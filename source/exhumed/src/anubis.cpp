@@ -36,6 +36,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "trigdat.h"
 #include "save.h"
 #include "kexbreak.h"   // VibeBuild32
+#include "kexinv.h"
+#include "anims.h"
 #include <assert.h>
 
 #define kMaxAnubis  80
@@ -72,6 +74,71 @@ static actionSeq ActionSeq[] = {
     { 43, 1 },
 };
 
+// The generated KEX ANUBIS.SEQ keeps the native live-action offsets, replaces
+// their compressed range/pain groups with the authored timelines, and adds the
+// otherwise-unrepresentable melee-miss group at slot 50.  The classic table
+// above remains the fallback for stock data and old conversions.
+static actionSeq KexAnubisActionSeq[] = {
+    { 0,  0 },
+    { 8,  0 },
+    { 16, 0 },
+    { 24, 0 },
+    { 32, 0 },
+    { 50, 0 },
+    { 46, 1 },
+    { 46, 1 },
+    { 47, 1 },
+    { 49, 1 },
+    { 49, 1 },
+    { 40, 1 },
+    { 42, 1 },
+    { 41, 1 },
+    { 43, 1 },
+};
+
+static bool KexAnubisExactSequence()
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqAnubis))
+        return false;
+
+    int const nBase = SeqOffsets[kSeqAnubis];
+    return SeqSize[nBase] == 1
+        && SeqSize[nBase + 8] == 18
+        && SeqSize[nBase + 16] == 24
+        && SeqSize[nBase + 24] == 25
+        && SeqSize[nBase + 32] == 10
+        && SeqSize[nBase + 40] == 20
+        && SeqSize[nBase + 41] == 1
+        && SeqSize[nBase + 42] == 20
+        && SeqSize[nBase + 43] == 1
+        && SeqSize[nBase + 50] == 9;
+}
+
+static actionSeq const &AnubisActionSequence(int nAction, bool bExactAnubis)
+{
+    return bExactAnubis ? KexAnubisActionSeq[nAction] : ActionSeq[nAction];
+}
+
+static bool KexAnubisShouldGib(int nRemainingHealth, int nDamageType)
+{
+    // kexSlaveActor::InflictDamage selects gibAnim for fire/explosion, or for
+    // generic overkill strictly below -2-(maxHealth>>4). AI_Anubis has 100 HP,
+    // so exactly -8 survives as a normal death and -9 gibs.
+    return nDamageType == kKexDamageExplosion
+        || nDamageType == kKexDamageFire
+        || nRemainingHealth < KexHealthUnits(-2 - (100 >> 4));
+}
+
+int KexAnubisGibSelectorTest()
+{
+    int const threshold = KexHealthUnits(-2 - (100 >> 4));
+    return !KexAnubisShouldGib(threshold, kKexDamageGeneric)
+        && KexAnubisShouldGib(threshold - 1, kKexDamageGeneric)
+        && KexAnubisShouldGib(0, kKexDamageExplosion)
+        && KexAnubisShouldGib(0, kKexDamageFire)
+        && !KexAnubisShouldGib(0, kKexDamageAcid);
+}
+
 short AnubisCount = 0;
 short nAnubisDrum = 0;
 
@@ -84,12 +151,9 @@ void InitAnubis()
 
 int BuildAnubis(int nSprite, int x, int y, int z, int nSector, int nAngle, uint8_t bIsDrummer)
 {
-    AnubisCount--;
-
-    short nAnubis = AnubisCount;
-    if (nAnubis < 0) {
+    if (AnubisCount <= 0)
         return -1;
-    }
+    short const nAnubis = --AnubisCount;
 
     if (nSprite == -1)
     {
@@ -116,10 +180,10 @@ int BuildAnubis(int nSprite, int x, int y, int z, int nSector, int nAngle, uint8
     sprite[nSprite].yoffset = 0;
     sprite[nSprite].picnum = 1;
     sprite[nSprite].pal = sector[sprite[nSprite].sectnum].ceilingpal;
-    sprite[nSprite].clipdist = 60;
+    sprite[nSprite].clipdist = g_kexMode ? 72 : 60;
     sprite[nSprite].ang = nAngle;
-    sprite[nSprite].xrepeat = 40;
-    sprite[nSprite].yrepeat = 40;
+    sprite[nSprite].xrepeat = g_kexMode ? 60 : 40;
+    sprite[nSprite].yrepeat = g_kexMode ? 60 : 40;
     sprite[nSprite].xvel = 0;
     sprite[nSprite].yvel = 0;
     sprite[nSprite].zvel = 0;
@@ -143,18 +207,95 @@ int BuildAnubis(int nSprite, int x, int y, int z, int nSector, int nAngle, uint8
         AnubisList[nAnubis].nAction = 0;
     }
 
-    AnubisList[nAnubis].nHealth = 540;
+    // AI_Anubis has 100 health in the KEX definitions; classic Anubis keeps
+    // the native 540.
+    AnubisList[nAnubis].nHealth = g_kexMode ? KexHealthUnits(100) : 540;
     AnubisList[nAnubis].nFrame  = 0;
     AnubisList[nAnubis].nSprite = nSprite;
     AnubisList[nAnubis].nTarget = -1;
+    AnubisList[nAnubis].f = 0;
     AnubisList[nAnubis].g = 0;
 
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nAnubis, kRunAnubis);
 
-    runlist_AddRunRec(NewRun, nAnubis, kRunAnubis);
+    AnubisList[nAnubis].h = runlist_AddRunRec(NewRun, nAnubis, kRunAnubis);
     nCreaturesLeft++;
 
     return nAnubis | 0x90000;
+}
+
+static void KexAnubisPlayDeathSound(short nSprite)
+{
+    int const sound = KexSound_Get(RandomBit() ? "k_andie2" : "anu_died");
+    if (sound >= 0)
+        D3PlayFX(sound, nSprite);
+}
+
+static void KexAnubisTossGibs(short nSprite)
+{
+    // anubis_death tosses one gib1, two gib2, two gib3 and four gib4.
+    static const int gibTiles[] = { 7808, 7809, 7809, 7810, 7810,
+                                    7811, 7811, 7811, 7811 };
+
+    for (size_t i = 0; i < ARRAY_SIZE(gibTiles); i++)
+        KexTossCreatureChunk(nSprite, gibTiles[i]);
+}
+
+static void KexAnubisDestroy(short nAnubis, short nSprite)
+{
+    runlist_DoSubRunRec(sprite[nSprite].owner);
+    runlist_FreeRun(sprite[nSprite].lotag - 1);
+    runlist_SubRunRec(AnubisList[nAnubis].h);
+    sprite[nSprite].cstat = 0x8000;
+    mydeletesprite(nSprite);
+    AnubisList[nAnubis].nSprite = -1;
+}
+
+static void KexAnubisImmediateGib(short nAnubis, short nSprite, short nKiller)
+{
+    // Safe fallback for a conversion whose ANUBIS.SEQ predates the exact
+    // normal-death timeline.
+    KexGibDeath_Spawn(sprite[nSprite].x, sprite[nSprite].y,
+        sprite[nSprite].z, sprite[nSprite].sectnum, 64,
+        sprite[nSprite].xrepeat, nKiller);
+    KexAnubisPlayDeathSound(nSprite);
+    KexAnubisTossGibs(nSprite);
+    KexAnubisDestroy(nAnubis, nSprite);
+}
+
+static void KexAnubisBeginGib(short nAnubis, short nSprite, short nKiller)
+{
+    KexGibDeath_Spawn(sprite[nSprite].x, sprite[nSprite].y,
+        sprite[nSprite].z, sprite[nSprite].sectnum, 64,
+        sprite[nSprite].xrepeat, nKiller);
+    KexAnubisPlayDeathSound(nSprite);
+    KexAnubisTossGibs(nSprite);
+
+    // A_GibDeath destroys the Anubis immediately but leaves Fx_Gibs01 alive
+    // for 19 ticks; that generic effect calls A_RandomItem on tick 18. Keep an
+    // invisible, save-serialized host until that callback has run.
+    AnubisList[nAnubis].nAction = 15;
+    AnubisList[nAnubis].nFrame = 0;
+    AnubisList[nAnubis].f = 0;
+    AnubisList[nAnubis].g = nKiller;
+    sprite[nSprite].xvel = 0;
+    sprite[nSprite].yvel = 0;
+    sprite[nSprite].zvel = 0;
+    sprite[nSprite].cstat = 0x8000;
+}
+
+int KexAnubisOwnsDeathDrop(int nSprite)
+{
+    if (!g_kexMode)
+        return 0;
+
+    for (int nAnubis = AnubisCount; nAnubis < kMaxAnubis; nAnubis++)
+        if (AnubisList[nAnubis].nSprite == nSprite
+            && (AnubisList[nAnubis].nAction == 11
+                || AnubisList[nAnubis].nAction == 12
+                || AnubisList[nAnubis].nAction == 15))
+            return 1;
+    return 0;
 }
 
 void FuncAnubis(int a, int nDamage, int nRun)
@@ -179,15 +320,62 @@ void FuncAnubis(int a, int nDamage, int nRun)
 
         case 0x20000:
         {
-            if (nAction < 11) {
+            bool const bExactAnubis = KexAnubisExactSequence();
+
+            // Invisible stand-in for Fx_Gibs01. Its sole gameplay callback is
+            // A_RandomItem on tick 18, after which the effect destroys itself.
+            if (g_kexMode && nAction == 15)
+            {
+                if (AnubisList[nAnubis].f >= 18)
+                {
+                    if (!seq_IsLoaded(kSeqKexGibDeath))
+                        KexDrop_RandomItemAt(sprite[nSprite].sectnum,
+                            sprite[nSprite].x, sprite[nSprite].y,
+                            sprite[nSprite].z - 128 * 16 * 6,
+                            AnubisList[nAnubis].g);
+                    KexAnubisDestroy(nAnubis, nSprite);
+                }
+                else
+                    AnubisList[nAnubis].f++;
+                return;
+            }
+
+            if ((unsigned)nAction >= ARRAY_SIZE(ActionSeq))
+                return;
+
+            actionSeq const &action = AnubisActionSequence(nAction,
+                                                            bExactAnubis);
+            short nSeq = SeqOffsets[kSeqAnubis] + action.a;
+            if (AnubisList[nAnubis].nFrame < 0
+                || AnubisList[nAnubis].nFrame >= SeqSize[nSeq])
+                AnubisList[nAnubis].nFrame = 0;
+            short const nRenderedFrame = AnubisList[nAnubis].nFrame;
+
+            bool const bExactDeath = bExactAnubis
+                && (nAction == 11 || nAction == 12);
+            if (bExactDeath && nRenderedFrame == 2)
+            {
+                // anubis_death_pc frame 1: A_ThrustZVelocity(6). KEX Z points
+                // upward; Build Z points downward and is scaled by 96.
+                sprite[nSprite].zvel = -(6 * 16 * 6);
+            }
+
+            if (nAction < 11 || bExactDeath) {
                 Gravity(nSprite);
             }
 
-            short nSeq = SeqOffsets[kSeqAnubis] + ActionSeq[nAction].a;
+            // The stock melee carries DOS sound events. KEX's 24-frame attack
+            // has its own callbacks below. The exact range, pain and death
+            // groups are callback-free too; their controller owns each event.
+            bool const controllerOwnsCallbacks = g_kexMode
+                && (nAction == 2
+                    || (bExactAnubis
+                        && (nAction == 3 || nAction == 4
+                            || nAction == 11 || nAction == 12)));
+            if (!controllerOwnsCallbacks)
+                seq_MoveSequence(nSprite, nSeq, nRenderedFrame);
 
-            seq_MoveSequence(nSprite, nSeq, AnubisList[nAnubis].nFrame);
-
-            sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, AnubisList[nAnubis].nFrame);
+            sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, nRenderedFrame);
 
             AnubisList[nAnubis].nFrame++;
             if (AnubisList[nAnubis].nFrame >= SeqSize[nSeq])
@@ -203,7 +391,7 @@ void FuncAnubis(int a, int nDamage, int nRun)
 
             int nMov = 0;
 
-            if (nAction > 0 && nAction < 11) {
+            if ((nAction > 0 && nAction < 11) || bExactDeath) {
                 nMov = MoveCreatureWithCaution(nSprite);
             }
 
@@ -232,6 +420,16 @@ void FuncAnubis(int a, int nDamage, int nRun)
                 }
                 case 1:
                 {
+                    if (g_kexMode && KexAIEnterMeleeRange(nSprite, nTarget, 0))
+                    {
+                        PlotCourseToSprite(nSprite, nTarget);
+                        AnubisList[nAnubis].nAction = 2;
+                        AnubisList[nAnubis].nFrame = 0;
+                        sprite[nSprite].xvel = 0;
+                        sprite[nSprite].yvel = 0;
+                        break;
+                    }
+
                     if ((nAnubis & 0x1F) == (totalmoves & 0x1F))
                     {
                         PlotCourseToSprite(nSprite, nTarget);
@@ -276,7 +474,8 @@ void FuncAnubis(int a, int nDamage, int nRun)
                             }
                             else
                             {
-                                AnubisList[nAnubis].g = 60;
+                                if (!g_kexMode)
+                                    AnubisList[nAnubis].g = 60;
 
                                 if (nTarget > -1) // NOTE: nTarget can be -1. this check wasn't in original code. TODO: demo compatiblity?
                                 {
@@ -289,6 +488,8 @@ void FuncAnubis(int a, int nDamage, int nRun)
 
                                         AnubisList[nAnubis].nAction = 3;
                                         AnubisList[nAnubis].nFrame = 0;
+                                        if (g_kexMode)
+                                            AnubisList[nAnubis].g = KexDifficulty_AICooldown();
                                     }
                                 }
                             }
@@ -306,24 +507,79 @@ void FuncAnubis(int a, int nDamage, int nRun)
                     }
                     else
                     {
-                        if (PlotCourseToSprite(nSprite, nTarget) >= 768)
+                        if (g_kexMode)
                         {
-                            AnubisList[nAnubis].nAction = 1;
-                        }
-                        else
-                        {
-                            if (nFlag & 0x80)
+                            PlotCourseToSprite(nSprite, nTarget);
+
+                            // Frames 4/17 run A_CheckMelee(..., 0). A miss
+                            // leaves this animation before the following slap.
+                            if ((nRenderedFrame == 4 || nRenderedFrame == 17)
+                                && !KexMeleeRange(nSprite, nTarget, 0))
                             {
-                                { int const s = KexSound_Get("k_anmele"); if (s >= 0) D3PlayFX(s, nSprite); }
-                                runlist_DamageEnemy(nTarget, nSprite, 7);
+                                AnubisList[nAnubis].nAction = bExactAnubis
+                                    ? 5 : 1;
+                                AnubisList[nAnubis].nFrame = 0;
+                                if (bExactAnubis)
+                                {
+                                    sprite[nSprite].xvel = 0;
+                                    sprite[nSprite].yvel = 0;
+                                }
+                                else
+                                {
+                                    sprite[nSprite].xvel = Cos(sprite[nSprite].ang) >> 2;
+                                    sprite[nSprite].yvel = Sin(sprite[nSprite].ang) >> 2;
+                                }
+                                break;
+                            }
+
+                            if (nRenderedFrame == 3 || nRenderedFrame == 16)
+                            {
+                                int const s = KexSound_Get("k_anmele");
+                                if (s >= 0) D3PlayFX(s, nSprite);
+                            }
+                            if (nRenderedFrame == 6 || nRenderedFrame == 19)
+                            {
+                                int const s = KexSound_Get("k_anslap");
+                                if (s >= 0) D3PlayFX(s, nSprite);
+                                if (KexMeleeAttackRange(nSprite, nTarget, 48))
+                                    runlist_DamageEnemy(nTarget, nSprite, 20);
                             }
                         }
+                        else if (PlotCourseToSprite(nSprite, nTarget) >= 768)
+                            AnubisList[nAnubis].nAction = 1;
+                        else if (nFlag & 0x80)
+                            runlist_DamageEnemy(nTarget, nSprite, 7);
                     }
 
                     break;
                 }
                 case 3:
                 {
+                    if (bExactAnubis)
+                    {
+                        if (nRenderedFrame == 0 || nRenderedFrame == 3
+                            || nRenderedFrame == 8)
+                            PlotCourseToSprite(nSprite, nTarget);
+
+                        if (nRenderedFrame == 8)
+                        {
+                            int const sound = KexSound_Get("anu_fire");
+                            if (sound >= 0)
+                                D3PlayFX(sound, nSprite);
+                            BuildKexAIFireProjectile(nSprite, 8, nTarget,
+                                                     4, 96, 16, 0);
+                        }
+
+                        if (bVal)
+                        {
+                            AnubisList[nAnubis].nAction = 1;
+                            AnubisList[nAnubis].nFrame = 0;
+                            sprite[nSprite].xvel = Cos(sprite[nSprite].ang) >> 2;
+                            sprite[nSprite].yvel = Sin(sprite[nSprite].ang) >> 2;
+                        }
+                        return;
+                    }
+
                     if (bVal)
                     {
                         AnubisList[nAnubis].nAction = 1;
@@ -337,7 +593,13 @@ void FuncAnubis(int a, int nDamage, int nRun)
                         // loc_25718:
                         if (nFlag & 0x80)
                         {
-                            BuildBullet(nSprite, 8, 0, 0, -1, sprite[nSprite].ang, nTarget + 10000, 1);
+                            if (g_kexMode)
+                                BuildKexAIFireProjectile(nSprite, 8, nTarget,
+                                                         4, 96, 16, 0);
+                            else
+                                BuildBullet(nSprite, 8, 0, 0, -1,
+                                            sprite[nSprite].ang,
+                                            nTarget + 10000, 1);
                         }
                     }
 
@@ -349,10 +611,23 @@ void FuncAnubis(int a, int nDamage, int nRun)
                     sprite[nSprite].xvel = 0;
                     sprite[nSprite].yvel = 0;
 
+                    if (bExactAnubis && nAction == 4
+                        && nRenderedFrame == 4)
+                    {
+                        int const sound = KexSound_Get("anu_hit");
+                        if (sound >= 0)
+                            D3PlayFX(sound, nSprite);
+                    }
+
                     if (bVal)
                     {
                         AnubisList[nAnubis].nAction = 1;
                         AnubisList[nAnubis].nFrame = 0;
+                        if (g_kexMode)
+                        {
+                            sprite[nSprite].xvel = Cos(sprite[nSprite].ang) >> 2;
+                            sprite[nSprite].yvel = Sin(sprite[nSprite].ang) >> 2;
+                        }
                     }
                     return;
                 }
@@ -372,6 +647,17 @@ void FuncAnubis(int a, int nDamage, int nRun)
                 case 11:
                 case 12:
                 {
+                    if (bExactAnubis)
+                    {
+                        if (nRenderedFrame == 0)
+                            KexAnubisPlayDeathSound(nSprite);
+                        if (nRenderedFrame == 10)
+                            sprite[nSprite].cstat &= ~0x1; // A_Die
+                        if (nRenderedFrame == 19)
+                            KexDrop_RandomItem(nSprite,
+                                               AnubisList[nAnubis].g);
+                    }
+
                     if (bVal)
                     {
                         AnubisList[nAnubis].nAction = nAction + 2;
@@ -413,7 +699,17 @@ void FuncAnubis(int a, int nDamage, int nRun)
 
         case 0x90000:
         {
-            seq_PlotSequence(a & 0xFFFF, SeqOffsets[kSeqAnubis] + ActionSeq[nAction].a, AnubisList[nAnubis].nFrame, ActionSeq[nAction].b);
+            if (nAction == 15 || (unsigned)nAction >= ARRAY_SIZE(ActionSeq))
+                return;
+            bool const bExactAnubis = KexAnubisExactSequence();
+            actionSeq const &action = AnubisActionSequence(nAction,
+                                                            bExactAnubis);
+            int const nSeq = SeqOffsets[kSeqAnubis] + action.a;
+            if (AnubisList[nAnubis].nFrame < 0
+                || AnubisList[nAnubis].nFrame >= SeqSize[nSeq])
+                AnubisList[nAnubis].nFrame = 0;
+            seq_PlotSequence(a & 0xFFFF, nSeq,
+                             AnubisList[nAnubis].nFrame, action.b);
             break;
         }
 
@@ -440,18 +736,21 @@ void FuncAnubis(int a, int nDamage, int nRun)
                     short nTarget = a & 0xFFFF;
 
                     // loc_258D6:
-                    if (nTarget < 0) {
+                    if (nTarget < 0 && !g_kexMode) {
                         return;
                     }
 
-                    if (sprite[nTarget].statnum == 100 || sprite[nTarget].statnum < 199)
+                    if (nTarget >= 0
+                        && (sprite[nTarget].statnum == 100 || sprite[nTarget].statnum < 199))
                     {
-                        if (!RandomSize(5)) {
+                        if (g_kexMode || !RandomSize(5)) {
                             AnubisList[nAnubis].nTarget = nTarget;
                         }
                     }
 
-                    if (RandomSize(1))
+                    bool const bPainRoll = g_kexMode
+                        ? KexDifficulty_PainRoll(64) : RandomSize(1) != 0;
+                    if (bPainRoll && (!g_kexMode || nAction == 1))
                     {
                         if (nAction >= 6 && nAction <= 10)
                         {
@@ -470,7 +769,7 @@ void FuncAnubis(int a, int nDamage, int nRun)
                         AnubisList[nAnubis].nAction = 4;
                         AnubisList[nAnubis].nFrame = 0;
                     }
-                    else
+                    else if (!g_kexMode)
                     {
                         // loc_259B5:
                         D3PlayFX(StaticSound[kSoundAnubisHit], nSprite);
@@ -478,20 +777,63 @@ void FuncAnubis(int a, int nDamage, int nRun)
                 }
                 else
                 {
-                    // he ded.
-                    sprite[nSprite].xvel = 0;
-                    sprite[nSprite].yvel = 0;
-                    sprite[nSprite].zvel = 0;
-                    sprite[nSprite].z = sector[sprite[nSprite].sectnum].floorz;
-                    sprite[nSprite].cstat &= 0xFEFE;
-
+                    int const nRemainingHealth = AnubisList[nAnubis].nHealth;
+                    short const nKiller = nMessage == 0xA0000
+                        ? (short)nRadialOwner : (short)(a & 0xFFFF);
+                    int const nDamageType = nMessage == 0xA0000
+                        ? kKexDamageExplosion : nKexDamageType;
                     AnubisList[nAnubis].nHealth = 0;
-
                     nCreaturesLeft--;
 
                     if (nAction < 11)
                     {
+                        if (KexAnubisExactSequence())
+                        {
+                            // Radial dispatch bypasses runlist_DamageEnemy's
+                            // post-death hook; direct hits are reported there
+                            // after this synchronous callback returns.
+                            if (nMessage == 0xA0000)
+                                KexTrigger_Died(nSprite);
+
+                            if (KexAnubisShouldGib(nRemainingHealth,
+                                                   nDamageType))
+                            {
+                                KexAnubisBeginGib(nAnubis, nSprite, nKiller);
+                            }
+                            else
+                            {
+                                // InflictDamage clears shootable immediately.
+                                // A_Die clears solid on authored death tick 10.
+                                sprite[nSprite].cstat &= ~0x100;
+                                AnubisList[nAnubis].nAction = 11;
+                                AnubisList[nAnubis].nFrame = 0;
+                                AnubisList[nAnubis].f = 0;
+                                AnubisList[nAnubis].g = nKiller;
+                                sprite[nSprite].xvel = 0;
+                                sprite[nSprite].yvel = 0;
+                                sprite[nSprite].zvel = 0;
+                            }
+                            return;
+                        }
+
+                        // Stock/classic cadence and old KEX conversions keep
+                        // the pre-existing immediate-death fallback.
+                        sprite[nSprite].xvel = 0;
+                        sprite[nSprite].yvel = 0;
+                        sprite[nSprite].zvel = 0;
+                        sprite[nSprite].z = sector[sprite[nSprite].sectnum].floorz;
+                        sprite[nSprite].cstat &= 0xFEFE;
                         DropMagic(nSprite);
+                        if (g_kexMode)
+                        {
+                            if (nMessage == 0xA0000)
+                            {
+                                KexDrop_RandomItem(nSprite, nKiller);
+                                KexTrigger_Died(nSprite);
+                            }
+                            KexAnubisImmediateGib(nAnubis, nSprite, nKiller);
+                            return;
+                        }
                         AnubisList[nAnubis].nAction = (nMessage == 0xA0000) + 11;
                         AnubisList[nAnubis].nFrame = 0;
                     }

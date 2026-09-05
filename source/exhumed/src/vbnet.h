@@ -33,6 +33,7 @@ void ExNet_SetPlayerColor(int color);          // -color
 void ExNet_SetStartNowPlayers(int n);          // --nplayers
 void ExNet_SetStartNow(int on);                // --startnow
 void ExNet_SetWait(int on);                    // --wait
+void ExNet_SetLateJoin(int on);                // --latejoin (host opt-in)
 
 // ---- lifecycle -------------------------------------------------------------
 // Runs the mmulti connect cycle from the -net arguments (or from --joinlobby).
@@ -42,6 +43,11 @@ int  ExNet_Enabled(void);                      // nonzero once >1 player is conn
 int  ExNet_IsServer(void);                     // this machine is the mmulti master
 void ExNet_SendGameFiles(int slot);            // host: stream --netfile files + the usermap
 void ExNet_ReceiveGameFiles(void);             // joiner: block until the host's files land
+// A client which connected after the host entered a level waits here for the
+// host's EXSN image. On success the current world is restored and normal
+// new-level construction must be skipped.
+int  ExNet_LoadLateJoinSnapshot(void);
+int  ExNet_IsLateJoiner(void);
 void ExNet_LevelStart(void);                   // ready barrier + tick reset, per level
 int  ExNet_WantsInput(void);                   // is a new tick's local input due? (gather gate)
 void ExNet_Update(void);                       // once per game-loop pass: pump + publish

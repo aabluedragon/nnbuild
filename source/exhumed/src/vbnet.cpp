@@ -28,6 +28,7 @@
 
 #include "exhumed.h"
 #include "engine.h"
+#include "init.h"
 #include "input.h"
 #include "player.h"
 #include "network.h"
@@ -38,8 +39,13 @@
 #include "control.h"
 #include "names.h"
 #include "vbnet.h"
+#include "save.h"
+#include "kexinv.h"
+#include "kexbreak.h"
 
 #include "netshared.h"   // VibeBuild32: shared masterserver client + file transfer
+
+#include <stdio.h>
 
 #if defined __APPLE__
 # include <mach-o/dyld.h>
@@ -65,6 +71,13 @@ enum
     EXNET_PT_FILE_HEADER,
     EXNET_PT_FILE_CHUNK,
     EXNET_PT_FILES_DONE,  // host has finished streaming --netfile/usermap files
+    EXNET_PT_ROSTER,      // host-authoritative active slots at session start
+    EXNET_PT_LATE_ANNOUNCE, // host -> staged client: this game is already running
+    EXNET_PT_LATE_READY,    // staged client -> host: asset/snapshot phase ready
+    EXNET_PT_LATE_FREEZE,   // host -> active roster: stop at the named tick
+    EXNET_PT_LATE_FROZEN,   // active roster -> host: reached the freeze tick
+    EXNET_PT_LATE_SNAPSHOT, // host -> staged client: one EXSN chunk
+    EXNET_PT_LATE_GO,       // host -> all: atomically promote staged slot
 };
 
 // How far ahead of the simulated tick a machine publishes its own input.  This
@@ -89,6 +102,15 @@ enum
 // timeout each machine judged for itself would drop the player on different
 // ticks and desync the survivors.
 #define EXNET_INPUT_TIMEOUT_MS 12000
+
+// Mid-level admission deliberately has its own state machine rather than
+// pretending a newly connected transport slot was present from tick zero. The
+// host first waits for the client to mount any streamed assets, freezes the
+// existing deterministic roster at an agreed tick, sends an EXSN world image,
+// then all processes create the new player and restart the input pipeline.
+#define EXNET_LATE_FREEZE_LEAD 60
+#define EXNET_LATE_CHUNK_SIZE  1024
+#define EXNET_LATE_MAX_BYTES   (32 * 1024 * 1024)
 
 static uint8_t s_packbuf[1400];
 
@@ -115,6 +137,40 @@ static uint8_t     s_syncHave[EXNET_RINGSIZ];
 static uint32_t    s_levelGen;
 static uint32_t    s_readyGen[kMaxPlayers];
 static uint32_t    s_lastInputMs[kMaxPlayers];  // master only: liveness watchdog
+// mmulti reserves every slot named by the -net declaration.  A --startnow
+// game must distinguish a slot that is merely reserved for a future joiner
+// from one whose player is already part of this deterministic simulation.
+// Game-side player indices stay compact; packets and transport bookkeeping use
+// the stable mmulti slot number.
+static uint8_t     s_activeSlot[kMaxPlayers];
+static int         s_slotToPlayer[kMaxPlayers];
+static int         s_activePlayers;
+static int         s_rosterReady;
+
+// ---- late-join staging -----------------------------------------------------
+static int         s_lateJoinEnabled;
+static int         s_lateJoiner;
+static int         s_latePendingSlot = -1; // host-only, transport slot outside the roster
+static int         s_latePendingRejoin;
+static int         s_lateAssetsReady;
+static int         s_lateAssetsSent;
+static int         s_lateSnapshotReady;
+static uint32_t    s_lateStartMs;
+static uint32_t    s_lateLastAnnounceMs;
+static uint32_t    s_lateFreezeTick = UINT32_MAX;
+static uint8_t     s_lateFrozen[kMaxPlayers];
+static uint8_t     s_lateGoSlots[kMaxPlayers];
+static uint8_t     s_lateGoGone[kMaxPlayers];
+static int         s_lateGoSlot = -1;
+static int         s_lateGoRejoin;
+static int         s_lateGoReady;
+static char        s_lateName[11];
+static int         s_lateColor;
+static char       *s_lateSnapshot;
+static uint8_t    *s_lateSnapshotSeen;
+static int         s_lateSnapshotChunks;
+static int         s_lateSnapshotGot;
+static int         s_lateSnapshotLastLen;
 
 // ---- configuration ---------------------------------------------------------
 static char s_punchTarget[128];
@@ -152,6 +208,7 @@ void ExNet_SetPlayerColor(int color)        { s_playerColor = clamp(color, 0, 7)
 void ExNet_SetStartNowPlayers(int n)        { s_startNowPlayers = clamp(n, 2, kMaxPlayers); }
 void ExNet_SetStartNow(int on)              { s_startNow = on; }
 void ExNet_SetWait(int on)                  { s_wait = on; }
+void ExNet_SetLateJoin(int on)               { s_lateJoinEnabled = on; }
 void ExNet_AddNetFile(const char *path)
 {
     if (s_netFileCount < VB_MAX_NETFILES)
@@ -160,6 +217,50 @@ void ExNet_AddNetFile(const char *path)
 
 int ExNet_Enabled(void)  { return s_enabled; }
 int ExNet_IsServer(void) { return myconnectindex == connecthead; }
+int ExNet_IsLateJoiner(void) { return s_lateJoiner; }
+
+static int ExNet_SlotActive(int slot)
+{
+    return (unsigned)slot < kMaxPlayers && s_activeSlot[slot];
+}
+
+static int ExNet_PlayerForSlot(int slot)
+{
+    return ExNet_SlotActive(slot) ? s_slotToPlayer[slot] : -1;
+}
+
+static int ExNet_ApplyRoster(uint8_t const *slots)
+{
+    Bmemset(s_activeSlot, 0, sizeof(s_activeSlot));
+    for (int i = 0; i < kMaxPlayers; i++)
+        s_slotToPlayer[i] = -1;
+
+    s_activePlayers = 0;
+    for (int slot = 0; slot < numplayers; slot++)
+    {
+        if (slots[slot] != 1)
+            continue;
+        s_activeSlot[slot] = 1;
+        s_slotToPlayer[slot] = s_activePlayers;
+        s_activePlayers++;
+    }
+
+    s_rosterReady = s_activePlayers > 1 && ExNet_SlotActive(myconnectindex);
+    return s_rosterReady;
+}
+
+static void ExNet_ClearLateSnapshot(void)
+{
+    if (s_lateSnapshot)
+        Xfree(s_lateSnapshot);
+    if (s_lateSnapshotSeen)
+        Xfree(s_lateSnapshotSeen);
+    s_lateSnapshot = NULL;
+    s_lateSnapshotSeen = NULL;
+    s_lateSnapshotChunks = 0;
+    s_lateSnapshotGot = 0;
+    s_lateSnapshotLastLen = 0;
+}
 
 // ---------------------------------------------------------------------------
 // Packet routing.
@@ -183,8 +284,17 @@ static void ExNet_Broadcast(void *buf, int len)
         return;
     }
     for (int i = connecthead; i >= 0; i = connectpoint2[i])
-        if (i != myconnectindex)
+        if (i != myconnectindex && ExNet_SlotActive(i) && !s_gone[i])
             mmulti_sendpacket(i, (unsigned char *)buf, len);
+}
+
+// Unlike a normal game packet, the staged late-join slot is not in the active
+// roster yet. It still needs a direct reliable path to the host for the
+// announce, file stream, snapshot and GO packet.
+static void ExNet_SendDirect(int slot, void *buf, int len)
+{
+    if ((unsigned)slot < (unsigned)numplayers && slot != myconnectindex && mmulti_slotconnected(slot))
+        mmulti_sendpacket(slot, (unsigned char *)buf, len);
 }
 
 // Returns the payload length, with *from rewritten to the *originating* player
@@ -206,7 +316,7 @@ static int ExNet_Recv(int *from, uint8_t *buf)
         if (dest == 255)
         {
             for (int i = connecthead; i >= 0; i = connectpoint2[i])
-                if (i != myconnectindex && i != *from)
+                if (i != myconnectindex && i != *from && ExNet_SlotActive(i) && !s_gone[i])
                     mmulti_sendpacket(i, buf, len);
             Bmemmove(buf, buf + 2, len - 2);
             return len - 2;
@@ -216,7 +326,8 @@ static int ExNet_Recv(int *from, uint8_t *buf)
             Bmemmove(buf, buf + 2, len - 2);
             return len - 2;
         }
-        mmulti_sendpacket(dest, buf, len);
+        if (ExNet_SlotActive(dest) && !s_gone[dest])
+            mmulti_sendpacket(dest, buf, len);
         return 0;
     }
 
@@ -290,6 +401,68 @@ static uint32_t ExNet_StateCrc(void)
     return h;
 }
 
+// A snapshot transfer has to restore the full game-side roster, not just the
+// host's player. This opt-in probe runs between two lockstep ticks on the host:
+// it captures EXSN, damages every active player record in memory, reloads it,
+// and verifies all the player-facing state came back byte-for-byte. The next
+// simulation tick therefore starts from exactly the same state the client has.
+static uint32_t ExNet_SnapshotPlayerHash(void)
+{
+    uint32_t h = 2166136261u;
+    auto mix = [&h](void const *data, size_t bytes) {
+        uint8_t const *p = (uint8_t const *)data;
+        while (bytes--)
+            h = (h ^ *p++) * 16777619u;
+    };
+    mix(PlayerList, sizeof(PlayerList[0]) * kMaxPlayers);
+    mix(nPlayerScore, sizeof(nPlayerScore[0]) * kMaxPlayers);
+    mix(nPlayerColor, sizeof(nPlayerColor[0]) * kMaxPlayers);
+    mix(playerNames, sizeof(playerNames));
+    mix(nPlayerWeapons, sizeof(nPlayerWeapons[0]) * kMaxPlayers);
+    mix(nPistolClip, sizeof(nPistolClip[0]) * kMaxPlayers);
+    mix(nPlayerClip, sizeof(nPlayerClip[0]) * kMaxPlayers);
+    mix(nPlayerDouble, sizeof(nPlayerDouble[0]) * kMaxPlayers);
+    mix(nPlayerFloorSprite, sizeof(nPlayerFloorSprite[0]) * kMaxPlayers);
+    mix(nPlayerGrenade, sizeof(nPlayerGrenade));
+    mix(KexInvList, sizeof(KexInvList[0]) * kMaxPlayers);
+    return h;
+}
+
+static void ExNet_NetworkSnapshotSelftest(void)
+{
+    static int state = -1;
+    if (state < 0)
+    {
+        char const *const path = Bgetenv("VB_EXNET_SNAPSHOT_FILE");
+        state = ExNet_IsServer() && path && path[0] ? 1 : 0;
+    }
+    if (state != 1 || s_netTick < 120)
+        return;
+    state = 2;
+
+    char const *const path = Bgetenv("VB_EXNET_SNAPSHOT_FILE");
+    uint32_t const expected = ExNet_SnapshotPlayerHash();
+    LoadSave::SaveNetworkSnapshot(path);
+
+    for (int player = 0; player < nTotalPlayers; player++)
+    {
+        PlayerList[player].nHealth = (short)(-100 - player);
+        nPlayerScore[player] ^= 0x5a5a;
+        nPlayerWeapons[player] ^= 0x55;
+        KexInvList[player].artifacts ^= UINT32_C(0x55aa55aa);
+    }
+
+    LoadSave::LoadNetworkSnapshot(path);
+    int const localSpriteOkay = (unsigned)nLocalPlayer < (unsigned)kMaxPlayers
+        && nLocalSpr == PlayerList[nLocalPlayer].nSprite;
+    int const okay = expected == ExNet_SnapshotPlayerHash() && localSpriteOkay;
+    if (okay)
+        LOG_F(INFO, "EXNET snapshot test: PASS (all-player EXSN, local sprite OK)");
+    else
+        LOG_F(ERROR, "EXNET snapshot test: FAIL (all-player EXSN, local sprite %s)",
+              localSpriteOkay ? "OK" : "MISMATCH");
+}
+
 static void ExNet_ReportDesync(uint32_t tick, uint32_t mine, uint32_t theirs, int who)
 {
     if (s_syncFailed)
@@ -307,9 +480,24 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 {
     switch (pkt[0])
     {
+        case EXNET_PT_ROSTER:
+        {
+            // Only the master may define the initial session roster. A later
+            // roster change uses LATE_GO and an EXSN image, never this startup
+            // packet, so it cannot be mistaken for an ordinary connection.
+            if (len != 1 + kMaxPlayers || from != connecthead || ExNet_IsServer() || s_rosterReady)
+                break;
+            for (int slot = 0; slot < kMaxPlayers; slot++)
+                if (pkt[1 + slot] > 1)
+                    return;
+            if (ExNet_ApplyRoster(&pkt[1]))
+                LOG_F(INFO, "Exhumed net: received initial roster (%d active player(s))", s_activePlayers);
+            break;
+        }
+
         case EXNET_PT_INPUT:
         {
-            if (len < 1 + 4 + EXNET_INPUT_BYTES || (unsigned)from >= kMaxPlayers)
+            if (len < 1 + 4 + EXNET_INPUT_BYTES || !ExNet_SlotActive(from))
                 break;
             uint32_t const tick = VB_get32(&pkt[1]);
             // A tick we have already run, or one absurdly far ahead, can only be
@@ -325,7 +513,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 
         case EXNET_PT_READY:
         {
-            if (len < 5 || (unsigned)from >= kMaxPlayers)
+            if (len < 5 || !ExNet_SlotActive(from))
                 break;
             uint32_t const gen = VB_get32(&pkt[1]);
             if (gen > s_readyGen[from])
@@ -335,7 +523,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 
         case EXNET_PT_SYNC:
         {
-            if (len < 9)
+            if (len < 9 || !ExNet_SlotActive(from))
                 break;
             uint32_t const tick = VB_get32(&pkt[1]);
             uint32_t const crc  = VB_get32(&pkt[5]);
@@ -349,11 +537,12 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         }
 
         case EXNET_PT_OPTIONS:
-            if (len >= 1 + 1 + 11 && (unsigned)from < kMaxPlayers)
+            if (len >= 1 + 1 + 11 && ExNet_SlotActive(from))
             {
-                nPlayerColor[from] = clamp(pkt[1], 0, 7);
-                Bmemcpy(playerNames[from], &pkt[2], 10);
-                playerNames[from][10] = 0;
+                int const player = ExNet_PlayerForSlot(from);
+                nPlayerColor[player] = clamp(pkt[1], 0, 7);
+                Bmemcpy(playerNames[player], &pkt[2], 10);
+                playerNames[player][10] = 0;
             }
             break;
 
@@ -363,7 +552,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
             if (len < 6 || from != connecthead || ExNet_IsServer())
                 break;
             int const who = pkt[1];
-            if ((unsigned)who >= kMaxPlayers || s_gone[who])
+            if (!ExNet_SlotActive(who) || s_gone[who])
                 break;
             s_gone[who] = 1;
             s_goneTick[who] = max(VB_get32(&pkt[2]), s_netTick);
@@ -373,7 +562,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 
         case EXNET_PT_QUIT:
         {
-            if (len < 5 || (unsigned)from >= kMaxPlayers)
+            if (len < 5 || !ExNet_SlotActive(from))
                 break;
             uint32_t const tick = VB_get32(&pkt[1]);
             // Everyone drops this player at the same tick, so the sims stay
@@ -386,20 +575,127 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 
         case EXNET_PT_CHAT:
         {
-            if (len < 2 || (unsigned)from >= kMaxPlayers)
+            if (len < 2 || !ExNet_SlotActive(from))
                 break;
+            int const player = ExNet_PlayerForSlot(from);
             int const n = min((int)pkt[1], len - 2);
             char text[sizeof(s_chatBuf)];
             Bmemcpy(text, &pkt[2], min(n, (int)sizeof(text) - 1));
             text[min(n, (int)sizeof(text) - 1)] = 0;
-            StatusMessage(360, "%s: %s", playerNames[from], text);
-            LOG_F(INFO, "Exhumed chat: %s: %s", playerNames[from], text);
+            StatusMessage(360, "%s: %s", playerNames[player], text);
+            LOG_F(INFO, "Exhumed chat: %s: %s", playerNames[player], text);
             break;
         }
 
         case EXNET_PT_FILE_HEADER: VB_RecvFileHeader(&s_recv, pkt, "Exhumed"); break;
         case EXNET_PT_FILE_CHUNK:  VB_RecvFileChunk(&s_recv, pkt, "Exhumed");  break;
         case EXNET_PT_FILES_DONE:  s_filesDone = 1; break;
+
+        case EXNET_PT_LATE_ANNOUNCE:
+            if (len == 1 && from == connecthead && !ExNet_IsServer())
+            {
+                s_lateJoiner = 1;
+                LOG_F(INFO, "Exhumed net: joining a game already in progress; waiting for host state");
+            }
+            break;
+
+        case EXNET_PT_LATE_READY:
+            // The staging client sends phase 0 immediately after it has heard
+            // the announce, then phase 1 after the ordinary game-file stream
+            // has mounted and its engine is ready to load an EXSN image.
+            if (ExNet_IsServer() && from == s_latePendingSlot && len == 1 + 1 + 1 + 11)
+            {
+                int const phase = pkt[1];
+                s_lateColor = clamp(pkt[2], 0, 7);
+                Bmemcpy(s_lateName, &pkt[3], sizeof(s_lateName));
+                s_lateName[sizeof(s_lateName) - 1] = 0;
+                if (phase == 0)
+                    s_lateAssetsReady = 1;
+                else if (phase == 1 && s_lateAssetsSent)
+                    s_lateSnapshotReady = 1;
+            }
+            break;
+
+        case EXNET_PT_LATE_FREEZE:
+            if (len == 1 + 4 && from == connecthead && !s_lateJoiner && ExNet_SlotActive(myconnectindex))
+            {
+                uint32_t const tick = VB_get32(&pkt[1]);
+                if (tick == UINT32_MAX)
+                {
+                    s_lateFreezeTick = UINT32_MAX;
+                    Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
+                    LOG_F(INFO, "Exhumed net: late-join transfer released without promotion");
+                    break;
+                }
+                // A freeze instruction which arrived after its named tick is
+                // unsafe: continuing would create a divergent snapshot. Leave
+                // the existing roster alone and let the host's timeout abort
+                // the staged connection instead.
+                if (tick >= s_netTick)
+                {
+                    s_lateFreezeTick = tick;
+                    Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
+                    LOG_F(INFO, "Exhumed net: freezing at tick %u for a late join", tick);
+                }
+                else
+                    LOG_F(WARNING, "Exhumed net: late-join freeze tick %u arrived after local tick %u", tick, s_netTick);
+            }
+            break;
+
+        case EXNET_PT_LATE_FROZEN:
+            if (ExNet_IsServer() && len == 1 + 4 && ExNet_SlotActive(from)
+                && s_lateFreezeTick == VB_get32(&pkt[1]))
+                s_lateFrozen[from] = 1;
+            break;
+
+        case EXNET_PT_LATE_SNAPSHOT:
+        {
+            if (!s_lateJoiner || from != connecthead || len < 1 + 2 + 2 + 2)
+                break;
+            int const seq = VB_get16(&pkt[1]);
+            int const total = VB_get16(&pkt[3]);
+            int const bytes = VB_get16(&pkt[5]);
+            if (total <= 0 || total > EXNET_LATE_MAX_BYTES / EXNET_LATE_CHUNK_SIZE
+                || seq < 0 || seq >= total || bytes <= 0 || bytes > EXNET_LATE_CHUNK_SIZE
+                || len != 1 + 2 + 2 + 2 + bytes)
+                break;
+            if (!s_lateSnapshot || s_lateSnapshotChunks != total)
+            {
+                ExNet_ClearLateSnapshot();
+                s_lateSnapshot = (char *)Xmalloc((size_t)total * EXNET_LATE_CHUNK_SIZE);
+                s_lateSnapshotSeen = (uint8_t *)Xcalloc(total, sizeof(*s_lateSnapshotSeen));
+                s_lateSnapshotChunks = total;
+            }
+            Bmemcpy(&s_lateSnapshot[seq * EXNET_LATE_CHUNK_SIZE], &pkt[7], bytes);
+            if (!s_lateSnapshotSeen[seq])
+            {
+                s_lateSnapshotSeen[seq] = 1;
+                s_lateSnapshotGot++;
+            }
+            if (seq == total - 1)
+                s_lateSnapshotLastLen = bytes;
+            break;
+        }
+
+        case EXNET_PT_LATE_GO:
+            if (len == 1 + 1 + 1 + 1 + 11 + kMaxPlayers + kMaxPlayers && from == connecthead)
+            {
+                int const slot = pkt[1];
+                if ((unsigned)slot >= (unsigned)numplayers || pkt[3] > 1)
+                    break;
+                for (int i = 0; i < kMaxPlayers; i++)
+                    if (pkt[15 + i] > 1 || pkt[15 + kMaxPlayers + i] > 1)
+                        return;
+                s_lateGoSlot = slot;
+                s_lateColor = clamp(pkt[2], 0, 7);
+                s_lateGoRejoin = pkt[3];
+                Bmemcpy(s_lateName, &pkt[4], sizeof(s_lateName));
+                s_lateName[sizeof(s_lateName) - 1] = 0;
+                Bmemcpy(s_lateGoSlots, &pkt[15], sizeof(s_lateGoSlots));
+                Bmemcpy(s_lateGoGone, &pkt[15 + kMaxPlayers], sizeof(s_lateGoGone));
+                s_lateGoReady = 1;
+            }
+            break;
 
         default:
             break;
@@ -412,6 +708,28 @@ static void ExNet_Pump(void)
 
     while ((len = ExNet_Recv(&from, s_packbuf)) > 0)
         ExNet_HandlePacket(from, s_packbuf, len);
+}
+
+static void ExNet_SendRoster(void)
+{
+    uint8_t pkt[1 + kMaxPlayers];
+    pkt[0] = EXNET_PT_ROSTER;
+    Bmemcpy(&pkt[1], s_activeSlot, sizeof(s_activeSlot));
+    ExNet_Broadcast(pkt, sizeof(pkt));
+}
+
+static int ExNet_WaitForRoster(void)
+{
+    uint32_t const start = timerGetTicks();
+    while (!s_rosterReady && !s_lateJoiner)
+    {
+        handleevents();
+        ExNet_Pump();
+        ExNet_ClientPunchAttempt();
+        if (quitevent || timerGetTicks() - start > 15000)
+            return 0;
+    }
+    return s_rosterReady || s_lateJoiner;
 }
 
 // ---------------------------------------------------------------------------
@@ -442,9 +760,11 @@ void ExNet_HostAdvertise(void)
     else
         Bsnprintf(map, sizeof(map), "LEV%d", (int)levelnum);
 
-    char const *name = playerNames[connecthead];
+    int const hostPlayer = ExNet_PlayerForSlot(connecthead);
+    char const *name = hostPlayer >= 0 ? playerNames[hostPlayer] : "";
+    int const advertisedPlayers = s_rosterReady ? s_activePlayers : 1;
     VB_HostAdvertisePulse(1, name && name[0] ? name : "VibeBuild32 Powerslave server",
-                          mmulti_getport(), numplayers, kMaxPlayers, map);
+                          mmulti_getport(), advertisedPlayers, kMaxPlayers, map);
 }
 
 void ExNet_ClientPunchAttempt(void)
@@ -539,7 +859,7 @@ static void ExNet_SendCb(void *ctx, const void *buf, int len)
 
     int const slot = (int)(intptr_t)ctx;
     for (int i = 0; i < numplayers; i++)
-        if (i != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : (i == slot && mmulti_slotconnected(i))))
+        if (i != myconnectindex && (slot < 0 ? ExNet_SlotActive(i) : (i == slot && mmulti_slotconnected(i))))
             mmulti_sendpacket(i, (unsigned char *)const_cast<void *>(buf), len);
 }
 
@@ -619,8 +939,441 @@ static void ExNet_SendOptions(void)
     uint8_t pkt[1 + 1 + 11];
     pkt[0] = EXNET_PT_OPTIONS;
     pkt[1] = (uint8_t)s_playerColor;
-    Bmemcpy(&pkt[2], playerNames[myconnectindex], 11);
+    Bmemcpy(&pkt[2], playerNames[nLocalPlayer], 11);
     ExNet_Broadcast(pkt, sizeof(pkt));
+}
+
+static void ExNet_SendLateReady(int phase)
+{
+    if (!s_enabled || !s_lateJoiner || ExNet_IsServer())
+        return;
+
+    uint8_t pkt[1 + 1 + 1 + 11];
+    pkt[0] = EXNET_PT_LATE_READY;
+    pkt[1] = (uint8_t)phase;
+    pkt[2] = (uint8_t)s_playerColor;
+    Bmemset(&pkt[3], 0, 11);
+    Bstrncpyz((char *)&pkt[3], s_playerName, 11);
+    ExNet_SendDirect(connecthead, pkt, sizeof(pkt));
+}
+
+static int ExNet_ApplyLateRoster(void)
+{
+    if (!s_lateGoReady || (unsigned)s_lateGoSlot >= (unsigned)numplayers
+        || s_lateGoSlots[s_lateGoSlot] != 1 || s_lateGoGone[s_lateGoSlot])
+        return 0;
+
+    int const oldPlayers = s_activePlayers;
+    int oldMap[kMaxPlayers];
+    Bmemcpy(oldMap, s_slotToPlayer, sizeof(oldMap));
+
+    int wanted = 0;
+    for (int slot = 0; slot < numplayers; slot++)
+        wanted += s_lateGoSlots[slot] != 0;
+    if (wanted < 2 || wanted > kMaxPlayers)
+        return 0;
+
+    // Compact game indices are a public deterministic contract. Reordering an
+    // existing player would remap every PlayerList[] record in the snapshot,
+    // so this first implementation only admits a slot that appends to it.
+    if (!s_lateJoiner)
+        for (int slot = 0; slot < numplayers; slot++)
+            if (oldMap[slot] >= 0 && s_lateGoSlots[slot] != 1)
+                return 0;
+
+    if (!ExNet_ApplyRoster(s_lateGoSlots))
+        return 0;
+
+    for (int slot = 0; slot < numplayers; slot++)
+        if (oldMap[slot] >= 0 && ExNet_PlayerForSlot(slot) != oldMap[slot])
+            return 0;
+
+    int const newPlayer = ExNet_PlayerForSlot(s_lateGoSlot);
+    if (s_lateGoRejoin)
+    {
+        // A rejoin reactivates a departed record in place. Its PlayerList[]
+        // index was part of the frozen EXSN image, so changing it would make
+        // every existing peer address a different player after the handoff.
+        if ((!s_lateJoiner && (oldPlayers != wanted || oldMap[s_lateGoSlot] != newPlayer
+                               || s_gone[s_lateGoSlot] != 2))
+            || newPlayer < 0 || newPlayer >= wanted)
+            return 0;
+    }
+    else if (newPlayer != wanted - 1 || (!s_lateJoiner && oldPlayers != wanted - 1))
+        return 0;
+
+    nTotalPlayers = (short)wanted;
+    nNetPlayerCount = wanted - 1;
+    nLocalPlayer = ExNet_PlayerForSlot(myconnectindex);
+    wConsoleNode = ExNet_PlayerForSlot(connecthead);
+    if (nLocalPlayer < 0 || wConsoleNode < 0)
+        return 0;
+
+    for (int slot = 0; slot < numplayers; slot++)
+    {
+        s_gone[slot] = s_lateGoGone[slot];
+        s_goneTick[slot] = 0;
+    }
+    // A reclaimed slot may still carry the old process's watchdog timestamp.
+    // Treat the authoritative GO as current traffic so the master gives the
+    // returning client the normal input-delay window after the rebase.
+    s_lastInputMs[s_lateGoSlot] = timerGetTicks();
+
+    return newPlayer;
+}
+
+static int ExNet_SpawnLatePlayer(int player)
+{
+    if (player < 0 || player >= nTotalPlayers)
+        return 0;
+    if (s_lateGoRejoin)
+    {
+        // LogoffPlayer() deliberately hides but does not destroy the body,
+        // floor marker or player record. Restarting that same record preserves
+        // the score and compact roster index while producing a fresh spawn.
+        if (PlayerCount != nTotalPlayers || PlayerList[player].someNetVal != -1)
+            return 0;
+    }
+    else
+    {
+        if (PlayerCount != player || GrabPlayer() != player)
+            return 0;
+        InitPlayerInventory(player);
+    }
+
+    PlayerList[player].someNetVal = player == wConsoleNode ? -3 : -4;
+    Bstrncpyz(playerNames[player], s_lateName[0] ? s_lateName : "PLAYER", sizeof(playerNames[player]));
+
+    if (!KexCheckpoint_PrepareSpawn(player))
+    {
+        SetSavePoint(player, initx, inity, initz, initsect, inita);
+        KexTravel_PrepareSpawn(player, inita);
+    }
+    RestartPlayer(player);
+    InitPlayerKeys(player);
+    KexCampaign_FinishSpawn(player);
+    KexCheckpoint_CaptureEntry(player);
+    KexCheckpoint_FinishSpawn(player);
+
+    nPlayerColor[player] = (short)s_lateColor;
+    return 1;
+}
+
+static void ExNet_RebaseLateJoin(void)
+{
+    Bmemset(s_ring, 0, sizeof(s_ring));
+    Bmemset(s_ringHave, 0, sizeof(s_ringHave));
+    Bmemset(s_syncHave, 0, sizeof(s_syncHave));
+    s_netTick = 0;
+    // These initial delayed-input ticks are intentionally idle. Existing peers
+    // may resume a few frames before the staging process leaves its loader, so
+    // accepting a freshly sampled tick 0 input here would desync that player
+    // from the joiner. Real input starts at tick EXNET_INPUT_DELAY on everyone.
+    s_sendTick = EXNET_INPUT_DELAY;
+    s_syncFailed = 0;
+
+    for (int slot = 0; slot < numplayers; slot++)
+        if (ExNet_SlotActive(slot) && !s_gone[slot])
+            for (uint32_t t = 0; t < EXNET_INPUT_DELAY; t++)
+                s_ringHave[slot][t & EXNET_RINGMASK] = 1;
+
+    s_lateFreezeTick = UINT32_MAX;
+    Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
+    s_lateGoReady = 0;
+    s_lateGoSlot = -1;
+    s_lateGoRejoin = 0;
+    s_latePendingRejoin = 0;
+    s_lateJoiner = 0;
+    if (ExNet_IsServer())
+        mmulti_setextraslot(-1);
+}
+
+static int ExNet_FinishLatePromotion(int player)
+{
+    int const slot = s_lateGoSlot;
+    if (!ExNet_SpawnLatePlayer(player))
+        return 0;
+    ExNet_RebaseLateJoin();
+    LOG_F(INFO, "Exhumed net: promoted transport slot %d as player %d; lockstep rebased",
+          slot, player);
+    return 1;
+}
+
+static void ExNet_LateSnapshotPath(char *path, size_t size)
+{
+    char const *const tmp = Bgetenv("TMPDIR");
+#ifdef _WIN32
+    Bsnprintf(path, size, "%s\\exnet-late-%u.exsn", tmp && tmp[0] ? tmp : ".", timerGetTicks());
+#else
+    Bsnprintf(path, size, "%s/exnet-late-%ld.exsn", tmp && tmp[0] ? tmp : ".", (long)getpid());
+#endif
+}
+
+static void ExNet_AbortLateJoin(char const *reason)
+{
+    int const slot = s_latePendingSlot;
+    LOG_F(WARNING, "Exhumed net: late join aborted%s%s", reason ? ": " : "", reason ? reason : "");
+
+    // Existing peers may already be parked at the agreed tick. A special
+    // all-ones freeze value is a release marker, not a simulation tick.
+    if (s_lateFreezeTick != UINT32_MAX)
+    {
+        uint8_t thaw[1 + 4];
+        thaw[0] = EXNET_PT_LATE_FREEZE;
+        VB_put32((char *)&thaw[1], UINT32_MAX);
+        ExNet_Broadcast(thaw, sizeof(thaw));
+    }
+    s_lateFreezeTick = UINT32_MAX;
+    Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
+
+    if ((unsigned)slot < (unsigned)numplayers)
+        mmulti_dropslot(slot);
+    mmulti_setextraslot(-1);
+    s_latePendingSlot = -1;
+    s_latePendingRejoin = 0;
+    s_lateAssetsReady = 0;
+    s_lateAssetsSent = 0;
+    s_lateSnapshotReady = 0;
+}
+
+static int ExNet_SendLateSnapshot(void)
+{
+    char path[BMAX_PATH];
+    ExNet_LateSnapshotPath(path, sizeof(path));
+    LoadSave::SaveNetworkSnapshot(path);
+
+    FILE *const fp = Bfopen(path, "rb");
+    if (!fp)
+    {
+        ExNet_AbortLateJoin("could not read the EXSN image");
+        return 0;
+    }
+    Bfseek(fp, 0, SEEK_END);
+    long const fileBytes = Bftell(fp);
+    Bfseek(fp, 0, SEEK_SET);
+    if (fileBytes <= 0 || fileBytes > EXNET_LATE_MAX_BYTES)
+    {
+        Bfclose(fp);
+        remove(path);
+        ExNet_AbortLateJoin("EXSN image is outside the transfer limit");
+        return 0;
+    }
+
+    int const chunks = ((int)fileBytes + EXNET_LATE_CHUNK_SIZE - 1) / EXNET_LATE_CHUNK_SIZE;
+    if (chunks <= 0 || chunks > 65535)
+    {
+        Bfclose(fp);
+        remove(path);
+        ExNet_AbortLateJoin("EXSN image has too many chunks");
+        return 0;
+    }
+
+    LOG_F(INFO, "Exhumed net: streaming %ld-byte EXSN image to staged slot %d", fileBytes, s_latePendingSlot);
+    for (int seq = 0; seq < chunks; seq++)
+    {
+        int const bytes = min(EXNET_LATE_CHUNK_SIZE, (int)fileBytes - seq * EXNET_LATE_CHUNK_SIZE);
+        uint8_t pkt[1 + 2 + 2 + 2 + EXNET_LATE_CHUNK_SIZE];
+        pkt[0] = EXNET_PT_LATE_SNAPSHOT;
+        VB_put16((char *)&pkt[1], (uint16_t)seq);
+        VB_put16((char *)&pkt[3], (uint16_t)chunks);
+        VB_put16((char *)&pkt[5], (uint16_t)bytes);
+        if (Bfread(&pkt[7], 1, bytes, fp) != (size_t)bytes)
+        {
+            Bfclose(fp);
+            remove(path);
+            ExNet_AbortLateJoin("could not read an EXSN chunk");
+            return 0;
+        }
+        ExNet_SendDirect(s_latePendingSlot, pkt, 7 + bytes);
+        if (!ExNet_DrainReliableWindow())
+        {
+            Bfclose(fp);
+            remove(path);
+            ExNet_AbortLateJoin("staged client stopped acknowledging EXSN data");
+            return 0;
+        }
+    }
+    Bfclose(fp);
+    remove(path);
+
+    uint8_t roster[kMaxPlayers];
+    Bmemcpy(roster, s_activeSlot, sizeof(roster));
+    roster[s_latePendingSlot] = 1;
+
+    uint8_t gone[kMaxPlayers];
+    for (int slot = 0; slot < kMaxPlayers; slot++)
+        gone[slot] = s_gone[slot] != 0;
+    gone[s_latePendingSlot] = 0;  // this is the player being admitted/rejoined
+
+    uint8_t go[1 + 1 + 1 + 1 + 11 + kMaxPlayers + kMaxPlayers] = {};
+    go[0] = EXNET_PT_LATE_GO;
+    go[1] = (uint8_t)s_latePendingSlot;
+    go[2] = (uint8_t)s_lateColor;
+    go[3] = (uint8_t)s_latePendingRejoin;
+    Bstrncpyz((char *)&go[4], s_lateName[0] ? s_lateName : "PLAYER", 11);
+    Bmemcpy(&go[15], roster, sizeof(roster));
+    Bmemcpy(&go[15 + kMaxPlayers], gone, sizeof(gone));
+
+    // Reliable ordering guarantees the joiner processes every preceding EXSN
+    // chunk before this GO command. Existing peers are frozen, so they cannot
+    // simulate a changed roster before they receive the same command.
+    ExNet_SendDirect(s_latePendingSlot, go, sizeof(go));
+    ExNet_Broadcast(go, sizeof(go));
+    s_lateGoSlot = s_latePendingSlot;
+    s_lateColor = clamp(s_lateColor, 0, 7);
+    s_lateGoRejoin = s_latePendingRejoin;
+    Bmemcpy(s_lateGoSlots, roster, sizeof(roster));
+    Bmemcpy(s_lateGoGone, gone, sizeof(gone));
+    s_lateGoReady = 1;
+
+    int const player = ExNet_ApplyLateRoster();
+    if (player < 0 || !ExNet_FinishLatePromotion(player))
+    {
+        ExNet_AbortLateJoin("could not promote the deterministic roster");
+        return 0;
+    }
+    s_latePendingSlot = -1;
+    return 1;
+}
+
+static void ExNet_HostCheckLateJoin(void)
+{
+    if (!s_lateJoinEnabled || !ExNet_IsServer() || !s_enabled || numplayers < 2)
+        return;
+
+    if (s_latePendingSlot < 0)
+    {
+        for (int slot = 0; slot < numplayers; slot++)
+        {
+            if (slot == myconnectindex || !mmulti_slotconnected(slot))
+                continue;
+            int const rejoin = ExNet_SlotActive(slot) && s_gone[slot] == 2;
+            if (ExNet_SlotActive(slot) && !rejoin)
+                continue;
+            s_latePendingSlot = slot;
+            s_latePendingRejoin = rejoin;
+            s_lateAssetsReady = 0;
+            s_lateAssetsSent = 0;
+            s_lateSnapshotReady = 0;
+            s_lateStartMs = s_lateLastAnnounceMs = timerGetTicks();
+            mmulti_setextraslot(slot);
+            uint8_t announce[1] = { EXNET_PT_LATE_ANNOUNCE };
+            ExNet_SendDirect(slot, announce, sizeof(announce));
+            LOG_F(INFO, "Exhumed net: staged %s in transport slot %d",
+                  rejoin ? "rejoiner" : "late joiner", slot);
+            return;
+        }
+        return;
+    }
+
+    uint32_t const now = timerGetTicks();
+    if (now - s_lateStartMs > 120000)
+    {
+        ExNet_AbortLateJoin("staged client timed out");
+        return;
+    }
+
+    if (!s_lateAssetsReady && now - s_lateLastAnnounceMs >= 500)
+    {
+        s_lateLastAnnounceMs = now;
+        uint8_t announce[1] = { EXNET_PT_LATE_ANNOUNCE };
+        ExNet_SendDirect(s_latePendingSlot, announce, sizeof(announce));
+    }
+
+    if (s_lateAssetsReady && !s_lateAssetsSent)
+    {
+        ExNet_SendGameFiles(s_latePendingSlot);
+        s_lateAssetsSent = 1;
+        LOG_F(INFO, "Exhumed net: staged client received game files; waiting for snapshot readiness");
+        return;
+    }
+
+    if (!s_lateSnapshotReady)
+        return;
+
+    if (s_lateFreezeTick == UINT32_MAX)
+    {
+        s_lateFreezeTick = s_netTick + EXNET_LATE_FREEZE_LEAD;
+        Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
+        uint8_t freeze[1 + 4];
+        freeze[0] = EXNET_PT_LATE_FREEZE;
+        VB_put32((char *)&freeze[1], s_lateFreezeTick);
+        ExNet_Broadcast(freeze, sizeof(freeze));
+        LOG_F(INFO, "Exhumed net: late join will freeze at tick %u", s_lateFreezeTick);
+        return;
+    }
+
+    if (s_netTick != s_lateFreezeTick)
+        return;
+
+    s_lateFrozen[myconnectindex] = 1;
+    for (int slot = 0; slot < numplayers; slot++)
+        // A rejoiner still has an active compact roster entry, but it was
+        // already LogoffPlayer()'d and is deliberately outside normal traffic
+        // until GO. It cannot acknowledge this freeze from its loader.
+        if (ExNet_SlotActive(slot) && !s_gone[slot] && !s_lateFrozen[slot])
+            return;
+
+    ExNet_SendLateSnapshot();
+}
+
+int ExNet_LoadLateJoinSnapshot(void)
+{
+    if (!s_lateJoiner)
+        return 0;
+
+    uint32_t const start = timerGetTicks();
+    uint32_t lastReady = 0;
+    while (!s_lateGoReady || !s_lateSnapshot || s_lateSnapshotGot < s_lateSnapshotChunks
+           || s_lateSnapshotLastLen <= 0)
+    {
+        handleevents();
+        ExNet_Pump();
+        uint32_t const now = timerGetTicks();
+        if (now - lastReady >= 500)
+        {
+            lastReady = now;
+            ExNet_SendLateReady(1);
+        }
+        if (quitevent || now - start > 120000)
+        {
+            LOG_F(WARNING, "Exhumed net: timed out waiting for the late-join EXSN image");
+            ExNet_ClearLateSnapshot();
+            return 0;
+        }
+    }
+
+    int const player = ExNet_ApplyLateRoster();
+    if (player < 0)
+    {
+        LOG_F(ERROR, "Exhumed net: invalid late-join roster from host");
+        ExNet_ClearLateSnapshot();
+        return 0;
+    }
+
+    char path[BMAX_PATH];
+    ExNet_LateSnapshotPath(path, sizeof(path));
+    int const bytes = (s_lateSnapshotChunks - 1) * EXNET_LATE_CHUNK_SIZE + s_lateSnapshotLastLen;
+    FILE *const fp = Bfopen(path, "wb");
+    if (!fp || Bfwrite(s_lateSnapshot, 1, bytes, fp) != (size_t)bytes)
+    {
+        if (fp) Bfclose(fp);
+        remove(path);
+        LOG_F(ERROR, "Exhumed net: could not write the staged EXSN image");
+        ExNet_ClearLateSnapshot();
+        return 0;
+    }
+    Bfclose(fp);
+    ExNet_ClearLateSnapshot();
+    LoadSave::LoadNetworkSnapshot(path);
+    remove(path);
+
+    if (!ExNet_FinishLatePromotion(player))
+    {
+        LOG_F(ERROR, "Exhumed net: could not create the staged player from EXSN");
+        return 0;
+    }
+    return 1;
 }
 
 void ExNet_Connect(int argc, char const * const *argv, int firstnet)
@@ -674,20 +1427,66 @@ void ExNet_Connect(int argc, char const * const *argv, int firstnet)
     if (numplayers <= 1)
         return;
 
-    s_enabled       = 1;
-    nTotalPlayers   = (short)numplayers;
-    nNetPlayerCount = numplayers - 1;
-    nLocalPlayer    = myconnectindex;
-    wConsoleNode    = myconnectindex;
+    if (numplayers > kMaxPlayers)
+        bail2dos("Exhumed supports at most %d network players", kMaxPlayers);
 
-    for (int i = 0; i < numplayers; i++)
+    s_enabled       = 1;
+    s_rosterReady   = 0;
+    s_activePlayers = 0;
+    Bmemset(s_activeSlot, 0, sizeof(s_activeSlot));
+    for (int slot = 0; slot < kMaxPlayers; slot++)
+        s_slotToPlayer[slot] = -1;
+    if (ExNet_IsServer())
+    {
+        uint8_t slots[kMaxPlayers] = {};
+        for (int slot = 0; slot < numplayers; slot++)
+            slots[slot] = mmulti_slotconnected(slot) ? 1 : 0;
+        if (!ExNet_ApplyRoster(slots))
+        {
+            s_enabled = 0;
+            LOG_F(ERROR, "Exhumed net: host could not form an initial player roster");
+            return;
+        }
+        ExNet_SendRoster();
+    }
+    else if (!ExNet_WaitForRoster())
+    {
+        s_enabled = 0;
+        LOG_F(ERROR, "Exhumed net: timed out waiting for the host's initial roster");
+        return;
+    }
+
+    // A staging client has no active simulation roster yet. Give the regular
+    // engine startup a harmless one-player identity solely so it can install
+    // its assets and reach ExNet_LoadLateJoinSnapshot(); that function replaces
+    // the entire world and applies the compact authoritative roster from GO.
+    if (s_lateJoiner)
+    {
+        nTotalPlayers = 1;
+        nNetPlayerCount = 0;
+        nLocalPlayer = 0;
+        wConsoleNode = 0;
+        Bstrncpyz(playerNames[0], s_playerName, sizeof(playerNames[0]));
+        nPlayerColor[0] = (short)s_playerColor;
+        ExNet_SendLateReady(0);
+        LOG_F(INFO, "Exhumed: late-join client staged in transport slot %d", myconnectindex);
+        OSD_RegisterFunction("say", "say <text>: send a chat message to the other players", ExNet_OSDCmd_Say);
+        return;
+    }
+
+    nTotalPlayers   = (short)s_activePlayers;
+    nNetPlayerCount = s_activePlayers - 1;
+    nLocalPlayer    = ExNet_PlayerForSlot(myconnectindex);
+    wConsoleNode    = ExNet_PlayerForSlot(connecthead);
+
+    for (int i = 0; i < s_activePlayers; i++)
         if (!playerNames[i][0])
             Bsnprintf(playerNames[i], sizeof(playerNames[i]), "PLAYER %d", i + 1);
-    Bstrncpyz(playerNames[myconnectindex], s_playerName, sizeof(playerNames[0]));
-    nPlayerColor[myconnectindex] = (short)s_playerColor;
+    Bstrncpyz(playerNames[nLocalPlayer], s_playerName, sizeof(playerNames[0]));
+    nPlayerColor[nLocalPlayer] = (short)s_playerColor;
 
-    LOG_F(INFO, "Exhumed: multiplayer up -- %d players, I am player %d \"%s\" (%s), transport %s",
-          numplayers, myconnectindex, playerNames[myconnectindex],
+    LOG_F(INFO, "Exhumed: multiplayer up -- %d active player(s) in %d transport slot(s), I am player %d \"%s\" (%s), transport %s",
+          s_activePlayers, numplayers, nLocalPlayer, playerNames[nLocalPlayer],
           ExNet_IsServer() ? "master" : "slave",
           s_broadcastMode ? "peer-to-peer" : "master/slave");
 
@@ -722,8 +1521,9 @@ void ExNet_LevelStart(void)
     // that much.  Seed them idle on every machine so the pipeline starts full
     // and identical.
     for (int p = 0; p < numplayers; p++)
-        for (uint32_t t = 0; t < EXNET_INPUT_DELAY; t++)
-            s_ringHave[p][t & EXNET_RINGMASK] = 1;
+        if (ExNet_SlotActive(p))
+            for (uint32_t t = 0; t < EXNET_INPUT_DELAY; t++)
+                s_ringHave[p][t & EXNET_RINGMASK] = 1;
 
     s_readyGen[myconnectindex] = s_levelGen;
 
@@ -732,7 +1532,7 @@ void ExNet_LevelStart(void)
     VB_put32((char *)&pkt[1], s_levelGen);
     ExNet_Broadcast(pkt, sizeof(pkt));
 
-    LOG_F(INFO, "Exhumed net: waiting for all %d players at the level-start barrier...", numplayers);
+    LOG_F(INFO, "Exhumed net: waiting for all %d active player(s) at the level-start barrier...", s_activePlayers);
 
     int const startTic = (int)totalclock;
     int lastAnnounce = startTic;
@@ -744,7 +1544,7 @@ void ExNet_LevelStart(void)
 
         int all = 1;
         for (int p = 0; p < numplayers; p++)
-            if (s_readyGen[p] < s_levelGen && !s_gone[p]) { all = 0; break; }
+            if (ExNet_SlotActive(p) && s_readyGen[p] < s_levelGen && !s_gone[p]) { all = 0; break; }
         if (all)
             break;
 
@@ -832,14 +1632,14 @@ static void ExNet_PollStdin(void)
 // effect on, so all the survivors drop the player at the same instant.
 static void ExNet_CheckTimeouts(void)
 {
-    if (!ExNet_IsServer() || numplayers < 2)
+    if (!ExNet_IsServer() || s_activePlayers < 2)
         return;
 
     uint32_t const now = timerGetTicks();
 
     for (int p = 0; p < numplayers; p++)
     {
-        if (p == myconnectindex || s_gone[p])
+        if (!ExNet_SlotActive(p) || p == myconnectindex || s_gone[p])
             continue;
         if (!s_lastInputMs[p])                    // never heard from yet: start the clock
         {
@@ -865,6 +1665,39 @@ static void ExNet_CheckTimeouts(void)
     }
 }
 
+static void ExNet_CheckLateFreeze(void)
+{
+    if (s_lateJoiner || s_lateFreezeTick == UINT32_MAX || s_netTick != s_lateFreezeTick
+        || s_lateFrozen[myconnectindex])
+        return;
+
+    s_lateFrozen[myconnectindex] = 1;
+    if (!ExNet_IsServer())
+    {
+        uint8_t pkt[1 + 4];
+        pkt[0] = EXNET_PT_LATE_FROZEN;
+        VB_put32((char *)&pkt[1], s_lateFreezeTick);
+        ExNet_SendDirect(connecthead, pkt, sizeof(pkt));
+    }
+    LOG_F(INFO, "Exhumed net: reached late-join freeze tick %u", s_lateFreezeTick);
+}
+
+static void ExNet_CheckLatePromotion(void)
+{
+    if (!s_lateGoReady || s_lateJoiner)
+        return;
+    if (s_lateFreezeTick == UINT32_MAX || s_netTick != s_lateFreezeTick)
+        return;
+
+    int const player = ExNet_ApplyLateRoster();
+    if (player < 0 || !ExNet_FinishLatePromotion(player))
+    {
+        LOG_F(ERROR, "Exhumed net: rejected invalid late-join promotion");
+        if (ExNet_IsServer())
+            ExNet_AbortLateJoin("one peer rejected roster promotion");
+    }
+}
+
 void ExNet_Update(void)
 {
     if (!s_enabled)
@@ -874,13 +1707,16 @@ void ExNet_Update(void)
     ExNet_HostAdvertise();
     ExNet_CheckTimeouts();
     ExNet_PollStdin();
+    ExNet_CheckLateFreeze();
+    ExNet_HostCheckLateJoin();
+    ExNet_CheckLatePromotion();
 
     // Publishing is driven by simulation progress, not by the wall clock: one
     // new input per tick we have run.  That makes the pipeline self-regulating
     // -- if a peer stalls us, we stop producing too, and nothing runs away.
     while (s_sendTick < s_netTick + EXNET_INPUT_DELAY)
     {
-        PlayerInput const local = sPlayerInput[myconnectindex];
+        PlayerInput const local = sPlayerInput[nLocalPlayer];
 
         s_ring[myconnectindex][s_sendTick & EXNET_RINGMASK] = local;
         s_ringHave[myconnectindex][s_sendTick & EXNET_RINGMASK] = 1;
@@ -907,9 +1743,13 @@ int ExNet_MoveFrames(int wallClockFrames)
     while (ready < wallClockFrames)
     {
         uint32_t const t = s_netTick + ready;
+        if (!s_lateJoiner && s_lateFreezeTick != UINT32_MAX && t >= s_lateFreezeTick)
+            break;
         int have = 1;
         for (int p = 0; p < numplayers; p++)
         {
+            if (!ExNet_SlotActive(p))
+                continue;
             if (s_gone[p] && t >= s_goneTick[p])
                 continue;
             if (!s_ringHave[p][t & EXNET_RINGMASK]) { have = 0; break; }
@@ -931,17 +1771,20 @@ void ExNet_LoadTickInputs(void)
 
     for (int p = 0; p < numplayers; p++)
     {
+        if (!ExNet_SlotActive(p))
+            continue;
+        int const player = ExNet_PlayerForSlot(p);
         if (s_gone[p] && t >= s_goneTick[p])
         {
             if (s_gone[p] == 1 && t == s_goneTick[p])
             {
                 s_gone[p] = 2;          // apply the removal exactly once, on every machine
-                LogoffPlayer(p);
+                LogoffPlayer(player);
             }
-            Bmemset(&sPlayerInput[p], 0, sizeof(sPlayerInput[p]));
+            Bmemset(&sPlayerInput[player], 0, sizeof(sPlayerInput[player]));
             continue;
         }
-        sPlayerInput[p] = s_ring[p][t & EXNET_RINGMASK];
+        sPlayerInput[player] = s_ring[p][t & EXNET_RINGMASK];
         s_ringHave[p][t & EXNET_RINGMASK] = 0;
     }
 }
@@ -953,6 +1796,8 @@ void ExNet_EndTick(void)
 
     uint32_t const t = s_netTick++;
     uint32_t const crc = ExNet_StateCrc();
+
+    ExNet_NetworkSnapshotSelftest();
 
     s_syncCrc[t & EXNET_RINGMASK]  = crc;
     s_syncHave[t & EXNET_RINGMASK] = 1;
@@ -979,12 +1824,12 @@ void ExNet_EndTick(void)
         }
         if (traceEvery > 0 && (t % (uint32_t)traceEvery) == 0)
         {
-            int const nSprite = PlayerList[myconnectindex].nSprite;
+            int const nSprite = PlayerList[nLocalPlayer].nSprite;
             LOG_F(INFO, "EXNET tick %u crc %08x send %u  me(%d,%d) hp %d",
                   t, crc, s_sendTick,
                   (unsigned)nSprite < MAXSPRITES ? sprite[nSprite].x : 0,
                   (unsigned)nSprite < MAXSPRITES ? sprite[nSprite].y : 0,
-                  (int)PlayerList[myconnectindex].nHealth);
+                  (int)PlayerList[nLocalPlayer].nHealth);
         }
     }
 }
@@ -1022,8 +1867,8 @@ void ExNet_ChatSendText(const char *text)
     Bmemcpy(&pkt[2], text, n);
     ExNet_Broadcast(pkt, 2 + n);
 
-    StatusMessage(360, "%s: %s", playerNames[myconnectindex], text);
-    LOG_F(INFO, "Exhumed chat: %s: %s", playerNames[myconnectindex], text);
+    StatusMessage(360, "%s: %s", playerNames[nLocalPlayer], text);
+    LOG_F(INFO, "Exhumed chat: %s: %s", playerNames[nLocalPlayer], text);
 }
 
 static void ExNet_ChatSend(void)

@@ -4,11 +4,17 @@
      Set, queen, Selkis, bird) become visible in converted levels. Produced
      by a multi-agent research pass over sequence.cpp, the demo's SEQ/ART
      data and the remaster's anim scripts; the format writer round-tripped
-     byte-identical on ANUBIS/MUMMY/WASP.SEQ. Not yet implemented. -->
+     byte-identical on ANUBIS/MUMMY/WASP.SEQ. Kept current as implementation
+     evidence and a ledger of remaining approximations. -->
 
 # Compiling remaster sprite anims into Build .SEQ files — implementation spec
 
-Goal: `kexmap.py` emits loose `WASP.SEQ`, `ROACH.SEQ`, `SET.SEQ`, `QUEEN.SEQ`, `QUEENEGG.SEQ`, `SCORP.SEQ` (+ tiles via `exhumed.def`) next to the converted maps, overriding STUFF.DAT via `kopen4loadfrommod`, so the demo's 389 zero-size monster tiles stop making these creatures invisible. No engine changes.
+Current result: `kexmap.py` fills the compatible stock sequence tiles and
+emits loose exact/retargeted sequences (`WASP`, `HAWK`, `SEEDLING`,
+`SCORPION`, `MANACLE`, plus patched demo sequences) next to converted maps.
+They override STUFF.DAT through the mod search path. Small KEX-only controller
+branches preserve authored identities, callbacks and timings where the stock
+state machines cannot express them; classic behavior remains isolated.
 
 ## 1. The .SEQ format — authoritative writer spec
 
@@ -186,80 +192,275 @@ Common notation: "N+d" = sub-seq index; dir d=0..7 ↔ kex rotation N,NE,E,ES,S,
 
 ### 2.1 WASP — `WASP.SEQ` (kSeqWasp=22, SeqNames[22], sequence.cpp:100/sequence.h:52)
 
-Engine: `wasp.cpp:60` `ActionSeq[] = {{0,0},{0,0},{9,0},{18,0},{27,1},{28,1},{29,1}}`; xrepeat 50 normal / 20 egg-wasp (wasp.cpp:132–139); pain action 3 is dead code (wasp.cpp:226–232 sets then immediately overwrites `nAction=1`). Demo file: tag 'SD', center (160,148), 31 sub-seqs, 229 frames, 224 chunks, 1 chunk/frame. All 29 tiles 2432–2460 are 0×0. Demo per-dir tile block `2432+5d` (d=0..4) = {flapA, flapB, C recoil, D sting, E follow-through}. `WASPSMAL.SEQ`/`WASPBIG.SEQ` exist in the GRP but are never loaded.
+The demo fallback remains a 31-slot, 229-frame file driven by native
+`ActionSeq`, but KEX conversions now override it with `kexwaspseq.py`: a
+36-slot, 137-frame/chunk sequence compiled directly from `wasp_base`,
+`wasp_chase`, and `wasp_attack`. Fifteen distinct movement sprites occupy the
+private contiguous range 7870-7884; each frame stores the retail crop centre,
+so wing and sting poses retain a fixed actor origin. `WaspActionSeq` is
+selected only when slot 9 is eight frames and slot 27 is four, leaving stock
+data and non-KEX play on the original contract.
 
-Kex: `AI_Wasp` (type 7): spawnAnim `wasp_base`, chaseAnim `wasp_chase` (identical frames), meleeAnim `wasp_attack`, deathAnim `wasp_death` (1 frame, no sprites — gibs via `A_TossActor` ×8 of `wasp_gib01..05`, sprites 10/11/0/13/19), scale 1.25, health 60. Sheet `sprites/monsters/wasp.png` 512×256.
+| Exact sub-seq group | frames/view | retail source | callback contract |
+|---|---:|---|---|
+| 0+d base | 4 | `wasp_base` | no chase cue |
+| 9+d attack | 8 | `wasp_attack` | `waspatk` + `A_MeleeAttack(16,20)` f0; `wasphit` f3; backoff callback f7 |
+| 18+d backoff | 1 | `wasp_attack` f7 | move backward at 20 authored units/tick, then chase |
+| 27+d chase | 4 | `wasp_chase` | `waspact` f0; four authored `A_WaspBob` callback positions |
+| 8/17/26 | 0 | separators | required directional layout padding |
+| 35 | 1 | safe terminal pose | unreachable after immediate KEX gib death |
 
-| Build sub-seq | frames | ← kex source | mapping |
-|---|---|---|---|
-| 0+d fly (idle+chase) | 4 | wasp_base rot d | 1:1 — both A,A,B,B. Sprites (N/NE/E/ES/S): A = 6/15/3/12/1, B = 8/17/5/14/2 |
-| 8, 17, 26 | 0 | — | empty separators (required) |
-| 9+d attack | 13 | wasp_attack rot d | Build f0–3 ↔ kex f0–3 (A,A,B,B); Build f6–8 (sting D) ↔ kex f4–7 (sting: 9/18/7/16/4); Build f4,5,11,12 (C) → reuse flapB; f9,10 (E) → reuse sting or flapA (no kex art) |
-| 18+d pain | 6 | — (kex painChance 0) | hold C stand-in (flapB); unreachable at runtime |
-| 27 death tumble | 32 | — (kex gibs) | reproduce demo structure from fly tiles: 2433,2434,2457,2458,2459,2453,2432,… (2–3 ticks/tile, some y-flip); 2457–2459 = y-flipped fly sprites 6/1 (demo itself y-flips here) |
-| 28 plummet loop | 7 | — | 2459 stand-in ×7 (mixed x-flip in demo) |
-| 29 splat | 1 | — | tile 2460 stand-in: composite of gib sprites 10,11,0,13,19 (flagged, §3.2) |
-| 30 unused | 5 | — | 5 chunk-less frames, SeqFlag −1, matching demo |
+The sound table is exactly `[WASP_BUZ, WASP_STG, WASP_HIT]`, with events at
+chase f0, attack f0 and attack f3. `KEX_SOUNDS` maps those names to
+`waspact.wav`, `waspatk.wav` and `wasphit.wav`. Runtime damage is synchronized
+to attack frame 0; attack frame 7 enters the one-tick backoff group. KEX stats
+come from `AI_Wasp`: health 60, damage 20, radius 18, scale 1.25, speed 16,
+height 64 and `painChance 0`. Death immediately tosses the retail 1/1/1/3/2
+gib pattern on tiles 7823-7827 and randomly chooses `waspdeath01/02`.
 
-Actions 4/5/6 (`.b=1`) stay single-view. SD table: names `[WASP_BUZ, WASP_DIE, WASP_DY1, WASP_STG, WASP_WNG]` — all 5 VOCs exist in the demo GRP, no aliases needed. Events that actually fire: fly seq0 f0 → WASP_WNG|0x2000; attack seq9 f7 → WASP_STG; death seq27 f0 → WASP_DIE. (Demo also has WASP_BUZ on f0 of fly/attack dirs 1–7 and WASP_DY1 on pain seq18 f5 — never fire; copying all 18 events verbatim is safest.) Kex wav equivalents (reference only): waspact/waspatk/wasphit/waspdeath01/02; WASP_WNG has no kex counterpart. All FrameFlags 0.
+`A_WaspBob` is not a base/idle motion. All four `wasp_chase` frames call it;
+base and attack contain none. With no target it writes
+`cos((GameTicks/32)%360) * 2`; with a target it returns without changing Z when
+the source height delta is outside +/-128 or the full origin-to-origin 3D
+distance is at most 192. The native exact-Wasp path retains a 60 Hz source
+clock and vertical velocity in save-safe controller fields. KEX's default `.5`
+animation speed invokes each authored chase callback on the first of two 60 Hz
+source steps per 30 Hz Exhumed tick; the second preserves that velocity while
+AI_Wasp's .94 vertical friction is applied, and both displacements are summed
+after converting KEX up-positive Z to Build down-positive Z. It has a yaw-only
+pursuit helper so the old pitch-in-`sprite.zvel` chase path cannot overwrite
+the callback. `VB_KEX_WASP_BOB_TEST=1` exercises the exact
+phase, friction, bounds and sign; `kexverify.py` audits both source and native
+contracts.
 
-### 2.2 BIRD — no Build AI; resolved to stay on WASP.SEQ (see §3.1)
+### 2.2 BIRD — dedicated `HAWK.SEQ` identity on the Wasp run record
 
-Facts: `AT['CROW'] = (117, 0)` and `AT['MOSQUITO'] = (117, 0)` (kexmap.py ~1463–1464) → both spawn via `init.cpp:841 case 117:` `BuildWasp`. `HAWK.SEQ` is loaded (SeqNames[51], `kSeqHawk`, sequence.h:81) but `kSeqHawk` is referenced by **zero** .cpp files — dead data. Demo HAWK.SEQ: 2622 B, 'SD' with empty sound table, center (160,100), 54 sub-seqs (39–53 empty), 163 frames/chunks; layout: 0–7 fly 12 f/dir (11 in dir7), 9–16 glide 1 f (2 in dir3), 18–25 fly-step 6 f, 27–34 attack pose 1 f (tiles 3009–3013), 36 death fall (3014), 37 feather (3015, 10×12 **exists**), 38 (3016, 13×8 **exists**); tiles 2979–3014 all zero-size. Quirk: its dir groups are phase-rotated 90° (unique views 0,1,2,6,7; mirror axis through 2/6) vs the standard wasp/kex convention (unique 0–4, axis 0/4) — a regenerated file should use the standard convention.
+`AI_Bird` still uses the compact native Wasp record for runlist/save storage,
+but `s_waspKind` and the mirrored `sprite.hitag` now preserve a distinct bird
+identity. KEX birds select `BirdActionSeq` and `kSeqHawk`; classic records and
+missing optional data retain their native fallback. Save reconstruction also
+recognizes the private bird tile range.
 
-Kex: `AI_Bird` — health 10, painChance 0, fullbright 1, sightSound birdact.wav; anims: bird_fly_calm 1×8, bird_fly_chase 6×8 (flap sounds f1/f4), bird_fly_retreat 12×8, bird_attack 7×8 (one pose; melee f0, delay 8, goto retreat), bird_death 3 (f0/f1 = chase poses f4/f5; f2 spriteless gib+destroy), bird_feather 15×1 (sprite 32, 20×3). Sheet bird.png 256×256, 36 sprites. If a bird-skinned WASP.SEQ were built: fly 0–7 ← bird_fly_chase (6 f/dir); attack 9–16 ← bird_attack pose held; pain 18–25 ← retreat/chase f0 (no kex pain); death 27 ← bird_death f0–f1 alternated; 28 ← feather frames; 29 ← feather-pile tile (matches HAWK.SEQ's surviving 3015/3016). Sound aliases it would need: `hawk_flp` → sounds/birdflap01.wav, `hawk_die` → sounds/birddeath.wav (existing: `hawk_hrt` → birdattack.wav, kexmap.py KEX_SOUNDS; demo VOCs HAWK_HRT/HAWKFIRE exist).
+`kexbirdseq.py` is an exact 36-slot, 217-frame/chunk file covering all 36
+retail source sprites on tiles 7600-7635. It uses standard N..WN directional
+slots and KEX-origin-preserving chunk anchors, replacing the stock HAWK file's
+rotated and mostly zero-size layout.
+
+| Exact sub-seq group | frames/view | retail source | callback contract |
+|---|---:|---|---|
+| 0+d calm | 1 | `bird_fly_calm` | calm wander controller |
+| 9+d attack | 8 | `bird_attack` | seven visual frames plus authored `delay 8`; attack sound and melee f0 |
+| 18+d retreat | 12 | `bird_fly_retreat` | upward impulse f0, turning retreat f1-f11 |
+| 27+d chase | 6 | `bird_fly_chase` | flap01 f1, flap02 f4 |
+| 35 | 1 | `bird_feather` | art census slot; the live loop is `KEXBIRDFEATHER.SEQ` |
+
+The sound table is `[BIRD_WNG, BIRD_WN2, BIRD_ATK]`. Authored stats are
+health 10, damage 20, radius 16, scale 1.5/repeat 60, speed 8, height 128,
+fullbright and no infighting. Calm motion is two units/tick with 1.5-degree
+steering; pursuit is eight units/tick. The exact bridge keeps each Bird's
+60 Hz `GameTicks` and fractional Build-angle remainder in unused KEX-bird-only
+controller fields: `A_BirdWander` writes two-unit XY velocity on the `.5`
+animation edge and that zero-friction velocity moves on both source physics
+ticks. `A_BirdRetreat` similarly writes its four-unit turn/vector before both
+steps, then ends precisely when the script's vertical-velocity or
+ceiling-minus-128-height test succeeds rather than on a native timer.
+`VB_KEX_BIRD_FLIGHT_TEST=1` checks the source clock, fractional turns and
+retreat boundary. The 32-unit melee callback occurs on attack frame 0, then
+the bird rises and turns through the twelve-tick retreat. Death plays
+`birddeath.wav`, creates seven `Obj_Bird_Feathers` actors with the source's
+centred spawn range, and removes the host immediately. The optional
+`KEXBIRDFEATHER.SEQ` holds the single retail feather tile (7632) through the
+15 source crops; the native KEX-only bridge randomizes its initial frame,
+loops it, writes the downward half-unit velocity on f8/f14, and removes it at
+the source's 1.024-unit floor gate. `VB_KEX_BIRD_FEATHER_TEST=1` probes that
+sequence/fall boundary without creating visible gameplay actors.
 
 ### 2.3 SENTRY — `ROACH.SEQ` (kSeqRoach, SeqNames[50], sequence.cpp:131/sequence.h:80)
 
-Engine: `init.cpp:928` lotag 104 → `BuildRoach(1,…)` (start dormant, action 0); `init.cpp:938` lotag 103 → `BuildRoach(0,…)` (start alert, action 1); xrepeat/yrepeat 40 (roach.cpp:110–111). `ActionSeq` (roach.cpp:40–48): 0={24,0} dormant idle, 1={0,0} alert idle, 2={0,0} walk, 3={16,0} attack (fires bullet type 13 on 0x80, roach.cpp:394–397), 4={8,0} pain, 5={32,1} death, 6={42,1} corpse. Demo file: 'SD', center (160,156), 46 sub-seqs, 707 frames, 849 chunks. Zero-size tiles: 3200–3225, 3227–3253. Present: 3226 (97×113 attack), 3254/3255 (debris 29×4, 26×5), 3261/3262 (5×5), 3266 (shell 41×42), 3270 (corpse 54×23), unused 1885–1894.
+The native fallback remains the demo controller and file: lotag 104 starts
+dormant in action 0, lotag 103 starts alert in action 1, and `ActionSeq` uses
+groups 24/0/0/16/8/32/42 for dormant, alert, chase, attack, pain, death and
+corpse. That 46-slot file has 707 frames and 849 chunks and is still selected
+outside KEX mode or whenever the exact loose-file signature is absent.
 
-Kex: `AI_Sentry` — scale 1.5, health 180, sightSound sentryact01.wav; sentry_idle 1 f, sentry_chase 8 f (A_SentryChatter f0), sentry_pain 12 f (sentrypain01 f0), sentry_attack 10 f (sentryfire + `A_FireProjectile("Proj_Blaster")` **at f6**), sentry_death 1 f (gib: 9× A_TossActor of sentry_gib01–05, A_Destroy). Projectile Proj_Blaster (damage 30) maps to Build bullet 13 art (ROACSHOT/ROCHFIRE.SEQ — out of scope).
+Retail `AI_Sentry` has health 180, radius 48, height 192, step height 48,
+scale 1.5, speed 8, turn speed 2, pain chance 24 and `noDropOff 1`. Its exact
+animation contract is idle 1 frame, chase 8 (`A_SentryChatter` at frame 0),
+pain 12 (pain sound frame 0 and `goto sentry_chase` at frame 10), and attack
+10 (`sentryfire`, fullbright and `A_FireProjectile("Proj_Blaster",0,0,4,96,24)`
+at frame 6). Death is immediate and tosses nine authored gibs in the 2/1/1/2/3
+pattern before destroying the actor. `Proj_Blaster` has damage 30 and radius
+36 and is represented by native bullet type 13 with dedicated remaster art.
 
-| Build sub-seq | frames | ← kex | mapping / flags / sounds (dir-0) |
-|---|---|---|---|
-| 0–7 walk & alert idle | 8 | sentry_chase | 1:1 |
-| 8–15 pain | 12 | sentry_pain | 1:1; SD HAWK_HRT @ f0 |
-| 16–23 attack | 8 | sentry_attack | 10→8: take kex f2–9 so kex fire-f6 lands on Build local f4; flags 0x84 @ f4, 0x04 @ f5; SD LAZ-FIRE @ f4 |
-| 24–31 dormant idle | 5 | sentry_idle | 1→5 repeat (SeqSize ≥ 2 required — roach.cpp:265 checks `field_2 == 1`); demo flags 0x04 @ f3,f4 (blink), keep; no sound (demo's ROCH_WLD entries only sat on dirs ≠0 — never fired) |
-| 32 death | 38 | — | keep demo frames 13–37 verbatim (tiles 3254/3255/3266/3270 exist) and paint f0–12 from sentry_pain rotation_N; SD ROCH_DIE @ f0, SPISPLAT|0x2000 @ f23; up to 5 chunks/frame (shell 3266 + debris) |
-| 33 (4 f), 34–41 (50 f ×8, tiles 1885–1894 present), 43–45 (0 f) | — | unused by roach.cpp | emit empty (size 0), but **file must reach ≥43 sub-seqs** so index 42 exists (demo pads to 46, SeqFlag[45]=−1) |
-| 42 corpse | 1 | — | tile 3270 already visible — reference as-is |
+`kexseqmap_gen.py` emits the exact KEX file as 36 slots and 249 frames/chunks:
 
-Sounds: HAWK_HRT (VOC present; alias `hawk_hrt`→birdattack.wav), LAZ-FIRE (**no VOC** — alias `laz-fire`→sentryfire.wav required, exists in KEX_SOUNDS), ROCH_DIE (**no VOC** — alias `roch_die`→sentrydeath01.wav, exists), ROCH_WLD (alias exists, moot), SPISPLAT (VOC present, no alias needed). Note kexmap ACTOR_MAP emits only lotag 103 for AI_Sentry, but lotag 104's dormant group (24–31) must still be compiled — the action is reachable.
+| Exact sub-seq group | frames/view | controller action | callback contract |
+|---|---:|---|---|
+| 0–7 | 1 | dormant + alert idle | exact idle pose |
+| 9–16 | 8 | chase | authored movement cadence; chatter is controller-side |
+| 18–25 | 12 | pain | `ROCH_WLD` frame 0; controller exits after rendered frame 10 |
+| 27–34 | 10 | attack | `ROCH_GUN`, projectile and fullbright on frame 6 |
+| 8,17,26 | 0 | separators | preserve eight-direction grouping |
+| 35 | 1 | safe terminal | immediate KEX death bypasses corpse animation |
 
-### 2.4 SET — `SET.SEQ` (kSeqSet=48, sequence.h:78; lotag 111, init.cpp:871 → BuildSet)
+All 71 distinct layered composites, including the asymmetric pain rotations,
+are pre-rendered for all eight views on tiles 7890–7960. Consequently every
+chunk flip flag is zero: applying the stock west-view mirror would flip the
+already composed layers a second time. `SentryActionSeq` maps actions
+0/1/2/3/4/5/6 to slots 0/0/9/27/18/35/35. The controller recognizes the
+exact file by slot 0 having one frame and slot 27 having ten; otherwise it
+uses the classic action table.
+
+KEX `BuildRoach` converts the retail dimensions to clipdist 72 and repeat 60,
+uses speed 8 and incremental turn-speed-2 steering, plays `sentryact01.wav`
+on acquisition, and retains chatter/pain/fire/death cues. The env-only
+`VB_KEX_SENTRY_TEST=1` probe forces one attack and one pain cycle and verifies
+the 1/8/12/10 cadence, attack frame 6, pain exit frame 10, fullbright flag,
+stats and movement speed. `VB_KEX_SENTRY_AUDIT=1` logs the first live Sentry's
+resolved values and whether the exact sequence was detected.
+
+### 2.4 MANTIS — stock `LAVAG.SEQ` attack slot 10; lotag 108
+
+KEX `AI_Mantis` deliberately reuses the pixel-identical native Lava art, so it
+does not need another generated SEQ. The retail actor contract is health 400,
+radius 48 / Build clipdist 72, height 384, scale 3 / repeat 120, move speed 64,
+pain chance 16 and no in-fighting. Stock `LAVAG.SEQ` slot 10 already contains
+the required source frames 0–12.
+
+The native KEX controller supplies the timing that a static SEQ cannot express:
+three one-tick common frames, then either a rare 1/128 PSX branch or the usual
+Saturn branch. PSX renders frames 4–12 over nine ticks and calls the custom
+`FireActor` bridge on frames 5–9 for five independent yaw/pitch-spread shots at
+continuous speed 8–16. Saturn renders the exact 13-tick hold map
+`4,5,5,5,5,10,10,10,10,11,11,11,11`; its frame-5 callback is
+`A_FireProjectile("Proj_Fireball",0,0,8,192,16)`. The script's initial
+`1 + Size(3)` and check-before-decrement ordering produce two through nine
+volleys. KEX-only mode/count/timeline bits are packed into `Lava.nFrame`, so
+the original raw save structure does not grow.
+
+The rest of the retail state machine also uses the stock art verbatim. Hidden
+chase runs `A_MantisThink` every four ticks after the generic two-tick target
+look; the callback has its authored byte gate (`<= 32`), 2000-unit radial LOS,
+clamped `Size(3)`, and persistent scratch0/scratch1 peek-vs-rise decision.
+`mantis_peak` is slot 0 for 62 ticks, with show/hide and sounds at frames
+0/2/24/37/61. `mantis_rise` is slot 1 for 60 ticks, faces/shows/quakes on frame
+0, plays its sounds at 4/12/14, becomes solid and shootable at 31, and enters
+the attack after 59. Pain, submerge, and splash retain their exact 15/24/21
+timelines; blocking clears on pain frame 0 or submerge frame 3, and splash
+hides on frame 20. The two mutually exclusive wake counters share three more
+packed `nFrame` bits, still without changing the save record.
+
+The 54-frame death is composed from the same stock views: pain frames 0–8,
+submerge 0–23, then splash 0–19; source frame 53 hides and destroys before it
+is drawn. Frame 0 fires the tagged event, death sound, unblock, and first
+`A_MantisExplode`; frames 5 and 8 repeat the explosion, for the retail three
+bursts of twenty Ra-fire orbs. The splash sounds remain on death frames 37 and
+43.
+
+`VB_KEX_MANTIS_TEST=1` forces and validates the 62-tick peek, 60-tick rise,
+three-tick prefix, minimum two Saturn volleys (26 ticks), five-shot PSX branch
+(nine ticks), 24+21 submerge/splash path, and 53-tick destroy transition. It
+checks every immediate projectile, callback mask, tagged event, and all three
+death bursts without leaving test projectiles in the map.
+
+### 2.5 SET — `SET.SEQ` (kSeqSet=48, sequence.h:78; lotag 111, init.cpp:871 → BuildSet)
 
 Set's projectile (bullet 11, `BulletInfo[11]={30,-1,1000,-1, nSeq=52 kSeqSetGhost, field_C=53 kSeqSetGBlow, 4,20,48}`, bullet.cpp:94) uses SETGHOST/SETGBLOW.SEQ whose tiles (2681–2686, 3037, 3290–3295) all exist — not part of the problem. Demo SET.SEQ: 'SD', center (160,177), **81 sub-seqs, 1270 frames, 1305 chunks**, 12 sound names, 104 events. Zero tiles: 2559–2642 and 2687 (85 tiles — every body tile). Present: 2467 (35×28), 2678 (47×88 soul), 3034–3036, 3291–3292. Sprite repeat 87×96. State flow: spawn→1 dormant→2 wake→7 leap→chase 3 with random 7/6; 4 melee; 6 fire souls; 8/9 air/land; 10→11 death. Action 5 (stun) is never entered.
 
-Kex: `AI_Set` — scale 2.0, health 3000, painChance 24; anims set_idle 1×8, set_chase 20×8 (A_SetThink; setstomp02 f5,f15), set_melee 18×8 (hits f8,f17), set_leap_start 13×8 (setjump f9, launch f12), set_leap_loop 1×8, set_leap_land 12×8 (setland+quake f6), set_fire_souls 15×8 (fires Proj_Soul f7, fullbright f9), set_pain 8×8, set_death 30×1, set_death_loop 1×1. Script: leap at HP<2000 (25%/think), souls at HP<1500 (50%/think).
+Kex: `AI_Set` — radius 96, height 192, stepHeight 48, scale 2.0,
+health 3000, movement speed 10, painChance 24, noEnterWater and
+noInFighting. Its animations are set_idle 1×8, set_chase 20×8
+(`A_SetThink`; setstomp02 f5/f15), set_melee 18×8 (40-damage hits f8/f17),
+set_leap_start 13×8 (setjump f9, launch f12), set_leap_loop 1×8,
+set_leap_land 12×8 (landing/quake f6), set_fire_souls 15×8 (one
+`Proj_Soul` f7, fullbright f9), set_pain 8×8, set_death 30×1 and
+set_death_loop 1×1.
 
-| Build sub-seq | frames (demo) | ← kex | mapping |
-|---|---|---|---|
-| 0–7 walk (actions 0,3) | 20 | set_chase | 1:1 (20→20) |
-| 9–16 melee (action 4) | 18 | set_melee | 1:1; FrameFlag 0x80 on f6 & f15 (demo positions; kex hits f8/f17 — keep the demo pair) |
-| 18–25 leap wind-up (7) | 15 | set_leap_start | 1:1 f0–12, hold last pose f13–14 (or write SeqSize 13 — code reads size from file) |
-| 27–34 airborne loop (8) | 1 | set_leap_loop | 1:1 |
-| 36–43 landing (9) | 12 | set_leap_land | 1:1 |
-| 45–52 fire souls (6) | 18 | set_fire_souls | f0–14 1:1 + hold ×3; 0x84 on projectile frame (demo f10; kex fires f7, original `##009 0 128` comment marks f9 — use f10 to match demo timing), 0x04 on fullbright tail (demo f11–17) |
-| 54–61 unused | 18 | — | dead code; fill with set_pain/set_chase duplicates or 1-frame stubs — indices only must survive |
-| 63–70 stun (action 5, unreachable) | 30 | set_pain | 8→30 stretch or SeqSize 8; harmless |
-| 72 death (10) | 112 | set_death | 30→112 stretch/hold; 0x84 gib-spawn flag mid-anim (demo f81), 0x04 fullbright f79–91; optionally re-add demo's spirit-overlay second chunks (2467, 3291/3292, 3034–3036 — tiles exist) on f58–92 |
-| 74 dead loop (11) | 1 | set_death_loop | 1:1 |
-| 75 soul pic (BuildSoul/FuncSoul) | 1 | — | tile 2678 **exists** — no work |
-| 76 gib-chunk pic (action 10) | 1 | — | no kex counterpart — synthesize (crop of a death pose) — flagged |
-| 77 dormant statue (1) | 70 | set_idle | 70-frame hold of set_idle rotation_N; pose A f0–35 (tile 2559), pose B f36–69 (2687) both reuse it — flagged approximation |
-| 78 wake (2) | 29 | — | synthesize: set_idle pose (f0–7 ≙ 2559) → first chase/leap pose (f8–28 ≙ 2560) — flagged |
-| 8,17,26,35,44,53,62,71,73,79,80 | 0 | — | empty separators; SeqFlag[80]=−1; total must be exactly 81 |
+The generated exact file has **76 slots, 737 frames and 737 chunks**. Every
+direction is precomposited because Set's layered source rotations are not
+mirror-equivalent; 171 unique images occupy tiles 20000–20170 and every chunk
+flip is zero.
 
-SD events (dir-0): walk f5,f15 SET_LAND|0x2000; melee f0,f9 SET_LAND|0x2000, f13 SET_HIT|0x2000; leap f9 SET_JUMP; land f0 SET_LAND|0x2000, f6 RA_SPRIT|0x2000; fire f10 SET_SPRT; stun f4 REX_ICU; death f0 SET_GR2|0x2000, f57 REX-ICU|0x2000, f79 RA_SPRIT|0x2000, f111 SET_DETH|0x2000; soul seq75 f0 GHOST109|0x0200; dormant f35 SET_GR1|0x2000; wake f8 SET_ICU. Demo VOCs present: only RA_SPRIT, REX_ICU, SET_LAND. Aliases already in KEX_SOUNDS: set_land→setland.wav, set_jump→setjump.wav, set_hit→setpain.wav, set_sprt→setquake.wav, set_gr1→setact01.wav, set_gr2→setatk02.wav, set_icu→setact02.wav, set_deth→setdeath.wav, ra_sprit→setatk01.wav. **Gaps**: `REX-ICU` (add `rex-icu`→sounds/setquake.wav) and `GHOST109` (add `ghost109`→sounds/setatk03.wav, nearest).
+| exact slots | frames | action / callback contract |
+|---|---:|---|
+| 0–7 | 1 | directional idle; actions 0/1/2 compatibility pose |
+| 9–16 | 20 | chase; `A_SetThink` every frame, stomp f5/f15 |
+| 18–25 | 18 | melee; `0x80` and 40-damage callbacks on f8/f17 |
+| 27–34 | 13 | leap start; jump sound f9, launch after rendered f12 |
+| 36–43 | 1 | airborne loop; ground check every tick |
+| 45–52 | 12 | landing; land sound, quake and grounded-player hit on f6 |
+| 54–61 | 15 | soul cast; attack cue f6, one soul/`0x80` f7, fullbright f9 |
+| 63–70 | 8 | pain; pain cue f3, action cue f7, return to chase |
+| 72 | 30 | death; authored cue/quake schedule, remote tag 1010 on f29 |
+| 73 | 1 | persistent death loop |
+| 74 | 1 | native soul art tile 2678 for `BuildSoul` compatibility |
+| 75 | 1 | safe terminal pose, `SeqFlag=-1` |
+| 8/17/26/35/44/53/62/71 | 0 | separators |
 
-### 2.5 QUEEN — `QUEEN.SEQ` (kSeqQueen=49) + `QUEENEGG.SEQ` (kSeqQueenEgg=56); lotag 113 (init.cpp:861 → BuildQueen, statnum 121)
+Exact sound events are chase f5/f15 `K_SETSTP`; melee f0 `SET_STEP` and f9
+`SET_HIT`; leap f9 `SET_JUMP`; land f6 `SET_LAND`; cast f6 `SET_GR2` and f7
+`GHOST109`; pain f3 `SET_HIT` and f7 `SET_GR1`; death f0/f10 `SET_HIT`,
+f2/f7/f12/f17 `SET_SPRT`, f18 `RA_SPRIT`, and f28 `SET_DETH`. All fixed-width
+sound names are padded to eight bytes by the generator and resolve through
+`kexsound.txt`.
+
+`set.cpp` detects the exact cadence and selects a dedicated action table; if
+the file is absent, it retains the stock 81-slot table and
+`patch_demo_seqs()` fallback. `A_SetThink` uses the retail masked 1-in-16
+decision cadence, checks souls below 1500 health with a coin flip before
+checking leap below 2000 with a quarter roll, and computes speed from logical
+health. KEX health is stored as `KexHealthUnits(3000)`. Death suppresses the
+DOS twenty-soul recipe, sends tag 1010 after f29 and holds the corpse. The
+env-only `VB_KEX_SET_TEST=1` probe forces melee/cast/pain/leap and verifies all
+cadences, callback/fullbright frames, launch, dimensions, logical/internal
+health and full-health speed; `VB_KEX_SET_AUDIT=1` logs live resolved values.
+
+### 2.6 QUEEN — `QUEEN.SEQ` (kSeqQueen=49) + `QUEENEGG.SEQ` (kSeqQueenEgg=56); lotag 113 (init.cpp:861 → BuildQueen, statnum 121)
+
+The retail path is now exact. `kexqueenseq.py` emits a 104-slot,
+1002-frame/chunk `QUEEN.SEQ` and a two-action, three-frame/chunk
+`QUEENEGG.SEQ`. All 280 nonempty authored composites are precomposited with
+all eight rotations on tiles 20400–20679; callback-only empty frames carry
+safe hidden art, and no chunk flip is applied. The exact groups are idle
+1×8; base/chase/charge/after-charge 10×8 each; flap 11×8; hurl 30×8; tail
+missile 16×8; pain 13×1; death 62×1; snake idle/chase/melee
+1×8/5×8/1×8; snake explosion 85 rendered ticks; and tail 1×1. The seed pod
+holds spawn frame 0 for exactly 60 ticks, then executes its spriteless hatch
+callback. Both files are installed after `patch_demo_seqs()`.
+
+The native exact controller recognizes that signature and keeps the demo
+tables below only as fallback. It uses one 3600-point body pool (clip 96,
+repeat 60), the scripted high-health strafe/tail decisions, the 2400-point
+pain transition, low-health hurl/charge decisions, 50-damage flap, exact
+type-12 `FireActor` launch, 40-damage charge and knockback, and all authored
+callback/sound frames. The body death spawns the six Queen gibs and the
+200-health snake. Ten non-solid tail links each have an independent
+200-health gate: only the last is shootable, each death exposes its parent,
+and the head becomes shootable only after all ten are gone. Joints lerp 0.2
+toward their parent every tick. Snake melee deals 30 with retreat, and death
+runs 21 explosions over 85 ticks before firing the exit event once. The
+env-only `VB_KEX_QUEEN_TEST=1` probe verifies this complete lifecycle;
+`VB_KEX_QUEEN_AUDIT=1` logs live map stats.
+
+The ten-link runtime does not enlarge the original save record. The historical
+seven-short `tailspr` field remains byte-for-byte fixed; the three exact-only
+sprite ids are packed behind a marker in four `MoveQS` slots that the exact
+joint controller does not use. An unmarked KEX save is migrated from the older
+approximate controller: body phase health becomes one remaining 3600-point
+pool, old body/snake action ids are translated, legacy eggs become 60-tick
+seed pods, and action/frame bounds are sanitized before any exact sequence
+lookup. `VB_KEXSAVE_TEST=1 VB_KEX_QUEEN_SAVE_TEST=1` creates a live ten-tail
+snake, saves and reloads the complete world, and verifies body, head, all ten
+sprite ids and health gates after deserialization. On KILARENA, the lifecycle
+probe reuses its authored Queen controller because the retail campaign has one
+native controller slot; it does not attempt an impossible second allocation.
 
 `QUEENTAI.SEQ` in STUFF.DAT is **never loaded** ("queentai" not in SeqNames[]); tail drawn from QUEEN.SEQ sub-seq 73 ×7 (queen.cpp:1069). Demo QUEEN.SEQ: 'SD', center (160,171), **107 sub-seqs, 893 frames, 1321 chunks**. QUEENEGG.SEQ: center (160,167), **26 sub-seqs, 95 frames, 99 chunks**. Zero tiles: 3072–3090, 3092–3095, 3097–3102, 3104–3116, 3121–3127, 3130–3142, 3144–3176, 3310–3315. Present: 3015–3016, 3091, 3096, 3103, 3117–3120, 3128–3129, 3143, 3177–3181, 3281–3309, 2467–2473. Body `ActionSeq` queen.cpp:44, `HeadSeq` :58, `EggSeq` :70. 0x80 read at queen.cpp:1200/1346: action 4 → BuildBullet(type 12), action 5 → BuildQueenEgg.
 
 Kex: `AI_Queen` (queen_idle/chase/flap/death), `AI_Queen_Snake` (snake idle/chase/melee/explode), `Obj_Queen_Snake_Tail`, `AI_Seedling`, `Obj_QueenGib01–06`. Anims: queen_base 10×8, queen_chase 10×8, queen_chase_charge 10×8, queen_after_charge 10×8, queen_flap 11×8, queen_hurl 30×8, queen_tail_missile 16×8 (fires f7, fullbright f7–8), queen_pain 13×1, queen_death 62×1, queen_snake_idle 1×8, _chase 5×8, _melee 1×8, _explode 22×1, _tail 1×1, seedling_* (idle 1×8, chase 1×8, attack 6×8, spawn 2×1, projectile 1×1, death 1×1), gibs 1×1 ×6.
 
-QUEEN.SEQ map:
+Historical compatible demo-layout fallback map (used only when the exact
+files are absent):
 
 | sub-seq | frames | used by | ← kex | notes |
 |---|---|---|---|---|
@@ -284,43 +485,68 @@ QUEEN.SEQ map:
 
 QUEENEGG.SEQ map: 0–7 (+8) hatchling idle 1 f ← seedling_idle (EggSeq[2] dead code; compile anyway); 9–16 (+17) hunt 6 f ← seedling_attack (exact; SD EGG_BONG f0, VOC present); 18 hatch 35 f — tiles 2467–2473, 3128 present, only **3147 zero** (patch from seedling_spawn; SD GRN_BOOM f9, alias `grn_boom`→explode01.wav); 19 thrown egg 1 f — 3128 exists; 20–22 padding; 23 wasp egg 1 f — tile 3127 zero, **no kex equivalent** (flagged: reuse seedling_spawn f0 egg art or 3128 art ×2); 24/25 shells — 3015/3016 exist. Head contact plays hardcoded `kSoundQTail|0x2000` (queen.cpp:882), head spawn `kSoundFishDies` (:1405) — not SD.
 
-Sound aliases: existing q_tail→queenatk04, q_spit→queenatk01, q_gurgle→queenact02, q_cry→queenroar, q_deth→queendeath01, scrp_hit→selkishurt, scrp_icu→selkisact. **Gaps**: `rex-bite`→sounds/queenatk02.wav, `rex_grgl`→sounds/queenact02.wav (both VOCs missing from demo, no alias — silent today).
+After hatching, KEX mode hands the actor to the dedicated Seedling branch of
+the shared flyer record. `kexseedlingseq.py` emits a 31-slot, 68-frame/chunk
+`SEEDLING.SEQ`: 0+d is the exact one-frame grounded chase, 9+d is the exact
+six-frame attack, and the other native slots are safe compatibility poses.
+Fifteen origin-anchored tiles occupy 7850-7864. `SEED_ATK` fires on attack
+frame 3 beside `A_MeleeAttack(48,20)`. The controller enforces no-drop-off
+ground movement and authored health/radius/scale/speed 100/36/2.0/16; death
+tosses Queen gibs 1/3/4/5/6 and removes the actor.
 
-### 2.6 SELKIS — `SCORP.SEQ` (kSeqScorp, SeqNames[24], sequence.cpp:105; lotag 112, init.cpp:866 → BuildScorp)
+Sound aliases include q_tail→queenatk04, q_spit→queenatk01,
+q_gurgle→queenact02, q_sight→queenact01, q_cry→queenroar,
+q_deth→queendeath01, rex-bite→queenatk02 and q_stumpy→queenatk03. The exact
+sound/event table and every alias are audited by `kexverify.py`.
+
+### 2.7 SELKIS — `SCORP.SEQ` (kSeqScorp, SeqNames[24], sequence.cpp:105; lotag 112, init.cpp:866 → BuildScorp)
 
 Engine: statnum 122, xrepeat/yrepeat 80, health 20000, cstat 0x101. `ActionSeq` (scorp.cpp:57–68): 0={0,0} idle, 1={8,0} walk, 2={29,0} melee (damage 7 on 0x80, scorp.cpp:351), 3={19,0} ranged homing bullet 16 on 0x80 (:379), 4={45,1}…7={48,1} pain A–D (non-lethal hit picks `RandomSize(2)+4`; death cycles 6|7 ×10), 8={50,1} death burst (**spawns one spider per frame**, BuildSpider, :414), 9={53,1} final death → delete. Demo: 'SD', center (160,159), 64 seqs, 692 frames, 841 chunks, 18 sound names, 82 events. Zero tiles: 2698–2713, 2716–2719, 2722–2750. Present: 2714 (25×22), 2715 (31×16), 2720, 2721 (zap muzzles), gore 2390–2393, 2467–2469, 3033–3037.
 
-Kex: `AI_Selkis` — health 4000, scale 2.5; selkis_idle 1×8, selkis_chase 8×8, selkis_shoot 6×8 (fires `Proj_Cobra_Red_Selkis` f3), selkis_melee 9×8 (A_MeleeAttack f0 & f6), selkis_pain 25×8, selkis_wounded 40×1, selkis_malfunction1 12×1, selkis_malfunction2 20×1, selkis_death 1×1, selkis_explode 3×1 (countdown loop spawns 12 AI_Scorp), selkis_corpse 1×1. Sheet selkis.png 1024×512, 103 sprites ≤64 px, **original resolution** (slice 8 = 28×22 vs demo muzzle 2714 = 25×22).
+Kex: `AI_Selkis` — health 4000, radius 80, scale 2.5 (native clipdist 120/repeat 100); selkis_idle 1×8, selkis_chase 8×8, selkis_shoot 6×8 (fires `Proj_Cobra_Red_Selkis` f3), selkis_melee 9×8 (A_MeleeAttack f0 & f6), selkis_pain 25×8, selkis_wounded 40×1, selkis_malfunction1 12×1, selkis_malfunction2 20×1, selkis_death 1×1, selkis_explode 3×1 (countdown loop spawns 12 AI_Scorp), selkis_corpse 1×1. Sheet selkis.png 1024×512, 103 sprites ≤64 px, **original resolution** (slice 8 = 28×22 vs demo muzzle 2714 = 25×22). The frame-3 callback is the exact `A_FireProjectile(..., 2, 144, 64)` recipe. Its type-16 KEX bridge bypasses the native hitscan shortcut: the cobra is a zero-damage moving projectile that collides with actors/walls, adjusts along floor/ceiling planes, and turns visually without changing velocity (`homing` plus `noHomingThrust`).
 
-| Build sub-seq | frames (demo) | ← kex | fit |
-|---|---|---|---|
-| 0–7 idle | 1 | selkis_idle | exact |
-| 8–15 walk | 8 | selkis_chase | exact (demo seq 10 had 7 — write 8 everywhere) |
-| 19–26 ranged (+27 unused spare) | 6 | selkis_shoot | exact; 0x84 on f3 (kex fires there); demo has multi-chunk f3 (body 2713 + muzzle 2714) — muzzle tiles 2714/2715/2720/2721 exist, reuse them as second chunks |
-| 29–36 melee | 11 | selkis_melee (9) | emit 9 or pad f0/f5 to 11; **add 0x80 on kex strike frames 0 and 6** — demo melee has NO 0x80 (claw never damaged); deliberate fix, noted |
-| 37–44 roar/pain 8-rot | 25 | selkis_pain | exact; unused by PC code but clearly its port — emit; SD SCRP_CRY f0|0x2000, SCRP_CLA |
-| 45 pain A | 35 | selkis_wounded (40) | count free; SD SCRP_HIT f0|0x2000, SCRP_ICU f14|0x2000 |
-| 46 pain B | 19 | selkis_malfunction1 (12) | SD SCORP_Z2 f8|0x2200, f15|0x2400, SCRP_HIT f14 |
-| 47 pain C | 20 | selkis_malfunction2 (20) | exact; SD SCRP_ZP1 f9|0x600, f16|0x800 |
-| 48 pain D | 3 | selkis_explode (3) | exact; SD SCRP_ZP1 f2|0x800 |
-| 50 death burst | 40 | selkis_explode looped ~13× | length ≈40 keeps original spider count; SD SCRP_ZAP f6|0x600 |
-| 53 final death | 85 | selkis_corpse held (+ explode prefix) — or keep demo seq 53 verbatim: its gore tiles 2390–93/2467–69/3033–37 exist | flagged; SD Q_OUCH f0, P_FIRE f11, RA_SPRT2 f14, GRN_BOOM f60 (all |0x2000) |
-| 16–17 (22-f taunts), 18, 28, 49 (2 f zap, 2740/2741), 51 (30 f), 52 (3 f), 54–63 | var | — | unused by scorp.cpp; emit size 0 — **total seq count must reach ≥54** (demo: 64, SeqFlag[63]=−1) |
+The dedicated `kexselkisseq.py` output is a 51-slot, 469-frame/chunk
+`SCORP.SEQ`. It uses 167 precomposited authored views on private tiles
+20200–20366; all eight directional views are explicit and no chunk flip is
+required.
 
-Walk SD: GRN_PIN f0|0x2000 (VOC present), HAWKFIRE f5|0x2000 (alias hawkfire→queenatk04). Ranged SD: ROCH_GUN f0|0x2000 (alias→sentryfire), SCRP_TAL f3|0x2600 (alias→ammo.wav). Melee SD: HAWK_HRT f0|0x2000, REX_BITE f5|0x2000 (VOC present). Unaliased-but-VOC-present: GRN_PIN, REX_BITE, SCRP_ZP4, SCRP_ZAP, RA_SPRT2 (all 18 VOCs exist in demo — everything plays). Sight sound is engine-side `StaticSound[kSoundScorpionICU]` = SoundFiles[41] "scrp_icu" (sound.cpp:70–149) — already aliased.
+| Generated slots | retail action | frames | controller contract |
+|---|---|---:|---|
+| 0–7 | idle | 1×8 | exact directional pose |
+| 9–16 | chase | 8×8 | `A_SelkisThink` every rendered frame |
+| 18–25 | shoot | 6×8 | Cobra callback/fullbright on f3; chase after f5 |
+| 27–34 | melee | 9×8 | 20 damage on f0/f6; range check after f8 |
+| 36–43 | pain | 25×8 | authored facing callbacks through f23 |
+| 45 | wounded | 40×1 | exact callback and sound cadence |
+| 46 | malfunction1 | 12×1 | exact callback and sound cadence |
+| 47 | malfunction2 | 20×1 | exact callback and sound cadence |
+| 48 | explode | 3×1 | `A_SelkisCountDown` only on f1 |
+| 49 | corpse | 1×1 | persistent and non-solid |
+| 50 | terminal | 1×1 | SEQ terminator (`SeqFlag=-1`) |
+
+Slots 8/17/26/35/44 are empty separators. The controller recognizes this
+signature and otherwise retains the stock/demo action table. In the exact
+path, the zero-delay death trampoline initializes 24 countdown callbacks; the
+three-frame explosion loop therefore reaches the corpse on rendered tick 71,
+spawns twelve `AI_Scorp` actors on alternating post-decrement values, emits
+the probabilistic explosion effects, plays the death sound and fires remote
+event 1010 once. The exact sound table includes the retail shoot, claw,
+second attack, sight, hurt and two malfunction recordings; `slk_at2` maps to
+`sounds/selkisatk02.wav`.
 
 ## 3. Cross-creature open problems + resolutions
 
-1. **WASP.SEQ triple identity** — CROW, MOSQUITO and (presumably) WASP all map to lotag 117 → BuildWasp; one SEQ skins all three. **Resolution**: compile WASP.SEQ from **AI_Wasp art** (the native creature; birds/mosquitoes become wasps). HAWK.SEQ (kSeqHawk=51) is loaded but referenced by zero code — a real bird needs a new AI + spawn case (engine change, out of scope now). Keep §2.2's bird→WASP.SEQ table on file as the alternative skin, and if HAWK.SEQ is ever revived, regenerate it with the standard rotation convention (unique 0–4, x-flip 5–7), not its stock 90°-rotated layout.
-2. **Deaths the remaster gibs away** (Build needs persistent multi-frame death anims): wasp 27/28/29 (32+7+1 f) — synth from fly tiles + y-flips per §2.1, splat tile 2460 composited from gib sprites; sentry 32 — hybrid (paint f0–12 from pain, keep existing tiles f13–37); set 72 — stretch set_death 30→112 + existing overlay chunks; set 76 gib tile — crop a death pose; queen 56 head-pop — snake idle front frame; selkis 50/53 — explode loop ×13 / corpse hold (or keep demo seq 53 verbatim: gore tiles exist). All resolutions are cosmetic-only; state machines depend only on SeqSize + the flagged frames.
-3. **Missing pain anims**: wasp pain 18+d (dead code — any stand-in), set stun 63–70 (unreachable — set_pain stretch), queen pain 45–52 (kex queen_pain is 13 f **single-view**; must replicate across 8 dirs — accept the art loss), bird n/a. No engine risk in any of these.
-4. **Frame-count mismatches**: sentry attack 10→8 (take kex f2–9, fire frame alignment preserved); set leap 15 vs 13 and fire 18 vs 15 (hold last pose or shrink SeqSize — engine reads size from file, either works; prefer holding to keep demo timing); selkis melee 11 vs 9 (pad); queen hurl uneven 30/25 (emit uniform 30). Rule: whenever a 0x80 trigger exists, place it on the **demo's frame index** and map surrounding kex frames to preserve it.
-5. **Sound alias gaps** — add to `KEX_SOUNDS` (kexmap.py:1256): `rex-bite`→sounds/queenatk02.wav, `rex_grgl`→sounds/queenact02.wav, `rex-icu`→sounds/setquake.wav, `ghost109`→sounds/setatk03.wav; if the bird skin is ever used: `hawk_flp`→sounds/birdflap01.wav, `hawk_die`→sounds/birddeath.wav. Everything else either has a demo VOC or an existing alias (§2 tables).
-6. **Hardcoded picnums outside SEQs**: queen.cpp:1400 retextures gibs to kTile3117–3119 (exist) and **kTile3126 (zero — must be filled via DEF with queen_gib01 art)**. No other creature has this.
-7. **Behavior fix flags** (deliberate deviations from demo data, keep noted): selkis melee gains 0x80 on f0/f6 (stock boss claw dealt no damage); everything else copies demo flag positions exactly.
-8. **Pixel scale calibration**: kex sheets are original-resolution for selkis (slice 28×22 vs tile 25×22 → ≈1:1) but the wasp research estimated 1.6–2×. **Resolution**: per-creature scale factor calibrated against a *visible* demo reference tile where one exists (sentry 3226 = 97×113, selkis 2714 = 25×22, queen head 3285–3289, soul 2678 = 47×88, wasp none → derive from actor `scale` 1.25 vs the others' calibrated ratios); Build repeat values (wasp 50/20, roach 40, set 87×96, scorp 80) do the rest. Emit the factor as a per-creature constant in the spec table so it's tweakable after a visual pass.
+1. **Flyer identity (resolved)** — Wasp, Bird and Queen Seedling share one native run-record type but carry a persistent KEX identity. Exact `WASP.SEQ`, `HAWK.SEQ` and `SEEDLING.SEQ` action tables are selected independently; hitag markers and private tile ranges reconstruct old/new saves without changing the classic saved struct.
+2. **Deaths the remaster gibs away (resolved)** — Wasp, Bird and Seedling bypass persistent native death states and execute their authored immediate gib/feather recipes. Sentry uses its authored immediate nine-gib deletion. All eleven `A_GibDeath` callers spawn one shared fullbright `Fx_Gibs01`: blank tick 0, 13 visible ticks using ten poses, five final blank ticks, then `A_RandomItem` and destroy on tick 18. It inherits actor scale and applies the authored offsets (Anubis/Sentry/Queen +64, Seedling +32, all others +0), so the drop point is origin + offset + the effect's own height 64. Spider/Scorpion and the other delayed families keep save-serialized invisible host states only for cleanup and old-conversion fallback. Set, Selkis and Queen retain their exact authored death timelines; Queen continues as its linked snake actor before the final exit event.
+3. **Missing pain anims**: Wasp, Bird and Seedling have authored `painChance 0` and never enter native pain in KEX mode; their dedicated sequence slots are safe compatibility poses. Set's eight-frame pain group is exact and reachable at painChance 24. Queen pain is the exact single-view 13-frame threshold transition.
+4. **Frame-count mismatches**: Sentry, Set, Selkis and Queen are resolved by dedicated exact sequence/controller pairs. For native trigger-driven groups, keep each 0x80 callback on the controller's expected frame; dedicated exact controllers use the rendered retail frame directly.
+5. **Sound alias gaps** — the flyer aliases are resolved (`wasp_hit`, both Wasp deaths, two bird flaps/attack/sight/death, and the Seedling bite). Existing boss aliases include `rex-bite`, `rex_grgl`, `rex-icu` and `ghost109`; every new exact sequence sound is asserted by `kexverify.py`.
+6. **Hardcoded picnums outside SEQs**: the classic/fallback Queen path still references its DOS gib pictures. The exact KEX path addresses the six generated Queen gib tiles 7841–7846 directly.
+7. **Behavior fix flags** (deliberate deviations from demo data, keep noted): exact Selkis uses the retail melee callbacks on f0/f6 (the stock boss sequence had no damaging claw flag). The exact controller applies the authored 20 damage from those rendered frames.
+8. **Pixel scale calibration**: KEX monster sheets are original-resolution; actor `scale` is represented by Build repeats. Wasp/Bird/Seedling use 50/60/80 for authored 1.25/1.5/2.0, with one-to-one PNG pixels and origin-preserving chunks. Other creatures retain their per-controller repeat calibration.
 9. **Palette**: chunk tiles go in via `tilefromtexture` PNGs like the existing actor tiles (kexmap.py already ships truecolor PNGs through exhumed.def — "no palette reduction happens", kexmap.py:19) — no quantization needed; transparent pixels stay transparent PNG alpha.
 10. **Chunk offset range**: `tspr->xoffset/yoffset` are int8 — assert `|chunk x|,|y| ≤ 127` after scaling; the big bosses (set canvas height ~139 above anchor, selkis, queen) sit near the limit — if a composited frame exceeds it, split it into ≥2 vertically stacked chunks (multi-chunk frames are fully supported and the stock bosses already use up to 5).
+11. **Water crossings (resolved)** — the KEX `A_TossActor` and remaster projectile bridges snapshot their pre-move sector, then mirror `kexActor::UpdateMovement`: an air-to-underwater transition plays `splash01.wav` and spawns the fullbright, scale-1 `Fx_WaterSplash` actor on the destination ceiling (water-surface) plane. KEX projectiles retain their velocity across that portal (the sole flame projectile is outside this bridge and keeps its authored water removal); the old universal native bullet deletion remains classic-only. The `FF_WATER` pre-move below-surface gate remains silent, matching the source's `bNoSplash` case. `KEXWATERSPLASH.SEQ` preserves all 23 default-rate source frames as actor-centred composites on tiles 22014–22036; this stays KEX-only and never substitutes the classic `BuildSplash` art or sound.
 
 ## 4. Implementation plan — kexmap.py (function level)
 
@@ -343,16 +569,16 @@ Reuse existing plumbing: `_sprite_table(Z, names, group, base)` (:1691, parses `
    ('empty',)                                # separators / unused, SeqSize 0
    ('demo',)                                 # copy this sub-seq verbatim from the demo file
    ```
-   `frame_map` = list of kex frame indices per Build frame (handles 10→8 trims, 1→5 repeats, 13→112 stretches, hold-last). `('demo',)` entries (sentry death tail, selkis seq 53 option, wasp seq 30 trailer) need `read_seq(demo_bytes)` — the scratchpad parser (`seqtool.py`) inverted from `write_seq`. Per-file constants: `center` (WASP (160,148), ROACH (160,156), SET (160,177), QUEEN (160,171), QUEENEGG (160,167), SCORP (160,159)), `scale`, required total sub-seq counts (31 / 46 / 81 / 107 / 26 / 64).
+   `frame_map` = list of KEX frame indices per Build frame (handles repeats, long stretches and hold-last mappings). `('demo',)` entries need `read_seq(demo_bytes)`, the inverse of `write_seq`. Dedicated exact generators supersede this generic spec where controller timing differs: Sentry uses 36 slots, Spider/Scorpion 48 each, Anubis 58, Mummy 62, Bastet 57, Fish 49, Selkis 51, Queen 104 and QueenEgg 2. Per-file centers remain WASP (160,148), ANUBIS (159,156), ROACH (160,156), SET (160,177), QUEEN (160,171), QUEENEGG (160,167) and SCORP (160,159).
 
-6. `compile_creature_seq(Z, names, spec, alloc, demo_seq=None) -> seq_file` — walks the spec: for `group8`, emits 8 sub-seqs — dirs 0–4 composite fresh tiles from rotations N..S; dirs 5–7 reuse dir 3/2/1 tiles with `flags:1` and mirrored x (`chunk.x = -x` pre-negation is handled by the engine — store the same magnitude, flag set, per §1.4); dir-0 gets the flags/sounds, dirs 1–7 get flag copies (harmless, matches stock). Uses tiles-by-number directly for demo-present art (3270, 3284–3289, 3128, 3015/3016, 2714/2715/2720/2721, 2467–2473, 2390–2393, 3254/3255, 3266, 2678, 3117–3120).
+6. `compile_creature_seq(Z, names, spec, alloc, demo_seq=None) -> seq_file` — walks the generic spec: for `group8`, emits 8 sub-seqs, with dirs 0–4 composited from N..S and dirs 5–7 normally sharing mirrored ES/E/NE tiles. Sentry is the explicit exception: `kexseqmap_gen.py` precomposites all eight rotations, including per-layer source flips, and writes chunk flags of zero. Generic sequences may still use demo-present art by tile number where appropriate.
 
-7. `compile_creature_seqs(kpf, outdir, demo_grp_path, alloc, verbose)` — top-level: opens STUFF.DAT (for `('demo',)` copies and validation), loops `CREATURE_SPECS`, writes `outdir/wasp.seq`, `roach.seq`, `set.seq`, `queen.seq`, `queenegg.seq`, `scorp.seq`; calls `alloc.force(3126, gib_art)`; returns def rows to append to `write_def`'s assignments. Called from `convert_install` right after `build_actor_tiles`.
+7. Sequence orchestration opens STUFF.DAT for fallback copies and validation, builds the compatible creature art, then writes generated exact files from committed data modules or directly from KPF animation metadata. `kexmap.convert_install()` installs `WASP.SEQ`, `HAWK.SEQ`, `SEEDLING.SEQ`, `ROACH.SEQ`, `SPIDER.SEQ`, `SCORPION.SEQ`, `ANUBIS.SEQ`, `MUMMY.SEQ`, `LION.SEQ`, `FISH.SEQ`, `SCORP.SEQ`, `SET.SEQ`, `QUEEN.SEQ`, `QUEENEGG.SEQ`, the one-frame fullbright `AMUNBOMB.SEQ`, `KEXGIBDEATH.SEQ`, `KEXBIRDFEATHER.SEQ`, and `KEXWATERSPLASH.SEQ`. The gib sequence composites ten exact `effects/gib_death` poses onto tiles 22004-22013 and emits the source's blank/13-art/5-blank cadence; the water-splash file composites all 23 `effects/splash` source poses on tiles 22014–22036, while the KEX-only moving-actor bridge owns the water-sector transition, source-plane placement and `spl_big` callback. The feather file loops its 15 source crop positions over bird tile 7632, while the runtime owns its random start/fall/drop callbacks. Amun-bomb tile 7848 and boulder-shard tile 7849 are composited directly from `projectiles/amun_bomb_idle` and `projectiles/boulder_shard`; their actor scale remains a runtime repeat concern. Exact Bastet/Fish, Selkis, Set and Queen files are written after `patch_demo_seqs()` so the stock-layout fallback cannot overwrite them. Exact Anubis keeps slots 44–49 from the demo verbatim for drummer compatibility while replacing live actions, adding the nine-tick miss group, and expanding normal death. Bastet and Fish likewise retain copied compatibility/effect slots while replacing every live group with the retail cadence.
 
-8. `verify_seq(path, expect_nseqs, checks)` — reparse own output; assert sub-seq count, nonzero SeqSize at every code-referenced index (wasp {0,9,18,27,28,29}, roach {0,8,16,24,32,42}, set {0,9,18,27,36,45,63,72,74,75,76,77,78}, queen {0,9,18,27,36,45,53,54,55,56,57–60,65–72,73,74,82,90}, queenegg {9,18,19,23,24,25}, scorp {0,8,19,29,45,46,47,48,50,53}), presence of 0x80 on each required trigger frame, all chunk tiles either allocated or in the demo-present whitelist, all `|x−cx|,|y−cy| ≤ 127`, sound names ≤ 8 chars. Round-trip `write_seq(read_seq(bytes)) == bytes` as a self-test on the demo files at startup (already proven for 3 files).
+8. `kexverify.py` reparses every result and asserts the code-referenced groups, callback frames, tile coverage, aliases and chunk bounds. Anubis checks all seven authored motion/death groups, both death sounds, normal/gib callbacks, the 58-slot/892-frame/1042-chunk mixed exact/demo layout and tiles 21300–21427. Spider and Scorpion check their authored three-frame/four-tick deaths, complete three-/two-pose leap callbacks, exact gib inventories, delayed random-item ownership, save-stable skin identity, 48-slot/291-frame/419-frame layouts and tiles 20700–20744/20900–20947. Mummy checks the complete delayed source timelines, normal/gib callbacks, 62-slot/680-tick layout and tiles 21100-21207. Bastet checks the 57-slot/620-frame/623-chunk layout, all teleport/pain/attack callbacks, 168 composites and tiles 21500–21667; Fish checks the 49-slot/409-frame/415-chunk layout, fullbright and sound callbacks, 107 composites and tiles 21700–21806. In addition to Sentry, Set and Selkis, exact Queen checks all four actor types, fourteen script functions, seventeen animations, the 104/2-slot layouts, flags/events, tiles 20400–20679, all 280 PNGs, zero flips and native lifecycle tokens. `GIBDEATH` independently locks the retail actor/function, all eleven caller offsets, the 19-tick SEQ, ten PNG/DEF rows, inherited scale and effect-height callback bridge, plus duplicate-drop suppression. The verifier also statically enforces the shared four-internal-units-per-KEX-health-point contract across every adapted actor.
 
-9. `KEX_SOUNDS` additions (edit at :1256): `'rex-bite': ('sounds/queenatk02.wav', 0)`, `'rex_grgl': ('sounds/queenact02.wav', 0)`, `'rex-icu': ('sounds/setquake.wav', 0)`, `'ghost109': ('sounds/setatk03.wav', 0)` — flows to kexsound.txt automatically via the existing writer (:2453).
+9. `KEX_SOUNDS` includes the Queen's exact sequence aliases, including `rex-bite`, `q_gurgle`, `q_sight`, `q_stumpy`, `q_tail`, `q_spit`, `q_deth` and `q_cry`; these flow to kexsound.txt automatically.
 
-**Test recipe**: run converter, launch windowed (`-cfg vbtest.cfg`) on a converted map containing each lotag (117 wasp, 103/104 sentry, 111 Set, 113 queen, 112 Selkis); confirm visibility in all 8 view angles, attack trigger effects (sentry bullet, Set soul, queen egg, selkis zap/claw damage), death sequences, and that the demo's own ANUBIS/MUMMY (untouched files) still render — proving global seq/frame/chunk limits weren't blown.
+**Test recipe**: run the converter and full verifier, then launch a converted map containing each lotag (100 Anubis, 101 Mummy, 102 Bastet, 103/104 Sentry, 106 Fish, 108 Mantis, 111 Set, 112 Selkis, 113 Queen and 117 Wasp). Unattended probes must use `VB_HIDE_WINDOW=1`, `SDL_AUDIODRIVER=dummy`, `-nosound -nomusic` and an isolated absolute config. Use `VB_KEX_COMMON_ENEMY_TEST=1`, `VB_KEX_FLYER_TEST=1`, `VB_KEX_SENTRY_TEST=1`, `VB_KEX_SET_TEST=1`, `VB_KEX_SELKIS_TEST=1`, `VB_KEX_QUEEN_TEST=1`, `VB_KEX_MANTIS_TEST=1`, `VB_KEX_PROJECTILE_TEST=1`, `VB_KEX_BOMB_TEST=1` and `VB_KEX_GIB_DEATH_TEST=1` in separate runs for deterministic cadence/callback/stat/projectile probes. The gib-death probe validates representative +0/+64 offsets, scale 1/2, fullbright flags and the effect-top callback; the projectile probe covers both launch recipes and the Cobra/fireball/boulder death-blast matrix; the bomb probe covers 16→48 charge, release-time ammo, radius/scale, velocity/gravity and 512/140 first-impact behavior. Run `VB_KEX_QUEEN_TEST=1`, and pair `VB_KEXSAVE_TEST=1` with `VB_KEX_QUEEN_SAVE_TEST=1`, on KILARENA for the exact lifecycle and ten-tail serialization probes; `VB_KEX_QUEEN_AUDIT=1` and `VB_KEX_PROJECTILE_AUDIT=1` report live resolved values. Confirm all eight views, attack effects, deaths, and that untouched demo creatures still render so global sequence/frame/chunk limits are covered.
 
 Key file paths: `/Users/alonamir/dev/eduke32/source/exhumed/src/sequence.cpp`, `wasp.cpp`, `roach.cpp`, `set.cpp`, `queen.cpp`, `scorp.cpp`, `init.cpp`, `exhumed.cpp` (:2556/:2577 load order), `/Users/alonamir/dev/eduke32/source/exhumed/tools/kexmap.py`; scratch tooling: `/private/tmp/claude-501/-Users-alonamir-dev-eduke32/8338d716-9146-4e6d-a50c-c933a3d0904b/scratchpad/{seqtool.py, writeseq.py, seqparse.py, parse_set_seq.py, scorp_seq.json, set_seq_dump.txt}`.

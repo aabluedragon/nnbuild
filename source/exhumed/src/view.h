@@ -50,6 +50,12 @@ void viewDoInterpolations(int smoothRatio);
 void viewUpdateInterpolations(void);
 void viewRestoreInterpolations(void);
 
+// KEX presents world sprites between their 30 Hz simulation poses, without
+// perturbing the authoritative Build sprites used by game logic and collision.
+void KexView_SnapshotSprites(void);
+void KexView_SpriteInserted(int16_t nSprite);
+void KexView_SpriteDeleted(int16_t nSprite);
+
 extern fix16_t nDestVertPan[];
 extern short dVertPan[];
 extern fix16_t nVertPan[];

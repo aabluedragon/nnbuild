@@ -8828,6 +8828,7 @@ int32_t (*loadboard_replace)(const char *filename, char flags, vec3_t *dapos, in
 int32_t (*saveboard_replace)(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum) = NULL;
 
 int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum) = NULL;  // Blood override hook
+void (*insertsprite_callback)(int16_t spritenum) = NULL;
 int32_t insertsprite(int16_t sectnum, int16_t statnum)
 {
     if (insertsprite_replace)
@@ -8841,6 +8842,8 @@ int32_t insertsprite(int16_t sectnum, int16_t statnum)
 
         do_insertsprite_at_headofsect(newspritenum, sectnum);
         Numsprites++;
+        if (insertsprite_callback)
+            insertsprite_callback((int16_t)newspritenum);
     }
 
     return newspritenum;
@@ -8851,6 +8854,7 @@ int32_t insertsprite(int16_t sectnum, int16_t statnum)
 // deletesprite
 //
 int32_t (*deletesprite_replace)(int16_t spritenum) = NULL;  // Blood override hook
+void (*deletesprite_callback)(int16_t spritenum) = NULL;
 int32_t deletesprite(int16_t spritenum)
 {
     if (deletesprite_replace)
@@ -8860,6 +8864,9 @@ int32_t deletesprite(int16_t spritenum)
 
     if (sprite[spritenum].statnum == MAXSTATUS)
         return -1;  // already not in the world
+
+    if (deletesprite_callback)
+        deletesprite_callback(spritenum);
 
     do_deletespritestat(spritenum);
     do_deletespritesect(spritenum);

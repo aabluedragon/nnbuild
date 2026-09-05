@@ -29,9 +29,10 @@ static int          s_n;
 static int32_t      s_minx, s_miny, s_cw, s_ch;
 static char         s_loaded[BMAX_PATH];
 
-#define KEXVL_CELL     1200      // grid cell, Build units: one reach, so 3x3 cells cover a query
-#define KEXVL_RADIUS   1150.f    // reach of a query: ~190 Kex units, one cell diagonal and a bit
+#define KEXVL_CELL     (128 * 6) // the baked field's 128-Kex-unit cell, in Build units
+#define KEXVL_RADIUS   1150.f    // one cell diagonal plus a small margin, in Build units
 #define KEXVL_SOFT     (48.f*48.f)  // softening: a sample a few units away is not infinite
+#define KEXVL_SNAP     72.f         // within this, a vertex IS the sample (12 Kex units)
 
 void KexVL_Free(void)
 {
@@ -133,7 +134,7 @@ int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
     if (!s_n)
         return fallback;
     int const cx = (int)((x - s_minx) / KEXVL_CELL), cy = (int)((y - s_miny) / KEXVL_CELL);
-    float wsum = 0.f, lsum = 0.f;
+    float wsum = 0.f, lsum = 0.f, nearest2 = 1e30f; int nearest = -1;
     float const r2max = KEXVL_RADIUS * KEXVL_RADIUS;
     for (int j = cy - 1; j <= cy + 1; j++)
     {
@@ -148,6 +149,7 @@ int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
                 float const dx = s.x - x, dy = s.y - y, dz = (s.z - z) * (1.f / 16.f);   // z units to world units
                 float const d2 = dx * dx + dy * dy + dz * dz;
                 if (d2 > r2max) continue;
+                if (d2 < nearest2) { nearest2 = d2; nearest = s_order[k]; }
                 float const w = 1.f / ((d2 + KEXVL_SOFT) * (d2 + KEXVL_SOFT));   // steep: the nearest corners rule
                 wsum += w; lsum += w * s.lum;
             }
@@ -155,5 +157,12 @@ int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
     }
     if (wsum <= 0.f)
         return fallback;
+    // A vertex sitting on a cell corner takes that corner's sample outright:
+    // the remaster interpolates within a cell and never across one, and
+    // blending the neighbours here flattened the peak of a fire's halo (the
+    // wall behind TOMB's pot fell to 0.43 of its lit value six cells out
+    // where the remaster falls to 0.35).
+    if (nearest >= 0 && nearest2 < KEXVL_SNAP * KEXVL_SNAP)
+        return KexVL_ShadeOfLum((float)s_samples[nearest].lum);
     return KexVL_ShadeOfLum(lsum / wsum);
 }

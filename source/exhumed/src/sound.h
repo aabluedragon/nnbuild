@@ -26,7 +26,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #define kMaxSoundFiles      80
 #define kMaxSounds          200
-#define kMaxSoundNameLen    8
+// KEX-only aliases include names such as k_electrocute.  Eight characters was
+// enough for the DOS roster but silently truncated those remaster lookups.
+#define kMaxSoundNameLen    24
 #define kMaxActiveSounds    8
 
 #define kCreepyCount 150

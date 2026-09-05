@@ -51,8 +51,16 @@ public:
     virtual void Load();
     void Read(void*, int);
     void Write(void*, int);
-    static void LoadGame(const char*);
-    static void SaveGame(const char*);
+    // The path is exact, allowing independent campaign, test and network-state files.
+    // A null or empty path retains the legacy save3.gam fallback.
+    static void LoadGame(const char* path);
+    static void SaveGame(const char* path);
+    // EXSN is an all-player world image used only by the multiplayer late-join
+    // protocol. It deliberately has a separate signature from ordinary EXSV
+    // saves, whose one-local-player layout remains compatible.
+    static void LoadNetworkSnapshot(const char* path);
+    static void SaveNetworkSnapshot(const char* path);
+    static int IsNetworkSnapshot();
 };
 
 void LoadSaveSetup();

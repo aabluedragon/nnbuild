@@ -29,5 +29,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 void InitLion();
 int BuildLion(short nSprite, int x, int y, int z, short nSector, short nAngle);
 void FuncLion(int, int, int);
+int KexBastetOwnsDeathDrop(int nSprite);
 
 #endif

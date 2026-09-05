@@ -47,6 +47,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "object.h"
 #include "save.h"
 #include "kexbreak.h"
+#include "kexinv.h"
 #include <string.h>
 #include <assert.h>
 
@@ -72,6 +73,25 @@ short nTemperature[kMaxPlayers];
 short nMinAmmo[] = { 0, 24, 51, 50, 1, 0, 0, 0 };
 short word_96E26 = 0;
 
+// KEX presents the local weapon as a lightly sprung part of the camera. These
+// are render-only, so they deliberately do not enter the player/net state.
+static int s_kexTurnSway;
+static int s_kexWeaponJumpBob;
+
+static int KexWeaponSpring(int value, int target, int divisor)
+{
+    int const delta = target - value;
+    if (!delta)
+        return value;
+
+    // Integer render offsets otherwise stop one or two pixels short of the
+    // target forever. Keep the response smooth while guaranteeing rest.
+    int step = delta / divisor;
+    if (!step)
+        step = delta < 0 ? -1 : 1;
+    return value + step;
+}
+
 
 void RestoreMinAmmo(short nPlayer)
 {
@@ -83,8 +103,9 @@ void RestoreMinAmmo(short nPlayer)
 
         if ((1 << i) & nPlayerWeapons[nPlayer])
         {
-            if (nMinAmmo[i] > PlayerList[nPlayer].nAmmo[i]) {
-                PlayerList[nPlayer].nAmmo[i] = nMinAmmo[i];
+            int const nRestore = g_kexMode ? min((int)nMinAmmo[i], KexInv_AmmoMax(i)) : nMinAmmo[i];
+            if (nRestore > PlayerList[nPlayer].nAmmo[i]) {
+                PlayerList[nPlayer].nAmmo[i] = (short)nRestore;
             }
         }
     }
@@ -99,10 +120,9 @@ void FillWeapons(short nPlayer)
     for (int i = 0; i < kMaxWeapons; i++)
     {
         if (WeaponInfo[i].bUsesAmmo) {
-            PlayerList[nPlayer].nAmmo[i] = 99;
+            PlayerList[nPlayer].nAmmo[i] = g_kexMode ? KexInv_AmmoMax(i) : 99;
         }
     }
-    PlayerList[nPlayer].nAmmo[kWeaponManacle] = 6;   // the Manacle carries six
 
     CheckClip(nPlayer);
 
@@ -142,6 +162,23 @@ void InitWeapons()
 static uint8_t s_manacleTicks[kMaxPlayers];
 static uint8_t s_manacleCharge[kMaxPlayers];
 int KexManacle_LastShot;        // bolts fired by the last release, for the self-test
+
+// The console remaster puts the grenade before the flame thrower. Keep the
+// DOS numeric enum for save/demo compatibility, but use the remaster's order
+// for Kex cycling and pickup auto-selection.
+static int const s_kexWeaponOrder[] = { kWeaponSword, kWeaponPistol, kWeaponM60,
+                                        kWeaponGrenade, kWeaponFlamer, kWeaponStaff,
+                                        kWeaponRing, kWeaponManacle };
+
+static int WeaponOrderSlot(int nWeapon)
+{
+    if (!g_kexMode)
+        return nWeapon;
+    for (int i = 0; i < (int)ARRAY_SIZE(s_kexWeaponOrder); i++)
+        if (s_kexWeaponOrder[i] == nWeapon)
+            return i;
+    return nWeapon;
+}
 
 void SetNewWeapon(short nPlayer, short nWeapon)
 {
@@ -210,7 +247,7 @@ void SetNewWeaponImmediate(short nPlayer, short nWeapon)
 
 void SetNewWeaponIfBetter(short nPlayer, short nWeapon)
 {
-    if (nWeapon > PlayerList[nPlayer].nCurrentWeapon) {
+    if (WeaponOrderSlot(nWeapon) > WeaponOrderSlot(PlayerList[nPlayer].nCurrentWeapon)) {
         SetNewWeapon(nPlayer, nWeapon);
     }
 }
@@ -224,11 +261,14 @@ void SelectNextWeapon()
     if (nCurrentWeapon == kWeaponMummified)
         return; // can't change weapon when mummified
 
-    int nStartWeapon = nCurrentWeapon++;
+    int const nStartSlot = WeaponOrderSlot(nCurrentWeapon);
     int nBits = nPlayerWeapons[nLocalPlayer];
 
-    while (nCurrentWeapon != nStartWeapon)
+    for (int nStep = 1; nStep < kWeaponMummified; nStep++)
     {
+        nCurrentWeapon = g_kexMode
+            ? s_kexWeaponOrder[(nStartSlot + nStep) % kWeaponMummified]
+            : (nCurrentWeapon + 1 >= kWeaponMummified ? 0 : nCurrentWeapon + 1);
         if (((nBits >> nCurrentWeapon) & 1) && nCurrentWeapon != kWeaponMummified)
         {
             int nAmmoType = WeaponInfo[nCurrentWeapon].nAmmoType;
@@ -240,9 +280,6 @@ void SelectNextWeapon()
             }
         }
 
-        nCurrentWeapon++;
-        if (nCurrentWeapon >= kWeaponMummified)
-            nCurrentWeapon = 0;
     }
 }
 
@@ -255,11 +292,14 @@ void SelectPreviousWeapon()
     if (nCurrentWeapon == kWeaponMummified)
         return; // can't change weapon when mummified
 
-    int nStartWeapon = nCurrentWeapon--;
+    int const nStartSlot = WeaponOrderSlot(nCurrentWeapon);
     int nBits = nPlayerWeapons[nLocalPlayer];
 
-    while (nCurrentWeapon != nStartWeapon)
+    for (int nStep = 1; nStep < kWeaponMummified; nStep++)
     {
+        nCurrentWeapon = g_kexMode
+            ? s_kexWeaponOrder[(nStartSlot + kWeaponMummified - nStep) % kWeaponMummified]
+            : (nCurrentWeapon - 1 < 0 ? kWeaponMummified - 1 : nCurrentWeapon - 1);
         if (((nBits >> nCurrentWeapon) & 1) && nCurrentWeapon != kWeaponMummified)
         {
             int nAmmoType = WeaponInfo[nCurrentWeapon].nAmmoType;
@@ -271,34 +311,25 @@ void SelectPreviousWeapon()
             }
         }
 
-        nCurrentWeapon--;
-        if (nCurrentWeapon < 0)
-            nCurrentWeapon = kWeaponMummified - 1;
     }
 }
 
 void SelectNewWeapon(short nPlayer)
 {
-    int nWeapon = kWeaponManacle; // start at the highest weapon number
-
     uint16_t nAvailableWeaponBits = nPlayerWeapons[nPlayer];
-    uint16_t nBitToCheck = 0x80; // bit 8 turned on
-
-    while (nBitToCheck)
+    int nWeapon = kWeaponSword;
+    for (int i = kWeaponMummified - 1; i >= 0; i--)
     {
-        if (nAvailableWeaponBits & nBitToCheck)
+        int const candidate = g_kexMode ? s_kexWeaponOrder[i] : i;
+        if (nAvailableWeaponBits & (1 << candidate))
         {
-            // we have this weapon
-            if (!WeaponInfo[nWeapon].bUsesAmmo || PlayerList[nPlayer].nAmmo[WeaponInfo[nWeapon].nAmmoType])
+            if (!WeaponInfo[candidate].bUsesAmmo || PlayerList[nPlayer].nAmmo[WeaponInfo[candidate].nAmmoType])
+            {
+                nWeapon = candidate;
                 break;
+            }
         }
-
-        nWeapon--;
-        nBitToCheck >>= 1;
     }
-
-    if (nWeapon < 0)
-        nWeapon = kWeaponSword;
 
     PlayerList[nPlayer].bIsFiring = kFalse;
 
@@ -523,7 +554,10 @@ void MoveWeapons(short nPlayer)
                                 if (nWeapon == kWeaponGrenade)
                                 {
                                     BuildGrenade(nPlayer);
-                                    AddAmmo(nPlayer, 4, -1);
+                                    // Retail Amun bombs consume their ammo in
+                                    // bomb_throw, not when bomb_fire begins.
+                                    if (!g_kexMode)
+                                        AddAmmo(nPlayer, kWeaponGrenade, -1);
                                 }
                                 else if (nWeapon == kWeaponMummified)
                                 {
@@ -556,6 +590,7 @@ void MoveWeapons(short nPlayer)
                             }
                             else
                             {
+                                KexGrenade_Charge(nPlayer);
                                 PlayerList[nPlayer].nWeaponFrame = SeqSize[var_3C] - 1;
                                 continue;
                             }
@@ -1089,6 +1124,8 @@ void DrawWeapons(int smooth)
     // CHECKME - not & 0x7FF?
     int nBobAngle = angle_interpolate16(obobangle, bobangle, smooth);
     int	yOffset = (nVal * (sintable[nBobAngle & 0x3FF] >> 8)) >> 9;
+    if (g_kexMode)
+        yOffset = (int)(yOffset * clamp(kex_view_bob_height, .5f, 10.f));
 
     int xOffset = 0;
 
@@ -1100,6 +1137,31 @@ void DrawWeapons(int smooth)
     {
         xOffset = 0;
         obobangle = bobangle = 512;
+    }
+
+    if (g_kexMode && var_34 == 1)
+    {
+        // Exhumed's input angle is the yaw consumed on the most recent game
+        // tick.  It gives the remaster-style weapon lag on a turn without
+        // changing aim, movement or any networked state.
+        int const turnTarget = clamp(-(int)sPlayerInput[nLocalPlayer].nAngle * 2, -16, 16);
+        s_kexTurnSway = KexWeaponSpring(s_kexTurnSway, turnTarget, 3);
+        xOffset += (int)(s_kexTurnSway * clamp(kex_turn_sway, .1f, 1.f));
+
+        // The native KEX w_jumpSpringApply option applies the weapon spring
+        // to vertical player motion. Build already exposes that motion as the
+        // local puppet's zvel; retaining a small spring makes the effect a
+        // presentation setting rather than a change to jump physics.
+        int const nPlayerSprite = PlayerList[nLocalPlayer].nSprite;
+        int const jumpTarget = kex_weapon_jump_bobbing && (unsigned)nPlayerSprite < (unsigned)kMaxSprites
+            ? clamp(-sprite[nPlayerSprite].zvel / 256, -24, 24) : 0;
+        s_kexWeaponJumpBob = KexWeaponSpring(s_kexWeaponJumpBob, jumpTarget, 4);
+        yOffset += s_kexWeaponJumpBob;
+    }
+    else
+    {
+        s_kexTurnSway = 0;
+        s_kexWeaponJumpBob = 0;
     }
 
     if (nWeapon == 3 && var_34 == 1) {

@@ -43,6 +43,23 @@ extern Anim AnimList[];
 extern uint8_t AnimFlags[];
 
 void InitAnims();
+void KexImpactLight_Tick();
+// Returns -1 only when exact converted art is unavailable. A value below -1
+// means the exact path was selected but animation allocation was exhausted,
+// so callers must not add a second, classic effect.
+int KexExplosion01_Spawn(int x, int y, int z, short nSector,
+                         int nKexZOffset, int bWater);
+int KexVasePuff_Spawn(int x, int y, int z, short nSector,
+                      int nKexZOffset);
+int KexWaterSplash_Spawn(int x, int y, int z, short nSector);
+void KexWaterSplash_OnTransition(short nOldSector, int oldX, int oldY,
+                                 int oldZ, short nNewSector, int newX,
+                                 int newY);
+int KexGibDeath_Spawn(int x, int y, int z, short nSector,
+                      int nKexZOffset, int nRepeat, int nKiller);
+void KexGibDeath_TestTick();
+int KexBirdFeather_Spawn(int x, int y, int z, short nSector);
+void KexBirdFeather_TestTick();
 void DestroyAnim(int nAnim);
 int BuildAnim(int nSprite, int val, int val2, int x, int y, int z, int nSector, int nRepeat, int nFlag);
 short GetAnimSprite(short nAnim);

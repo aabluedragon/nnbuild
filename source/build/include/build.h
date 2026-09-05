@@ -1396,6 +1396,15 @@ static FORCE_INLINE void rotatesprite_win(int32_t sx, int32_t sy, int32_t z, int
 
 void   getzrange(const vec3_t *pos, int16_t sectnum, int32_t *ceilz, int32_t *ceilhit, int32_t *florz,
                  int32_t *florhit, int32_t walldist, uint32_t cliptype) ATTRIBUTE((nonnull(1,3,4,5,6)));
+// Like getzrange(), but lets a game exclude a neighbouring sector's surfaces
+// from the edge-support result while still traversing through that sector.
+// The starting sector is always considered. This is useful for map formats
+// that explicitly distinguish standing inside a sector from merely
+// overlapping one with the actor's radius.
+typedef int32_t (*getzrange_sector_filter_t)(int16_t sectnum, void *userdata);
+void   getzrange_filtered(const vec3_t *pos, int16_t sectnum, int32_t *ceilz, int32_t *ceilhit, int32_t *florz,
+                          int32_t *florhit, int32_t walldist, uint32_t cliptype,
+                          getzrange_sector_filter_t sectorfilter, void *userdata) ATTRIBUTE((nonnull(1,3,4,5,6)));
 extern vec2_t hitscangoal;
 int32_t   hitscan(const vec3_t *sv, int16_t sectnum, int32_t vx, int32_t vy, int32_t vz,
                   hitdata_t *hitinfo, uint32_t cliptype) ATTRIBUTE((nonnull(1,6)));
@@ -1556,6 +1565,10 @@ int32_t deletesprite(int16_t spritenum);
 // are unaffected. See source/blood/BLOOD_UNIFY.md.
 extern int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum);
 extern int32_t (*deletesprite_replace)(int16_t spritenum);
+// Optional observers for game-side render state. They do not replace or alter
+// Build's sprite-list operations.
+extern void (*insertsprite_callback)(int16_t spritenum);
+extern void (*deletesprite_callback)(int16_t spritenum);
 extern int32_t (*changespritesect_replace)(int16_t spritenum, int16_t newsectnum);
 extern int32_t (*changespritestat_replace)(int16_t spritenum, int16_t newstatnum);
 extern void    (*initspritelists_replace)(void);

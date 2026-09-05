@@ -69,6 +69,9 @@ int BuildObject(short nSprite, int nOjectType, int nHitag);
 int BuildArrow(int nSprite, int nVal);
 int BuildFireBall(int nSprite, int a, int b);
 int BuildBoulderTrap(int nSprite, int nSpeed);
+bool ConfigureKexTrap(int nTrap, int nStartChannel);
+void KexTrapStop_Add(int nSprite, int nChannel);
+void KexTrap_TestTick();
 void BuildDrip(int nSprite);
 int BuildEnergyBlock(short nSector, int nKexChannel = -1);   // VibeBuild32: nKexChannel >= 0 = a remaster bomb wall
 int BuildElevC(int arg1, int nChannel, int nSector, int nWallSprite, int arg5, int arg6, int nCount, ...);

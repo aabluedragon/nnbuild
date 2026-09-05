@@ -31,5 +31,8 @@ int BuildQueen(int nSprite, int x, int y, int z, int nSector, int nAngle, int nC
 void FuncQueenEgg(int, int, int);
 void FuncQueenHead(int, int, int);
 void FuncQueen(int, int, int);
+void KexQueen_TestTick();
+int KexQueen_SaveTestPrepare(void);
+int KexQueen_SaveTestValidate(void);
 
 #endif

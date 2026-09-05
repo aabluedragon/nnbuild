@@ -30,9 +30,57 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "config.h"
 #include "osdcmds.h"
 #include "ramses.h"
+#include "kexinv.h"
+#include "kexmenu.h"
+#include "kextactile.h"
 #include "view.h"
 
 #include "vfs.h"
+
+// The three renderer settings in Nightdive's stock default.cfg.  The Build
+// renderer can apply FOV and anisotropy directly.  It has no runtime MSAA
+// switch, so retain that preference rather than pretending a filter setting is
+// the same thing.
+static float s_kexFov = 64.f;
+static int s_kexAntialiasing = 7;
+static int s_kexAnisotropy = 16;
+
+float KexRender_Fov(void)
+{
+    return s_kexFov;
+}
+
+void KexRender_SetFov(float value)
+{
+    s_kexFov = value < 60.f ? 60.f : value > 140.f ? 140.f : value;
+    if (g_kexMode)
+        gFov = Blrintf(s_kexFov);
+}
+
+int KexRender_Antialiasing(void)
+{
+    return s_kexAntialiasing;
+}
+
+void KexRender_SetAntialiasing(int value)
+{
+    s_kexAntialiasing = value < 0 ? 0 : value > 7 ? 7 : value;
+}
+
+int KexRender_Anisotropy(void)
+{
+    return s_kexAnisotropy;
+}
+
+void KexRender_SetAnisotropy(int value)
+{
+    s_kexAnisotropy = value < 1 ? 1 : value > 16 ? 16 : value;
+    if (g_kexMode)
+    {
+        glanisotropy = s_kexAnisotropy;
+        gltexapplyprops();
+    }
+}
 
 
 static int osdcmd_god(osdcmdptr_t UNUSED(parm))
@@ -226,11 +274,113 @@ static int osdcmd_button(osdcmdptr_t parm)
     return OSDCMD_OK;
 }
 
+// The remaster's default.cfg uses its own command vocabulary rather than
+// Build's gamefunc_* names. Keep those binds usable when a KEX config is
+// executed, but do not change the classic game's command behavior.
+struct KexCompatButton
+{
+    char const *name;
+    int gamefunc;
+};
+
+static KexCompatButton const s_kexCompatButtons[] =
+{
+    { "automap",         gamefunc_Map },
+    { "jump",            gamefunc_Jump },
+    { "strafeleft",      gamefunc_Strafe_Left },
+    { "backward",        gamefunc_Move_Backward },
+    { "+use",            gamefunc_Open },
+    { "forward",         gamefunc_Move_Forward },
+    { "straferight",     gamefunc_Strafe_Right },
+    { "+weapprev",      gamefunc_Previous_Weapon },
+    { "+weapnext",      gamefunc_Next_Weapon },
+    { "mapzoomout",     gamefunc_Zoom_Out },
+    { "inventoryscreen", gamefunc_Inventory },
+    { "mapzoomin",      gamefunc_Zoom_In },
+    { "turnleft",       gamefunc_Turn_Left },
+    { "turnright",      gamefunc_Turn_Right },
+    { "attack",         gamefunc_Fire },
+    { "*weaponwheel",   gamefunc_Weapon_Wheel },
+    { "weaponwheel",    gamefunc_Weapon_Wheel },
+};
+
+static int KexCompat_Gamefunc(char const *name, char const *weaponSlot)
+{
+    for (auto const &button : s_kexCompatButtons)
+    {
+        if (!Bstrcasecmp(name, button.name))
+            return button.gamefunc;
+    }
+
+    if (Bstrcasecmp(name, "weapon") || !weaponSlot)
+        return -1;
+
+    char *end = nullptr;
+    long const slot = strtol(weaponSlot, &end, 10);
+    if (!end || *end || (unsigned long)slot >= 8)
+        return -1;
+
+    return gamefunc_Weapon_1 + slot;
+}
+
+static int KexCompat_GamefuncCommand(char const *command)
+{
+    static char const weaponPrefix[] = "weapon ";
+    if (!Bstrncasecmp(command, weaponPrefix, ARRAY_SIZE(weaponPrefix) - 1))
+        return KexCompat_Gamefunc("weapon", command + ARRAY_SIZE(weaponPrefix) - 1);
+    return Bstrchr(command, ' ') ? -1 : KexCompat_Gamefunc(command, NULL);
+}
+
+static int osdcmd_kexcompat(osdcmdptr_t parm)
+{
+    if (!g_kexMode)
+        return OSDCMD_OK;
+
+    int const gamefunc = KexCompat_Gamefunc(parm->name,
+        parm->numparms == 1 ? parm->parms[0] : NULL);
+    if (gamefunc < 0)
+        return OSDCMD_SHOWHELP;
+
+    // The numbered KEX control slots are contiguous. GetLocalInput() maps
+    // slots 3 and 4 to the legacy Amun-Bomb/flame-thrower enum order before
+    // the packet reaches the player code.
+    CONTROL_ButtonFlags[gamefunc] = 1;
+    return OSDCMD_OK;
+}
+
 const char *const ConsoleButtons[] =
 {
     "mouse1", "mouse2", "mouse3", "mouse4", "mwheelup",
     "mwheeldn", "mouse5", "mouse6", "mouse7", "mouse8"
 };
+
+static int KexCompat_MouseButton(char const *name)
+{
+    static struct { char const *name; int button; } const aliases[] =
+    {
+        { "mouse_left",       0 },
+        { "mouse_right",      1 },
+        { "mouse_middle",     2 },
+        { "mouse_wheel_up",   4 },
+        { "mouse_wheel_down", 5 },
+    };
+    for (auto const &alias : aliases)
+        if (!Bstrcasecmp(name, alias.name))
+            return alias.button;
+    return -1;
+}
+
+static int KexCompat_JoystickButton(char const *name)
+{
+    static char const prefix[] = "joy_";
+    if (Bstrncasecmp(name, prefix, ARRAY_SIZE(prefix) - 1))
+        return -1;
+    char *end = nullptr;
+    long const button = strtol(name + ARRAY_SIZE(prefix) - 1, &end, 10);
+    if (!end || *end || (unsigned long)button >= MAXJOYBUTTONSANDHATS)
+        return -1;
+    return (int)button;
+}
 
 static int osdcmd_bind(osdcmdptr_t parm)
 {
@@ -272,15 +422,58 @@ static int osdcmd_bind(osdcmdptr_t parm)
             break;
     }
 
-    // didn't find the key
+    // Didn't find a keyboard key. The KEX cfg uses SDL-style mouse names;
+    // accept both those and the long-standing Build spellings.
     if (i == ARRAY_SSIZE(sctokeylut))
     {
+        int joyButton = -1;
         for (i=0; i<MAXMOUSEBUTTONS; i++)
             if (!Bstrcasecmp(parm->parms[0],ConsoleButtons[i]))
                 break;
 
         if (i >= MAXMOUSEBUTTONS)
+            i = KexCompat_MouseButton(parm->parms[0]);
+
+        if (i < 0)
+            joyButton = g_kexMode ? KexCompat_JoystickButton(parm->parms[0]) : -1;
+
+        if (i < 0 && joyButton < 0)
             return OSDCMD_SHOWHELP;
+
+        if (joyButton >= 0)
+        {
+            if (parm->numparms < 2)
+                return OSDCMD_SHOWHELP;
+            Bstrcpy(tempbuf, parm->parms[1]);
+            for (j = 2; j < parm->numparms; j++)
+            {
+                Bstrcat(tempbuf, " ");
+                Bstrcat(tempbuf, parm->parms[j]);
+            }
+            int const gamefunc = KexCompat_GamefuncCommand(tempbuf);
+            if (gamefunc < 0)
+                return OSDCMD_SHOWHELP;
+
+            // KEX numbers its trigger presses after the SDL controller's
+            // fourteen regular buttons. Build exposes them as positive
+            // digital trigger axes instead of ordinary buttons.
+            if (joyButton == 15 || joyButton == 16)
+            {
+                int const axis = joyButton == 15 ? CONTROLLER_AXIS_TRIGGERLEFT
+                                                 : CONTROLLER_AXIS_TRIGGERRIGHT;
+                int const expected = joyButton == 15 ? gamefunc_Jump : gamefunc_Fire;
+                if (gamefunc != expected)
+                    return OSDCMD_SHOWHELP;
+                JoystickDigitalFunctions[axis][1] = gamefunc;
+                CONTROL_MapDigitalAxis(axis, gamefunc, 1);
+            }
+            else
+            {
+                JoystickFunctions[joyButton][0] = gamefunc;
+                CONTROL_MapButton(gamefunc, joyButton, 0, controldevice_joystick);
+            }
+            return OSDCMD_OK;
+        }
 
         if (parm->numparms < 2)
         {
@@ -304,7 +497,7 @@ static int osdcmd_bind(osdcmdptr_t parm)
         for (; j<parm->numparms; j++)
         {
             Bstrcat(tempbuf," ");
-            Bstrcat(tempbuf,parm->parms[j++]);
+            Bstrcat(tempbuf,parm->parms[j]);
         }
 
         CONTROL_BindMouse(i, tempbuf, repeat, ConsoleButtons[i]);
@@ -325,7 +518,6 @@ static int osdcmd_bind(osdcmdptr_t parm)
     }
 
     j = 1;
-
     repeat = 1;
     if (!Bstrcasecmp(parm->parms[j],"norepeat"))
     {
@@ -337,10 +529,23 @@ static int osdcmd_bind(osdcmdptr_t parm)
     for (; j<parm->numparms; j++)
     {
         Bstrcat(tempbuf," ");
-        Bstrcat(tempbuf,parm->parms[j++]);
+        Bstrcat(tempbuf,parm->parms[j]);
     }
 
     CONTROL_BindKey(sctokeylut[i].sc, tempbuf, repeat, sctokeylut[i].key);
+
+    // KEX aliases are real input actions too. Keep the native key table in
+    // sync so the remaster Bindings screen can show and subsequently edit an
+    // imported default.cfg binding.
+    if (g_kexMode)
+    {
+        int const gamefunc = KexCompat_GamefuncCommand(tempbuf);
+        if (gamefunc >= 0)
+        {
+            KeyboardKeys[gamefunc][1] = KeyboardKeys[gamefunc][0];
+            KeyboardKeys[gamefunc][0] = sctokeylut[i].sc;
+        }
+    }
 
     char *cp = tempbuf;
 
@@ -478,7 +683,15 @@ static int osdcmd_cvar_set_game(osdcmdptr_t parm)
             r_ambientlightrecip = 256.f;
         else r_ambientlightrecip = 1.f/r_ambientlight;
     }
-    else */if (!Bstrcasecmp(parm->name, "in_mouse"))
+    else */if (!Bstrcasecmp(parm->name, "r_fov"))
+    {
+        KexRender_SetFov(s_kexFov);
+    }
+    else if (!Bstrcasecmp(parm->name, "r_rhimaxanisotropic"))
+    {
+        KexRender_SetAnisotropy(s_kexAnisotropy);
+    }
+    else if (!Bstrcasecmp(parm->name, "in_mouse"))
     {
         CONTROL_MouseEnabled = (gSetup.usemouse && CONTROL_MousePresent);
     }
@@ -635,6 +848,11 @@ int32_t registerosdcommands(void)
         //{ "demoplay_showsync","enable/disable display of sync status",(void *)&demoplay_showsync, CVAR_BOOL, 0, 1 },
 
         { "fov", "change the field of view", (void *)&gFov, CVAR_INT|CVAR_FUNCPTR, 60, 140 },
+        { "r_fov", "PowerSlave Exhumed field of view", (void *)&s_kexFov, CVAR_FLOAT|CVAR_FUNCPTR, 60, 140 },
+        { "r_antialiasing", "PowerSlave Exhumed anti-aliasing preference (compatibility only)",
+          (void *)&s_kexAntialiasing, CVAR_INT, 0, 7 },
+        { "r_rhimaxanisotropic", "PowerSlave Exhumed anisotropic filtering", (void *)&s_kexAnisotropy,
+          CVAR_INT|CVAR_FUNCPTR, 1, 16 },
 
         //{ "hud_althud", "enable/disable alternate mini-hud", (void *)&ud.althud, CVAR_BOOL, 0, 1 },
         //{ "hud_custom", "change the custom hud", (void *)&ud.statusbarcustom, CVAR_INT, 0, ud.statusbarrange },
@@ -700,8 +918,19 @@ int32_t registerosdcommands(void)
 
         //{ "team","change team in multiplayer", (void *)&ud.team, CVAR_INT|CVAR_MULTI, 0, 3 },
 
-        { "kex_language","Ramses speech language in the remaster campaign: 0 english, 1 french, 2 german, 3 spanish",
-          (void *)&kex_language, CVAR_INT, 0, 3 },
+        { "kex_language","remaster language: 0 english, 1 french, 2 german, 3 spanish, 4 italian text (english speech/movies)",
+          (void *)&kex_language, CVAR_INT, 0, 4 },
+        { "kex_vibration", "enable authored controller vibration in remaster levels", (void *)&kex_vibration, CVAR_BOOL, 0, 1 },
+        { "kex_vibration_volume", "remaster controller vibration strength (percent)", (void *)&kex_vibration_volume, CVAR_INT, 0, 100 },
+        { "kex_enable_checkpoints", "enable remaster checkpoint scarabs", (void *)&kex_enable_checkpoints, CVAR_BOOL, 0, 1 },
+        { "kex_original_overworld", "use the remaster's original console overworld screen", (void *)&kex_original_overworld, CVAR_BOOL, 0, 1 },
+        { "kex_view_bob_speed", "remaster weapon bob speed (0.5 through 10.0)", (void *)&kex_view_bob_speed, CVAR_FLOAT, 0, 10 },
+        { "kex_view_bob_height", "remaster weapon bob height (0.5 through 10.0)", (void *)&kex_view_bob_height, CVAR_FLOAT, 0, 10 },
+        { "kex_turn_sway", "remaster turn-driven weapon sway (0.1 through 1.0)", (void *)&kex_turn_sway, CVAR_FLOAT, 0, 1 },
+        { "kex_weapon_jump_bobbing", "enable remaster weapon jump bobbing", (void *)&kex_weapon_jump_bobbing, CVAR_BOOL, 0, 1 },
+        { "kex_show_play_time", "show remaster campaign play time", (void *)&kex_show_play_time, CVAR_BOOL, 0, 1 },
+        { "kex_show_hud_messages", "show remaster HUD messages", (void *)&kex_show_hud_messages, CVAR_BOOL, 0, 1 },
+        { "kex_crosshair_size", "remaster crosshair size (0 disabled, 0.05 through 3.0 visible)", (void *)&kex_crosshair_size, CVAR_FLOAT, 0, 3 },
 
         { "vid_gamma","gamma/brightness correction",(void *) &g_videoGamma, CVAR_FLOAT|CVAR_FUNCPTR, (int)floor(MIN_GAMMA), (int)ceil(MAX_GAMMA) },
         { "vid_contrast","contrast correction",(void *) &g_videoContrast, CVAR_FLOAT|CVAR_FUNCPTR, (int)floor(MIN_CONTRAST), (int)ceil(MAX_CONTRAST) },
@@ -754,6 +983,16 @@ int32_t registerosdcommands(void)
 
         OSD_RegisterFunction(t, Xstrdup(tempbuf), osdcmd_button);
     }
+
+    static char const * const s_kexCompatCommands[] =
+    {
+        "automap", "jump", "strafeleft", "backward", "+use", "forward",
+        "straferight", "+weapprev", "+weapnext", "mapzoomout",
+        "inventoryscreen", "mapzoomin", "turnleft", "turnright", "attack",
+        "*weaponwheel", "weaponwheel", "weapon",
+    };
+    for (auto const command : s_kexCompatCommands)
+        OSD_RegisterFunction(command, "PowerSlave Exhumed KEX input compatibility", osdcmd_kexcompat);
 
     //OSD_RegisterFunction("give","give <all|health|weapons|ammo|armor|keys|inventory>: gives requested item", osdcmd_give);
     OSD_RegisterFunction("god","god: toggles god mode", osdcmd_god);

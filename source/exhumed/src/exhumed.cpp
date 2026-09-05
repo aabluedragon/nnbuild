@@ -85,6 +85,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <ctype.h>
 #include <time.h>
 #include <assert.h>
+#include "kexbreak.h"
 #include "kexinv.h"
 
 #ifdef _WIN32
@@ -1021,6 +1022,10 @@ void DoPassword(int nPassword)
 // entrance corridor in TOMB where the remaster still shows (39,16,4).
 int Kex_BaseVisibility(void)
 {
+    // Tried and measured: with the light field loaded, dropping the falloff
+    // to 16 changes not one pixel of a lit room (p05..p95 identical), because
+    // the vertex colours carry the shading and the fog term never reaches
+    // these surfaces. So the calibrated 512 stays.
     return g_kexMode ? 512 : 2048;
 }
 
@@ -1483,8 +1488,13 @@ void FinishLevel()
             // Assemble the transmitter and the distress call gets out.
             Bsprintf(endPath, "movies/%s-%s.ogv",
                      KexInv_TransCount(0) >= KEX_TRANS_PIECES ? "goodend" : "badend",
-                     movieLang[clamp(kex_language, 0, 3)]);
+                     movieLang[KexLanguage_VoiceIndex()]);
             Kex_PlayTheora(endPath);
+            // Kex maps all run as user maps, so the generic levelnew++ below
+            // would reload TOMBEND after the ending movie. mapDestination -2
+            // on Obj_Choppa is terminal: leave the campaign after playback.
+            levelnew = 100;
+            return;
         }
     }
 
@@ -1801,13 +1811,23 @@ char const *Kex_MusicForMap(char const *mapname)
 char const *Kex_PickupCaption(int lotag)
 {
     static char s_table[4096];
-    static int  s_loaded = 0;
+    static int  s_language = -1;
     static char s_result[128];
 
-    if (!s_loaded)
+    int const language = KexLanguage_Index();
+    if (s_language != language)
     {
-        s_loaded = 1;
-        int const fil = kopen4loadfrommod("kexpickup.txt", 0);
+        s_language = language;
+        s_table[0] = 0;
+        char filename[32];
+        if (language == 0)
+            Bstrcpy(filename, "kexpickup.txt");
+        else
+            Bsnprintf(filename, sizeof(filename), "kexpickup_%s.txt", KexLanguage_Code());
+        int fil = kopen4loadfrommod(filename, 0);
+        // Converted directories made by older builds only carry English.
+        if (fil == -1 && language != 0)
+            fil = kopen4loadfrommod("kexpickup.txt", 0);
         if (fil != -1)
         {
             int const len = min(kfilelength(fil), (int)sizeof(s_table) - 1);
@@ -1866,6 +1886,16 @@ static void GameMove(void)
 {
     FixPalette();
 
+    // KEX presents actors between the old and newly simulated 30 Hz poses.
+    // Slot lifecycle callbacks keep a newly spawned sprite from borrowing a
+    // removed sprite's pose. Classic sessions do not enter this bridge.
+    if (g_kexMode)
+    {
+        insertsprite_callback = KexView_SpriteInserted;
+        deletesprite_callback = KexView_SpriteDeleted;
+        KexView_SnapshotSprites();
+    }
+
     if (levelnum == kMap20)
     {
         if (lCountDown <= 0)
@@ -1911,7 +1941,12 @@ static void GameMove(void)
     }
     else
     {
-        bobangle += 56;
+        // The remaster exposes g_viewBobSpeed as a 0.5..10.0 multiplier.
+        // Keep the original phase step byte-for-byte outside KEX mode.
+        int const bobStep = g_kexMode
+            ? max(1, (int)(56.f * clamp(kex_view_bob_speed, .5f, 10.f) + .5f))
+            : 56;
+        bobangle += bobStep;
         bobangle &= kAngleMask;
     }
 
@@ -2060,6 +2095,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     wConsoleNode = 0;
 
     int nMenu = 0; // TEMP
+    int lateJoinRestored = 0;
 
     // VibeBuild32: argv index of the first mmulti token after -net (0 = no -net).
     // Everything from there on belongs to the transport, not to us.
@@ -2067,10 +2103,10 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     // VibeBuild32: the shared multiplayer flags every game accepts identically
     // (--advertise/--lobbylist/--joinlobby/--netfile/--headless/--dedicated/
-    // --nplayers/--startnow/--wait). Exhumed takes its server role from the
+    // --nplayers/--startnow/--wait/--latejoin). Exhumed takes its server role from the
     // mmulti args, so networkMode stays NULL; the auto-start knobs are collected
     // here and handed to the netcode once parsing is done.
-    int netDedicated = 0, netStartNow = 0, netWait = 0, netStartNowPlayers = 2;
+    int netDedicated = 0, netStartNow = 0, netWait = 0, netLateJoin = 0, netStartNowPlayers = 2;
     vb_netarg_ctx const exNetArg = {
         &netDedicated, 1, 0,
         &g_noSetup, NULL,
@@ -2130,6 +2166,10 @@ int Exhumed_app_main(int argc, char const* const* argv)
             {
                 if (i + 1 < argc) ExNet_SetAutoJoin(argv[++i]);
                 g_noSetup = 1;
+            }
+            else if (!Bstrcasecmp(pOpt, "latejoin") || !Bstrcasecmp(pOpt, "lj"))
+            {
+                netLateJoin = 1;
             }
             else if (int const nc = VB_NetArg(&exNetArg, pOpt, (i + 1 < argc) ? argv[i + 1] : NULL))
             {
@@ -2384,6 +2424,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     ExNet_SetStartNowPlayers(netStartNowPlayers);
     ExNet_SetStartNow(netStartNow || (netDedicated && !netWait));
     ExNet_SetWait(netWait);
+    ExNet_SetLateJoin(netLateJoin);
 
     // This needs to happen afterwards, as G_CheckCommandLine() is where we set
     // up the command-line-provided search paths (duh).
@@ -2529,7 +2570,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     OSD_Exec(CONFIG_CvarsFilename());
     OSD_Exec(APPBASENAME "_autoexec.cfg");
 
-    CONFIG_SetDefaultKeys(keydefaults, true);
+    CONFIG_SetDefaultKeys(g_kexMode ? kexkeydefaults : keydefaults, true);
 
     system_getcvars();
 
@@ -2729,6 +2770,18 @@ STARTGAME2:
     bool cdSuccess;
     bCamera = kFalse;
     ClearCinemaSeen();
+
+    // A mid-level client has already mounted the host's assets at this point.
+    // Loading the EXSN image replaces the current world and supplies the
+    // original players; do not build a blank level or re-run their spawn code.
+    if (ExNet_IsLateJoiner())
+    {
+        if (!ExNet_LoadLateJoinSnapshot())
+            goto EXITGAME;
+        lateJoinRestored = 1;
+        goto LATEJOIN_READY;
+    }
+
     PlayerCount = 0;
     lastlevel = -1;
 
@@ -2842,23 +2895,36 @@ LOOP3:
     }
     */
     lastlevel = levelnum;
+    KexCheckpoint_WorldLoaded();
 
     for (i = 0; i < nTotalPlayers; i++)
     {
-        SetSavePoint(i, initx, inity, initz, initsect, inita);
+        if (!KexCheckpoint_PrepareSpawn(i))
+        {
+            SetSavePoint(i, initx, inity, initz, initsect, inita);
+            KexTravel_PrepareSpawn(i, inita);
+        }
         RestartPlayer(i);
         InitPlayerKeys(i);
+        KexCampaign_FinishSpawn(i);
+        KexCheckpoint_CaptureEntry(i);
+        KexCheckpoint_FinishSpawn(i);
     }
 
+LATEJOIN_READY:
     UpdateScreenSize();
     fps = 0;
     lastfps = 0;
     InitStatus();
     ResetView();
-    ResetEngine();
-    totalmoves = 0;
+    if (!lateJoinRestored)
+    {
+        ResetEngine();
+        totalmoves = 0;
+    }
     GrabPalette();
-    ResetMoveFifo();
+    if (!lateJoinRestored)
+        ResetMoveFifo();
     moveframes = 0;
     bInMove = kFalse;
     tclocks = totalclock;
@@ -2877,12 +2943,15 @@ LOOP3:
     tclocks2 = totalclock;
     CONTROL_BindsEnabled = 1;
 
-    // VibeBuild32 multiplayer: every machine meets here before tick 0, so the
-    // lockstep streams all start from the same moment.
-    ExNet_LevelStart();
+    // Normal level loads meet at the startup barrier. A late-join world was
+    // already frozen, promoted and rebased by ExNet_LoadLateJoinSnapshot(), so
+    // waiting here would deadlock against peers already resuming the level.
+    if (!lateJoinRestored)
+        ExNet_LevelStart();
     tclocks = tclocks2 = totalclock;
 
     cdSuccess = true;
+    lateJoinRestored = 0;
     // Game Loop
     while (1)
     {
@@ -3172,6 +3241,19 @@ LOOP3:
                     case 1:
                         goto STARTGAME1;
 
+                    // Kex pause actions reload through the same pending-map
+                    // path used after death.  Reload preserves a scarab;
+                    // restart clears it but keeps the source entry snapshot.
+                    case 5:
+                        if (KexCheckpoint_Reload(nLocalPlayer, 0))
+                            goto LOOP1;
+                        break;
+
+                    case 6:
+                        if (KexCheckpoint_Reload(nLocalPlayer, 1))
+                            goto LOOP1;
+                        break;
+
                     // VibeBuild32: the Kex pause menu's "exit to title screen".
                     // The classic menu has no such entry, so this code is only
                     // ever reached in Kex mode.
@@ -3224,7 +3306,10 @@ LOOP3:
             else if (BUTTON(gamefunc_Toggle_Crosshair))
             {
                 CONTROL_ClearButton(gamefunc_Toggle_Crosshair);
-                gShowCrosshair = !gShowCrosshair;
+                if (g_kexMode)
+                    kex_crosshair_size = kex_crosshair_size > 0.f ? 0.f : 1.f;
+                else
+                    gShowCrosshair = !gShowCrosshair;
             }
 
             if (nMapMode != 0)
@@ -3253,16 +3338,21 @@ LOOP3:
                     SetNextItem(nLocalPlayer);
                     CONTROL_ClearButton(gamefunc_Inventory_Right);
                 }
-                if (BUTTON(gamefunc_Inventory) || KexInv_TestWantsScreen())
+                int const kexWeaponWheel = g_kexMode && BUTTON(gamefunc_Weapon_Wheel);
+                if (BUTTON(gamefunc_Inventory) || kexWeaponWheel || KexInv_TestWantsScreen())
                 {
                     CONTROL_ClearButton(gamefunc_Inventory);
+                    if (kexWeaponWheel)
+                        CONTROL_ClearButton(gamefunc_Weapon_Wheel);
                     if (g_kexMode && KexMenu_Available())
                     {
-                        // The remaster's inventory screen, on the item key:
-                        // the converted maps have no usable items for it.
+                        // The remaster's inventory opens the full status
+                        // interface; its weapon wheel focuses the arsenal and
+                        // applies the selected owned weapon. The converted
+                        // maps have no usable classic inventory.
                         CONTROL_BindsEnabled = 0;
                         bInMove = kTrue;
-                        KexMenu_Status();
+                        KexMenu_Status(kexWeaponWheel);
                         totalclock = ototalclock = tclocks;
                         bInMove = kFalse;
                         CONTROL_BindsEnabled = 1;
@@ -3300,6 +3390,7 @@ void mydeletesprite(int nSprite)
         bail2dos("bad sprite value %d handed to mydeletesprite", nSprite);
     }
 
+    KexCheckpoint_SpriteDeleted(nSprite);
     UnlinkIgnitedAnim(nSprite);
     deletesprite(nSprite);
 
@@ -3402,7 +3493,7 @@ void DoTitle()
         static char const * const movieLang[] = { "en", "fr", "de", "es" };
         char intro[40];
         Bsprintf(intro, "movies/intro-%s.ogv",
-                 movieLang[clamp(kex_language, 0, 3)]);
+                 movieLang[KexLanguage_VoiceIndex()]);
         // VB_KEX_SKIPMOVIES: straight to the title hold, for checking it.
         if (Bgetenv("VB_KEX_SKIPMOVIES") || Kex_PlayTheora("movies/NightDive.ogv"))
         {

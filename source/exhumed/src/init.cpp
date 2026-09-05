@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "runlist.h"
 #include "kexbreak.h"
+#include "kextactile.h"
 #include "kexinv.h"
 #include "switch.h"
 #include "object.h"
@@ -78,6 +79,7 @@ short SectFlag[kMaxSectors]      = { 0 };
 int   SectDepth[kMaxSectors]     = { 0 };
 int   SectAbove[kMaxSectors]     = { 0 };
 short SectDamage[kMaxSectors]    = { 0 };
+uint8_t KexHazard[kMaxSectors]   = { 0 };
 short SectSpeed[kMaxSectors]     = { 0 };
 int   SectBelow[kMaxSectors]     = { 0 };
 
@@ -401,7 +403,10 @@ bool LoadLevel(int nMap)
     artCrossplayApplyMapTileRemap();
 
 #ifdef YAX_ENABLE
-    yax_update(1);
+    // engineLoadBoard has already decoded any converted KEX TROR bunches.
+    // Rebuild their runtime lists instead of clearing them; maps without
+    // vertical topology retain the original reset behavior.
+    yax_update(numyaxbunches > 0 ? 2 : 1);
 #endif
 
     int i;
@@ -648,10 +653,20 @@ void SnapSectors(short nSectorA, short nSectorB, short b)
 void InitSectFlag()
 {
     KexScripted_Reset();
+    KexPlate_Reset();
+    KexRemote_Reset();
+    KexSwitch_Reset();
+    KexSealedDoor_Reset();
     KexBeam_Reset();
     KexTrigger_Reset();
     KexHold_Reset();
     KexScript_Reset();
+    KexFloat_Reset();
+    KexPad_Reset();
+    KexNoStanding_Reset();
+    KexWall_Reset();
+    KexRamses_Reset();
+    KexTactile_Reset();
     for (int i = 0; i < kMaxSectors; i++)
     {
         SectSoundSect[i] = -1;
@@ -662,6 +677,7 @@ void InitSectFlag()
         SectFlag[i]  = 0;
         SectSpeed[i] = 0;
         SectDamage[i] = 0;
+        KexHazard[i] = kKexHazardNone;
     }
 }
 
@@ -981,6 +997,11 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 mydeletesprite(nSprite);
                 return;
             }
+            case 83:    // VibeBuild32: Kex sector flag 0x20, "No standing on edges"
+            {
+                KexNoStanding_Add(nSprite);
+                return;
+            }
             case 99: // underwater type 2
             {
                 short nSector = sprite[nSprite].sectnum;
@@ -1017,6 +1038,14 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
 
                 SectDamage[nSector] = nDamage;
                 SectFlag[nSector] |= kSectLava;
+                // kexmap.py reserves the two marker values below for the
+                // KEX floor-face flags: lava (0x20) and slime (0x80).  The
+                // ordinary damaging-sector behaviour remains intact for all
+                // classic maps and any non-KEX marker.
+                if (g_kexMode)
+                    KexHazard[nSector] |= nHitag == 40 ? kKexHazardLava
+                                        : nHitag == 16 ? kKexHazardSlime
+                                                       : kKexHazardNone;
 
                 mydeletesprite(nSprite);
                 return;
@@ -1044,6 +1073,12 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             case 90:
             {
                 BuildObject(nSprite, 3, nHitag);
+                return;
+            }
+            case 91:    // VibeBuild32: Kex DOOR_OPEN_ONLY_MESSAGE direct-use behavior
+            {
+                KexSealedDoor_Add(sprite[nSprite].sectnum);
+                mydeletesprite(nSprite);
                 return;
             }
             case 79:
@@ -1085,8 +1120,8 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             case 77:
             {
                 int nArrow = BuildArrow(nSprite, nSpeed);
-
-                runlist_AddRunRec(sRunChannels[nChannel].a, nArrow, kRunTrap);
+                if (!ConfigureKexTrap(nArrow, nChannel))
+                    runlist_AddRunRec(sRunChannels[nChannel].a, nArrow, kRunTrap);
                 return;
             }
             case 76: // Explosion Trigger (Exploding Fire Cauldron)
@@ -1102,7 +1137,8 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             case 69:    // VibeBuild32: the remaster's boulder spawner
             {
                 int nTrap = BuildBoulderTrap(nSprite, nSpeed);
-                runlist_AddRunRec(sRunChannels[nChannel].a, nTrap, kRunTrap);
+                if (!ConfigureKexTrap(nTrap, nChannel))
+                    runlist_AddRunRec(sRunChannels[nChannel].a, nTrap, kRunTrap);
                 return;
             }
             case 71:
@@ -1111,8 +1147,13 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 // wall-texture flip Build keys off it would otherwise catch a
                 // switch on the same channel in the same room.
                 int nFireball = BuildFireBall(nSprite, g_kexMode ? -1 : nHitag, nSpeed);
-
-                runlist_AddRunRec(sRunChannels[nChannel].a, nFireball, kRunTrap);
+                if (!ConfigureKexTrap(nFireball, nChannel))
+                    runlist_AddRunRec(sRunChannels[nChannel].a, nFireball, kRunTrap);
+                return;
+            }
+            case 72:    // VibeBuild32: source-actor-ordered KEX trap stop record
+            {
+                KexTrapStop_Add(nSprite, nChannel);
                 return;
             }
             case 70:
@@ -1122,7 +1163,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             }
             case 73:    // VibeBuild32: this sector's mover holds where its tag put it
             case 74:    // VibeBuild32: a bomb wall's floor once blown (read at InitSectFlag)
-            case 81:    // VibeBuild32: a drop pad's raised height (read at InitSectFlag)
+            case 81:    // VibeBuild32: legacy drop-pad top marker (pre-kexpad output)
             {
                 KexHold_Add(nSprite);
                 return;
@@ -1149,7 +1190,41 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             }
             case 64:    // VibeBuild32: a sector the remaster's level script moves
             {
-                KexScripted_Add(sprite[nSprite].sectnum, nHitag);
+                // xvel stores partner Build sector + 1; zero is the legacy
+                // no-partner marker emitted by old/custom conversions.
+                KexScripted_Add(sprite[nSprite].sectnum, nHitag,
+                                sprite[nSprite].xvel - 1);
+                mydeletesprite(nSprite);
+                return;
+            }
+            case 84:    // VibeBuild32: the remaster's sinking floor trigger plate
+            {
+                KexPlate_Add(sprite[nSprite].sectnum, nHitag, sprite[nSprite].z);
+                mydeletesprite(nSprite);
+                return;
+            }
+            case 85:    // VibeBuild32: Kex switch off art, keyed by its raw event tag
+            {
+                KexSwitch_Add(sprite[nSprite].sectnum, nHitag, sprite[nSprite].xvel,
+                              sprite[nSprite].yvel, sprite[nSprite].x, sprite[nSprite].y);
+                mydeletesprite(nSprite);
+                return;
+            }
+            case 86:    // VibeBuild32: Kex ARTIFACT_SPAWN exact floor-triangle destination
+            {
+                if (g_kexMode)
+                    KexInv_AddShrineSpawn(nSprite, nHitag);
+                else
+                    mydeletesprite(nSprite);
+                return;
+            }
+            case 87:    // VibeBuild32: Kex REMOTE_TRIGGER dispatcher
+            {
+                // hitag is the allotted Build channel; xvel preserves the
+                // signed source tag and yvel says its source event is one-shot.
+                if (g_kexMode)
+                    KexRemote_Add(sprite[nSprite].sectnum, sprite[nSprite].xvel,
+                                  nHitag, sprite[nSprite].yvel);
                 mydeletesprite(nSprite);
                 return;
             }
@@ -1194,6 +1269,11 @@ void ExamineSprites()
         int nStatus = sprite[nSprite].statnum;
         if (!nStatus)
         {
+            if (!KexCheckpoint_RegisterSprite(nSprite))
+            {
+                mydeletesprite(nSprite);
+                continue;
+            }
             short lotag = sprite[nSprite].lotag;
             short hitag = sprite[nSprite].hitag;
 
@@ -1270,18 +1350,248 @@ void LoadObjects()
         }
     }
 
+    // Clear per-map KEX construction state before ExamineSprites() feeds it
+    // shrine pads and checkpoint actors. This also distinguishes an ordinary
+    // map transition from a pending checkpoint reload.
+    KexInv_BeginLevel();
     ExamineSprites();
     PostProcess();
+
+    // Constructor-level regression probe for the ordinary KEX enemies whose
+    // native Build counterparts use different collision/renderer dimensions.
+    // Run after every authored sprite has been constructed so it validates the
+    // live level state, not merely constants in source.
+    if (g_kexMode && Bgetenv("VB_KEX_COMMON_ENEMY_TEST"))
+    {
+        struct KexEnemyDimensions
+        {
+            int stat, clipdist, repeat;
+            char const *name;
+        };
+        static KexEnemyDimensions const expected[] = {
+            { 101, 72, 60, "Anubis" },
+            { 102, 72, 60, "Mummy" },
+            { 104, 72, 60, "Bastet" },
+            { 103, 24, 40, "Fish" },
+            {  99, 24, 40, "Spider/Scorpion" },
+        };
+        int count[ARRAY_SIZE(expected)] = {};
+        int bad[ARRAY_SIZE(expected)] = {};
+        for (unsigned kind = 0; kind < ARRAY_SIZE(expected); kind++)
+            for (int nSprite = headspritestat[expected[kind].stat]; nSprite >= 0;
+                 nSprite = nextspritestat[nSprite])
+            {
+                count[kind]++;
+                bad[kind] += sprite[nSprite].clipdist != expected[kind].clipdist
+                          || sprite[nSprite].xrepeat != expected[kind].repeat
+                          || sprite[nSprite].yrepeat != expected[kind].repeat;
+            }
+        int total = 0, totalBad = 0;
+        for (unsigned kind = 0; kind < ARRAY_SIZE(expected); kind++)
+        {
+            total += count[kind];
+            totalBad += bad[kind];
+        }
+        bool const okay = total > 0 && totalBad == 0;
+        OSD_Printf("Kex common enemy dimensions test: %s "
+                   "(Anubis %d/%d, Mummy %d/%d, Bastet %d/%d, Fish %d/%d, "
+                   "Spider/Scorpion %d/%d)\n",
+                   okay ? "PASS" : "FAIL", count[0] - bad[0], count[0],
+                   count[1] - bad[1], count[1], count[2] - bad[2], count[2],
+                   count[3] - bad[3], count[3], count[4] - bad[4], count[4]);
+
+        bool bastetCadence = seq_IsLoaded(kSeqLion);
+        int const bastetSeq = SeqOffsets[kSeqLion];
+        if (bastetCadence)
+            for (int direction = 0; direction < 8; direction++)
+                bastetCadence = bastetCadence
+                    && SeqSize[bastetSeq + direction] == 12
+                    && SeqSize[bastetSeq + 10 + direction] == 11
+                    && SeqSize[bastetSeq + 44 + direction] == 17;
+        bastetCadence = bastetCadence
+            && SeqSize[bastetSeq + 8] == 41
+            && SeqSize[bastetSeq + 9] == 23
+            && SeqSize[bastetSeq + 54] == 1;
+
+        bool fishCadence = seq_IsLoaded(kSeqFish);
+        int const fishSeq = SeqOffsets[kSeqFish];
+        if (fishCadence)
+            for (int direction = 0; direction < 8; direction++)
+                fishCadence = fishCadence
+                    && SeqSize[fishSeq + direction] == 8
+                    && SeqSize[fishSeq + 8 + direction] == 1
+                    && SeqSize[fishSeq + 24 + direction] == 14;
+        fishCadence = fishCadence && SeqSize[fishSeq + 48] == 1;
+        OSD_Printf("Kex Bastet/Fish sequence lifecycle test: %s "
+                   "(Bastet 12/11/17/41/23, Fish 8/1/14, delayed drops)\n",
+                   bastetCadence && fishCadence ? "PASS" : "FAIL");
+
+        // The converter replaces both Spider files with exact retail action
+        // groups.  Check every directional slot, not only the callback-facing
+        // first one, so a stale compressed SCORPION.SEQ cannot pass unnoticed.
+        bool spiderCadence = seq_IsLoaded(kSeqSpider);
+        bool scorpCadence = seq_IsLoaded(kSeqScorpion);
+        int const spiderSeq = SeqOffsets[kSeqSpider];
+        int const scorpSeq = SeqOffsets[kSeqScorpion];
+        if (spiderCadence)
+            for (int direction = 0; direction < 8; direction++)
+                spiderCadence = spiderCadence
+                    && SeqSize[spiderSeq + direction] == 6
+                    && SeqSize[spiderSeq + 8 + direction] == 6
+                    && SeqSize[spiderSeq + 16 + direction] == 6
+                    && SeqSize[spiderSeq + 24 + direction] == 3
+                    && SeqSize[spiderSeq + 32 + direction] == 14
+                    && (direction == 0
+                        ? SeqSize[spiderSeq + 40] == 4
+                            && SeqSize[spiderSeq + 41] == 1
+                        : SeqSize[spiderSeq + 40 + direction] == 1);
+        if (scorpCadence)
+            for (int direction = 0; direction < 8; direction++)
+                scorpCadence = scorpCadence
+                    && SeqSize[scorpSeq + direction] == 12
+                    && SeqSize[scorpSeq + 8 + direction] == 12
+                    && SeqSize[scorpSeq + 16 + direction] == 12
+                    && SeqSize[scorpSeq + 24 + direction] == 2
+                    && SeqSize[scorpSeq + 32 + direction] == 13
+                    && (direction == 0
+                        ? SeqSize[scorpSeq + 40] == 4
+                            && SeqSize[scorpSeq + 41] == 1
+                        : SeqSize[scorpSeq + 40 + direction] == 1);
+        OSD_Printf("Kex Spider/Scorpion sequence cadence test: %s "
+                   "(Spider 6/14/3/4, Scorpion 12/13/2/4, save identity)\n",
+                   spiderCadence && scorpCadence && KexSpiderIdentityTest()
+                       ? "PASS" : "FAIL");
+
+        bool anubisCadence = seq_IsLoaded(kSeqAnubis);
+        int const anubisSeq = SeqOffsets[kSeqAnubis];
+        if (anubisCadence)
+            for (int direction = 0; direction < 8; direction++)
+                anubisCadence = anubisCadence
+                    && SeqSize[anubisSeq + direction] == 1
+                    && SeqSize[anubisSeq + 8 + direction] == 18
+                    && SeqSize[anubisSeq + 16 + direction] == 24
+                    && SeqSize[anubisSeq + 24 + direction] == 25
+                    && SeqSize[anubisSeq + 32 + direction] == 10
+                    && SeqSize[anubisSeq + 50 + direction] == 9;
+        anubisCadence = anubisCadence
+            && SeqSize[anubisSeq + 40] == 20
+            && SeqSize[anubisSeq + 41] == 1
+            && SeqSize[anubisSeq + 42] == 20
+            && SeqSize[anubisSeq + 43] == 1;
+        OSD_Printf("Kex Anubis sequence/death selector test: %s "
+                   "(1/18/24/25/10/9/20/1, generic -8/-9 split)\n",
+                   anubisCadence && KexAnubisGibSelectorTest()
+                       ? "PASS" : "FAIL");
+
+        bool mummyCadence = seq_IsLoaded(kSeqMummy);
+        int const mummySeq = SeqOffsets[kSeqMummy];
+        if (mummyCadence)
+            for (int direction = 0; direction < 8; direction++)
+                mummyCadence = mummyCadence
+                    && SeqSize[mummySeq + direction] == 16
+                    && SeqSize[mummySeq + 8 + direction] == 1
+                    && SeqSize[mummySeq + 16 + direction] == 13
+                    && SeqSize[mummySeq + 24 + direction] == 39
+                    && SeqSize[mummySeq + 50 + direction] == 9;
+        mummyCadence = mummyCadence
+            && SeqSize[mummySeq + 32] == 35
+            && SeqSize[mummySeq + 40] == 1;
+        OSD_Printf("Kex Mummy sequence/death selector test: %s "
+                   "(16/1/13/39/35/1/9, generic -10/-11 split)\n",
+                   mummyCadence && KexMummyGibSelectorTest()
+                       ? "PASS" : "FAIL");
+
+        // Exercise the shared A_CheckMelee/A_MeleeAttack conversion at both
+        // sides of its exact 3-D boundary. These temporary sprites never join
+        // a controller or survive level construction.
+        int const nSource = insertsprite(initsect, 0);
+        int const nTarget = insertsprite(initsect, 0);
+        bool rangeOkay = nSource >= 0 && nTarget >= 0;
+        bool meleeKindsOkay = rangeOkay;
+        if (rangeOkay)
+        {
+            sprite[nSource].x = sprite[nSource].y = sprite[nSource].z = 0;
+            sprite[nSource].clipdist = 72; // authored radius 48
+            sprite[nSource].cstat = 0x101;
+            // AI source radius 48 + the player puppet's hardcoded 95.25 +
+            // A_MeleeAttack reach 48, all at WORLD=6: 1147.5 Build units.
+            sprite[nTarget].x = 1147;
+            sprite[nTarget].y = sprite[nTarget].z = 0;
+            sprite[nTarget].clipdist = 1;  // prove KEX uses authored player radius
+            changespritestat(nTarget, 100);
+            sprite[nTarget].cstat = 0x101;
+            rangeOkay = KexMeleeRange(nSource, nTarget, 48);
+            sprite[nTarget].x++;
+            rangeOkay = rangeOkay && !KexMeleeRange(nSource, nTarget, 48);
+            sprite[nTarget].x = 0;
+            sprite[nTarget].z = 1147 * 16;
+            rangeOkay = rangeOkay && KexMeleeRange(nSource, nTarget, 48);
+            sprite[nTarget].z += 16;
+            rangeOkay = rangeOkay && !KexMeleeRange(nSource, nTarget, 48);
+            sprite[nTarget].z = 0;
+            sprite[nTarget].cstat = 0;
+            rangeOkay = rangeOkay && !KexMeleeRange(nSource, nTarget, 48);
+
+            // The source has three deliberately different checks: generic
+            // AI entry is sight/FOV aware, A_CheckMelee compares raw origins,
+            // and flying A_MeleeAttack lifts the target by half its height.
+            sprite[nTarget].cstat = 0x101;
+            changespritestat(nSource, 101); // Anubis: forward-facing AI.
+            sprite[nSource].x = initx;
+            sprite[nSource].y = inity;
+            sprite[nSource].z = initz;
+            sprite[nTarget].x = initx + 128;
+            sprite[nTarget].y = inity;
+            sprite[nTarget].z = initz;
+            sprite[nSource].ang = getangle(128, 0);
+            meleeKindsOkay = KexAIEnterMeleeRange(nSource, nTarget, 0);
+            sprite[nSource].ang = (sprite[nSource].ang + 339) & kAngleMask;
+            meleeKindsOkay = meleeKindsOkay
+                && !KexAIEnterMeleeRange(nSource, nTarget, 0);
+
+            changespritestat(nSource, 103); // AI_Fish: flying.
+            sprite[nSource].x = sprite[nSource].y = sprite[nSource].z = 0;
+            sprite[nSource].clipdist = 24;
+            sprite[nTarget].x = sprite[nTarget].y = 0;
+            sprite[nTarget].z = 13000;
+            meleeKindsOkay = meleeKindsOkay
+                && !KexMeleeRange(nSource, nTarget, 16)
+                && KexMeleeAttackRange(nSource, nTarget, 16);
+        }
+        if (nSource >= 0)
+            mydeletesprite(nSource);
+        if (nTarget >= 0)
+            mydeletesprite(nTarget);
+        OSD_Printf("Kex common enemy melee range test: %s "
+                   "(XY/Z boundary, invalid target, AI entry and flying hit)\n",
+                   rangeOkay && meleeKindsOkay ? "PASS" : "FAIL");
+
+        // kexAI's inherited sightDistance is 3000 source units. Its strict
+        // per-axis comparison is shared by every converted ordinary monster,
+        // replacing the native controllers' inconsistent acquisition ranges.
+        bool const sightOkay = KexAIWithinSightDistance(17999, 0)
+            && !KexAIWithinSightDistance(18000, 0)
+            && KexAIWithinSightDistance(0, -17999)
+            && !KexAIWithinSightDistance(0, -18000);
+        OSD_Printf("Kex common enemy sight range test: %s "
+                   "(3000 KEX units, strict XY boundary)\n",
+                   sightOkay ? "PASS" : "FAIL");
+
+    }
 
     // The remaster's vases and barrels are shootable props; arm them once the
     // level's own objects are in place. No-op outside Kex mode.
     KexBreak_Init();
+    KexDecor_Init();
     KexLight_Init();
     KexTele_Init();
     KexScripted_Init();
+    KexFloat_Init();
+    KexPad_Init();
     KexBeam_Init();
     KexTrigger_Init();
     KexScript_Init();
+    KexNoStanding_Test();
     KexInv_LevelStart();
     InitRa();
     InitChunks();
@@ -1291,6 +1601,7 @@ void LoadObjects()
         runlist_ChangeChannel(nChannel, 0);
         runlist_ReadyChannel(nChannel);
     }
+    KexCheckpoint_LevelReady();
 
     nCamerax = initx;
     nCameray = inity;

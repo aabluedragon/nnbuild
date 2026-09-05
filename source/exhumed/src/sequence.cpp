@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 
 #define kMaxSequences	4096
-#define kMaxSEQFiles 81
+#define kMaxSEQFiles 97
 #define kMaxSEQFrames	18000
 #define kMaxSEQChunks	21000
 
@@ -158,7 +158,23 @@ const char *SeqNames[kMaxSEQFiles] =
   "rat",
   "boulder",      // VibeBuild32: written by the Kex converter; absent from the classic data
   "manacle",      // VibeBuild32: likewise
-  "scorpion"      // VibeBuild32: likewise
+  "scorpion",     // VibeBuild32: likewise
+  "seedling",     // VibeBuild32: Queen's hatched scarab; likewise
+  "amunbomb",     // VibeBuild32: the remaster's world Amun bomb; likewise
+  "kexmuzzle",      // VibeBuild32: exact fireball-spawner shooting puff; likewise
+  "keximpact",      // VibeBuild32: exact fireball/boulder impact puff; likewise
+  "kexcobrared",    // VibeBuild32: exact red-cobra impact puff; likewise
+  "kexcobragreen",  // VibeBuild32: exact green-cobra impact puff; likewise
+  "kexcobractl",    // VibeBuild32: exact four-puff callback cadence; likewise
+  "kexanuimpact",   // VibeBuild32: exact Anubis-fireball death animation; likewise
+  "kexexplode",     // VibeBuild32: exact Fx_Explosion01 land effect; likewise
+  "kexwaterexp",    // VibeBuild32: exact Fx_Explosion01_Water effect; likewise
+  "kexvasepuff",    // VibeBuild32: exact ordinary-breakable puff; likewise
+  "kexammospawn",   // VibeBuild32: exact Fx_AmmoSpawn delayed orb; likewise
+  "kexhealthspawn", // VibeBuild32: exact Fx_HealthSpawn delayed orb; likewise
+  "kexgibdeath",    // VibeBuild32: exact Fx_Gibs01 delayed drop actor; likewise
+  "kexbirdfeather", // VibeBuild32: exact Obj_Bird_Feathers loop/fall actor; likewise
+  "kexwatersplash"  // VibeBuild32: exact Fx_WaterSplash surface-crossing actor; likewise
 };
 
 short SeqOffsets[kMaxSEQFiles];
@@ -176,7 +192,15 @@ int seq_IsLoaded(int nSeq)
 static bool seq_IsOptional(const char *seqName)
 {
     return !Bstrcasecmp(seqName, "boulder") || !Bstrcasecmp(seqName, "manacle")
-        || !Bstrcasecmp(seqName, "scorpion");
+        || !Bstrcasecmp(seqName, "scorpion") || !Bstrcasecmp(seqName, "seedling")
+        || !Bstrcasecmp(seqName, "amunbomb") || !Bstrcasecmp(seqName, "kexmuzzle")
+        || !Bstrcasecmp(seqName, "keximpact") || !Bstrcasecmp(seqName, "kexcobrared")
+        || !Bstrcasecmp(seqName, "kexcobragreen") || !Bstrcasecmp(seqName, "kexcobractl")
+        || !Bstrcasecmp(seqName, "kexanuimpact") || !Bstrcasecmp(seqName, "kexexplode")
+        || !Bstrcasecmp(seqName, "kexwaterexp") || !Bstrcasecmp(seqName, "kexvasepuff")
+        || !Bstrcasecmp(seqName, "kexammospawn") || !Bstrcasecmp(seqName, "kexhealthspawn")
+        || !Bstrcasecmp(seqName, "kexgibdeath") || !Bstrcasecmp(seqName, "kexbirdfeather")
+        || !Bstrcasecmp(seqName, "kexwatersplash");
 }
 
 int seq_ReadSequence(const char *seqName)

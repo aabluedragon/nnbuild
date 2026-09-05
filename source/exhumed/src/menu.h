@@ -56,6 +56,7 @@ short menu_GameLoad(int nSlot);
 void menu_GameLoad2(buildvfs_kfd hFile, bool bIsDemo = false);
 void menu_GameSave2(FILE *fp);
 void menu_GameSave(int nSaveSlot);
+int menu_SaveSlotUsed(int nSaveSlot);
 void menu_DemoGameSave(FILE* fp);
 int menu_DrawTheMap(int nLevel, int param_B, int param_C);
 void DoEnergyTile();

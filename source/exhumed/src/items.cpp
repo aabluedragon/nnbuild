@@ -36,6 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "object.h"
 #include "save.h"
 #include "kexinv.h"
+#include "kexbreak.h"
 
 struct AnimInfo
 {
@@ -124,6 +125,16 @@ void BuildItemAnim(short nSprite)
 {
     int nItem = sprite[nSprite].statnum - 906;
 
+    // Kex's rare vase map drop (and any converted Item_Map) already carries
+    // the remaster's composited scroll tile. Do not add the classic animated
+    // map overlay on top of it; lotag 11 is still retained for pickup logic.
+    if (g_kexMode && nItem == 5)
+    {
+        sprite[nSprite].owner = -1;
+        sprite[nSprite].yrepeat = sprite[nSprite].xrepeat = 64;
+        return;
+    }
+
     if (nItemAnimInfo[nItem].a >= 0)
     {
         int nAnim = BuildAnim(nSprite, 41, nItemAnimInfo[nItem].a, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, sprite[nSprite].sectnum, nItemAnimInfo[nItem].repeat, 20);
@@ -157,10 +168,9 @@ void DestroyItemAnim(short nSprite)
 
 void ItemFlash()
 {
-    // The remaster washes the screen a strong blue for an instant on a
-    // pickup, where the original game gave a faint white.
+    // The remaster uses a blue 192-alpha overlay, not a DOS palette wash.
     if (g_kexMode)
-        TintPalette(24, 24, 112);
+        KexHud_PickupFlash();
     else
         TintPalette(16, 16, 16);
 }

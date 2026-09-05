@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 void InitLava();
 int BuildLava(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
 int BuildLavaLimb(int nSprite, int edx, int ebx);
+void KexMantis_TestTick();
 void FuncLavaLimb(int, int, int);
 void FuncLava(int, int, int);
 

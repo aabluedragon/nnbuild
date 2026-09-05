@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "keyboard.h"
 #include "control.h"
 #include "engine.h"
+#include "palette.h"
 #include "config.h"
 #include "names.h"
 #include "view.h"
@@ -48,6 +49,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "trigdat.h"
 #include "runlist.h"
 #include "kexbreak.h"
+#include "kexinv.h"
 
 short bSubTitles = kTrue;
 
@@ -86,8 +88,56 @@ int32_t oldipos[MAXINTERPOLATIONS];
 int32_t* curipos[MAXINTERPOLATIONS];
 int32_t bakipos[MAXINTERPOLATIONS];
 
+struct KexSpritePose
+{
+    int32_t x, y, z;
+    int16_t ang, sectnum;
+    uint8_t valid;
+};
+
+// KEX renders actor movement smoothly between its 30 Hz game updates. Keep a
+// private previous pose per Build slot and apply it only to tsprite copies in
+// analyzesprites(), so physics, AI, savegames and net state remain exact.
+static KexSpritePose s_kexSpritePose[MAXSPRITES];
+static int s_kexSpriteSmoothRatio = 65536;
+static constexpr int kKexSpriteInterpolationMaxDelta = 8192;
+static int s_kexSpriteInterpolationTest = -1;
+
 int32_t nCameraDist = 0;
 int32_t nCameraClock = 0;
+
+void KexView_SpriteInserted(int16_t nSprite)
+{
+    if ((unsigned)nSprite < MAXSPRITES)
+        s_kexSpritePose[nSprite].valid = 0;
+}
+
+void KexView_SpriteDeleted(int16_t nSprite)
+{
+    KexView_SpriteInserted(nSprite);
+}
+
+void KexView_SnapshotSprites(void)
+{
+    if (!g_kexMode)
+        return;
+
+    for (int nSprite = 0; nSprite < MAXSPRITES; nSprite++)
+    {
+        KexSpritePose &pose = s_kexSpritePose[nSprite];
+        if (sprite[nSprite].statnum == MAXSTATUS)
+        {
+            pose.valid = 0;
+            continue;
+        }
+        pose.x = sprite[nSprite].x;
+        pose.y = sprite[nSprite].y;
+        pose.z = sprite[nSprite].z;
+        pose.ang = sprite[nSprite].ang;
+        pose.sectnum = sprite[nSprite].sectnum;
+        pose.valid = 1;
+    }
+}
 
 
 int viewSetInterpolation(int32_t *const posptr)
@@ -200,6 +250,17 @@ static void analyzesprites()
         }
 
         pTSprite->pal = RemapPLU(pTSprite->pal);
+        int const decorTile = KexDecor_ViewTile(nSprite);
+        if (decorTile >= 0)
+            pTSprite->picnum = (int16_t)decorTile;
+        int const ramsesTile = KexRamses_ViewTile(nSprite);
+        if (ramsesTile >= 0)
+        {
+            // Materialise/vanish advance on the renderer's 120 Hz clock even
+            // though gameplay scripts restart at 30 Hz, as in the remaster.
+            pTSprite->picnum = (int16_t)ramsesTile;
+            pTSprite->shade = -128;
+        }
         if (KexFlash_Active(nSprite))       // the remaster's hit flash: white, fullbright
         {
             pTSprite->shade = -128;
@@ -273,6 +334,60 @@ static void analyzesprites()
         if (!cansee(x, y, z, nSector, pTarget->x, pTarget->y, pTarget->z - GetSpriteHeight(besttarget), pTarget->sectnum))
         {
             besttarget = -1;
+        }
+    }
+
+    if (s_kexSpriteInterpolationTest < 0)
+        s_kexSpriteInterpolationTest = g_kexMode && Bgetenv("VB_KEX_SPRITE_INTERP_TEST") ? 0 : -2;
+
+    if (!g_kexMode || s_kexSpriteSmoothRatio >= 65536)
+        return;
+
+    for (int i = 0; i < spritesortcnt; i++)
+    {
+        tspritetype &t = tsprite[i];
+        int const nSprite = t.owner;
+        if ((unsigned)nSprite >= MAXSPRITES)
+            continue;
+
+        KexSpritePose &pose = s_kexSpritePose[nSprite];
+        if (!pose.valid || pose.sectnum != t.sectnum)
+            continue;
+
+        // The opt-in probe advances a real renderer copy from a private pose.
+        // It never writes sprite[] and is reset by the next simulation snapshot.
+        if (s_kexSpriteInterpolationTest == 0)
+        {
+            pose.x = t.x - 256;
+            pose.y = t.y;
+            pose.z = t.z;
+            pose.ang = t.ang;
+            pose.sectnum = t.sectnum;
+            s_kexSpriteInterpolationTest = 2;
+        }
+
+        int const dx = t.x - pose.x;
+        int const dy = t.y - pose.y;
+        int const dz = t.z - pose.z;
+        // Teleports, sector changes and large scripted jumps must present at
+        // their destination; blending them can draw through a closed room.
+        if (klabs(dx) > kKexSpriteInterpolationMaxDelta
+            || klabs(dy) > kKexSpriteInterpolationMaxDelta
+            || klabs(dz) > kKexSpriteInterpolationMaxDelta)
+            continue;
+
+        t.x = pose.x + mulscale16(dx, s_kexSpriteSmoothRatio);
+        t.y = pose.y + mulscale16(dy, s_kexSpriteSmoothRatio);
+        t.z = pose.z + mulscale16(dz, s_kexSpriteSmoothRatio);
+        t.ang = (int16_t)angle_interpolate16(pose.ang, t.ang, s_kexSpriteSmoothRatio);
+
+        // Prove a real renderer copy, not its authoritative sprite, blended
+        // at a fractional frame ratio. The test pose above is private state.
+        if (s_kexSpriteInterpolationTest == 2 && (dx || dy || dz))
+        {
+            OSD_Printf("Kex sprite interpolation test: PASS (sprite %d, ratio %d, delta %d/%d/%d)\n",
+                       nSprite, s_kexSpriteSmoothRatio, dx, dy, dz);
+            s_kexSpriteInterpolationTest = 1;
         }
     }
 }
@@ -464,6 +579,7 @@ void viewDo3rdPerson(int nSprite, vec3_t* v, short* nSector, short nAngle, int h
 
 void DrawView(int smoothRatio)
 {
+    s_kexSpriteSmoothRatio = g_kexMode ? clamp(smoothRatio, 0, 65536) : 65536;
     int playerX;
     int playerY;
     int playerZ;
@@ -572,6 +688,7 @@ void DrawView(int smoothRatio)
                 viewz = floorZ;
 
             nCameraa += fix16_from_int((nQuake[nLocalPlayer] >> 7) % 31);
+            nCameraa += fix16_from_int(KexQuakeYaw());
             nCameraa &= 0x7FFFFFF;
         }
     }
@@ -587,6 +704,7 @@ void DrawView(int smoothRatio)
             viewz = floorZ;
 
         nCameraa += fix16_from_int((nQuake[nLocalPlayer] >> 7) % 31);
+        nCameraa += fix16_from_int(KexQuakeYaw());
         nCameraa &= 0x7FFFFFF;
 
         vec3_t cpos;
@@ -672,11 +790,13 @@ void DrawView(int smoothRatio)
         // Duke's G_DoSpriteAnimations has. The main layer is done last, so
         // besttarget still ends up computed from the sectors the player is
         // actually standing in.
+        KexWall_ViewBegin(nCamerax, nCameray, viewz);
         yax_preparedrawrooms();
         renderDrawRoomsQ16(nCamerax, nCameray, viewz, nCameraa, nCamerapan, nSector);
         yax_drawrooms(ExhumedYaxSpriteAnim, nSector, 0, smoothRatio);
         analyzesprites();
         renderDrawMasks();
+        KexWall_ViewEnd();
 
         if (HavePLURemap())
         {
@@ -747,9 +867,14 @@ void DrawView(int smoothRatio)
             if (nSnakeCam < 0)
             {
                 DrawWeapons(smoothRatio);
-                if (gShowCrosshair) {
+                float const crosshairSize = g_kexMode
+                    ? clamp(kex_crosshair_size, 0.f, 3.f)
+                    : (gShowCrosshair ? 1.f : 0.f);
+                if (crosshairSize > 0.f) {
                     if (!waloff[kTile1579]) tileLoad(kTile1579);
-                    rotatesprite(160<<16, 92<<16, 65536, 0, kTile1579, 0, 0, 1+2, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+                    int const scale = g_kexMode
+                        ? max(1, (int)(65536.f * crosshairSize + .5f)) : 65536;
+                    rotatesprite(160<<16, 92<<16, scale, 0, kTile1579, 0, 0, 1+2, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
                 }
                 DrawMap();
                 DrawStatus();
@@ -779,6 +904,27 @@ void DrawView(int smoothRatio)
 
     sprite[nPlayerSprite].cstat = nPlayerOldCstat;
     sprite[nDoppleSprite[nLocalPlayer]].cstat = nDoppleOldCstat;
+
+#ifdef USE_OPENGL
+    // kexHud::Display adds these after every HUD element. The Kex bridge keeps
+    // their source alpha independently of PCExhumed's damage/item palette
+    // fades. Each native tick represents two source updates.
+    if (videoGetRenderMode() >= REND_POLYMOST)
+    {
+        int const damageAlpha = KexHud_DamageFlashAlpha();
+        if (damageAlpha > 0)
+            fullscreen_tint_gl(255, 32, 32, (uint8_t)damageAlpha);
+        int const pickupAlpha = KexHud_PickupFlashAlpha();
+        if (pickupAlpha > 0)
+            fullscreen_tint_gl(32, 32, 255, (uint8_t)pickupAlpha);
+        int const shockAlpha = KexForce_ElectrocuteAlpha();
+        if (shockAlpha > 0)
+            fullscreen_tint_gl(32, 255, 32, (uint8_t)shockAlpha);
+        int const teleAlpha = KexTele_FlashAlpha();
+        if (teleAlpha > 0)
+            fullscreen_tint_gl(0, 255, 8, (uint8_t)teleAlpha);
+    }
+#endif
 
     flash = 0;
 }

@@ -174,6 +174,16 @@ int32_t wm_msgbox(const char *name, const char *fmt, ...)
     Bvsnprintf(buf,MSGBOX_PRINTF_MAX,fmt,va);
     va_end(va);
     buf[MSGBOX_PRINTF_MAX-1] = 0;
+
+    // Unattended test runs deliberately have no visible UI.  A native modal
+    // alert would otherwise sit above the hidden game window forever waiting
+    // for input, so emit the same information to the log and keep the caller's
+    // normal error/exit path moving.
+    if (getenv("VB_HIDE_WINDOW"))
+    {
+        LOG_F(INFO, "Suppressed message box '%s': %s", name, buf);
+        return 0;
+    }
 #if defined EDUKE32_OSX
     auto result = osx_msgbox(name, buf);
     return result;
@@ -221,6 +231,14 @@ int32_t wm_ynbox(const char *name, const char *fmt, ...)
     Bvsnprintf(buf,MSGBOX_PRINTF_MAX,fmt,va);
     va_end(va);
     buf[MSGBOX_PRINTF_MAX-1] = 0;
+
+    // Hidden unattended runs cannot answer a modal question.  Default to the
+    // safe negative response and leave a diagnostic instead of blocking.
+    if (getenv("VB_HIDE_WINDOW"))
+    {
+        LOG_F(INFO, "Suppressed question box '%s' (answering No): %s", name, buf);
+        return 0;
+    }
 #if defined EDUKE32_OSX
     auto result = osx_ynbox(name, buf);
     return result;

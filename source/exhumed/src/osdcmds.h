@@ -32,6 +32,16 @@ void onvideomodechange(int32_t newmode);
 void GAME_onshowosd(int shown);
 void GAME_clearbackground(int numcols, int numrows);
 
+// The three renderer preferences stored by PowerSlave Exhumed's default.cfg.
+// KEX menus use these accessors so immediate renderer changes and config state
+// remain in one place.
+float KexRender_Fov(void);
+void KexRender_SetFov(float value);
+int KexRender_Antialiasing(void);
+void KexRender_SetAntialiasing(int value);
+int KexRender_Anisotropy(void);
+void KexRender_SetAnisotropy(int value);
+
 //extern float r_ambientlight,r_ambientlightrecip;
 
 extern const char *const ConsoleButtons[];

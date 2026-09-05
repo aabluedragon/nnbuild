@@ -54,6 +54,27 @@ void DestroyBullet(short nRun);
 int MoveBullet(short nBullet);
 void SetBulletEnemy(short nBullet, short nEnemy);
 int BuildBullet(short nSprite, int nType, int ebx, int ecx, int val1, int nAngle, int val2, int val3);
+// KEX A_FireProjectile: callback distance is added to the source actor's
+// authored radius; height and speed are in retail KEX units.  Homing thrust
+// means the projectile curves its velocity rather than merely facing a target.
+int BuildKexAIFireProjectile(short nSprite, int nType, short nTarget,
+                             int nCallbackDistance, int nHeight,
+                             int nSpeed, int bHomingThrust);
+int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
+                                    int nCallbackDistance, int nHeight,
+                                    int nSpeed, int bHomingThrust);
+// Mantis's rare PSX callback uses FireActor at z+192, then adds independent
+// signed yaw/pitch spread and a floating 8..16-unit speed.
+int BuildKexMantisFireProjectile(short nSprite, short nTarget);
+int KexBullet_CheckMantisFireProjectile(int nBullet, short nSource);
+// Exact remaster death-animation helpers shared by native enemy bullets and
+// the vase-spawned green-cobra/Ra projectiles.
+int KexProjectile_SpawnFireballImpact(int x, int y, int z, short nSector,
+                                      int nKexZOffset, int bSoundBefore);
+int KexProjectile_StartCobraBurst(int x, int y, int z, short nSector,
+                                  int bRed);
+void KexProjectile_CobraBurstFrame(short nControllerSprite, int nFrame);
+void KexBullet_TestTick();
 int GetBulletSprite(int nBullet);
 void IgniteSprite(int nSprite);
 void FuncBullet(int, int, int);

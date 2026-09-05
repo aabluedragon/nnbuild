@@ -212,6 +212,31 @@ Point PointList[kMaxPoints];
 short nTrapInterval[kMaxTraps];
 short sBobID[kMaxBobs];
 
+enum
+{
+    kKexTrapFireballInterval = 60,
+    kKexTrapLaserInterval = 10,
+};
+
+// FireActorEventFromTag() in the remaster walks the original map-actor array.
+// A matching spawner starts one factory for its source sector, while *any*
+// actor whose tag is one less removes that sector's factory. The converter
+// retains those stop records as short-lived lotag-72 sprites.
+struct KexTrapStop
+{
+    int16_t actor;
+    int16_t group;
+    int16_t channel;
+};
+
+static KexTrapStop s_kexTrapStop[kMaxSprites];
+static int s_kexTrapStops;
+static uint8_t s_kexTrapChannelListener[kMaxChannels];
+static int s_kexTrapTest = -1;
+static int s_kexTrapTestShots;
+static int s_kexTrapTestPuffs;
+static bool s_kexTrapTestNoFire;
+
 short PointCount;
 short PointFree[kMaxPoints];
 
@@ -261,6 +286,12 @@ void InitObjects()
     nFinaleStage = 0;
     lFinaleStart = 0;
     nSmokeSparks = 0;
+    s_kexTrapStops = 0;
+    Bmemset(s_kexTrapChannelListener, 0, sizeof(s_kexTrapChannelListener));
+    s_kexTrapTest = -1;
+    s_kexTrapTestShots = 0;
+    s_kexTrapTestPuffs = 0;
+    s_kexTrapTestNoFire = false;
 }
 
 void InitElev()
@@ -549,9 +580,36 @@ void MoveSectorSprites(int nSector, int z)
     }
 }
 
+// Kex mover.cpp has separate loops for a stone ceiling door and a floor/lift,
+// then uses stonestop.wav at both endpoints.  Classic maps must retain their
+// original indexed sound slots, including the map-dependent selections made
+// in init.cpp, so this bridge is deliberately active only in Kex mode.
+static bool KexElevSound(short nSprite, int nVal, bool bStop)
+{
+    if (!g_kexMode)
+        return false;
+
+    char const * const name = bStop ? "k_stonestop" : (nVal & 2 ? "k_plat" : "amb_ston");
+    char const * const want = bStop ? "sounds/stonestop.wav"
+        : (nVal & 2 ? "sounds/platstart.wav" : "sounds/stonemov.wav");
+    char const * const path = KexSound_Alias(name, NULL);
+    int const sound = KexSound_Get(name);
+    if (Bgetenv("VB_KEXMOVER_SOUND_TEST"))
+        OSD_Printf("Kex mover sound test: %s (%s -> %s)\n",
+                   path && !Bstrcasecmp(path, want) ? "PASS" : "FAIL",
+                   bStop ? "stop" : (nVal & 2 ? "floor/lift" : "door"), want);
+    if (sound < 0)
+        return false;
+    D3PlayFX(sound, nSprite);
+    return true;
+}
+
 void StartElevSound(short nSprite, int nVal)
 {
     short nSound;
+
+    if (KexElevSound(nSprite, nVal, false))
+        return;
 
     if (nVal & 2) {
         nSound = nElevSound;
@@ -692,7 +750,8 @@ void FuncElev(int a, int UNUSED(b), int nRun)
                         Elevator[nElev].field_32 = -1;
                         runlist_ReadyChannel(nChannel);
 
-                        D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
+                        if (!KexElevSound(Elevator[nElev].nSprite, var_18, true))
+                            D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
                     }
                 }
                 else
@@ -732,7 +791,8 @@ void FuncElev(int a, int UNUSED(b), int nRun)
                         runlist_SubRunRec(nRun);
                         Elevator[nElev].field_32 = -1;
                         StopSpriteSound(Elevator[nElev].nSprite);
-                        D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
+                        if (!KexElevSound(Elevator[nElev].nSprite, var_18, true))
+                            D3PlayFX(StaticSound[nStopSound], Elevator[nElev].nSprite);
                         runlist_ReadyChannel(nChannel);
                     }
 
@@ -1145,6 +1205,10 @@ int BuildTrap(int nSprite, int edx, int ebx, int ecx)
     int var_14 = edx;
     int var_18 = ebx;
     int var_10 = ecx;
+    short const kexActor = sprite[nSprite].xvel;
+    short const kexGroup = sprite[nSprite].yvel;
+    short const kexNormalZ = sprite[nSprite].zvel;
+    bool const kexMetadata = g_kexMode && kexActor >= 0 && kexGroup < 0;
 
     if (nTraps >= kMaxTraps) {
         bail2dos("Too many traps!\n");
@@ -1160,6 +1224,15 @@ int BuildTrap(int nSprite, int edx, int ebx, int ecx)
     sprite[nSprite].yvel = 0;
     sprite[nSprite].zvel = 0;
     sprite[nSprite].extra = -1;
+    if (kexMetadata)
+    {
+        // xvel is the source actor-array index, yvel is -(source sector+1),
+        // and zvel is the authored face normal. The hidden trap owns all
+        // three for its lifetime, including across a save/load.
+        sprite[nSprite].xvel = kexActor;
+        sprite[nSprite].yvel = kexGroup;
+        sprite[nSprite].zvel = kexNormalZ;
+    }
 
     sprite[nSprite].lotag = runlist_HeadRun() + 1;
     sprite[nSprite].hitag = runlist_AddRunRec(NewRun, nTrap, kRunTrap);
@@ -1171,21 +1244,20 @@ int BuildTrap(int nSprite, int edx, int ebx, int ecx)
     // 0 = arrow (bullet 15), 1 = fireball (14), 2 = the remaster's boulder (17).
     sTrap[nTrap].nType = var_14 == 0 ? 15 : var_14 == 2 ? 17 : 14;
     sTrap[nTrap].field_0 = -1;
+    sTrap[nTrap].field_6 = -1;
+    sTrap[nTrap].field_8 = -1;
+    sTrap[nTrap].field_A = 0;
+    sTrap[nTrap].field_C = 0;
+    sTrap[nTrap].field_E = -1;
 
     nTrapInterval[nTrap] = 64 - (2 * var_10);
     if (nTrapInterval[nTrap] < 5) {
         nTrapInterval[nTrap] = 5;
     }
 
-    sTrap[nTrap].field_C = 0;
-    sTrap[nTrap].field_A = 0;
-
     if (var_18 == -1) {
         return nTrap;
     }
-
-    sTrap[nTrap].field_6 = -1;
-    sTrap[nTrap].field_8 = -1;
 
     short nSector = sprite[nSprite].sectnum;
     short nWall = sector[nSector].wallptr;
@@ -1218,10 +1290,232 @@ int BuildTrap(int nSprite, int edx, int ebx, int ecx)
     }
 }
 
+static bool KexTrapConfigured(int nTrap)
+{
+    if (!g_kexMode || (unsigned)nTrap >= (unsigned)nTraps)
+        return false;
+    int const nSprite = sTrap[nTrap].nSprite;
+    return sTrap[nTrap].field_E >= 0
+        && (unsigned)nSprite < (unsigned)kMaxSprites
+        && sprite[nSprite].yvel < 0;
+}
+
+static int KexTrapGroup(int nTrap)
+{
+    return -sprite[sTrap[nTrap].nSprite].yvel - 1;
+}
+
+static int KexTrapInterval(int nType)
+{
+    return nType == 15 ? kKexTrapLaserInterval : kKexTrapFireballInterval;
+}
+
+static bool KexTrapGroupActive(int group)
+{
+    for (int i = 0; i < nTraps; i++)
+        if (KexTrapConfigured(i) && KexTrapGroup(i) == group
+                && sTrap[i].field_0 >= 0)
+            return true;
+    return false;
+}
+
+static void KexTrapStopGroup(int group)
+{
+    for (int i = 0; i < nTraps; i++)
+        if (KexTrapConfigured(i) && KexTrapGroup(i) == group)
+            sTrap[i].field_0 = -1;
+}
+
+static int KexTrapMaxActor()
+{
+    int actor = -1;
+    for (int i = 0; i < nTraps; i++)
+        if (KexTrapConfigured(i))
+            actor = max(actor, (int)sprite[sTrap[i].nSprite].xvel);
+    for (int i = 0; i < s_kexTrapStops; i++)
+        actor = max(actor, (int)s_kexTrapStop[i].actor);
+    return actor;
+}
+
+static void KexTrapStartGroup(int group, int nType, int extraDelay)
+{
+    int const interval = KexTrapInterval(nType);
+    int delay = extraDelay;
+    int const maxActor = KexTrapMaxActor();
+
+    // LinkSector() appends actors, so the sector list has map-actor order.
+    // Recreate that order even when the converter split the source sector
+    // into several Build sectors.
+    for (int actor = 0; actor <= maxActor; actor++)
+    {
+        for (int i = 0; i < nTraps; i++)
+        {
+            if (!KexTrapConfigured(i) || KexTrapGroup(i) != group
+                    || sTrap[i].nType != nType
+                    || sprite[sTrap[i].nSprite].xvel != actor)
+                continue;
+
+            if (delay > interval)
+                delay -= interval;  // exact retail code: one subtraction
+            sTrap[i].field_0 = min(delay + 1, 32767);
+            nTrapInterval[i] = interval;
+            delay += 8;
+        }
+    }
+}
+
+static void KexTrapFireEvent(int nChannel)
+{
+    int extraDelay = 0;
+    int const maxActor = KexTrapMaxActor();
+
+    // This is FireActorEventFromTag(), including its start-before-stop order
+    // for one actor and its sector-wide SF_SPECIAL exclusion.
+    for (int actor = 0; actor <= maxActor; actor++)
+    {
+        for (int i = 0; i < nTraps; i++)
+        {
+            if (!KexTrapConfigured(i) || sTrap[i].field_E != nChannel
+                    || sprite[sTrap[i].nSprite].xvel != actor)
+                continue;
+            int const group = KexTrapGroup(i);
+            if (!KexTrapGroupActive(group))
+            {
+                KexTrapStartGroup(group, sTrap[i].nType, extraDelay);
+                extraDelay += 8;
+            }
+        }
+
+        for (int i = 0; i < s_kexTrapStops; i++)
+        {
+            KexTrapStop const &stop = s_kexTrapStop[i];
+            if (stop.actor == actor && stop.channel == nChannel
+                    && KexTrapGroupActive(stop.group))
+                KexTrapStopGroup(stop.group);
+        }
+    }
+}
+
+static void KexTrapListenChannel(int nChannel, int nTrap)
+{
+    if ((unsigned)nChannel >= (unsigned)kMaxChannels
+            || (unsigned)nTrap >= (unsigned)nTraps
+            || s_kexTrapChannelListener[nChannel])
+        return;
+    runlist_AddRunRec(sRunChannels[nChannel].a, nTrap, kRunTrap);
+    s_kexTrapChannelListener[nChannel] = 1;
+}
+
+bool ConfigureKexTrap(int nTrap, int nStartChannel)
+{
+    if (!g_kexMode || (unsigned)nTrap >= (unsigned)nTraps)
+        return false;
+    int const nSprite = sTrap[nTrap].nSprite;
+    if ((unsigned)nSprite >= (unsigned)kMaxSprites
+            || sprite[nSprite].xvel < 0 || sprite[nSprite].yvel >= 0)
+        return false;
+
+    sTrap[nTrap].field_E = nStartChannel;
+    nTrapInterval[nTrap] = KexTrapInterval(sTrap[nTrap].nType);
+    KexTrapListenChannel(nStartChannel, nTrap);
+    return true;
+}
+
+void KexTrapStop_Add(int nSprite, int nChannel)
+{
+    if (!g_kexMode || (unsigned)nSprite >= (unsigned)kMaxSprites
+            || sprite[nSprite].xvel < 0 || sprite[nSprite].yvel >= 0
+            || s_kexTrapStops >= (int)ARRAY_SIZE(s_kexTrapStop))
+    {
+        mydeletesprite(nSprite);
+        return;
+    }
+
+    KexTrapStop &stop = s_kexTrapStop[s_kexTrapStops++];
+    stop.actor = sprite[nSprite].xvel;
+    stop.group = -sprite[nSprite].yvel - 1;
+    stop.channel = nChannel;
+
+    for (int i = 0; i < nTraps; i++)
+        if (KexTrapConfigured(i))
+        {
+            KexTrapListenChannel(nChannel, i);
+            break;
+        }
+    mydeletesprite(nSprite);
+}
+
+static void KexTrapSpawnMuzzlePuff(short nSprite)
+{
+    // kexFireballSpawner creates Fx_FireballShootPuff before attempting to
+    // create Proj_Fireball. The converter's optional sequence is the exact
+    // red-tinted eight-frame magicPuff run at scale 2; the stock fire poof is
+    // only a graceful fallback for an older converted data directory.
+    bool const exact = seq_IsLoaded(kSeqKexMuzzle);
+    BuildAnim(-1, exact ? kSeqKexMuzzle : kSeqFirePoof, 0,
+              sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z,
+              sprite[nSprite].sectnum, exact ? 48 : 40, exact ? 0 : 4);
+}
+
+static void TrapFireProjectile(int nTrap)
+{
+    short const nSprite = sTrap[nTrap].nSprite;
+    short const nType = sTrap[nTrap].nType;
+
+    if (s_kexTrapTestNoFire && KexTrapConfigured(nTrap))
+    {
+        s_kexTrapTestShots++;
+        s_kexTrapTestPuffs += nType == 14;
+        return;
+    }
+
+    if (KexTrapConfigured(nTrap) && nType == 14)
+        KexTrapSpawnMuzzlePuff(nSprite);
+
+    int const nBullet = BuildBullet(nSprite, nType, 0, 0, 0,
+                                    sprite[nSprite].ang, 0, 1);
+    if (nBullet < 0)
+        return;
+
+    int const nBulletSprite = GetBulletSprite(nBullet);
+    assert(nBulletSprite >= 0);
+
+    if (nType == 15)
+    {
+        sprite[nBulletSprite].ang = (sprite[nBulletSprite].ang - 512) & kAngleMask;
+        // kexFireballSpawner plays fballshoot for lasers too. Keep the native
+        // arrow sound only for a classic Build arrow trap.
+        D3PlayFX(StaticSound[KexTrapConfigured(nTrap)
+                            ? kSoundTrapFire : kSoundTrapArrow], nSprite);
+        return;
+    }
+
+    sprite[nBulletSprite].clipdist = 50;
+    short nWall = sTrap[nTrap].field_6;
+    if (nWall > -1)
+        wall[nWall].picnum = sTrap[nTrap].field_A + 1;
+    nWall = sTrap[nTrap].field_8;
+    if (nWall > -1)
+        wall[nWall].picnum = sTrap[nTrap].field_C + 1;
+
+    // Every kexSlaveFireballSpawner launch uses fballshoot.wav. boulder.wav
+    // is the projectile's face-bounce sound, not its launch sound.
+    D3PlayFX(StaticSound[kSoundTrapFire], nSprite);
+}
+
+static void KexTrapTick(int nTrap)
+{
+    if (sTrap[nTrap].field_0 < 0)
+        return;
+    if (--sTrap[nTrap].field_0 > 0)
+        return;
+    TrapFireProjectile(nTrap);
+    sTrap[nTrap].field_0 = nTrapInterval[nTrap];
+}
+
 void FuncTrap(int a, int UNUSED(b), int nRun)
 {
     short nTrap = RunData[nRun].nVal;
-    short nSprite = sTrap[nTrap].nSprite;
 
     int nMessage = a & 0x7F0000;
 
@@ -1230,6 +1524,16 @@ void FuncTrap(int a, int UNUSED(b), int nRun)
         case 0x10000:
         {
             short nChannel = a & 0x3FFF;
+
+            if (KexTrapConfigured(nTrap))
+            {
+                // KEX events are pulses. A zero state is only the Build
+                // channel's load/reset notification; tag+1 is the explicit
+                // factory stop and is represented by its own listener.
+                if (sRunChannels[nChannel].c > 0)
+                    KexTrapFireEvent(nChannel);
+                return;
+            }
 
             if (sRunChannels[nChannel].c > 0)
             {
@@ -1245,6 +1549,12 @@ void FuncTrap(int a, int UNUSED(b), int nRun)
 
         case 0x20000:
         {
+            if (KexTrapConfigured(nTrap))
+            {
+                KexTrapTick(nTrap);
+                return;
+            }
+
             if (sTrap[nTrap].field_0 >= 0)
             {
                 sTrap[nTrap].field_0--;
@@ -1279,38 +1589,7 @@ void FuncTrap(int a, int UNUSED(b), int nRun)
                     if (sTrap[nTrap].field_0 != 5) {
                         return;
                     }
-
-                    int nBullet = BuildBullet(nSprite, nType, 0, 0, 0, sprite[nSprite].ang, 0, 1);
-                    if (nBullet > -1)
-                    {
-                        int nBulletSprite = GetBulletSprite(nBullet);
-                        assert(nBulletSprite >= 0);
-
-                        if (nType == 15)
-                        {
-                            sprite[nBulletSprite].ang = (sprite[nBulletSprite].ang - 512) & kAngleMask;
-                            D3PlayFX(StaticSound[kSoundTrapArrow], nSprite);
-                        }
-                        else
-                        {
-                            sprite[nBulletSprite].clipdist = 50;
-
-                            short nWall = sTrap[nTrap].field_6;
-                            if (nWall > -1)
-                            {
-                                wall[nWall].picnum = sTrap[nTrap].field_A + 1;
-                            }
-
-                            nWall = sTrap[nTrap].field_8;
-                            if (nWall > -1)
-                            {
-                                wall[nWall].picnum = sTrap[nTrap].field_C + 1;
-                            }
-
-                            { int const s = (nType == 17) ? KexSound_Get("k_bould") : -1;   // the boulder's own throw
-                              D3PlayFX(s >= 0 ? s : StaticSound[kSoundTrapFire], nSprite); }
-                        }
-                    }
+                    TrapFireProjectile(nTrap);
                 }
             }
 
@@ -1343,7 +1622,110 @@ int BuildFireBall(int nSprite, int a, int b)
 // the boulder bullet instead (no wall to light up: -1).
 int BuildBoulderTrap(int nSprite, int nSpeed)
 {
-    return BuildTrap(nSprite, 2, -1, nSpeed);
+    // The converter stores params2's normal.z in the hidden source sprite so
+    // floor and ceiling boulder emitters retain their authored 3-D launch.
+    short const normalZ = sprite[nSprite].zvel;
+    int const nTrap = BuildTrap(nSprite, 2, -1, nSpeed);
+    sprite[nSprite].zvel = normalZ;
+    return nTrap;
+}
+
+void KexTrap_TestTick()
+{
+    if (s_kexTrapTest < 0)
+        s_kexTrapTest = g_kexMode && Bgetenv("VB_KEX_TRAP_TEST") ? 1 : 0;
+    if (s_kexTrapTest != 1)
+        return;
+    s_kexTrapTest = 2;
+
+    Trap saved[kMaxTraps];
+    short savedInterval[kMaxTraps];
+    Bmemcpy(saved, sTrap, sizeof(saved));
+    Bmemcpy(savedInterval, nTrapInterval, sizeof(savedInterval));
+
+    int startChannel = -1;
+    for (int i = 0; i < nTraps; i++)
+        if (KexTrapConfigured(i))
+        {
+            startChannel = sTrap[i].field_E;
+            break;
+        }
+
+    if (startChannel >= 0)
+        KexTrapFireEvent(startChannel);
+
+    int active = 0;
+    int groups = 0;
+    int expectedShots = 0;
+    int expectedPuffs = 0;
+    bool phaseOkay = true;
+    constexpr int testTicks = kKexTrapFireballInterval + 1;
+    for (int i = 0; i < nTraps; i++)
+    {
+        if (!KexTrapConfigured(i) || sTrap[i].field_0 < 0)
+            continue;
+        active++;
+        int const interval = KexTrapInterval(sTrap[i].nType);
+        int const first = sTrap[i].field_0;
+        phaseOkay &= nTrapInterval[i] == interval && first >= 1 && first <= interval + 1;
+        if (testTicks >= first)
+        {
+            int const shots = 1 + (testTicks - first) / interval;
+            expectedShots += shots;
+            if (sTrap[i].nType == 14)
+                expectedPuffs += shots;
+        }
+
+        int const group = KexTrapGroup(i);
+        bool seen = false;
+        for (int j = 0; j < i; j++)
+            seen |= KexTrapConfigured(j) && sTrap[j].field_0 >= 0
+                && KexTrapGroup(j) == group;
+        groups += !seen;
+    }
+
+    s_kexTrapTestShots = 0;
+    s_kexTrapTestPuffs = 0;
+    s_kexTrapTestNoFire = true;
+    for (int tick = 0; tick < testTicks; tick++)
+        for (int i = 0; i < nTraps; i++)
+            if (KexTrapConfigured(i))
+                KexTrapTick(i);
+    s_kexTrapTestNoFire = false;
+
+    bool stopFound = false;
+    bool stopOkay = false;
+    for (int i = 0; i < s_kexTrapStops && !stopFound; i++)
+    {
+        KexTrapStop const &stop = s_kexTrapStop[i];
+        if (!KexTrapGroupActive(stop.group))
+            continue;
+        bool alsoStarts = false;
+        for (int j = 0; j < nTraps; j++)
+            alsoStarts |= KexTrapConfigured(j) && sTrap[j].field_E == stop.channel;
+        if (alsoStarts)
+            continue;
+        stopFound = true;
+        KexTrapFireEvent(stop.channel);
+        stopOkay = !KexTrapGroupActive(stop.group);
+    }
+
+    bool const exactMuzzle = seq_IsLoaded(kSeqKexMuzzle);
+    bool const ok = startChannel >= 0 && active > 0 && groups > 0 && phaseOkay
+        && s_kexTrapTestShots == expectedShots
+        && s_kexTrapTestPuffs == expectedPuffs && exactMuzzle
+        && stopFound && stopOkay;
+    OSD_Printf("Kex trap factory test: %s (actors %d, factories %d, "
+               "shots %d/%d, puffs %d/%d, exact-seq %d, stop %d; "
+               "intervals 60/10, stagger 8, "
+               "source-order tag/tag+1)\n",
+               ok ? "PASS" : "FAIL", active, groups,
+               s_kexTrapTestShots, expectedShots,
+               s_kexTrapTestPuffs, expectedPuffs, exactMuzzle,
+               stopFound && stopOkay);
+
+    Bmemcpy(sTrap, saved, sizeof(saved));
+    Bmemcpy(nTrapInterval, savedInterval, sizeof(savedInterval));
 }
 
 int BuildSpark(int nSprite, int nVal)

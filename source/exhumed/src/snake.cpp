@@ -99,7 +99,7 @@ void DestroySnake(int nSnake)
 
 void ExplodeSnakeSprite(int nSprite, short nPlayer)
 {
-    short nDamage = BulletInfo[kWeaponStaff].nDamage;
+    short nDamage = g_kexMode ? 100 : BulletInfo[kWeaponStaff].nDamage;
 
     if (nPlayerDouble[nPlayer] > 0) {
         nDamage *= 2;
@@ -109,7 +109,10 @@ void ExplodeSnakeSprite(int nSprite, short nPlayer)
     short nOwner = sprite[nSprite].owner;
     sprite[nSprite].owner = PlayerList[nPlayer].nSprite;
 
-    runlist_RadialDamageEnemy(nSprite, nDamage, BulletInfo[kWeaponStaff].nRadius);
+    // cobra_green_death is A_RadialBlast(512,100,false). The false toggle
+    // argument deliberately leaves authored blast-open faces closed.
+    runlist_RadialDamageEnemy(nSprite, nDamage,
+        g_kexMode ? 512 * 6 / 256 : BulletInfo[kWeaponStaff].nRadius);
 
     sprite[nSprite].owner = nOwner;
 

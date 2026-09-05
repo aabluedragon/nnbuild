@@ -40,7 +40,148 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "save.h"
 #include "kexbreak.h"   // VibeBuild32: KexSound_Get
 
-static void KexBullet_ImpactSound(bulletInfo const *pBulletInfo, int x, int y, int z, int nSector);   // below
+static int KexBulletTile(int nType)
+{
+    if (!g_kexMode)
+        return -1;
+    if (nType == 8)
+        return kKexAnubisFireTile;
+    if (nType == 10 || nType == 14)
+        return kKexFireballTile;
+    if (nType == 13)
+        return kKexBlasterTile;
+    if (nType == 16)
+        return kKexSelkisCobraTile;
+    return -1;
+}
+
+// Several KEX projectiles reuse native bullet records.  Keep their shipped
+// damage values without changing those records for classic gameplay:
+// Proj_Anubis (type 8) is 20, Proj_Fireball (type 10) is 100, and
+// Proj_Blaster (type 13) is 30 and the laser-spawner's Proj_Beam (type 15) is
+// 100. Both red cobras (types 9/16) have zero direct damage but a separate
+// 50-point death blast; impactWallsOnly governs planes, not actor collision.
+static int KexBulletDamage(int nType)
+{
+    if (g_kexMode)
+    {
+        if (nType == 8)
+            return 20;
+        if (nType == 9)
+            return 0;
+        if (nType == 10)
+            return 100;
+        if (nType == 14)
+            return 100;
+        if (nType == 15)
+            return 100;
+        if (nType == 11)
+            return 40;
+        if (nType == 13)
+            return 30;
+        if (nType == 16)
+            return 0;
+    }
+
+    return BulletInfo[nType].nDamage;
+}
+
+static int KexBulletRadius(int nType)
+{
+    if (!g_kexMode)
+        return -1;
+    switch (nType)
+    {
+        case 8:  // Proj_Anubis
+        case 11: // Proj_Soul
+        case 12: // Proj_Seedling
+        case 13: // Proj_Blaster
+        case 15: // Proj_Beam (laser spawner)
+            return 36;
+        case 9:  // Proj_Cobra_Red
+        case 16: // Proj_Cobra_Red_Selkis
+            return 16;
+        case 10: // Proj_Fireball (Mantis)
+        case 14: // Proj_Fireball (wall spawner)
+        case 17: // Proj_Boulder
+            return 25;
+        default:
+            return -1;
+    }
+}
+
+static int KexBulletRepeat(int nType, int kexRadius, int classicRepeat)
+{
+    if (kexRadius < 0)
+        return classicRepeat;
+    // Proj_Boulder is authored at scale 2.0; the other bridged projectiles
+    // are scale 1.0. Forty is the native projection baseline for that scale.
+    return nType == 17 ? 80 : 40;
+}
+
+struct KexImpactBlast
+{
+    int radius;                 // retail KEX units
+    int damage;                 // retail logical health points
+    bool opensToggleFaces;
+};
+
+// Projectile actor damage and death-animation damage are separate in KEX.
+// In particular, both red cobras deliberately have direct damage zero but
+// their authored death animation still runs A_RadialBlast(224, 50, false).
+static KexImpactBlast KexBulletImpactBlast(int nType)
+{
+    if (g_kexMode)
+    {
+        switch (nType)
+        {
+            case 9:             // Proj_Cobra_Red
+            case 16:            // Proj_Cobra_Red_Selkis
+                return { 224, 50, false };
+            case 10:            // Proj_Fireball (Mantis)
+            case 14:            // Proj_Fireball (wall spawner)
+            case 17:            // Proj_Boulder
+                return { 192, 64, true };
+        }
+    }
+    return { 0, 0, false };
+}
+
+static int KexBulletBuildBlastRadius(int kexRadius)
+{
+    // runlist compares (|dx|+|dy|)>>8 with this value. Converted map XY is
+    // six times retail KEX, hence the same conversion used by breakables.
+    return kexRadius * 6 / 256;
+}
+
+static bool KexBulletGlidesOnPlanes(int nType)
+{
+    // KEX's impactWallsOnly lets these projectiles follow floors/ceilings;
+    // they still collide with walls and actors.  Both cobra definitions and
+    // Proj_Soul carry the flag in defs/actors/projectiles.txt.
+    return g_kexMode && (nType == 9 || nType == 11 || nType == 15 || nType == 16);
+}
+
+static bool KexBulletFacesTargetWithoutThrust(int nType)
+{
+    // Both red cobras are homing projectiles with noHomingThrust: their
+    // orientation keeps seeking, but their launch velocity never curves.
+    return g_kexMode && (nType == 9 || nType == 16);
+}
+
+static int KexBulletTurnStep(int nType)
+{
+    // homingTurnAngles from projectiles.txt, converted to Build's 2048-angle
+    // circle: Proj_Soul .0218 rad ~= 7, Mummy cobra .03 ~= 10, and Selkis
+    // cobra .028 ~= 9.
+    if (g_kexMode && nType == 11)
+        return 7;
+    if (g_kexMode && nType == 9)
+        return 10;
+    if (g_kexMode && nType == 16)
+        return 9;
+    return 16;
+}
 #include <string.h>
 #include <assert.h>
 #ifndef __WATCOMC__
@@ -73,6 +214,23 @@ struct Bullet
     int z;
 };
 
+enum
+{
+    kKexBoulderType = 17,
+    kKexSpawnerFireballSpeed = 12 * 6,
+    kKexSpawnerLaserSpeed = 16 * 6,
+    kKexSpawnerFireballHeight = 32 * 16 * 6,
+    kKexSpawnerFireballStepHeight = 36 * 16 * 6,
+    kKexSpawnerLaserHeight = 8 * 16 * 6,
+    kKexBoulderGravity = 72,       // 0.75 KEX units in Build's 16*6 Z scale
+    kKexBoulderFloorContacts = 8,
+    kKexBoulderSpeed = kKexSpawnerFireballSpeed,
+    kKexBoulderHeight = 32 * 16 * 6,
+    kKexBoulderStepHeight = 36 * 16 * 6,
+    kKexBoulderBounceNumerator = 31, // authored bouncePower 1.9375
+    kKexBoulderBounceDenominator = 16,
+};
+
 Bullet BulletList[kMaxBullets];
 short nBulletEnemy[kMaxBullets];
 int nBulletsFree;
@@ -81,6 +239,376 @@ short lasthitsect, lasthitsprite, lasthitwall;
 
 int nBulletCount = 0;
 short nRadialBullet = 0;
+
+enum
+{
+    kKexImpactUnavailable = -1,
+    kKexImpactHandledNoAnim = -2,
+};
+
+static bool KexBulletExactImpactAvailable(int nType)
+{
+    if (!g_kexMode)
+        return false;
+    switch (nType)
+    {
+        case 8:
+            return seq_IsLoaded(kSeqKexAnuImpact);
+        case 9:
+        case 11:
+        case 16:
+            return seq_IsLoaded(kSeqKexCobraRed)
+                && seq_IsLoaded(kSeqKexCobraCtl);
+        case 10:
+        case 12:
+        case 14:
+        case 17:
+            return seq_IsLoaded(kSeqKexImpact);
+        case 13: // sentry_projectile_destroy: A_Destroy only
+        case 15: // beam_destroy: destroy tails, then A_Destroy
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool KexBulletUsesRemasterDeath(int nType)
+{
+    // Every native slot from Anubis through the remaster-only boulder is
+    // bridged to an explicit KEX projectile death recipe. None may inherit a
+    // DOS BulletInfo radial blast or actor-hit puff by accident.
+    return g_kexMode && nType >= 8 && nType <= kKexBoulderType;
+}
+
+static bool KexBulletSuppressClassicRadial(int nType)
+{
+    return KexBulletUsesRemasterDeath(nType);
+}
+
+static void KexProjectileImpactSound(int x, int y, int z, int nSector); // below
+
+int KexProjectile_SpawnFireballImpact(int x, int y, int z, short nSector,
+                                      int nKexZOffset, int bSoundBefore)
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqKexImpact)
+            || (unsigned)nSector >= (unsigned)numsectors)
+        return -1;
+
+    if (bSoundBefore)
+        KexProjectileImpactSound(x, y, z, nSector);
+    int const nAnim = BuildAnim(-1, kSeqKexImpact, 0, x, y,
+        z - nKexZOffset * 16 * 6, nSector, 48, 4);
+    if (!bSoundBefore)
+        KexProjectileImpactSound(x, y, z, nSector);
+    return nAnim >= 0 ? nAnim : kKexImpactHandledNoAnim;
+}
+
+static int KexCobraRandomOffset(int amplitude)
+{
+    // kexSlaveRandomizer::RFloatVal returns a centred uniform value. Consume
+    // one full 16-bit draw per axis and keep this simulation state integral.
+    return (int)(((int64_t)RandomSize(16) * amplitude * 2) / 65535)
+         - amplitude;
+}
+
+static int KexProjectileSpawnCobraPuff(int x, int y, int z, short nSector,
+                                      bool red)
+{
+    int const px = x + KexCobraRandomOffset(32 * 6);
+    int const py = y + KexCobraRandomOffset(32 * 6);
+    int const pz = z + KexCobraRandomOffset(32 * 16 * 6);
+    int const nSeq = red ? kSeqKexCobraRed : kSeqKexCobraGreen;
+    int const nAnim = BuildAnim(-1, nSeq, 0, px, py, pz, nSector, 48, 4);
+    // Both callbacks attach pbexplode.wav to the puff only when spawning the
+    // actor succeeded.
+    if (nAnim >= 0)
+        KexProjectileImpactSound(px, py, pz, nSector);
+    return nAnim;
+}
+
+int KexProjectile_StartCobraBurst(int x, int y, int z, short nSector,
+                                  int bRed)
+{
+    int const nPuffSeq = bRed ? kSeqKexCobraRed : kSeqKexCobraGreen;
+    if (!g_kexMode || !seq_IsLoaded(nPuffSeq)
+            || !seq_IsLoaded(kSeqKexCobraCtl)
+            || (unsigned)nSector >= (unsigned)numsectors)
+        return -1;
+
+    // Frame zero's callback is immediate. A hidden twelve-tick Anim keeps the
+    // remaining t=3/6/9 callbacks in the ordinary serialized Anim state and
+    // disappears at the same t=12 at which the KEX projectile destroys.
+    int const nController = BuildAnim(-1, kSeqKexCobraCtl, 0, x, y, z,
+                                      nSector, 1, 0);
+    if (nController < 0)
+        return kKexImpactHandledNoAnim;
+    short const nControllerSprite = GetAnimSprite(nController);
+    sprite[nControllerSprite].cstat |= 0x8000;
+    sprite[nControllerSprite].xvel = bRed != 0;
+    KexProjectileSpawnCobraPuff(x, y, z, nSector, bRed != 0);
+    return nController;
+}
+
+void KexProjectile_CobraBurstFrame(short nControllerSprite, int nFrame)
+{
+    if (!g_kexMode || (unsigned)nControllerSprite >= (unsigned)kMaxSprites
+            || sprite[nControllerSprite].sectnum < 0
+            || (nFrame != 2 && nFrame != 5 && nFrame != 8))
+        return;
+    KexProjectileSpawnCobraPuff(sprite[nControllerSprite].x,
+        sprite[nControllerSprite].y, sprite[nControllerSprite].z,
+        sprite[nControllerSprite].sectnum, sprite[nControllerSprite].xvel != 0);
+}
+
+static int KexBulletSpawnAnubisImpact(int x, int y, int z, short nSector)
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqKexAnuImpact)
+            || (unsigned)nSector >= (unsigned)numsectors)
+        return -1;
+    int const nAnim = BuildAnim(-1, kSeqKexAnuImpact, 0, x, y, z,
+                                nSector, 40, 4);
+    return nAnim >= 0 ? nAnim : kKexImpactHandledNoAnim;
+}
+
+static bool KexBulletHandleDeathVisual(int nType, int x, int y, int z,
+                                       short nSector)
+{
+    if (!KexBulletExactImpactAvailable(nType))
+        return false;
+    switch (nType)
+    {
+        case 8:
+            return KexBulletSpawnAnubisImpact(x, y, z, nSector)
+                != kKexImpactUnavailable;
+        case 9:
+        case 11:
+        case 16:
+            return KexProjectile_StartCobraBurst(x, y, z, nSector, 1)
+                != kKexImpactUnavailable;
+        case 10:
+        case 14:
+            // fireball_death: sound, spawn, radial blast.
+            return KexProjectile_SpawnFireballImpact(
+                x, y, z, nSector, 0, 1) != kKexImpactUnavailable;
+        case 12:
+            // seedling_explode: +2 spawn, sound, then destroy; no radial.
+            return KexProjectile_SpawnFireballImpact(
+                x, y, z, nSector, 2, 0) != kKexImpactUnavailable;
+        case 17:
+            // boulder_explode: +2 spawn, sound, radial, four tosses.
+            return KexProjectile_SpawnFireballImpact(
+                x, y, z, nSector, 2, 0) != kKexImpactUnavailable;
+        case 13:
+        case 15:
+            return true; // their authored death animations render nothing
+        default:
+            return false;
+    }
+}
+
+static bool KexBulletApplyImpactBlast(short nBullet, int x, int y, int z,
+                                      short nSector, bool exactImpact)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    KexImpactBlast const blast = KexBulletImpactBlast(pBullet->nType);
+    if (blast.damage <= 0 || (unsigned)nSector >= (unsigned)numsectors)
+        return false;
+
+    short const nSprite = pBullet->nSprite;
+    sprite[nSprite].x = x;
+    sprite[nSprite].y = y;
+    sprite[nSprite].z = z;
+    if (sprite[nSprite].sectnum != nSector)
+        mychangespritesect(nSprite, nSector);
+
+    if (blast.opensToggleFaces)
+        KexToggle_Blast(x, y, z, nSector, blast.radius);
+
+    nRadialBullet = pBullet->nType;
+    runlist_RadialDamageEnemy(nSprite, blast.damage,
+                              KexBulletBuildBlastRadius(blast.radius));
+    nRadialBullet = -1;
+    // The exact effect owns its fixed-radius fourteen-tick light. Old
+    // conversions retain the native long AddFlash fallback.
+    if (!exactImpact)
+        AddFlash(nSector, x, y, z, 128);
+
+    if (pBullet->nType == 17)
+    {
+        if (!exactImpact)
+            KexProjectileImpactSound(x, y, z, nSector);
+
+        // boulder_explode tosses four Proj_Boulder_Piece actors after its
+        // 192/64 blast. They use the same shared A_TossActor recipe as every
+        // remaster gib and shard.
+        for (int i = 0; i < 4; i++)
+        {
+            int const nChunk = KexTossBouncyCreatureChunk(nSprite,
+                                                           kKexBoulderShardTile,
+                                                           kKexTossBounceSoundGlass);
+            short const nChunkSprite = nChunk & 0xffff;
+            if ((unsigned)nChunkSprite < (unsigned)kMaxSprites)
+            {
+                sprite[nChunkSprite].xrepeat = 40;
+                sprite[nChunkSprite].yrepeat = 40;
+            }
+        }
+    }
+    return true;
+}
+
+struct KexProjectileLaunch
+{
+    short nTarget;
+    int nCallbackDistance;
+    int nHeight;
+    int nSpeed;
+    bool bHomingThrust;
+    bool bSuppressAudit = false;
+};
+
+struct KexProjectileExpected
+{
+    int x, y, z;
+    int vx, vy, vz;
+};
+
+static int s_kexBulletAudit = -1;
+static int s_kexBulletTest = -1;
+
+// Deterministic 64-bit integer square root. Projectile aim is simulation
+// state, so do not introduce platform-dependent floating-point normalization.
+static uint64_t KexBulletISqrt(uint64_t value)
+{
+    uint64_t result = 0;
+    uint64_t bit = UINT64_C(1) << 62;
+    while (bit > value)
+        bit >>= 2;
+    while (bit)
+    {
+        if (value >= result + bit)
+        {
+            value -= result + bit;
+            result = (result >> 1) + bit;
+        }
+        else
+        {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return result;
+}
+
+static uint64_t KexBulletVectorLength(int64_t x, int64_t y, int64_t z)
+{
+    auto const abs64 = [](int64_t value) -> uint64_t {
+        return value < 0 ? (uint64_t)(-(value + 1)) + 1 : (uint64_t)value;
+    };
+    uint64_t biggest = max<uint64_t>(abs64(x),
+        max<uint64_t>(abs64(y), abs64(z)));
+    int shift = 0;
+    while (biggest > UINT64_C(0x3fffffff))
+    {
+        x >>= 1;
+        y >>= 1;
+        z >>= 1;
+        biggest >>= 1;
+        shift++;
+    }
+    uint64_t const squared = (uint64_t)(x * x) + (uint64_t)(y * y)
+                           + (uint64_t)(z * z);
+    return KexBulletISqrt(squared) << shift;
+}
+
+static int KexSpawnerLaunchSpeed(short nSource, int nType)
+{
+    // kexmap.py marks a converted kexSlaveFireballSpawner with its negative
+    // source-sector key in yvel. Do not change ordinary/classic trap bullets
+    // merely because the game happens to be running in KEX mode.
+    if (!g_kexMode || (unsigned)nSource >= (unsigned)kMaxSprites
+            || sprite[nSource].yvel >= 0)
+        return 0;
+    if (nType == 15)
+        return kKexSpawnerLaserSpeed;
+    if (nType == 14 || nType == kKexBoulderType)
+        return kKexSpawnerFireballSpeed;
+    return 0;
+}
+
+static bool KexSpawnerProjectile(Bullet const *pBullet)
+{
+    short const nSprite = pBullet->nSprite;
+    return (unsigned)nSprite < (unsigned)kMaxSprites
+        && KexSpawnerLaunchSpeed(sprite[nSprite].owner, pBullet->nType) > 0;
+}
+
+static int KexBulletTargetCenterZ(short nTarget)
+{
+    // A_FireProjectile takes the target's logical kexActor::Height(), not
+    // its rendered frame extent. In particular the 160-unit player puppet
+    // must stay the exact same aim point while its sprites animate at
+    // differing repeats.
+    return sprite[nTarget].z - KexActorHeightBuild(nTarget) / 2;
+}
+
+static void KexBulletAimPitch(int x, int y, int z, short nTarget,
+                              int *cosPitch, int *sinPitch)
+{
+    int64_t const dx = (int64_t)sprite[nTarget].x - x;
+    int64_t const dy = (int64_t)sprite[nTarget].y - y;
+    uint64_t const horizontal = KexBulletVectorLength(dx, dy, 0);
+    int64_t const dzUp = ((int64_t)z - KexBulletTargetCenterZ(nTarget)) / 16;
+    uint64_t const length = max<uint64_t>(1,
+        KexBulletVectorLength(horizontal, 0, dzUp));
+    *cosPitch = clamp<int>((int)((horizontal * 16384) / length), 0, 16384);
+    *sinPitch = clamp<int>((int)((dzUp * 16384) / (int64_t)length),
+                           -16384, 16384);
+}
+
+// Return a 14-bit unit direction. XY is kept on the source actor's authored
+// yaw exactly as A_FireProjectile does; only pitch is solved from the target.
+// Dividing Build Z by 16 puts it in the same converted metric as Build XY
+// (both then carry the converter's common six-times KEX scale).
+static void KexBulletAimDirection(int x, int y, int z, short nTarget,
+                                  short nYaw, int *fx, int *fy, int *fz)
+{
+    int cosPitch, sinPitch;
+    KexBulletAimPitch(x, y, z, nTarget, &cosPitch, &sinPitch);
+    *fx = mulscale14(Cos(nYaw), cosPitch);
+    *fy = mulscale14(Sin(nYaw), cosPitch);
+    *fz = sinPitch;
+}
+
+static KexProjectileExpected KexBulletExpectedLaunch(short nSource,
+    KexProjectileLaunch const &launch)
+{
+    int fx, fy, fz;
+    short const nYaw = sprite[nSource].ang;
+    KexBulletAimDirection(sprite[nSource].x, sprite[nSource].y,
+                          sprite[nSource].z, launch.nTarget, nYaw,
+                          &fx, &fy, &fz);
+
+    // A_FireProjectile adds its fourth argument to actor->Radius(). Build's
+    // clipdist is radius/4, while converted KEX XY coordinates are x6.
+    int const distance = (sprite[nSource].clipdist << 2)
+                       + launch.nCallbackDistance * 6;
+    KexProjectileExpected expected;
+    expected.x = sprite[nSource].x + (int)(((int64_t)fx * distance) / 16384);
+    expected.y = sprite[nSource].y + (int)(((int64_t)fy * distance) / 16384);
+    expected.z = sprite[nSource].z - (int)(((int64_t)fz * distance) / 16384)
+               - launch.nHeight * 16 * 6;
+
+    // KEX recalculates pitch from the actual projectile origin, then applies
+    // the source yaw and the callback's speed.
+    KexBulletAimDirection(expected.x, expected.y, expected.z, launch.nTarget,
+                          nYaw, &fx, &fy, &fz);
+    int const worldSpeed = launch.nSpeed * 6;
+    expected.vx = fx * worldSpeed; // clipmove's XY deltas are 14-bit fixed
+    expected.vy = fy * worldSpeed;
+    expected.vz = -(int)(((int64_t)fz * worldSpeed * 16) / 16384);
+    return expected;
+}
 
 bulletInfo BulletInfo[] = {
     { 25,   1,    20, -1, -1, 13, 0,  0, -1 },
@@ -112,6 +640,8 @@ bulletInfo BulletInfo[] = {
 void InitBullets()
 {
     nBulletCount = 0;
+    s_kexBulletAudit = -1;
+    s_kexBulletTest = -1;
 
     for (int i = 0; i < kMaxBullets; i++) {
         BulletFree[i] = i;
@@ -166,6 +696,7 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
     assert(nSector >= 0 && nSector < kMaxSectors);
 
     bulletInfo *pBulletInfo = &BulletInfo[pBullet->nType];
+    bool const suppressClassicPuff = KexBulletUsesRemasterDeath(pBullet->nType);
 
     short nStat = sprite[nHitSprite].statnum;
 
@@ -184,7 +715,6 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
             }
 
             if (!RandomSize(2)) {
-                KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
                 BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
             }
 
@@ -246,18 +776,22 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
     }
 
     // BHS_switchBreak:
-    short nDamage = pBulletInfo->nDamage;
+    short nDamage = KexBulletDamage(pBullet->nType);
 
     if (pBullet->field_13 > 1) {
         nDamage *= 2;
     }
 
+    int const previousDamageType = nKexDamageType;
+    if (g_kexMode && (pBullet->nType == 10 || pBullet->nType == 14))
+        nKexDamageType = kKexDamageFire;
     runlist_DamageEnemy(nHitSprite, nBulletSprite, nDamage);
+    nKexDamageType = previousDamageType;
 
     if (nStat <= 90 || nStat >= 199)
     {
-        KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
-        BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
+        if (!suppressClassicPuff)
+            BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
         return;
     }
 
@@ -269,14 +803,16 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
         case 102:
         case kStatExplodeTrigger:
         case kStatExplodeTarget:
-            BuildAnim(-1, 12, 0, x, y, z, nSector, 40, 0);
+            if (!suppressClassicPuff)
+                BuildAnim(-1, 12, 0, x, y, z, nSector, 40, 0);
             break;
         default:
-            BuildAnim(-1, 39, 0, x, y, z, nSector, 40, 0);
-            if (pBullet->nType > 2)
+            if (!suppressClassicPuff)
             {
-                KexBullet_ImpactSound(pBulletInfo, x, y, z, nSector);
-                BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z, nSector, 40, pBulletInfo->nFlags);
+                BuildAnim(-1, 39, 0, x, y, z, nSector, 40, 0);
+                if (pBullet->nType > 2)
+                    BuildAnim(-1, pBulletInfo->field_C, 0, x, y, z,
+                              nSector, 40, pBulletInfo->nFlags);
             }
             break;
     }
@@ -287,6 +823,225 @@ void BackUpBullet(int *x, int *y, short nAngle)
 {
     *x -= Cos(nAngle) >> 11;
     *y -= Sin(nAngle) >> 11;
+}
+
+static int KexMoveSoulProjectile(short nBullet, short nTarget)
+{
+    Bullet *pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    int const desiredYaw = GetMyAngle(sprite[nTarget].x - sprite[nSprite].x,
+                                      sprite[nTarget].y - sprite[nSprite].y);
+    int turn = AngleDelta(sprite[nSprite].ang, desiredYaw, 1024);
+    turn = clamp(turn, -KexBulletTurnStep(11), KexBulletTurnStep(11));
+    sprite[nSprite].ang = (sprite[nSprite].ang + turn) & kAngleMask;
+
+    int fx, fy, fz;
+    KexBulletAimDirection(sprite[nSprite].x, sprite[nSprite].y,
+                          sprite[nSprite].z, nTarget, sprite[nSprite].ang,
+                          &fx, &fy, &fz);
+    // Proj_Soul omits homingMaxPitch and therefore uses KEX's 0.25-radian
+    // default. Homing pitch snaps each tick; yaw alone uses the turn cap.
+    constexpr int kSoulMaxPitchSin = 4053; // sin(0.25) * 16384
+    constexpr int kSoulMaxPitchCos = 15875; // cos(0.25) * 16384
+    if (klabs(fz) > kSoulMaxPitchSin)
+    {
+        fz = fz < 0 ? -kSoulMaxPitchSin : kSoulMaxPitchSin;
+        fx = mulscale14(Cos(sprite[nSprite].ang), kSoulMaxPitchCos);
+        fy = mulscale14(Sin(sprite[nSprite].ang), kSoulMaxPitchCos);
+    }
+
+    int const worldSpeed = max(1, pBullet->field_10 / 4);
+    pBullet->x = fx * worldSpeed;
+    pBullet->y = fy * worldSpeed;
+    pBullet->z = -(int)(((int64_t)fz * worldSpeed * 16) / 16384);
+    return movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z,
+                      sprite[nSprite].clipdist >> 1,
+                      sprite[nSprite].clipdist >> 1, CLIPMASK1);
+}
+
+static void KexTurnProjectileWithoutThrust(short nBullet, short nTarget)
+{
+    Bullet *pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    int const desiredYaw = GetMyAngle(sprite[nTarget].x - sprite[nSprite].x,
+                                      sprite[nTarget].y - sprite[nSprite].y);
+    int turn = AngleDelta(sprite[nSprite].ang, desiredYaw, 1024);
+    int const turnStep = KexBulletTurnStep(pBullet->nType);
+    turn = clamp(turn, -turnStep, turnStep);
+    sprite[nSprite].ang = (sprite[nSprite].ang + turn) & kAngleMask;
+    // Deliberately leave pBullet->x/y/z untouched: this is the retail
+    // PF_NOHOMINGTHRUST contract.
+}
+
+// KEX velocity uses one metric for all three axes. Build's clipmove XY is
+// Q14 in coordinates scaled by six, while its Z delta is scaled by 16*6, so
+// { x, y, -z*1024 } is the same fixed-point KEX vector on every axis.
+static void KexBoulderReflect(Bullet *pBullet, int nx, int ny, int nz)
+{
+    int64_t vx = pBullet->x;
+    int64_t vy = pBullet->y;
+    int64_t vz = -(int64_t)pBullet->z * 1024;
+    int64_t const dot = (vx * nx + vy * ny + vz * nz) / 16384;
+    int64_t const projection = dot * kKexBoulderBounceNumerator
+                             / kKexBoulderBounceDenominator;
+
+    vx -= projection * nx / 16384;
+    vy -= projection * ny / 16384;
+    vz -= projection * nz / 16384;
+
+    pBullet->x = (int)vx;
+    pBullet->y = (int)vy;
+    pBullet->z = (int)(-vz / 1024);
+}
+
+static void KexBoulderSlopeNormal(short nSector, int x, int y,
+                                  bool ceiling, int *nx, int *ny, int *nz)
+{
+    // Converted KEX Z is -BuildZ/96 and XY is BuildXY/6. Sampling the
+    // linear Build slope over +/-1024 therefore gives an unnormalised KEX
+    // upward normal of { dzdx, dzdy, 32*1024 }. Its sign is immaterial to
+    // reflection, so the same construction serves ceilings.
+    constexpr int sample = 1024;
+    auto const surface = [nSector, ceiling](int sx, int sy) {
+        return ceiling ? getceilzofslope(nSector, sx, sy)
+                       : getflorzofslope(nSector, sx, sy);
+    };
+    int64_t const rx = (int64_t)surface(x + sample, y)
+                     - surface(x - sample, y);
+    int64_t const ry = (int64_t)surface(x, y + sample)
+                     - surface(x, y - sample);
+    int64_t const rz = 32 * sample;
+    uint64_t const length = max<uint64_t>(1,
+        KexBulletVectorLength(rx, ry, rz));
+    *nx = (int)(rx * 16384 / (int64_t)length);
+    *ny = (int)(ry * 16384 / (int64_t)length);
+    *nz = (int)(rz * 16384 / (int64_t)length);
+}
+
+static void KexBoulderReflectSlope(Bullet *pBullet, short nSector,
+                                   int x, int y, bool ceiling)
+{
+    int nx, ny, nz;
+    KexBoulderSlopeNormal(nSector, x, y, ceiling, &nx, &ny, &nz);
+    KexBoulderReflect(pBullet, nx, ny, nz);
+}
+
+static void KexBoulderBounceSound(short nSprite)
+{
+    int const sound = KexSound_Get("k_bould");
+    if (sound >= 0)
+        PlayFX2(sound, nSprite);
+}
+
+static int KexMoveBoulder(short nBullet)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    spritetype *const pSprite = &sprite[nSprite];
+    int const floor = getflorzofslope(pSprite->sectnum,
+                                      pSprite->x, pSprite->y);
+
+    // kexProjectile adds the actor default gravity only while its origin is
+    // above the floor. At exact rest the floor test below still counts as an
+    // expiring contact, matching BumpedFloor's on-plane case.
+    if (pSprite->z < floor)
+        pBullet->z += kKexBoulderGravity;
+
+    // Proj_Boulder is drawn at scale 2, but KEX world collision continues to
+    // use its authored height 32 and stepHeight 36. Temporarily decouple the
+    // native sprite-height collision from the 80-repeat visual.
+    uint8_t const visualRepeat = pSprite->yrepeat;
+    int const tileHeight = max(1, (int)tilesiz[pSprite->picnum].y);
+    pSprite->yrepeat = (uint8_t)clamp(
+        (kKexBoulderHeight + tileHeight * 2) / (tileHeight * 4), 1, 255);
+    int nVal = movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z,
+                          kKexBoulderHeight, -kKexBoulderStepHeight,
+                          CLIPMASK1);
+    pSprite->yrepeat = visualRepeat;
+
+    if (!nVal && pBullet->z == 0 && pSprite->z >= floor)
+        nVal = 0x20000;
+    return nVal;
+}
+
+static bool KexBoulderStopped(Bullet const *pBullet,
+                              int oldX, int oldY, int oldZ)
+{
+    // sqrt(0.05) in the common 98304-units-per-KEX-unit metric.
+    constexpr uint64_t restLimit = 21981;
+    uint64_t const velocity = KexBulletVectorLength(
+        pBullet->x, pBullet->y, -(int64_t)pBullet->z * 1024);
+    short const nSprite = pBullet->nSprite;
+    uint64_t const displacement = KexBulletVectorLength(
+        (int64_t)(sprite[nSprite].x - oldX) * 16384,
+        (int64_t)(sprite[nSprite].y - oldY) * 16384,
+        -(int64_t)(sprite[nSprite].z - oldZ) * 1024);
+    return velocity <= restLimit || displacement <= restLimit;
+}
+
+static bool KexBoulderHandleBounce(short nBullet, int nVal)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    spritetype *const pSprite = &sprite[nSprite];
+    int const kind = nVal & 0xC000;
+
+    // A bouncy KEX projectile reflects from faces, but an actor contact runs
+    // OnImpact and applies the boulder's 35 direct damage before its blast.
+    if (kind == 0xC000)
+        return false;
+
+    bool bounced = false;
+    if (kind == 0x8000)
+    {
+        int const normal = GetWallNormal(nVal & 0x3FFF) & kAngleMask;
+        KexBoulderReflect(pBullet, Cos(normal), Sin(normal), 0);
+        bounced = true;
+    }
+    if (nVal & 0x10000)
+    {
+        KexBoulderReflectSlope(pBullet, pSprite->sectnum,
+                               pSprite->x, pSprite->y, true);
+        bounced = true;
+    }
+    if (nVal & 0x20000)
+    {
+        if (--pBullet->field_E <= 0)
+            return false;
+        KexBoulderReflectSlope(pBullet, pSprite->sectnum,
+                               pSprite->x, pSprite->y, false);
+        bounced = true;
+    }
+
+    if (bounced)
+    {
+        if (pBullet->x || pBullet->y)
+            pSprite->ang = GetMyAngle(pBullet->x, pBullet->y);
+        KexBoulderBounceSound(nSprite);
+    }
+    return bounced;
+}
+
+static int KexMoveSpawnerProjectile(short nBullet)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    spritetype *const pSprite = &sprite[nSprite];
+    int const height = pBullet->nType == 15
+        ? kKexSpawnerLaserHeight : kKexSpawnerFireballHeight;
+    int const stepHeight = pBullet->nType == 15
+        ? 0 : kKexSpawnerFireballStepHeight;
+
+    // Native Build derives projectile height from its art. KEX keeps visual
+    // scale separate: Proj_Fireball is 32/36 high/step and Proj_Beam is 8/0.
+    uint8_t const visualRepeat = pSprite->yrepeat;
+    int const tileHeight = max(1, (int)tilesiz[pSprite->picnum].y);
+    pSprite->yrepeat = (uint8_t)clamp(
+        (height + tileHeight * 2) / (tileHeight * 4), 1, 255);
+    int const nVal = movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z,
+                                height, -stepHeight, CLIPMASK1);
+    pSprite->yrepeat = visualRepeat;
+    return nVal;
 }
 
 int MoveBullet(short nBullet)
@@ -305,7 +1060,9 @@ int MoveBullet(short nBullet)
     int x = pSprite->x;
     int y = pSprite->y;
     int z = pSprite->z; // ebx
-    short nSectFlag = SectFlag[pSprite->sectnum];
+    short const nStartSector = pSprite->sectnum;
+    short nSectFlag = SectFlag[nStartSector];
+    unsigned const clipMask = CLIPMASK1;
 
     int x2, y2, z2;
 
@@ -318,9 +1075,16 @@ int MoveBullet(short nBullet)
         {
             if (!(sprite[nEnemySprite].cstat & 0x101))
                 nBulletEnemy[nBullet] = -1;
+            else if (KexBulletFacesTargetWithoutThrust(nType))
+            {
+                KexTurnProjectileWithoutThrust(nBullet, nEnemySprite);
+            }
             else
             {
-                nVal = AngleChase(nSprite, nEnemySprite, pBullet->field_10, 0, 16);
+                nVal = g_kexMode && nType == 11
+                    ? KexMoveSoulProjectile(nBullet, nEnemySprite)
+                    : AngleChase(nSprite, nEnemySprite, pBullet->field_10, 0,
+                                 KexBulletTurnStep(nType));
                 goto MOVEEND;
             }
         }
@@ -354,9 +1118,36 @@ int MoveBullet(short nBullet)
             }
         }
 
-        nVal = movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z, pSprite->clipdist >> 1, pSprite->clipdist >> 1, CLIPMASK1);
+        // KEX impactWallsOnly projectiles still use the actor-colliding mask;
+        // only their floor/ceiling response differs below.
+        if (g_kexMode && nType == kKexBoulderType)
+            nVal = KexMoveBoulder(nBullet);
+        else if (KexSpawnerProjectile(pBullet))
+            nVal = KexMoveSpawnerProjectile(nBullet);
+        else
+            nVal = movesprite(nSprite, pBullet->x, pBullet->y, pBullet->z,
+                              pSprite->clipdist >> 1, pSprite->clipdist >> 1,
+                              clipMask);
 
 MOVEEND:
+        if (g_kexMode && nType == kKexBoulderType)
+        {
+            if (nVal && KexBoulderHandleBounce(nBullet, nVal))
+                return 0;
+            if (!nVal && KexBoulderStopped(pBullet, x, y, z))
+                nVal = 1;
+        }
+        if (KexBulletGlidesOnPlanes(nType) && (nVal & 0x30000))
+        {
+            // impactWallsOnly is frequently misread as "ignore actors". In
+            // KEX it instead follows traversable floor/ceiling planes and
+            // still impacts vertical walls and actors. Flat planes are the
+            // common retail case; retain horizontal thrust after contact.
+            if ((nVal & 0x20000) && nType != 15)
+                pSprite->z -= 8 * 16 * 6; // authored floorOffset 8
+            pBullet->z = 0;
+            nVal &= ~0x30000;
+        }
         if (nVal)
         {
             x2 = pSprite->x;
@@ -383,15 +1174,25 @@ MOVEEND:
             }
         }
 
-        // sprite[nSprite].sectnum may have changed since we set nSectFlag ?
+        // kexActor::UpdateMovement lets remaster projectiles cross an
+        // FF_WATER portal, emits its Fx_WaterSplash callback, and keeps their
+        // velocity. The old PCExhumed loop deleted every bullet at this
+        // boundary, which made KEX enemy shots vanish at a water surface.
+        // Keep its classic behavior outside the explicit KEX projectile set.
         short nFlagVal = nSectFlag ^ SectFlag[pSprite->sectnum];
-        if (nFlagVal & kSectUnderwater)
+        if (KexBulletUsesRemasterDeath(nType))
+            KexWaterSplash_OnTransition(nStartSector, x, y, z,
+                                        pSprite->sectnum, pSprite->x,
+                                        pSprite->y);
+        if ((nFlagVal & kSectUnderwater)
+            && !KexBulletUsesRemasterDeath(nType))
         {
             DestroyBullet(nBullet);
             nVal = 1;
         }
 
-        if (nVal == 0 && nType != 15 && nType != 3)
+        if (nVal == 0 && nType != 15 && nType != 3
+            && !(g_kexMode && nType == kKexBoulderType))
         {
             AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, 0);
 
@@ -462,7 +1263,7 @@ HITWALL:
                 short nSector = wall[hitwall].nextsector;
                 if (nSector > -1)
                 {
-                    short nDamage = BulletInfo[pBullet->nType].nDamage;
+                    short nDamage = KexBulletDamage(pBullet->nType);
                     if (pBullet->field_13 > 1) {
                         nDamage *= 2;
                     }
@@ -476,6 +1277,16 @@ HITWALL:
 
         if (hitsect > -1) // NOTE: hitsect can be -1. this check wasn't in original code. TODO: demo compatiblity?
         {
+            // KEX death-animation callbacks run on every impact, including a
+            // floor or ceiling. Fx_FireballExplode is created at the
+            // unmodified contact point (with boulder's authored +2 KEX Z)
+            // before the radial callback and before the legacy wall-puff path
+            // backs x/y away from the face.
+            bool const kexExactImpact = KexBulletHandleDeathVisual(
+                nType, x2, y2, z2, hitsect);
+            bool const kexAuthoredBlast = KexBulletApplyImpactBlast(
+                nBullet, x2, y2, z2, hitsect, kexExactImpact);
+
             if (hitsprite < 0 && hitwall < 0)
             {
                 if ((SectBelow[hitsect] >= 0 && (SectFlag[SectBelow[hitsect]] & kSectUnderwater)) || SectDepth[hitsect])
@@ -485,7 +1296,7 @@ HITWALL:
                     pSprite->z = z2;
                     BuildSplash(nSprite, hitsect);
                 }
-                else
+                else if (!kexExactImpact)
                 {
                     BuildAnim(-1, pBulletInfo->field_C, 0, x2, y2, z2, hitsect, 40, pBulletInfo->nFlags);
                 }
@@ -494,18 +1305,21 @@ HITWALL:
             {
                 if (hitwall >= 0)
                 {
-                    BackUpBullet(&x2, &y2, pSprite->ang);
-
-                    if (nType != 3 || RandomSize(2) == 0)
+                    if (!kexExactImpact)
                     {
-                        int zOffset = RandomSize(8) << 3;
+                        BackUpBullet(&x2, &y2, pSprite->ang);
 
-                        if (!RandomBit()) {
-                            zOffset = -zOffset;
+                        if (nType != 3 || RandomSize(2) == 0)
+                        {
+                            int zOffset = RandomSize(8) << 3;
+
+                            if (!RandomBit()) {
+                                zOffset = -zOffset;
+                            }
+
+                            // draws bullet puff on walls when they're shot
+                            BuildAnim(-1, pBulletInfo->field_C, 0, x2, y2, z2 + zOffset, hitsect, 40, pBulletInfo->nFlags);
                         }
-
-                        // draws bullet puff on walls when they're shot
-                        BuildAnim(-1, pBulletInfo->field_C, 0, x2, y2, z2 + zOffset, hitsect, 40, pBulletInfo->nFlags);
                     }
                 }
                 else
@@ -517,11 +1331,12 @@ HITWALL:
                     mychangespritesect(nSprite, hitsect);
                 }
 
-                if (BulletInfo[nType].nRadius)
+                if (!kexAuthoredBlast && !KexBulletSuppressClassicRadial(nType)
+                        && BulletInfo[nType].nRadius)
                 {
                     nRadialBullet = nType;
 
-                    runlist_RadialDamageEnemy(nSprite, pBulletInfo->nDamage, pBulletInfo->nRadius);
+                    runlist_RadialDamageEnemy(nSprite, KexBulletDamage(nType), pBulletInfo->nRadius);
 
                     nRadialBullet = -1;
 
@@ -550,23 +1365,25 @@ int GetBulletSprite(int nBullet)
 }
 
 
-// VibeBuild32: the boulder's impact is the remaster's pbexplode.wav; the
-// other bullets keep their own SEQ-carried sounds.
-static void KexBullet_ImpactSound(bulletInfo const *pBulletInfo, int x, int y, int z, int nSector)
+// VibeBuild32: Proj_Fireball and Proj_Boulder both play pbexplode.wav from
+// their death animation. The exact KEX impact sequence is intentionally
+// silent so callback order stays explicit here.
+static void KexProjectileImpactSound(int x, int y, int z, int nSector)
 {
-    if (pBulletInfo->nSeq != kSeqBoulder)
-        return;
     int const s = KexSound_Get("k_bldhit");
     if (s >= 0)
         PlayFXAtXYZ(s, x, y, z, nSector);
 }
 
-int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int val1, int nAngle, int val2, int val3)
+static int BuildBulletInternal(short nSprite, int nType, int UNUSED(ebx),
+                               int UNUSED(ecx), int val1, int nAngle,
+                               int val2, int val3,
+                               KexProjectileLaunch const *kexLaunch)
 {
     Bullet sBullet;
     bulletInfo *pBulletInfo = &BulletInfo[nType];
 
-    if (pBulletInfo->field_4 > 30000)
+    if (!kexLaunch && pBulletInfo->field_4 > 30000)
     {
         if (val2 >= 10000)
         {
@@ -636,7 +1453,8 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
     nBulletEnemy[nBullet] = -1;
 
     sprite[nBulletSprite].cstat = 0;
-    sprite[nBulletSprite].shade = -64;
+    int const kexRadius = KexBulletRadius(nType);
+    sprite[nBulletSprite].shade = kexRadius >= 0 ? -127 : -64;
 
     if (pBulletInfo->nFlags & 4) {
         sprite[nBulletSprite].pal = 4;
@@ -645,9 +1463,10 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
         sprite[nBulletSprite].pal = 0;
     }
 
-    sprite[nBulletSprite].clipdist = 25;
+    sprite[nBulletSprite].clipdist = kexRadius >= 0
+        ? (uint8_t)((kexRadius * 6 + 2) / 4) : 25;
 
-    short nRepeat = pBulletInfo->xyRepeat;
+    short nRepeat = KexBulletRepeat(nType, kexRadius, pBulletInfo->xyRepeat);
     if (nRepeat < 0) {
         nRepeat = 30;
     }
@@ -668,7 +1487,8 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
 //	GrabTimeSlot(3);
 
     pBullet->field_10 = 0;
-    pBullet->field_E = pBulletInfo->field_2;
+    pBullet->field_E = g_kexMode && nType == kKexBoulderType
+        ? kKexBoulderFloorContacts : pBulletInfo->field_2;
     pBullet->nFrame  = 0;
 
     short nSeq;
@@ -686,7 +1506,8 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
 
     pBullet->nSeq = nSeq;
 
-    sprite[nBulletSprite].picnum = seq_GetSeqPicnum(nSeq, 0, 0);
+    int const kexTile = KexBulletTile(nType);
+    sprite[nBulletSprite].picnum = kexTile >= 0 ? kexTile : seq_GetSeqPicnum(nSeq, 0, 0);
 
     if (nSeq == kSeqBullet) {
         sprite[nBulletSprite].cstat |= 0x8000;
@@ -699,6 +1520,41 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
     pBullet->field_8 = runlist_AddRunRec(NewRun, nBullet, kRunBullet);
     pBullet->field_13 = val3;
     sprite[nBulletSprite].z += val1;
+
+    if (kexLaunch)
+    {
+        KexProjectileExpected const expected = KexBulletExpectedLaunch(nSprite, *kexLaunch);
+        sprite[nBulletSprite].x = expected.x;
+        sprite[nBulletSprite].y = expected.y;
+        sprite[nBulletSprite].z = expected.z;
+        short launchSector = nSector;
+        updatesectorz(expected.x, expected.y, expected.z, &launchSector);
+        if (launchSector >= 0 && launchSector != nSector)
+            mychangespritesect(nBulletSprite, launchSector);
+
+        pBullet->field_10 = kexLaunch->nSpeed * 24;
+        pBullet->x = expected.vx;
+        pBullet->y = expected.vy;
+        pBullet->z = expected.vz;
+        nBulletEnemy[nBullet] = kexLaunch->bHomingThrust
+                || KexBulletFacesTargetWithoutThrust(nType)
+            ? kexLaunch->nTarget : -1;
+
+        if (s_kexBulletAudit < 0)
+            s_kexBulletAudit = g_kexMode && Bgetenv("VB_KEX_PROJECTILE_AUDIT") ? 1 : 0;
+        if (s_kexBulletAudit && !kexLaunch->bSuppressAudit)
+        {
+            OSD_Printf("Kex projectile: type %d source %d target %d pos %d,%d,%d vel %d,%d,%d callback %d/%d/%d radius %d repeat %d homing %d\n",
+                       nType, nSprite, kexLaunch->nTarget,
+                       expected.x, expected.y, expected.z,
+                       expected.vx, expected.vy, expected.vz,
+                       kexLaunch->nCallbackDistance, kexLaunch->nHeight,
+                       kexLaunch->nSpeed, kexRadius,
+                       (int)sprite[nBulletSprite].xrepeat,
+                       kexLaunch->bHomingThrust ? 1 : 0);
+        }
+        return nBullet;
+    }
 
     int var_18;
 
@@ -793,6 +1649,28 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
     }
 
     pBullet->z = 0;
+
+    int const kexSpawnerSpeed = KexSpawnerLaunchSpeed(nSprite, nType);
+    if (kexSpawnerSpeed > 0)
+    {
+        // Every kexSlaveFireballSpawner launches along its full face normal:
+        // fireballs/boulders at speed 12 and laser bolts at 16. The converter
+        // has already placed this hidden source at the exact face polygon
+        // centroid plus the authored 32-unit normal offset.
+        int const normalZ = clamp((int)sprite[nSprite].zvel, -16384, 16384);
+        int const horizontal = (int)KexBulletISqrt(
+            (uint64_t)16384 * 16384 - (int64_t)normalZ * normalZ);
+        int const normalX = mulscale14(Cos(nAngle), horizontal);
+        int const normalY = mulscale14(Sin(nAngle), horizontal);
+        pBullet->field_10 = (kexSpawnerSpeed / 6) * 24;
+        pBullet->x = normalX * kexSpawnerSpeed;
+        pBullet->y = normalY * kexSpawnerSpeed;
+        pBullet->z = -(int)(((int64_t)normalZ * kexSpawnerSpeed * 16)
+                           / 16384);
+        nBulletEnemy[nBullet] = -1;
+        return nBullet;
+    }
+
     pBullet->x = (sprite[nSprite].clipdist << 2) * Cos(nAngle);
     pBullet->y = (sprite[nSprite].clipdist << 2) * Sin(nAngle);
     nBulletEnemy[nBullet] = -1;
@@ -807,9 +1685,512 @@ int BuildBullet(short nSprite, int nType, int UNUSED(ebx), int UNUSED(ecx), int 
         pBullet->x = (Cos(nAngle) >> 3) * pBulletInfo->field_4;
         pBullet->y = (Sin(nAngle) >> 3) * pBulletInfo->field_4;
         pBullet->z = var_18 >> 3;
+
     }
 
     return nBullet;
+}
+
+int BuildBullet(short nSprite, int nType, int ebx, int ecx, int val1,
+                int nAngle, int val2, int val3)
+{
+    return BuildBulletInternal(nSprite, nType, ebx, ecx, val1, nAngle,
+                               val2, val3, nullptr);
+}
+
+int BuildKexAIFireProjectile(short nSprite, int nType, short nTarget,
+                             int nCallbackDistance, int nHeight,
+                             int nSpeed, int bHomingThrust)
+{
+    if (!g_kexMode || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || (unsigned)nTarget >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0 || sprite[nTarget].sectnum < 0
+        || !(sprite[nTarget].cstat & 0x101) || nSpeed <= 0)
+        return -1;
+
+    KexProjectileLaunch const launch = {
+        nTarget, nCallbackDistance, nHeight, nSpeed, bHomingThrust != 0,
+        false
+    };
+    return BuildBulletInternal(nSprite, nType, 0, 0, 0,
+                               sprite[nSprite].ang, nTarget + 10000, 1,
+                               &launch);
+}
+
+int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
+                                    int nCallbackDistance, int nHeight,
+                                    int nSpeed, int bHomingThrust)
+{
+    if (!g_kexMode || (unsigned)nBullet >= (unsigned)kMaxBullets
+        || (unsigned)nSource >= (unsigned)kMaxSprites
+        || (unsigned)nTarget >= (unsigned)kMaxSprites)
+        return 0;
+    Bullet const &bullet = BulletList[nBullet];
+    if ((unsigned)bullet.nSprite >= (unsigned)kMaxSprites
+        || sprite[bullet.nSprite].sectnum < 0)
+        return 0;
+    KexProjectileLaunch const launch = {
+        nTarget, nCallbackDistance, nHeight, nSpeed, bHomingThrust != 0,
+        false
+    };
+    KexProjectileExpected const expected = KexBulletExpectedLaunch(nSource, launch);
+    int const radius = KexBulletRadius(bullet.nType);
+    spritetype const &projectile = sprite[bullet.nSprite];
+    return projectile.x == expected.x && projectile.y == expected.y
+        && projectile.z == expected.z && bullet.x == expected.vx
+        && bullet.y == expected.vy && bullet.z == expected.vz
+        && bullet.field_10 == nSpeed * 24
+        && nBulletEnemy[nBullet] == (bHomingThrust
+                || KexBulletFacesTargetWithoutThrust(bullet.nType)
+            ? nTarget : -1)
+        && radius >= 0 && projectile.clipdist == (radius * 6 + 2) / 4
+        && projectile.xrepeat == KexBulletRepeat(bullet.nType, radius, 0)
+        && projectile.yrepeat == KexBulletRepeat(bullet.nType, radius, 0)
+        && projectile.shade == -127;
+}
+
+static bool KexBulletImpactContractMatches()
+{
+    KexImpactBlast const mummy = KexBulletImpactBlast(9);
+    KexImpactBlast const selkis = KexBulletImpactBlast(16);
+    KexImpactBlast const fireball = KexBulletImpactBlast(10);
+    KexImpactBlast const trapFireball = KexBulletImpactBlast(14);
+    KexImpactBlast const boulder = KexBulletImpactBlast(17);
+    KexImpactBlast const soul = KexBulletImpactBlast(11);
+    KexImpactBlast const seedling = KexBulletImpactBlast(12);
+    return mummy.radius == 224 && mummy.damage == 50
+        && !mummy.opensToggleFaces
+        && selkis.radius == 224 && selkis.damage == 50
+        && !selkis.opensToggleFaces
+        && fireball.radius == 192 && fireball.damage == 64
+        && fireball.opensToggleFaces
+        && trapFireball.radius == 192 && trapFireball.damage == 64
+        && trapFireball.opensToggleFaces
+        && boulder.radius == 192 && boulder.damage == 64
+        && boulder.opensToggleFaces
+        && KexBulletBuildBlastRadius(224) == 5
+        && KexBulletBuildBlastRadius(192) == 4
+        && soul.radius == 0 && soul.damage == 0
+        && seedling.radius == 0 && seedling.damage == 0
+        && KexBulletSuppressClassicRadial(11)
+        && KexBulletSuppressClassicRadial(12)
+        && KexBulletDamage(14) == 100
+        && KexBulletRadius(14) == 25 && KexBulletRadius(17) == 25
+        && KexBulletRepeat(17, 25, 0) == 80;
+}
+
+static bool KexBoulderPhysicsContractMatches()
+{
+    Bullet wall = {};
+    wall.x = 72 * 16384;
+    KexBoulderReflect(&wall, 16384, 0, 0);
+
+    Bullet floor = {};
+    floor.z = 64;
+    KexBoulderReflect(&floor, 0, 0, 16384);
+
+    return kKexBoulderGravity == 72
+        && kKexBoulderFloorContacts == 8
+        && kKexBoulderHeight == 32 * 16 * 6
+        && kKexBoulderStepHeight == 36 * 16 * 6
+        && kKexBoulderBounceNumerator == 31
+        && kKexBoulderBounceDenominator == 16
+        && wall.x == -(72 * 16384 * 15 / 16)
+        && wall.y == 0 && wall.z == 0
+        && floor.x == 0 && floor.y == 0 && floor.z == -60;
+}
+
+static int KexMantisSpreadAngle()
+{
+    // A_MantisAttack adds RFloat() * .0625 radians. Convert a signed 16-bit
+    // random fraction to Build's 2048-angle circle without floating point;
+    // .0625 rad is 20.37 Build angle units.
+    int const signedRandom = RandomSize(16) - 32768;
+    return (int)(((int64_t)signedRandom * 41) / 65536);
+}
+
+int BuildKexMantisFireProjectile(short nSprite, short nTarget)
+{
+    if (!g_kexMode || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || (unsigned)nTarget >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0 || sprite[nTarget].sectnum < 0
+        || !(sprite[nTarget].cstat & 0x101))
+        return -1;
+
+    // FireActor("Proj_Fireball", 0, 0, 192) starts at the actor origin,
+    // unlike A_FireProjectile's radius-plus-distance muzzle. Mantis has the
+    // authored 48-unit radius (clipdist 72), so -48 cancels that generic
+    // launch distance while retaining the shared allocation/appearance path.
+    KexProjectileLaunch const launch = {
+        nTarget, -48, 192, 8, false, true
+    };
+    int const nBullet = BuildBulletInternal(nSprite, 10, 0, 0, 0,
+        sprite[nSprite].ang, nTarget + 10000, 1, &launch);
+    if (nBullet < 0)
+        return -1;
+
+    Bullet &bullet = BulletList[nBullet];
+    short const nProjectile = bullet.nSprite;
+    int const yawSpread = KexMantisSpreadAngle();
+    int const pitchSpread = KexMantisSpreadAngle();
+    short const yaw = (sprite[nSprite].ang + yawSpread) & kAngleMask;
+
+    int cosPitch, sinPitch;
+    KexBulletAimPitch(sprite[nProjectile].x, sprite[nProjectile].y,
+                      sprite[nProjectile].z, nTarget,
+                      &cosPitch, &sinPitch);
+    int const spreadCos = Cos(pitchSpread);
+    int const spreadSin = Sin(pitchSpread);
+    int const adjustedCos = mulscale14(cosPitch, spreadCos)
+                          - mulscale14(sinPitch, spreadSin);
+    int const adjustedSin = mulscale14(sinPitch, spreadCos)
+                          + mulscale14(cosPitch, spreadSin);
+    int const fx = mulscale14(Cos(yaw), adjustedCos);
+    int const fy = mulscale14(Sin(yaw), adjustedCos);
+
+    // Math::RandFloat() supplies the continuous 8..16 KEX speed. Keep it in
+    // Q16 through conversion so the native projectile does not collapse the
+    // range to eight integer choices.
+    int const speedQ16 = (8 << 16)
+        + (int)(((int64_t)RandomSize(16) * (8 << 16)) / 65535);
+    int64_t const worldSpeedQ16 = (int64_t)speedQ16 * 6;
+    bullet.x = (int)(((int64_t)fx * worldSpeedQ16) / 65536);
+    bullet.y = (int)(((int64_t)fy * worldSpeedQ16) / 65536);
+    bullet.z = -(int)(((int64_t)adjustedSin * worldSpeedQ16 * 16)
+                       / (16384 * INT64_C(65536)));
+    bullet.field_10 = (uint16_t)clamp<int>(
+        (int)(((int64_t)speedQ16 * 24 + 32768) / 65536), 1, 29999);
+    nBulletEnemy[nBullet] = -1;
+    sprite[nProjectile].ang = yaw;
+
+    if (s_kexBulletAudit)
+    {
+        int const speedMilli = (int)(((int64_t)speedQ16 * 1000 + 32768) / 65536);
+        OSD_Printf("Kex Mantis PSX projectile: source %d target %d pos %d,%d,%d vel %d,%d,%d speed %d.%03d spread %d/%d radius %d repeat %d\n",
+                   nSprite, nTarget, (int)sprite[nProjectile].x,
+                   (int)sprite[nProjectile].y, (int)sprite[nProjectile].z,
+                   bullet.x, bullet.y, bullet.z, speedMilli / 1000,
+                   speedMilli % 1000, yawSpread, pitchSpread,
+                   KexBulletRadius(10), (int)sprite[nProjectile].xrepeat);
+    }
+    return nBullet;
+}
+
+int KexBullet_CheckMantisFireProjectile(int nBullet, short nSource)
+{
+    if (!g_kexMode || (unsigned)nBullet >= (unsigned)kMaxBullets
+        || (unsigned)nSource >= (unsigned)kMaxSprites)
+        return 0;
+    Bullet const &bullet = BulletList[nBullet];
+    if (bullet.nType != 10
+        || (unsigned)bullet.nSprite >= (unsigned)kMaxSprites
+        || sprite[bullet.nSprite].sectnum < 0)
+        return 0;
+    spritetype const &projectile = sprite[bullet.nSprite];
+    uint64_t const fixedWorldSpeed = KexBulletVectorLength(
+        bullet.x, bullet.y, (int64_t)bullet.z * 1024);
+    return projectile.x == sprite[nSource].x
+        && projectile.y == sprite[nSource].y
+        && projectile.z == sprite[nSource].z - 192 * 16 * 6
+        && klabs(AngleDelta(sprite[nSource].ang, projectile.ang, 1024)) <= 20
+        && fixedWorldSpeed >= UINT64_C(48) * 16384
+        && fixedWorldSpeed <= UINT64_C(96) * 16384
+        && bullet.field_10 >= 192 && bullet.field_10 <= 384
+        && nBulletEnemy[nBullet] == -1
+        && projectile.clipdist == (25 * 6 + 2) / 4
+        && projectile.xrepeat == 40 && projectile.yrepeat == 40
+        && projectile.shade == -127;
+}
+
+void KexBullet_TestTick()
+{
+    if (s_kexBulletTest == -1)
+        s_kexBulletTest = g_kexMode && Bgetenv("VB_KEX_PROJECTILE_TEST")
+            ? 0 : -2;
+    if (s_kexBulletTest != 0)
+        return;
+
+    short const nTarget = PlayerList[nLocalPlayer].nSprite;
+    if ((unsigned)nTarget >= (unsigned)kMaxSprites
+        || sprite[nTarget].sectnum < 0 || !(sprite[nTarget].cstat & 0x101))
+        return;
+
+    struct TestRecipe
+    {
+        int nType, nSourceClip, nDistance, nHeight, nSpeed, bHomingThrust;
+    };
+    // Current retail projectile callbacks for Anubis, Sentry, Set, Selkis,
+    // Mummy, Queen and Saturn Mantis respectively. Queen's FireActor starts at
+    // the actor origin, hence the -64 radius cancellation. This also catches
+    // the type-16 hitscan shortcut without requiring a live boss encounter.
+    static TestRecipe const recipes[] = {
+        { 8,  72,  4,  96, 16, 0 },
+        { 13, 72,  4,  96, 24, 0 },
+        { 11, 144, 50, 192, 16, 1 },
+        { 16, 120, 2, 144, 64, 0 },
+        { 9,  72,  2,  96, 12, 0 },
+        { 12, 96, -64, 128, 32, 0 },
+        { 10, 72,  8, 192, 16, 0 },
+    };
+
+    short const nSource = insertsprite(sprite[nTarget].sectnum, 0);
+    if (nSource < 0)
+    {
+        OSD_Printf("Kex projectile test: FAIL (no free source sprite)\n");
+        s_kexBulletTest = -2;
+        return;
+    }
+    // Put the synthetic launcher behind the player and aim it forward so the
+    // check exercises horizontal and vertical normalization, not a degenerate
+    // same-origin vector.
+    sprite[nSource].x = sprite[nTarget].x
+        - mulscale14(Cos(sprite[nTarget].ang), 600);
+    sprite[nSource].y = sprite[nTarget].y
+        - mulscale14(Sin(sprite[nTarget].ang), 600);
+    sprite[nSource].z = sprite[nTarget].z;
+    sprite[nSource].ang = sprite[nTarget].ang;
+    sprite[nSource].cstat = 0;
+    sprite[nSource].xvel = 0;  // source actor-array index (synthetic actor 0)
+    sprite[nSource].yvel = -1; // converted spawner marker: source sector 0
+    sprite[nSource].zvel = 0;
+
+    // Keep the native A_FireProjectile target point independent of animated
+    // Build sprite repeat. The retail kexPuppet height is exactly 160 units.
+    bool const logicalTargetCenterExact = sprite[nTarget].statnum == 100
+        && KexBulletTargetCenterZ(nTarget)
+            == sprite[nTarget].z - (160 * 16 * 6) / 2;
+
+    unsigned passed = 0;
+    for (unsigned i = 0; i < ARRAY_SIZE(recipes); i++)
+    {
+        TestRecipe const &r = recipes[i];
+        sprite[nSource].clipdist = r.nSourceClip;
+        int const nBullet = BuildKexAIFireProjectile(nSource, r.nType,
+            nTarget, r.nDistance, r.nHeight, r.nSpeed, r.bHomingThrust);
+        if (KexBullet_CheckAIFireProjectile(nBullet, nSource, nTarget,
+                r.nDistance, r.nHeight, r.nSpeed, r.bHomingThrust))
+            passed |= 1u << i;
+        if (nBullet >= 0)
+            DestroyBullet(nBullet);
+    }
+    sprite[nSource].clipdist = 72;
+    int const nMantisBullet = BuildKexMantisFireProjectile(nSource, nTarget);
+    if (KexBullet_CheckMantisFireProjectile(nMantisBullet, nSource))
+        passed |= 1u << ARRAY_SIZE(recipes);
+    if (nMantisBullet >= 0)
+        DestroyBullet(nMantisBullet);
+
+    bool boulderLaunchExact = false;
+    bool boulderMotionExact = false;
+    int const nBoulder = BuildBullet(nSource, kKexBoulderType, 0, 0, 0,
+                                     sprite[nSource].ang, 0, 1);
+    if (nBoulder >= 0)
+    {
+        Bullet const &boulder = BulletList[nBoulder];
+        bool const horizontalExact = boulder.field_10 == 12 * 24
+            && boulder.field_E == kKexBoulderFloorContacts
+            && boulder.x == Cos(sprite[nSource].ang) * kKexBoulderSpeed
+            && boulder.y == Sin(sprite[nSource].ang) * kKexBoulderSpeed
+            && boulder.z == 0
+            && sprite[boulder.nSprite].x == sprite[nSource].x
+            && sprite[boulder.nSprite].y == sprite[nSource].y
+            && sprite[boulder.nSprite].z == sprite[nSource].z
+            && sprite[boulder.nSprite].clipdist == (25 * 6 + 2) / 4
+            && sprite[boulder.nSprite].xrepeat == 80
+            && sprite[boulder.nSprite].yrepeat == 80;
+
+        // Exercise the real movesprite path on the loaded map: one free-fall
+        // tick must add 0.75 gravity, then a flat-floor contact must reflect
+        // upward and consume exactly one of the eight authored contacts.
+        Bullet &moving = BulletList[nBoulder];
+        short const movingSprite = moving.nSprite;
+        int const floorZ = getflorzofslope(sprite[movingSprite].sectnum,
+                                           sprite[movingSprite].x,
+                                           sprite[movingSprite].y);
+        sprite[movingSprite].z = floorZ - 1024;
+        moving.x = moving.y = moving.z = 0;
+        bool const fell = MoveBullet(nBoulder) == 0
+            && moving.z == kKexBoulderGravity
+            && sprite[movingSprite].z == floorZ - 1024 + kKexBoulderGravity
+            && moving.field_E == kKexBoulderFloorContacts;
+        sprite[movingSprite].z = floorZ - 16;
+        moving.z = 64;
+        bool const bounced = MoveBullet(nBoulder) == 0
+            && moving.z < 0
+            && moving.field_E == kKexBoulderFloorContacts - 1
+            && sprite[movingSprite].z == floorZ;
+        boulderMotionExact = fell && bounced;
+        DestroyBullet(nBoulder);
+
+        sprite[nSource].zvel = 16384;
+        int const nVertical = BuildBullet(nSource, kKexBoulderType, 0, 0, 0,
+                                          sprite[nSource].ang, 0, 1);
+        if (nVertical >= 0)
+        {
+            Bullet const &vertical = BulletList[nVertical];
+            boulderLaunchExact = horizontalExact
+                && vertical.x == 0 && vertical.y == 0
+                && vertical.z == -kKexBoulderSpeed * 16
+                && vertical.field_E == kKexBoulderFloorContacts;
+            DestroyBullet(nVertical);
+        }
+    }
+    if (boulderLaunchExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 1);
+
+    bool sharedSpawnerLaunchExact = false;
+    sprite[nSource].zvel = 16384;
+    int const nFireball = BuildBullet(nSource, 14, 0, 0, 0,
+                                      sprite[nSource].ang, 0, 1);
+    if (nFireball >= 0)
+    {
+        Bullet const &fireball = BulletList[nFireball];
+        bool const fireballExact = fireball.field_10 == 12 * 24
+            && fireball.x == 0 && fireball.y == 0
+            && fireball.z == -kKexSpawnerFireballSpeed * 16
+            && KexBulletDamage(14) == 100 && KexBulletRadius(14) == 25
+            && sprite[fireball.nSprite].clipdist == (25 * 6 + 2) / 4
+            && sprite[fireball.nSprite].xrepeat == 40
+            && sprite[fireball.nSprite].yrepeat == 40;
+        DestroyBullet(nFireball);
+
+        sprite[nSource].zvel = 0;
+        int const nLaser = BuildBullet(nSource, 15, 0, 0, 0,
+                                       sprite[nSource].ang, 0, 1);
+        if (nLaser >= 0)
+        {
+            Bullet const &laser = BulletList[nLaser];
+            sharedSpawnerLaunchExact = fireballExact
+                && laser.field_10 == 16 * 24
+                && laser.x == Cos(sprite[nSource].ang) * kKexSpawnerLaserSpeed
+                && laser.y == Sin(sprite[nSource].ang) * kKexSpawnerLaserSpeed
+                && laser.z == 0
+                && KexBulletDamage(15) == 100 && KexBulletRadius(15) == 36
+                && KexBulletGlidesOnPlanes(15)
+                && sprite[laser.nSprite].clipdist == (36 * 6 + 2) / 4
+                && sprite[laser.nSprite].xrepeat == 40
+                && sprite[laser.nSprite].yrepeat == 40;
+            DestroyBullet(nLaser);
+        }
+    }
+    if (sharedSpawnerLaunchExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 2);
+
+    bool impactEffectExact = false;
+    if (KexBulletExactImpactAvailable(10))
+    {
+        int const x = sprite[nSource].x;
+        int const y = sprite[nSource].y;
+        int const z = sprite[nSource].z;
+        short const nSector = sprite[nSource].sectnum;
+        int const nFireImpact = KexProjectile_SpawnFireballImpact(
+            x, y, z, nSector, 0, 1);
+        bool fireExact = false;
+        if (nFireImpact >= 0)
+        {
+            short const nEffect = GetAnimSprite(nFireImpact);
+            fireExact = AnimList[nFireImpact].nSeq == SeqOffsets[kSeqKexImpact]
+                && SeqSize[AnimList[nFireImpact].nSeq] == 14
+                && sprite[nEffect].x == x && sprite[nEffect].y == y
+                && sprite[nEffect].z == z
+                && sprite[nEffect].xrepeat == 48
+                && sprite[nEffect].yrepeat == 48
+                && (AnimFlags[nFireImpact] & 4);
+            DestroyAnim(nFireImpact);
+            mydeletesprite(nEffect);
+        }
+
+        int const nBoulderImpact = KexProjectile_SpawnFireballImpact(
+            x, y, z, nSector, 2, 0);
+        bool boulderExact = false;
+        if (nBoulderImpact >= 0)
+        {
+            short const nEffect = GetAnimSprite(nBoulderImpact);
+            boulderExact = AnimList[nBoulderImpact].nSeq
+                    == SeqOffsets[kSeqKexImpact]
+                && sprite[nEffect].x == x && sprite[nEffect].y == y
+                && sprite[nEffect].z == z - 2 * 16 * 6
+                && sprite[nEffect].xrepeat == 48
+                && sprite[nEffect].yrepeat == 48
+                && (AnimFlags[nBoulderImpact] & 4);
+            DestroyAnim(nBoulderImpact);
+            mydeletesprite(nEffect);
+        }
+        impactEffectExact = fireExact && boulderExact;
+    }
+
+    bool deathFamilyExact = false;
+    if (KexBulletExactImpactAvailable(8)
+            && KexBulletExactImpactAvailable(9)
+            && KexBulletExactImpactAvailable(11)
+            && KexBulletExactImpactAvailable(12)
+            && KexBulletExactImpactAvailable(13)
+            && KexBulletExactImpactAvailable(15)
+            && seq_IsLoaded(kSeqKexCobraGreen))
+    {
+        int const x = sprite[nSource].x;
+        int const y = sprite[nSource].y;
+        int const z = sprite[nSource].z;
+        short const nSector = sprite[nSource].sectnum;
+
+        int const nAnubisImpact = KexBulletSpawnAnubisImpact(
+            x, y, z, nSector);
+        bool anubisExact = false;
+        if (nAnubisImpact >= 0)
+        {
+            short const nEffect = GetAnimSprite(nAnubisImpact);
+            anubisExact = AnimList[nAnubisImpact].nSeq
+                    == SeqOffsets[kSeqKexAnuImpact]
+                && SeqSize[AnimList[nAnubisImpact].nSeq] == 13
+                && sprite[nEffect].x == x && sprite[nEffect].y == y
+                && sprite[nEffect].z == z
+                && sprite[nEffect].xrepeat == 40
+                && sprite[nEffect].yrepeat == 40
+                && (AnimFlags[nAnubisImpact] & 4);
+            DestroyAnim(nAnubisImpact);
+            mydeletesprite(nEffect);
+        }
+
+        int const nCobraController = KexProjectile_StartCobraBurst(
+            x, y, z, nSector, 1);
+        bool cobraExact = false;
+        if (nCobraController >= 0)
+        {
+            short const nController = GetAnimSprite(nCobraController);
+            cobraExact = AnimList[nCobraController].nSeq
+                    == SeqOffsets[kSeqKexCobraCtl]
+                && SeqSize[AnimList[nCobraController].nSeq] == 12
+                && (sprite[nController].cstat & 0x8000)
+                && sprite[nController].xvel == 1
+                && SeqSize[SeqOffsets[kSeqKexCobraRed]] == 14
+                && SeqSize[SeqOffsets[kSeqKexCobraGreen]] == 14;
+            DestroyAnim(nCobraController);
+            mydeletesprite(nController);
+        }
+
+        deathFamilyExact = anubisExact && cobraExact
+            && KexBulletHandleDeathVisual(13, x, y, z, nSector)
+            && KexBulletHandleDeathVisual(15, x, y, z, nSector)
+            && KexBulletSuppressClassicRadial(11)
+            && KexBulletSuppressClassicRadial(12);
+    }
+    mydeletesprite(nSource);
+
+    if (KexBulletImpactContractMatches())
+        passed |= 1u << (ARRAY_SIZE(recipes) + 3);
+    if (KexBoulderPhysicsContractMatches() && boulderMotionExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 4);
+    if (impactEffectExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 5);
+    if (deathFamilyExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 6);
+    if (logicalTargetCenterExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 7);
+
+    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 8)) - 1;
+    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
+               passed == wanted ? "PASS" : "FAIL", passed, wanted);
+    s_kexBulletTest = -2;
 }
 
 void FuncBullet(int a, int UNUSED(b), int nRun)
@@ -830,6 +2211,10 @@ void FuncBullet(int a, int UNUSED(b), int nRun)
 
             seq_MoveSequence(nSprite, nSeq, BulletList[nBullet].nFrame);
 
+            int const kexTile = KexBulletTile(BulletList[nBullet].nType);
+            if (kexTile >= 0)
+                sprite[nSprite].picnum = kexTile;
+
             if (nFlag & 0x80)
             {
                 BuildAnim(-1, 45, 0, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, sprite[nSprite].sectnum, sprite[nSprite].xrepeat, 0);
@@ -847,7 +2232,9 @@ void FuncBullet(int a, int UNUSED(b), int nRun)
                 BulletList[nBullet].nFrame = 0;
             }
 
-            if (BulletList[nBullet].field_E != -1 && --BulletList[nBullet].field_E == 0)
+            if (!(g_kexMode && BulletList[nBullet].nType == kKexBoulderType)
+                && BulletList[nBullet].field_E != -1
+                && --BulletList[nBullet].field_E == 0)
             {
                 DestroyBullet(nBullet);
             }
@@ -870,6 +2257,9 @@ void FuncBullet(int a, int UNUSED(b), int nRun)
             else
             {
                 seq_PlotSequence(nSprite2, nSeq, BulletList[nBullet].nFrame, 0);
+                int const kexTile = KexBulletTile(BulletList[nBullet].nType);
+                if (kexTile >= 0)
+                    tsprite[nSprite2].picnum = kexTile;
                 tsprite[nSprite2].owner = -1;
             }
             break;

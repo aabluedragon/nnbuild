@@ -27,9 +27,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 extern short nSpiritSprite;
 extern short nHeadStage;
 
-extern int kex_language;    // cvar: the remaster speeches' language
+// 0 English, 1 French, 2 German, 3 Spanish, 4 Italian. Italian has remaster
+// text but no matching Ramses speech/cinematics, which use English instead.
+extern int kex_language;
+int KexLanguage_Index();
+int KexLanguage_VoiceIndex();
+char const *KexLanguage_Code();
 
 void InitSpiritHead();
 int DoSpiritHead();
+void KexRamses_Reset();
+int KexRamses_Tick();
+int KexRamses_ViewTile(int nSprite);
 
 #endif

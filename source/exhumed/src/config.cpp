@@ -67,6 +67,8 @@ const char gamefunctions[kMaxGameFunctions][kMaxGameFuncLen] =
     "Weapon_5",
     "Weapon_6",
     "Weapon_7",
+    "Weapon_8",
+    "Weapon_Wheel",
     "Pause",
     "Map",
     "Zoom_In",
@@ -115,6 +117,8 @@ const char keydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen] =
     "5", "",
     "6", "",
     "7", "",
+    "8", "",
+    "", "",
     "Pause", "",
     "Tab", "",
     "=", "",
@@ -163,6 +167,8 @@ const char oldkeydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen] =
     "5", "",
     "6", "",
     "7", "",
+    "8", "",
+    "", "",
     "Pause", "",
     "Tab", "",
     "=", "",
@@ -182,6 +188,42 @@ const char oldkeydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen] =
     "CapLck", "",
     "F", "",
 	"F7", "",
+};
+
+// Nightdive's default.cfg is intentionally a different layout from the DOS
+// game.  These are native gamefunc bindings, so a fresh -kex session gets the
+// same controls without requiring the KEX console parser or its config cvars.
+// Existing config entries are still loaded over these defaults.
+const char kexkeydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen] =
+{
+    "W", "",             // Move forward
+    "S", "",             // Move backward
+    "", "",              // Turn left
+    "", "",              // Turn right
+    "", "",              // Strafe modifier
+    "A", "",             // Strafe left
+    "D", "",             // Strafe right
+    "", "",              // Run
+    "Space", "",         // Jump
+    "", "",              // Crouch
+    "", "",              // Fire (mouse left)
+    "E", "",             // Interact
+    "", "", "", "", "", "", "", "", "", "", "", "", // look/chat actions
+    "1", "", "2", "", "3", "", "4", "", "5", "", "6", "", "7", "", "8", "",
+    "Q", "",              // Weapon wheel
+    "Pause", "",        // Pause
+    "Tab", "",          // Automap
+    "LAlt", "",         // Zoom map in
+    "LCtrl", "",        // Zoom map out
+    "F11", "",          // Gamma
+    "Escape", "",       // Escape
+    "", "", "", "",  // Screen size
+    "LShift", "",       // Inventory screen
+    "", "", "", "",  // Inventory navigation
+    "`", "",            // Console
+    "U", "", "I", "", // Mouse aiming / crosshair
+    "", "", "", "",  // Weapon cycle (mouse wheel)
+    "CapLck", "", "F", "", "F7", "",
 };
 
 static const char *mousedefaults[MAXMOUSEBUTTONS] =
@@ -389,6 +431,69 @@ static void CONFIG_SetJoystickAnalogAxisFunction(int i, int function)
     CONTROL_MapAnalogAxis(i, function);
 }
 
+// The KEX release ships a gamecontrollerdb plus an SDL-standard default.cfg.
+// Exhumed formerly initialized every controller slot to -1, which left a fresh
+// install unable to move, fire, navigate the KEX menu, or reach its authored
+// vibration.  Use the same semantic controller layout as the other modern
+// Build games; CONFIG_SetupJoystick() subsequently overwrites every entry
+// present in an existing user cfg.
+static void CONFIG_SetGameControllerDefaults(void)
+{
+    for (int i = 0; i < MAXJOYBUTTONSANDHATS; i++)
+    {
+        CONFIG_SetJoystickButtonFunction(i, 0, -1);
+        CONFIG_SetJoystickButtonFunction(i, 1, -1);
+    }
+    for (int i = 0; i < MAXJOYAXES; i++)
+    {
+        CONFIG_SetJoystickAnalogAxisScale(i, DEFAULTJOYSTICKANALOGUESCALE);
+        CONFIG_SetJoystickAnalogAxisInvert(i, 0);
+        CONFIG_SetJoystickAnalogAxisDeadSaturate(i, DEFAULTJOYSTICKANALOGUEDEAD,
+                                                  DEFAULTJOYSTICKANALOGUESATURATE);
+        CONFIG_SetJoystickDigitalAxisFunction(i, 0, -1);
+        CONFIG_SetJoystickDigitalAxisFunction(i, 1, -1);
+        CONFIG_SetJoystickAnalogAxisFunction(i, -1);
+    }
+
+    int const wheelFunction = g_kexMode ? gamefunc_Weapon_Wheel : gamefunc_Inventory;
+    struct { int button, function; } const buttons[] =
+    {
+        { CONTROLLER_BUTTON_A,              gamefunc_Open },
+        { CONTROLLER_BUTTON_B,              gamefunc_Escape },
+        { CONTROLLER_BUTTON_X,              wheelFunction },
+        { CONTROLLER_BUTTON_Y,              gamefunc_Map },
+        { CONTROLLER_BUTTON_BACK,           gamefunc_Inventory },
+        { CONTROLLER_BUTTON_START,          gamefunc_Pause },
+        { CONTROLLER_BUTTON_LEFTSTICK,      gamefunc_Run },
+        { CONTROLLER_BUTTON_RIGHTSTICK,     gamefunc_Crouch },
+        { CONTROLLER_BUTTON_LEFTSHOULDER,   gamefunc_Previous_Weapon },
+        { CONTROLLER_BUTTON_RIGHTSHOULDER,  gamefunc_Next_Weapon },
+        { CONTROLLER_BUTTON_DPAD_UP,        gamefunc_Zoom_In },
+        { CONTROLLER_BUTTON_DPAD_DOWN,      gamefunc_Zoom_Out },
+        { CONTROLLER_BUTTON_DPAD_LEFT,      gamefunc_Turn_Left },
+        { CONTROLLER_BUTTON_DPAD_RIGHT,     gamefunc_Turn_Right },
+    };
+    static struct { int axis, function; } const analog[] =
+    {
+        { CONTROLLER_AXIS_LEFTX,  analog_strafing },
+        { CONTROLLER_AXIS_LEFTY,  analog_moving },
+        { CONTROLLER_AXIS_RIGHTX, analog_turning },
+        { CONTROLLER_AXIS_RIGHTY, analog_lookingupanddown },
+    };
+    static struct { int axis, direction; int function; } const digital[] =
+    {
+        { CONTROLLER_AXIS_TRIGGERLEFT,  1, gamefunc_Jump },
+        { CONTROLLER_AXIS_TRIGGERRIGHT, 1, gamefunc_Fire },
+    };
+
+    for (auto const &button : buttons)
+        CONFIG_SetJoystickButtonFunction(button.button, 0, button.function);
+    for (auto const &axis : analog)
+        CONFIG_SetJoystickAnalogAxisFunction(axis.axis, axis.function);
+    for (auto const &axis : digital)
+        CONFIG_SetJoystickDigitalAxisFunction(axis.axis, axis.direction, axis.function);
+}
+
 
 void CONFIG_SetDefaultKeys(const char (*keyptr)[kMaxGameFuncLen], bool lazy/*=false*/)
 {
@@ -498,7 +603,7 @@ void CONFIG_SetDefaults()
     screensize = 0;
     nGamma = 2;
 
-    CONFIG_SetDefaultKeys(keydefaults);
+    CONFIG_SetDefaultKeys(g_kexMode ? kexkeydefaults : keydefaults);
 
     memset(MouseFunctions, -1, sizeof(MouseFunctions));
     memset(MouseDigitalFunctions, -1, sizeof(MouseDigitalFunctions));
@@ -524,8 +629,18 @@ void CONFIG_SetDefaults()
         CONTROL_MapDigitalAxis(i, MouseDigitalFunctions[i][1], 1);
     }
 
-    // TODO:
-    //CONFIG_SetGameControllerDefaultsStandard();
+    if (g_kexMode)
+    {
+        // The KEX cfg uses these as console names; configure them natively so
+        // a fresh session has the remaster's wheel behavior from the first run.
+        MouseFunctions[4][0] = gamefunc_Next_Weapon;
+        MouseFunctions[5][0] = gamefunc_Previous_Weapon;
+        CONTROL_MapButton(MouseFunctions[4][0], 4, 0, controldevice_mouse);
+        CONTROL_MapButton(MouseFunctions[5][0], 5, 0, controldevice_mouse);
+        CONTROL_BindKey(sc_F5, "screenshot", 1, KB_ScanCodeToString(sc_F5));
+    }
+
+    CONFIG_SetGameControllerDefaults();
 
 #if 0
     FXVolume       = 128;

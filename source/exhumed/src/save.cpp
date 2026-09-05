@@ -29,20 +29,31 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdio.h>
 #include <assert.h>
 #include "exhumed.h"
+#include "kexbreak.h"
 
 const char kSaveSig[] = "EXSV";
-const uint16_t kSaveVersion = 10000;   // VibeBuild32: the per-sector tables grew to kMaxSectors 4096
+const uint16_t kSaveVersion = 10004;   // VibeBuild32: KEX force-field and native air/gasp state are serialized
+static char const kNetworkSnapshotSig[] = "EXSN";
+// EXSN v2 retains every reusable body/chunk/gun allocator entry.  A staging
+// level's unwritten pool tail could otherwise leak into a rejoin respawn.
+static uint16_t const kNetworkSnapshotVersion = 2;
+static int s_networkSnapshot;
 
+static char const *Exhumed_SaveTestFilename(void)
+{
+    char const *const overrideName = Bgetenv("VB_EX_SAVE_TEST_FILE");
+    return overrideName && overrideName[0] ? overrideName : "exsave";
+}
 
 void testsave()
 {
-    LoadSave::SaveGame("exsave");
+    LoadSave::SaveGame(Exhumed_SaveTestFilename());
     StatusMessage(300, "Saved game");
 }
 
 void testload()
 {
-    LoadSave::LoadGame("exsave");
+    LoadSave::LoadGame(Exhumed_SaveTestFilename());
     StatusMessage(300, "Loaded game");
 }
 
@@ -188,45 +199,52 @@ public:
     virtual void Save();
 };
 
-void LoadSave::LoadGame(const char* pzFile)
+int LoadSave::IsNetworkSnapshot()
 {
-    int nSlot = 3; // TEMP
-    char filename[BMAX_PATH];
+    return s_networkSnapshot;
+}
 
-    sprintf(filename, "save%1d.gam", nSlot);
+static void Exhumed_LoadStateFile(const char *pzFile, char const *expectedSignature,
+                                  uint16_t versionExpected, int networkSnapshot)
+{
+    char const *const filename = pzFile && pzFile[0] ? pzFile : "save3.gam";
 
-    hLFile = buildvfs_open_read(filename);
-    if (hLFile == buildvfs_fd_invalid) {
+    s_networkSnapshot = networkSnapshot;
+
+    LoadSave::hLFile = buildvfs_open_read(filename);
+    if (LoadSave::hLFile == buildvfs_fd_invalid) {
         bail2dos("Error loading save file %s.", filename);
     }
 
-    char signature[4];
-    buildvfs_read(hLFile, &signature, sizeof(signature));
-    if (memcmp(&signature, kSaveSig, 4) != 0) {
+    char actualSignature[4];
+    buildvfs_read(LoadSave::hLFile, &actualSignature, sizeof(actualSignature));
+    if (memcmp(actualSignature, expectedSignature, sizeof(actualSignature)) != 0) {
         bail2dos("Invalid save file signature");
     }
 
     uint16_t version;
-    buildvfs_read(hLFile, &version, 2);
-    if (version != kSaveVersion) {
+    buildvfs_read(LoadSave::hLFile, &version, 2);
+    if (version != versionExpected) {
         bail2dos("Invalid save file version");
     }
 
     StopAllSounds();
+    KexWall_ClipEnd();
     memset(sprite, 0, sizeof(spritetype) * kMaxSprites);
     automapping = 1;
 
     ClearStatusMessage();
 
-    LoadSave* rover = head.next;
-    while (rover != &head)
+    LoadSave* rover = LoadSave::head.next;
+    while (rover != &LoadSave::head)
     {
         rover->Load();
         rover = rover->next;
     }
 
-    buildvfs_close(hLFile);
-    hLFile = buildvfs_fd_invalid;
+    buildvfs_close(LoadSave::hLFile);
+    LoadSave::hLFile = buildvfs_fd_invalid;
+    s_networkSnapshot = 0;
 
 #ifdef USE_STRUCT_TRACKERS
     Bmemset(sectorchanged, 0, sizeof(sectorchanged));
@@ -255,30 +273,54 @@ void LoadSave::LoadGame(const char* pzFile)
 #endif
 }
 
-void LoadSave::SaveGame(const char* pzFile)
+void LoadSave::LoadGame(const char* pzFile)
 {
-    int nSlot = 3; // TEMP
-    char filename[BMAX_PATH];
+    Exhumed_LoadStateFile(pzFile, kSaveSig, kSaveVersion, 0);
+}
 
-    sprintf(filename, "save%1d.gam", nSlot);
+void LoadSave::LoadNetworkSnapshot(const char* pzFile)
+{
+    Exhumed_LoadStateFile(pzFile, kNetworkSnapshotSig, kNetworkSnapshotVersion, 1);
+}
 
-    hSFile = buildvfs_open_write(filename);
-    if (hSFile == buildvfs_fd_invalid) {
+static void Exhumed_SaveStateFile(const char *pzFile, char const *signature,
+                                  uint16_t version, int networkSnapshot)
+{
+    char const *const filename = pzFile && pzFile[0] ? pzFile : "save3.gam";
+
+    s_networkSnapshot = networkSnapshot;
+
+    // Never capture one of the temporary height-selected portal rewires used
+    // during clipping/rendering as permanent map topology.
+    KexWall_ClipEnd();
+    LoadSave::hSFile = buildvfs_open_write(filename);
+    if (LoadSave::hSFile == buildvfs_fd_invalid) {
         bail2dos("Error creating save file");
     }
 
-    buildvfs_write(hSFile, kSaveSig, 4);
-    buildvfs_write(hSFile, &kSaveVersion, 2);
+    buildvfs_write(LoadSave::hSFile, signature, 4);
+    buildvfs_write(LoadSave::hSFile, &version, 2);
 
-    LoadSave* rover = head.next;
-    while (rover != &head)
+    LoadSave* rover = LoadSave::head.next;
+    while (rover != &LoadSave::head)
     {
         rover->Save();
         rover = rover->next;
     }
 
-    buildvfs_close(hSFile);
-    hSFile = buildvfs_fd_invalid;
+    buildvfs_close(LoadSave::hSFile);
+    LoadSave::hSFile = buildvfs_fd_invalid;
+    s_networkSnapshot = 0;
+}
+
+void LoadSave::SaveGame(const char* pzFile)
+{
+    Exhumed_SaveStateFile(pzFile, kSaveSig, kSaveVersion, 0);
+}
+
+void LoadSave::SaveNetworkSnapshot(const char* pzFile)
+{
+    Exhumed_SaveStateFile(pzFile, kNetworkSnapshotSig, kNetworkSnapshotVersion, 1);
 }
 
 void MyLoadSave::Load()
@@ -497,6 +539,8 @@ void LoadSaveSetup()
     void SnakeLoadSaveConstruct();
 
     void LightingLoadSaveConstruct();
+    void KexToggleLoadSaveConstruct();
+    void KexInventorySnapshotLoadSaveConstruct();
 
     myLoadSave = new MyLoadSave();
 
@@ -533,4 +577,6 @@ void LoadSaveSetup()
     RaLoadSaveConstruct();
     SnakeLoadSaveConstruct();
     BubbleLoadSaveConstruct();
+    KexToggleLoadSaveConstruct();
+    KexInventorySnapshotLoadSaveConstruct();
 }

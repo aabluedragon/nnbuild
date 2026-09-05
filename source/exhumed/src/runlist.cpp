@@ -72,6 +72,7 @@ short ChannelLast = -1;
 int nRadialOwner;
 int nDamageRadius;
 int nRadialDamage;
+int nKexDamageType = kKexDamageGeneric;
 short RunChain;
 short NewRun;
 
@@ -443,6 +444,8 @@ void runlist_ProcessChannels()
             {
                 sRunChannels[ChannelList].d ^= 2;
                 runlist_SignalRun(sRunChannels[ChannelList].a, ChannelList | k0x10000);
+                KexPlate_ChannelFired(ChannelList); // Kex floor plates listen on tag+1
+                KexPad_ChannelFired(ChannelList);   // Kex drop pads reset on their tag
             }
 
             if (d & 1)
@@ -510,6 +513,24 @@ void runlist_ExecObjects()
     runlist_SignalRun(RunChain, k0x20000);
 }
 
+// TEST_LIFTS has a lowering lift on tag 1 and a raising lift on tag 2. Build
+// uses that numeric value as its initial channel state, while Kex treats it
+// only as an event tag. Exercise the real step-switch callback at load under
+// an opt-in test flag, before the normal tick consumes the queued change.
+static int s_kexLiftTest = -1;
+static void KexLift_TestTaggedStep(int nChannel, int nSector)
+{
+    if (s_kexLiftTest < 0)
+        s_kexLiftTest = g_kexMode && Bgetenv("VB_KEXLIFT_TEST") ? 1 : 0;
+    if (!s_kexLiftTest || sRunChannels[nChannel].c == 0)
+        return;
+    int const before = sRunChannels[nChannel].c;
+    runlist_SignalRun(sRunChannels[nChannel].a, 0x50000);
+    bool const pass = sRunChannels[nChannel].c == 1 && (sRunChannels[nChannel].d & 2);
+    OSD_Printf("Kex lift test: %s (sector %d, tagged state %d -> %d)\n",
+               pass ? "PASS" : "FAIL", nSector, before, sRunChannels[nChannel].c);
+}
+
 void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 {
     int zListA[8];
@@ -519,6 +540,8 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
     assert(nChannel >= 0 && nChannel < kMaxChannels);
 
     int keyMask = (nHitag / 1000) << 12;
+    int const kexRate = nLotag / 1000;
+    bool const kexMover = g_kexMode && kexRate > 0;
     int nSpeed = nLotag / 1000;
 
     if (!nSpeed) {
@@ -526,6 +549,12 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
     }
 
     nSpeed <<= 2;
+
+    // Remaster movers advance 4 source units every 60 Hz tick (or 1 for the
+    // slow close door). At Build's 30 Hz update, those are exactly 768 and
+    // 192 z units. The old rate bands (800/200) were close but arrived early
+    // on every long Kex lift and door.
+    int const kexMoveSpeed = kexMover ? (kexRate == 1 ? 192 : 768) : nSpeed * 100;
 
     int nEffectTag = (nLotag % 1000);
 
@@ -540,7 +569,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
             assert(nextSector > -1);
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
+            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
@@ -548,7 +577,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwPress, kRunSwPressSector);
 
-            int nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            int nSwPause = BuildSwPause(nChannel, BuildLink(2, -1, 0), kexMover ? 90 : 60);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwPause, kRunSwPause);
             return;
@@ -599,6 +628,8 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
         case 83:
         case 84:
         case 85:
+        case 86:
+        case 87:
         {
             return;
         }
@@ -619,9 +650,10 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             int nTop;
             if (KexHold_PadTop(nSector, &nTop))
             {
-                // VibeBuild32: the remaster's drop pad, its raised height from
-                // the converter's marker rather than a higher neighbour.
-                int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), 400, 400, 2, nTop, sector[nSector].floorz);
+                // VibeBuild32: compatibility for pre-kexpad conversions. Fresh
+                // KEX output uses the paired-surface KexPad controller instead.
+                int const kexPadSpeed = kexMover ? kexMoveSpeed : 400;
+                int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexPadSpeed, kexPadSpeed, 2, nTop, sector[nSector].floorz);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
                 int nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwStepOn);
@@ -648,7 +680,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
             assert(nextSector > -1);
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
+            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
@@ -667,7 +699,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
             assert(nextSector > -1);
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
+            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
             return;
@@ -678,21 +710,23 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             short nextSector = nextsectorneighborz(nSector, sector[nSector].floorz, 1, 1);
             assert(nextSector > -1);
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].floorz);
+            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, sector[nextSector].floorz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
             if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's active lift stays down
                 return;
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
+            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), kexMover ? 90 : 150);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
-            if (g_kexMode && nHitag % 1000 == 0)
+            if (g_kexMode)
             {
-                // VibeBuild32: the remaster's untagged FLOOR_LOWER_WAIT_RAISE is
-                // ridden -- step on it and it sinks, waits, comes back up.
-                int nStep = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+                // kexWorld::EnterSectorSpecial starts this lift when it is
+                // entered on the floor, regardless of its remote-event tag.
+                // TEST_LIFTS uses tags 1 and 2 specifically to cover this.
+                int nStep = BuildKexSwStepOn(nChannel, nSector);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
+                KexLift_TestTaggedStep(nChannel, nSector);
             }
             return;
         }
@@ -732,7 +766,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 zVal = sector[nextSector].floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, zVal);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
             return;
@@ -752,19 +786,20 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 zVal = sector[nextSector].floorz;
             }
 
-            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, zVal);
+            int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, zVal);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 150);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
-            if (g_kexMode && nHitag % 1000 == 0)
+            if (g_kexMode)
             {
-                // VibeBuild32: the remaster's untagged FLOOR_RAISE_WAIT_LOWER is
-                // ridden -- step on it and it rises, waits, comes back down.
-                int nStep = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+                // As above, tagged FLOOR_RAISE_WAIT_LOWER sectors are also
+                // direct step-on specials in the remaster.
+                int nStep = BuildKexSwStepOn(nChannel, nSector);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
+                KexLift_TestTaggedStep(nChannel, nSector);
             }
             return;
         }
@@ -889,13 +924,13 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             short nextSector = nextsectorneighborz(nSector, sector[nSector].ceilingz, -1, -1);
             assert(nextSector > -1);
 
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
+            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), kexMoveSpeed, kexMoveSpeed, 2, sector[nSector].floorz, sector[nextSector].ceilingz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
             if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's open-only door stays open
                 return;
-            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), 60);
+            int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), kexMover ? 90 : 60);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nSwitch, kRunSwPause);
             return;
@@ -1379,7 +1414,10 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
         case 75:
         {
-            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), nSpeed * 100, nSpeed * 100, 2, (int)sector[nSector].ceilingz, (int)sector[nSector].floorz);
+            // Type 8 uses the regular Kex cadence; type 9 is its exact
+            // one-source-unit slow variant.
+            int const kexDoorSpeed = kexMover ? kexMoveSpeed : nSpeed * 100;
+            int nElev = BuildElevC(0, nChannel, nSector, FindWallSprites(nSector), kexDoorSpeed, kexDoorSpeed, 2, (int)sector[nSector].ceilingz, (int)sector[nSector].floorz);
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
             return;
@@ -1602,6 +1640,14 @@ int runlist_CheckRadialDamage(short nSprite)
         edi = 0x7FFF;
     }
 
+    // Radial damage is broadcast straight to actor run records and therefore
+    // bypasses runlist_DamageEnemy(), where direct bullet hits start the Kex
+    // white blink. Mark every creature that actually received blast damage so
+    // Amun bombs, fireballs and exploding props give the same hit feedback.
+    if (edi > 0 && g_kexMode && sprite[nSprite].statnum > 100
+        && sprite[nSprite].statnum < 200)
+        KexFlash_RadialHit(nSprite);
+
     return edi;
 }
 
@@ -1637,6 +1683,16 @@ void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
 
     short nPreCreaturesLeft = nCreaturesLeft;
 
+    // Several KEX deaths destroy their host during the damage callback. Keep
+    // A_RandomItem's authored origin + actor-height point before that happens;
+    // deleted sprites no longer have a usable sector for the delayed drop.
+    int const nKexDropSector = g_kexMode ? sprite[nSprite].sectnum : -1;
+    int const nKexDropStat = sprite[nSprite].statnum;
+    int const nKexDropX = sprite[nSprite].x;
+    int const nKexDropY = sprite[nSprite].y;
+    int const nKexDropZ = sprite[nSprite].z
+        - KexDrop_ActorHeight(nSprite) * 16 * 6;
+
     if (nDamage > 0 && sprite[nSprite].statnum > 100 && sprite[nSprite].statnum < 200)
         KexFlash_Hit(nSprite);      // the remaster's hit flash (no-op outside Kex mode)
     runlist_SendMessageToRunRec(nRun, (nSprite2 & 0xFFFF) | 0x80000, nDamage * 4);
@@ -1644,7 +1700,16 @@ void runlist_DamageEnemy(int nSprite, int nSprite2, short nDamage)
     // is there now one less creature? (has one died)
     if (nPreCreaturesLeft > nCreaturesLeft)
     {
-        KexDrop_RandomItem(nSprite, nSprite2);   // the remaster's drop roll
+        // Exact gib effects own A_RandomItem at their authored delayed callback
+        // tick instead of at the initial lethal hit.
+        if (!KexAnubisOwnsDeathDrop(nSprite)
+            && !KexMummyOwnsDeathDrop(nSprite)
+            && !KexBastetOwnsDeathDrop(nSprite)
+            && !KexFishOwnsDeathDrop(nSprite)
+            && !KexSpiderOwnsDeathDrop(nSprite)
+            && !KexGibDeath_OwnsDrop(nKexDropStat))
+            KexDrop_RandomItemAt(nKexDropSector, nKexDropX, nKexDropY,
+                                 nKexDropZ, nSprite2);
         KexTrigger_Died(nSprite);                // and its kill-count triggers
     }
 

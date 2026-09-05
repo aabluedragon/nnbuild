@@ -1063,7 +1063,7 @@ exhumed_game_objs := \
     queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
     runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
     sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
-    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp \
+    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp kextactile.cpp \
 
 components += exhumed
 dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))

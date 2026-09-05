@@ -42,6 +42,9 @@ int BuildSwNotOnPause(int nChannel, int nLink, int nSector, int ecx);
 int BuildLink(int nCount, ...);
 int BuildSwPressSector(int nChannel, int nLink, int nSector, int keyMask);
 int BuildSwStepOn(int nChannel, int nLink, int nSector);
+// Kex type-21/24 lifts are entered directly, independent of the source tag
+// that remote events use. This step switch always selects Build state 1.
+int BuildKexSwStepOn(int nChannel, int nSector);
 int BuildSwReady(int nChannel, short nLink);
 
 int BuildSwPressWall(short nChannel, short nLink, short nWall);

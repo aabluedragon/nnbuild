@@ -32,6 +32,8 @@ void InitGrenades();
 int BuildGrenade(int nPlayer);
 void DestroyGrenade(int nGrenade);
 int ThrowGrenade(int nPlayer, int edx, int ebx, int ecx, int push1);
+void KexGrenade_Charge(int nPlayer);
+void KexGrenade_TestTick(void);
 void FuncGrenade(int, int, int);
 
 #endif

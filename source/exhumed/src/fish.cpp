@@ -33,6 +33,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "sound.h"
 #include "save.h"
+#include "kexinv.h"
+#include "kexbreak.h" // VibeBuild32: KEX fish attack sound
 #include <assert.h>
 
 #define kMaxFishes  128
@@ -239,7 +241,9 @@ int BuildFish(int nSprite, int x, int y, int z, int nSector, int nAngle)
     sprite[nSprite].z = z;
     sprite[nSprite].cstat = 0x101;
     sprite[nSprite].shade = -12;
-    sprite[nSprite].clipdist = 80;
+    // AI_Fish radius 16 -> Build clipdist 16*WORLD(6)/4 = 24. The original
+    // game's much larger collision circle remains untouched outside KEX mode.
+    sprite[nSprite].clipdist = g_kexMode ? 24 : 80;
     sprite[nSprite].xrepeat = 40;
     sprite[nSprite].yrepeat = 40;
     sprite[nSprite].pal = sector[sprite[nSprite].sectnum].ceilingpal;
@@ -257,7 +261,8 @@ int BuildFish(int nSprite, int x, int y, int z, int nSector, int nAngle)
 //	GrabTimeSlot(3);
 
     FishList[nFish].nAction = 0;
-    FishList[nFish].nHealth = 200;
+    // AI_Fish has 40 health in KEX; the classic fish remains at 200.
+    FishList[nFish].nHealth = g_kexMode ? KexHealthUnits(40) : 200;
     FishList[nFish].nSprite = nSprite;
     FishList[nFish].nTarget = -1;
     FishList[nFish].field_C = 60;
@@ -308,6 +313,74 @@ void DestroyFish(short nFish)
     mydeletesprite(nSprite);
 }
 
+static bool KexFishExactSequence()
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqFish))
+        return false;
+
+    int const nBase = SeqOffsets[kSeqFish];
+    return SeqSize[nBase] == 8
+        && SeqSize[nBase + 8] == 1
+        && SeqSize[nBase + 24] == 14
+        && SeqSize[nBase + 48] == 1;
+}
+
+static void KexFishTossGibs(short nSprite)
+{
+    // fish_death.tsc tosses three gibs1, two gibs2 and two gibs3, then
+    // destroys the host actor.
+    static const int gibTiles[] = { 7820, 7820, 7820, 7821, 7821, 7822, 7822 };
+
+    for (size_t i = 0; i < ARRAY_SIZE(gibTiles); i++)
+        KexTossCreatureChunk(nSprite, gibTiles[i]);
+
+    int const sound = KexSound_Get("fishdies");
+    if (sound >= 0)
+        PlayLocalSound(sound, 0);
+}
+
+static void KexFishDestroy(short nFish, short nSprite)
+{
+    sprite[nSprite].cstat = 0x8000;
+    DestroyFish(nFish);
+    FishList[nFish].nSprite = -1;
+}
+
+static void KexFishImmediateDeath(short nFish, short nSprite, short nKiller)
+{
+    KexGibDeath_Spawn(sprite[nSprite].x, sprite[nSprite].y,
+        sprite[nSprite].z, sprite[nSprite].sectnum, 0,
+        sprite[nSprite].xrepeat, nKiller);
+    KexFishTossGibs(nSprite);
+    KexFishDestroy(nFish, nSprite);
+}
+
+static void KexFishBeginGibTimer(short nFish, short nSprite, short nKiller)
+{
+    KexGibDeath_Spawn(sprite[nSprite].x, sprite[nSprite].y,
+        sprite[nSprite].z, sprite[nSprite].sectnum, 0,
+        sprite[nSprite].xrepeat, nKiller);
+    KexFishTossGibs(nSprite);
+    FishList[nFish].nAction = 9;
+    FishList[nFish].nFrame = 0;
+    FishList[nFish].nTarget = nKiller;
+    sprite[nSprite].xvel = 0;
+    sprite[nSprite].yvel = 0;
+    sprite[nSprite].zvel = 0;
+    sprite[nSprite].cstat = 0x8000;
+}
+
+int KexFishOwnsDeathDrop(int nSprite)
+{
+    if (!g_kexMode || !KexFishExactSequence())
+        return 0;
+
+    for (int nFish = 0; nFish < FishCount; nFish++)
+        if (FishList[nFish].nSprite == nSprite && FishList[nFish].nAction == 9)
+            return 1;
+    return 0;
+}
+
 void FuncFish(int a, int nDamage, int nRun)
 {
     short nFish = RunData[nRun].nVal;
@@ -315,6 +388,11 @@ void FuncFish(int a, int nDamage, int nRun)
 
     short nSprite = FishList[nFish].nSprite;
     short nAction = FishList[nFish].nAction;
+    if ((unsigned)nAction >= ARRAY_SIZE(ActionSeq))
+    {
+        nAction = FishList[nFish].nAction = 0;
+        FishList[nFish].nFrame = 0;
+    }
 
     int nMessage = a & kMessageMask;
 
@@ -328,6 +406,12 @@ void FuncFish(int a, int nDamage, int nRun)
 
         case 0x90000:
         {
+            if (KexFishExactSequence() && nAction == 9)
+                return;
+            int const nSeq = SeqOffsets[kSeqFish] + ActionSeq[nAction].a;
+            if (FishList[nFish].nFrame < 0
+                || FishList[nFish].nFrame >= SeqSize[nSeq])
+                FishList[nFish].nFrame = 0;
             seq_PlotSequence(a & 0xFFFF, SeqOffsets[kSeqFish] + ActionSeq[nAction].a, FishList[nFish].nFrame, ActionSeq[nAction].b);
             tsprite[a & 0xFFFF].owner = -1;
             return;
@@ -345,7 +429,8 @@ void FuncFish(int a, int nDamage, int nRun)
                     return;
                 }
 
-                FishList[nFish].field_C = 10;
+                if (!g_kexMode)
+                    FishList[nFish].field_C = 10;
             }
             // fall through
             fallthrough__;
@@ -364,7 +449,27 @@ void FuncFish(int a, int nDamage, int nRun)
 
                 sprite[nSprite].cstat &= 0xFEFE;
 
-                if (nMessage == 0x80000)
+                if (g_kexMode)
+                {
+                    short const nKiller = nMessage == 0xA0000
+                        ? (short)nRadialOwner : (short)(a & 0xFFFF);
+                    if (KexFishExactSequence())
+                    {
+                        KexFishBeginGibTimer(nFish, nSprite, nKiller);
+                        if (nMessage == 0xA0000)
+                            KexTrigger_Died(nSprite);
+                    }
+                    else
+                    {
+                        if (nMessage == 0xA0000)
+                        {
+                            KexDrop_RandomItem(nSprite, nKiller);
+                            KexTrigger_Died(nSprite);
+                        }
+                        KexFishImmediateDeath(nFish, nSprite, nKiller);
+                    }
+                }
+                else if (nMessage == 0x80000)
                 {
                     for (int i = 0; i < 3; i++)
                     {
@@ -385,9 +490,21 @@ void FuncFish(int a, int nDamage, int nRun)
             else
             {
                 short nTarget = a & 0xFFFF;
-                if (nTarget >= 0 && sprite[nTarget].statnum < 199)
+                if ((unsigned)nTarget < (unsigned)kMaxSprites
+                    && ((!g_kexMode && sprite[nTarget].statnum < 199)
+                        || (g_kexMode && sprite[nTarget].statnum == 100)))
                 {
                     FishList[nFish].nTarget = nTarget;
+                }
+
+                if (g_kexMode)
+                {
+                    // AI_Fish has painChance 0 and no pain animation or
+                    // pain sound. KEX still consumes the random byte in
+                    // kexSlaveAI::InflictDamage, but damage never interrupts
+                    // its current movement or attack.
+                    KexDifficulty_PainRoll(0);
+                    return;
                 }
 
                 FishList[nFish].nAction = 4;
@@ -400,16 +517,40 @@ void FuncFish(int a, int nDamage, int nRun)
 
         case 0x20000:
         {
+            bool const bExactFish = KexFishExactSequence();
+            if (bExactFish && nAction == 9)
+            {
+                if (FishList[nFish].nFrame >= 18)
+                {
+                    if (!seq_IsLoaded(kSeqKexGibDeath))
+                        KexDrop_RandomItemAt(sprite[nSprite].sectnum,
+                            sprite[nSprite].x, sprite[nSprite].y,
+                            sprite[nSprite].z - 64 * 16 * 6,
+                            FishList[nFish].nTarget);
+                    KexFishDestroy(nFish, nSprite);
+                }
+                else
+                    FishList[nFish].nFrame++;
+                return;
+            }
+
             if (!(SectFlag[sprite[nSprite].sectnum] & kSectUnderwater))
             {
                 Gravity(nSprite);
             }
 
             short nSeq = SeqOffsets[kSeqFish] + ActionSeq[nAction].a;
+            if (FishList[nFish].nFrame < 0
+                || FishList[nFish].nFrame >= SeqSize[nSeq])
+                FishList[nFish].nFrame = 0;
+            short const nRenderedFrame = FishList[nFish].nFrame;
 
-            sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, FishList[nFish].nFrame);
+            sprite[nSprite].picnum = seq_GetSeqPicnum2(nSeq, nRenderedFrame);
 
-            seq_MoveSequence(nSprite, nSeq, FishList[nFish].nFrame);
+            // The KEX bite's sounds are on frames 2/8 and its sole hit is on
+            // frame 12. The DOS FISH.SEQ has a different two-hit sound recipe.
+            if (!(g_kexMode && nAction == 3))
+                seq_MoveSequence(nSprite, nSeq, nRenderedFrame);
 
             FishList[nFish].nFrame++;
             if (FishList[nFish].nFrame >= SeqSize[nSeq]) {
@@ -431,6 +572,12 @@ void FuncFish(int a, int nDamage, int nRun)
                         nTarget = FindPlayer(nSprite, 60);
                         if (nTarget >= 0)
                         {
+                            if (g_kexMode)
+                            {
+                                int const sound = KexSound_Get("fish_act");
+                                if (sound >= 0)
+                                    D3PlayFX(sound, nSprite);
+                            }
                             FishList[nFish].nTarget = nTarget;
                             FishList[nFish].nAction = 2;
                             FishList[nFish].nFrame = 0;
@@ -455,6 +602,37 @@ void FuncFish(int a, int nDamage, int nRun)
                 case 2:
                 case 3:
                 {
+                    if (g_kexMode && nAction == 3)
+                    {
+                        if (nRenderedFrame == 2 || nRenderedFrame == 8)
+                        {
+                            int const s = KexSound_Get("fishbit2");
+                            if (s >= 0) D3PlayFX(s, nSprite);
+                        }
+                        if (nRenderedFrame == 12
+                            && KexMeleeAttackRange(nSprite, nTarget, 48))
+                            runlist_DamageEnemy(nTarget, nSprite, 20);
+                        if (nRenderedFrame == 13)
+                        {
+                            // A_CheckMelee(..., 16) keeps biting while close.
+                            FishList[nFish].nAction = KexMeleeRange(nSprite, nTarget, 16)
+                                ? 3 : 2;
+                            FishList[nFish].nFrame = 0;
+                        }
+                    }
+
+                    if (g_kexMode && nAction == 2
+                        && KexAIEnterMeleeRange(nSprite, nTarget, 16))
+                    {
+                        PlotCourseToSprite(nSprite, nTarget);
+                        FishList[nFish].nAction = 3;
+                        FishList[nFish].nFrame = 0;
+                        sprite[nSprite].xvel = 0;
+                        sprite[nSprite].yvel = 0;
+                        sprite[nSprite].zvel = 0;
+                        return;
+                    }
+
                     FishList[nFish].field_C--;
                     if (FishList[nFish].field_C <= 0)
                     {
@@ -514,7 +692,11 @@ void FuncFish(int a, int nDamage, int nRun)
             short nSector = sprite[nSprite].sectnum;
 
             // loc_2EF54
-            int nMov = movesprite(nSprite, sprite[nSprite].xvel << 13, sprite[nSprite].yvel << 13, sprite[nSprite].zvel << 2, 0, 0, CLIPMASK0);
+            int nMov = movesprite(nSprite,
+                                  KexScaleCreatureMove(nSprite, sprite[nSprite].xvel << 13),
+                                  KexScaleCreatureMove(nSprite, sprite[nSprite].yvel << 13),
+                                  KexScaleCreatureMove(nSprite, sprite[nSprite].zvel << 2),
+                                  0, 0, CLIPMASK0);
 
             if (!(SectFlag[sprite[nSprite].sectnum] & kSectUnderwater))
             {
@@ -534,7 +716,7 @@ void FuncFish(int a, int nDamage, int nRun)
 
                 if (!nMov)
                 {
-                    if (nAction == 3)
+                    if (nAction == 3 && !g_kexMode)
                     {
                         FishList[nFish].nAction = 2;
                         FishList[nFish].nFrame = 0;
@@ -560,11 +742,8 @@ void FuncFish(int a, int nDamage, int nRun)
                                 FishList[nFish].nAction = 3;
                                 FishList[nFish].nFrame = 0;
                             }
-
-                            if (!FishList[nFish].nFrame)
-                            {
+                            else if (!g_kexMode && !FishList[nFish].nFrame)
                                 runlist_DamageEnemy(nTarget, nSprite, 2);
-                            }
                         }
                     }
                 }

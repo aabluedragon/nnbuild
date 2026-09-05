@@ -56,6 +56,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define kMaxSaveSlots		5
 #define kMaxSaveSlotChars	25
 
+static char const *menu_SaveFileName(void)
+{
+    char const *const overrideName = Bgetenv("VB_EXHUMED_SAVE_FILE");
+    return overrideName && overrideName[0] ? overrideName : kSaveFileName;
+}
+
 GameStat GameStats;
 
 short nCinemaSeen[30];
@@ -1050,13 +1056,13 @@ int menu_NewGameMenu()
 
     int arg_3E = tilesiz[kMenuBlankTitleTile].x - 10;
 
-    FILE *fp = fopen(kSaveFileName, "rb");
+    FILE *fp = fopen(menu_SaveFileName(), "rb");
     if (fp == NULL)
     {
         memset(nameList,   0, nameListSize);
         memset(&GameStats, 0, sizeof(GameStat));
 
-        fp = fopen(kSaveFileName, "wb+");
+        fp = fopen(menu_SaveFileName(), "wb+");
         if (fp != NULL)
         {
             // write new blank save file
@@ -1238,7 +1244,7 @@ check_keys:
                     }
                 }
 
-                FILE *fp = fopen(kSaveFileName, "rb+");
+                FILE *fp = fopen(menu_SaveFileName(), "rb+");
                 if (fp == NULL) {
                     return -1;
                 }
@@ -1335,7 +1341,7 @@ int menu_LoadGameMenu()
 
     int nSlot = 0;
 
-    FILE *fp = fopen(kSaveFileName, "rb");
+    FILE *fp = fopen(menu_SaveFileName(), "rb");
     if (fp == NULL)
     {
         memset(nameList, 0, sizeof(nameList));
@@ -1430,6 +1436,23 @@ void menu_ResetKeyTimer()
     keytimer = (int)totalclock + 2400;
 }
 
+static void menu_ApplyGameStats(void)
+{
+    nPlayerWeapons[nLocalPlayer] = GameStats.nWeapons;
+    nPlayerClip[nLocalPlayer] = GameStats.clip;
+    Bmemcpy(&PlayerList[nLocalPlayer], &GameStats.player, sizeof(Player));
+
+    int nPistolBullets = PlayerList[nLocalPlayer].nAmmo[kWeaponPistol];
+    if (nPistolBullets >= 6)
+        nPistolBullets = 6;
+    nPistolClip[nLocalPlayer] = nPistolBullets;
+
+    nPlayerItem[nLocalPlayer]  = GameStats.items;
+    nPlayerLives[nLocalPlayer] = GameStats.nLives;
+    SetPlayerItem(nLocalPlayer, nPlayerItem[nLocalPlayer]);
+    CheckClip(nLocalPlayer);
+}
+
 void menu_GameLoad2(buildvfs_kfd hFile, bool bIsDemo)
 {
     if (bIsDemo)
@@ -1475,44 +1498,50 @@ void menu_GameLoad2(buildvfs_kfd hFile, bool bIsDemo)
         kread(hFile, &GameStats, sizeof(GameStats));
     }
 
-    nPlayerWeapons[nLocalPlayer] = GameStats.nWeapons;
-
-    PlayerList[nLocalPlayer].nCurrentWeapon = GameStats.nCurrentWeapon;
-    nPlayerClip[nLocalPlayer] = GameStats.clip;
-
-    int nPistolBullets = PlayerList[nLocalPlayer].nAmmo[kWeaponPistol];
-    if (nPistolBullets >= 6) {
-        nPistolBullets = 6;
-    }
-
-    nPistolClip[nLocalPlayer] = nPistolBullets;
-
-    memcpy(&PlayerList[nLocalPlayer], &GameStats.player, sizeof(Player));
-
-    nPlayerItem[nLocalPlayer]  = GameStats.items;
-    nPlayerLives[nLocalPlayer] = GameStats.nLives;
-
-    SetPlayerItem(nLocalPlayer, nPlayerItem[nLocalPlayer]);
-    CheckClip(nLocalPlayer);
+    menu_ApplyGameStats();
 }
 
 short menu_GameLoad(int nSlot)
 {
-    memset(&GameStats, 0, sizeof(GameStats));
-
-    buildvfs_kfd hFile = kopen4loadfrommod(kSaveFileName, 0);
-    if (hFile < 0) {
+    if ((unsigned)nSlot >= kMaxSaveSlots)
         return 0;
-    }
 
-    klseek(hFile, 125, SEEK_SET);
-    klseek(hFile, nSlot * sizeof(GameStats), SEEK_CUR);
+    Bmemset(&GameStats, 0, sizeof(GameStats));
+    FILE *fp = fopen(menu_SaveFileName(), "rb");
+    if (!fp)
+        return 0;
+    int const offset = kMaxSaveSlots * kMaxSaveSlotChars
+        + nSlot * (int)sizeof(GameStats);
+    int const ok = fseek(fp, offset, SEEK_SET) == 0
+        && fread(&GameStats, sizeof(GameStats), 1, fp) == 1;
+    fclose(fp);
+    if (!ok)
+        return 0;
 
-    menu_GameLoad2(hFile);
-    kclose(hFile);
-    KexInv_Load(nSlot);
+    menu_ApplyGameStats();
+    short const nMap = (short)KexInv_Load(nSlot, GameStats.nMap);
+    if (g_kexMode && nMap > 0 && nMap <= 99)
+        KexCampaign_StagePlayer(nLocalPlayer);
+    return nMap;
+}
 
-    return GameStats.nMap;
+int menu_SaveSlotUsed(int nSlot)
+{
+    if ((unsigned)nSlot >= kMaxSaveSlots)
+        return 0;
+    int const validKexSidecar = KexInv_SaveSlotInfo(nSlot, NULL, 0, NULL);
+
+    FILE *fp = fopen(menu_SaveFileName(), "rb");
+    if (!fp)
+        return 0;
+    GameStat slot;
+    int const offset = kMaxSaveSlots * kMaxSaveSlotChars
+        + nSlot * (int)sizeof(GameStat);
+    int const used = fseek(fp, offset, SEEK_SET) == 0
+        && fread(&slot, sizeof(slot), 1, fp) == 1
+        && (slot.nMap != 0 || validKexSidecar);
+    fclose(fp);
+    return used;
 }
 
 void menu_DemoGameSave(FILE* fp)
@@ -1576,13 +1605,50 @@ void menu_GameSave2(FILE *fp)
     fwrite(&GameStats, sizeof(GameStats), 1, fp);
 }
 
+static FILE *menu_OpenOrCreateSaveFile(void)
+{
+    FILE *fp = fopen(menu_SaveFileName(), "rb+");
+    if (fp)
+        return fp;
+
+    fp = fopen(menu_SaveFileName(), "wb+");
+    if (!fp)
+        return NULL;
+
+    char names[kMaxSaveSlots][kMaxSaveSlotChars];
+    GameStat blank;
+    char const endMark = 0x0f;
+    Bmemset(names, 0, sizeof(names));
+    Bmemset(&blank, 0, sizeof(blank));
+    if (fwrite(names, sizeof(names), 1, fp) != 1)
+    {
+        fclose(fp);
+        return NULL;
+    }
+    for (int i = 0; i < kMaxSaveSlots; i++)
+        if (fwrite(&blank, sizeof(blank), 1, fp) != 1)
+        {
+            fclose(fp);
+            return NULL;
+        }
+    if (fwrite(&endMark, sizeof(endMark), 1, fp) != 1)
+    {
+        fclose(fp);
+        return NULL;
+    }
+    return fp;
+}
+
 void menu_GameSave(int nSaveSlot)
 {
     if (nSaveSlot < 0) {
         return;
     }
 
-    FILE *fp = fopen(kSaveFileName, "rb+");
+    // KEX's slot picker does not pass through the classic name-entry screen,
+    // which used to be the only place this fixed-layout backing file was
+    // created. Ensure a clean remaster install can save and subsequently load.
+    FILE *fp = menu_OpenOrCreateSaveFile();
     if (fp != NULL)
     {
         fseek(fp, 125, SEEK_SET); // skip save slot names

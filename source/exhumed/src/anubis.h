@@ -30,5 +30,7 @@ void InitAnubis();
 int BuildAnubis(int nSprite, int x, int y, int z, int nSector, int nAngle, uint8_t bIsDrummer);
 
 void FuncAnubis(int a, int b, int c);
+int KexAnubisOwnsDeathDrop(int nSprite);
+int KexAnubisGibSelectorTest();
 
 #endif

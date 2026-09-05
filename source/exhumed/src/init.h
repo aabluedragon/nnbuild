@@ -33,6 +33,20 @@ enum {
     kSectLava = 0x4000,
 };
 
+// The KEX floor-face flags distinguish lava from slime.  Classic Exhumed has
+// only a generic damaging sector, so keep the source hazard kind alongside it
+// for the remaster-only player damage rules.
+enum KexSectorHazard {
+    kKexHazardNone,
+    kKexHazardLava,
+    kKexHazardSlime,
+};
+
+enum {
+    kKexHazardWallLava = -32004,
+    kKexHazardWallSlime = -32005,
+};
+
 extern ClockTicks ototalclock;
 
 extern int initx;
@@ -51,6 +65,7 @@ void SnapSectors(short nSectorA, short nSectorB, short b);
 
 extern short SectSound[];
 extern short SectDamage[];
+extern uint8_t KexHazard[];
 extern short SectSpeed[];
 extern int SectBelow[];
 extern short SectFlag[];

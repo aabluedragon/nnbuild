@@ -29,5 +29,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 void InitRoachs();
 int BuildRoach(int nType, int nSprite, int x, int y, int z, short nSector, int angle);
 void FuncRoach(int a, int nDamage, int nRun);
+void KexSentry_TestTick();
 
 #endif

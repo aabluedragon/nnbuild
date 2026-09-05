@@ -345,6 +345,63 @@ void Kex_SpriteGlow(short nSector, int x, int y, int peak, int shift, int nDepth
                     &sector[nSector].ceilingpal, best);
 }
 
+// One tick of a remaster dynamic light. Unlike Kex_SpriteGlow's persistent
+// scenery approximation, this record restores completely at the start of the
+// next game tick; the owning animation casts it again with a smaller `peak`.
+// Keeping radius separate from peak mirrors KEX's fixed-radius, color-fading
+// dlight instead of shrinking the falloff by accident. KEX renders radius*4,
+// and converted XY is six times retail units, so callers pass that final Build
+// radius directly.
+static void Kex_TransientGlowRec(short nSector, int x, int y, int peak,
+                                 int radius, int nDepth)
+{
+    if (nSector < 0 || nSector >= numsectors || nDepth > 1
+            || peak <= 0 || radius <= 0)
+        return;
+
+    int const startwall = sector[nSector].wallptr;
+    int const endwall = startwall + sector[nSector].wallnum;
+    int lit = 0, best = 0;
+
+    for (int i = startwall; i < endwall; i++)
+    {
+        int const w2 = wall[i].point2;
+        int const mx = (wall[i].x + wall[w2].x) / 2;
+        int const my = (wall[i].y + wall[w2].y) / 2;
+        int const distance = klabs(x - mx) + klabs(y - my);
+        int const add = (int)(((int64_t)distance * 127) / radius) - peak;
+        if (add >= 0)
+            continue;
+
+        lit++;
+        if (add < best)
+            best = add;
+
+        if (wall[i].pal >= 5)
+            continue;
+        if (!AddFlashRec(2, i, &wall[i].shade, &wall[i].pal, add))
+            return;
+
+        if (wall[i].nextsector > -1 && !wall[i].overpicnum)
+            Kex_TransientGlowRec(wall[i].nextsector, x, y, peak, radius,
+                                 nDepth + 1);
+    }
+
+    if (!lit)
+        return;
+    if (sector[nSector].floorpal < 4)
+        AddFlashRec(1, nSector, &sector[nSector].floorshade,
+                    &sector[nSector].floorpal, best);
+    if (!(sector[nSector].ceilingstat & 1) && sector[nSector].ceilingpal < 4)
+        AddFlashRec(3, nSector, &sector[nSector].ceilingshade,
+                    &sector[nSector].ceilingpal, best);
+}
+
+void Kex_TransientGlow(short nSector, int x, int y, int peak, int radius)
+{
+    Kex_TransientGlowRec(nSector, x, y, peak, radius, 0);
+}
+
 void UndoFlashes()
 {
     if (!nFlashes) {

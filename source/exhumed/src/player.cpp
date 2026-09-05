@@ -60,6 +60,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdio.h>
 #include <string.h>
 #include "kexinv.h"
+#include "kexbreak.h"
+#include "kexmenu.h"
 
 bool bDemoPlayerFinishedLevel = false;
 
@@ -141,6 +143,145 @@ PlayerSave sPlayerSave[kMaxPlayers];
 int totalvel[kMaxPlayers] = { 0 };
 int16_t eyelevel[kMaxPlayers], oeyelevel[kMaxPlayers];
 short nNetStartSprite[kMaxPlayers] = { 0 };
+// PF_NEEDTOGASP is KEX actor state. It affects the Dolphin's surface breach,
+// so retain it separately from the DOS breath counter and serialize it.
+static uint8_t s_kexNeedGasp[kMaxPlayers];
+
+// kexPlayer::UpdateAirSupply runs at 60 Hz.  The native player loop is 30
+// Hz, so advance its air state twice per update instead of reusing the DOS
+// ninety-tick breath cadence.  nAir and nBreathTimer are both already saved
+// with PlayerLoadSave; in KEX mode they are the remaster's 0..64 supply and
+// airSupplyTime respectively.
+static void KexAirSupply_Update(int nPlayer, short nSprite, int bUnderwater)
+{
+    Player &p = PlayerList[nPlayer];
+    int const dolphin = KexInv_DollCount(nPlayer) >= KEX_DOLLS_DOLPHIN;
+    if (!bUnderwater)
+    {
+        if (s_kexNeedGasp[nPlayer])
+        {
+            if (dolphin)
+            {
+                // PMOVE_SPEED_JUMP is 10.25 source units, the same upward
+                // magnitude as the port's ordinary -3584 jump impulse.
+                int const sound = KexSound_Get(((int32_t)totalclock & 1) ? "k_dolph1" : "k_dolph2");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+                sprite[nSprite].zvel -= 3584;
+            }
+            else
+            {
+                int const sound = KexSound_Get("jon_gasp");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+            }
+            s_kexNeedGasp[nPlayer] = 0;
+        }
+        nBreathTimer[nPlayer] = 0;
+        p.nAir = min(64, p.nAir + 16); // two source ticks, +8 each
+        airpages = 0;
+        if (nPlayer == nLocalPlayer)
+            SetAirFrame();
+        return;
+    }
+
+    airpages = 1;
+    int const masked = KexInv_HasArtifact(nPlayer, kKexArtiMask);
+    int const period = masked ? 100 : 5;
+    for (int tick = 0; tick < 2; tick++)
+    {
+        nBreathTimer[nPlayer]++;
+        if (dolphin)
+            s_kexNeedGasp[nPlayer] = 1;
+        if (nBreathTimer[nPlayer] < period)
+            continue;
+
+        if (p.nAir > 0)
+        {
+            nBreathTimer[nPlayer] = 0;
+            p.nAir = max(0, p.nAir - 2);
+            if (!s_kexNeedGasp[nPlayer] && p.nAir <= 48)
+                s_kexNeedGasp[nPlayer] = 1;
+            if (masked && !dolphin && (p.nAir & 3) == 2)
+            {
+                int const sound = KexSound_Get("jon_scub");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+            }
+        }
+        else if ((nBreathTimer[nPlayer] & 0x7f) == 0)
+        {
+            // The source's damage is in visible KEX health points;
+            // runlist_DamageEnemy supplies the port's x4 health conversion.
+            runlist_DamageEnemy(nSprite, -1, nBreathTimer[nPlayer] >> 2);
+        }
+    }
+    if (nPlayer == nLocalPlayer)
+        SetAirFrame();
+}
+
+// kexPuppet::OnDamage uses an independent presentation RNG for its pain
+// variants. Derive our choice from the current game tick instead of touching
+// PCExhumed's synchronized RandomBit stream, which would alter gameplay and
+// multiplayer state merely because a sound was played.
+static void KexPlayer_PlaySound(short nSprite, char const *name)
+{
+    int const sound = KexSound_Get(name);
+    if (sound >= 0)
+        D3PlayFX(sound, nSprite);
+}
+
+static void KexPlayer_DamageFeedback(int nPlayer, short nSprite, short nInstigator)
+{
+    static char const * const kUnderwaterPain[] =
+        { "k_whit1", "k_whit2", "k_whit3", "k_whit4", "k_whit5" };
+    static char const * const kLandPain[] = { "jon_hit1", "jon_hit2", "jon_hit3" };
+
+    if (!g_kexMode || nPlayer != nLocalPlayer)
+        return;
+
+    // The physical sprite remains in the submerged half while its head is at
+    // the surface. nPlayerViewSect is the port's PF_ABOVESURFACE equivalent,
+    // so it is the sector the remaster uses for water pain and drowning.
+    int const nViewSector = nPlayerViewSect[nPlayer];
+    bool const underwater = (unsigned)nViewSector < (unsigned)kMaxSectors
+        ? (SectFlag[nViewSector] & kSectUnderwater) != 0
+        : (SectFlag[sprite[nSprite].sectnum] & kSectUnderwater) != 0;
+    bool const electrocuted = KexForce_IsElectrocuted(nSprite);
+    if (PlayerList[nPlayer].nHealth <= 0)
+    {
+        // kexPuppet::OnDamage gives water and an actual instigator precedence
+        // over an electric death. Lava/slime emit their own death pair after
+        // this callback, and falling adds pxdeath in its caller.
+        if (underwater)
+            KexPlayer_PlaySound(nSprite, "jon_drwn");
+        else if (nInstigator >= 0)
+            KexPlayer_PlaySound(nSprite, "jon_die3");
+        else if (electrocuted)
+            KexPlayer_PlaySound(nSprite, "k_jdie1");
+        return;
+    }
+
+    // KexForce_OnWallHit has already set its lock and green flash. Its
+    // nonfatal shock is the only normal OnDamage case that has no red flash.
+    if (electrocuted)
+    {
+        KexPlayer_PlaySound(nSprite, "k_electrocute");
+        return;
+    }
+
+    if (KexHazard_IsActive(nPlayer))
+    {
+        KexPlayer_PlaySound(nSprite, "jon_pois");
+        return;
+    }
+
+    int const which = ((int)totalclock + nPlayer * 7) & 7;
+    if (underwater)
+        KexPlayer_PlaySound(nSprite, kUnderwaterPain[which % ARRAY_SIZE(kUnderwaterPain)]);
+    else
+        KexPlayer_PlaySound(nSprite, kLandPain[which % ARRAY_SIZE(kLandPain)]);
+}
 
 short nStandHeight;
 
@@ -671,11 +812,20 @@ void InitPlayerInventory(short nPlayer)
 {
     memset(&PlayerList[nPlayer], 0, sizeof(Player));
     KexInv_Reset(nPlayer);
+    if (nPlayer == nLocalPlayer)
+        KexCheckpoint_Reset();
 
     nPlayerItem[nPlayer] = -1;
     nPlayerSwear[nPlayer] = 4;
 
     ResetPlayerWeapons(nPlayer);
+    KexInv_InitAmmo(nPlayer);
+
+    // kexSlavePlayer::Reset has a live full-health player before NewGame
+    // writes its initial slot. The classic path historically waited until
+    // RestartPlayer(), which left a zero-health backing save in KEX mode.
+    if (g_kexMode)
+        PlayerList[nPlayer].nHealth = (short)KexInv_MaxHealth(nPlayer);
 
     nPlayerLives[nPlayer] = kDefaultLives;
 
@@ -777,7 +927,12 @@ void RestartPlayer(short nPlayer)
     {
         sprite[nSprite].x = sPlayerSave[nPlayer].x;
         sprite[nSprite].y = sPlayerSave[nPlayer].y;
-        sprite[nSprite].z = sector[sPlayerSave[nPlayer].nSector].floorz;
+        // KEX map actors spawn at their compiled Z. This is normally the
+        // floor, but a few retail starts and every restored checkpoint retain
+        // an authored vertical offset; gravity settles them naturally. Keep
+        // the classic floor spawn byte-for-byte outside the KEX bridge.
+        sprite[nSprite].z = g_kexMode ? sPlayerSave[nPlayer].z
+                                      : sector[sPlayerSave[nPlayer].nSector].floorz;
         PlayerList[nPlayer].q16angle = fix16_from_int(sPlayerSave[nPlayer].nAngle&kAngleMask);
         sprite[nSprite].ang = fix16_to_int(PlayerList[nPlayer].q16angle);
 
@@ -863,7 +1018,7 @@ void RestartPlayer(short nPlayer)
     }
 
     PlayerList[nPlayer].nLastWeapon = 0;
-    PlayerList[nPlayer].nAir = 100;
+    PlayerList[nPlayer].nAir = g_kexMode ? 64 : 100;
     airpages = 0;
 
     if (levelnum <= kMap20)
@@ -887,7 +1042,8 @@ void RestartPlayer(short nPlayer)
 
     PlayerList[nPlayer].q16ohoriz = PlayerList[nPlayer].q16horiz = nVertPan[nPlayer] = F16(92);
     nDestVertPan[nPlayer] = F16(92);
-    nBreathTimer[nPlayer] = 90;
+    nBreathTimer[nPlayer] = g_kexMode ? 0 : 90;
+    s_kexNeedGasp[nPlayer] = 0;
 
     nTauntTimer[nPlayer] = RandomSize(3) + 3;
 
@@ -1027,7 +1183,13 @@ void StartDeathSeq(int nPlayer, int nVal)
 
     sprite[nSprite].cstat &= 0xFEFE;
 
-    if (nTotalPlayers == 1)
+    if (g_kexMode && nTotalPlayers == 1)
+    {
+        // KEX has no finite-life respawn. Its death state automatically
+        // reloads the current map and restores the latest checkpoint.
+        KexCheckpoint_DeathStart(nPlayer);
+    }
+    else if (nTotalPlayers == 1)
     {
         short nLives = nPlayerLives[nPlayer];
 
@@ -1058,17 +1220,15 @@ int AddAmmo(int nPlayer, int nWeapon, int nAmmoAmount)
     }
 
     short nCurAmmo = PlayerList[nPlayer].nAmmo[nWeapon];
+    int const nMaxAmmo = g_kexMode ? KexInv_AmmoMax(nWeapon) : 300;
 
-    if (nCurAmmo >= 300 && nAmmoAmount > 0) {
+    if (nCurAmmo >= nMaxAmmo && nAmmoAmount > 0) {
         return 0;
     }
 
     nAmmoAmount = nCurAmmo + nAmmoAmount;
-    if (nAmmoAmount > 300) {
-        nAmmoAmount = 300;
-    }
-    if (nWeapon == kWeaponManacle && nAmmoAmount > 6) {
-        nAmmoAmount = 6;              // VibeBuild32: the Manacle carries six
+    if (nAmmoAmount > nMaxAmmo) {
+        nAmmoAmount = nMaxAmmo;
     }
 
     PlayerList[nPlayer].nAmmo[nWeapon] = nAmmoAmount;
@@ -1194,7 +1354,25 @@ static void WeaponPickup(int nPlayer, int nSprite, int nWeapon, int nAddAmmo, in
     int nPickupSound = -1;
     int weaponBit = 1 << nWeapon;
 
-    if (nPlayerWeapons[nPlayer] & weaponBit)
+    if (g_kexMode)
+    {
+        if (nPlayerWeapons[nPlayer] & weaponBit)
+        {
+            // Native KEX normally removes this actor at level initialization.
+            // Do the same if one is introduced later in the frame.
+            DestroyItemAnim(nSprite);
+            mydeletesprite(nSprite);
+            return;
+        }
+
+        // GiveWeapon(slot, true) only marks and selects the weapon. Its ammo
+        // pool was initialized to max when the player was reset.
+        nPlayerWeapons[nPlayer] |= weaponBit;
+        StopFiringWeapon(nPlayer);
+        SetNewWeapon(nPlayer, nWeapon);
+        nPickupSound = StaticSound[kSoundWeapon];
+    }
+    else if (nPlayerWeapons[nPlayer] & weaponBit)
     {
         if (levelnum > 20)
         {
@@ -1212,11 +1390,16 @@ static void WeaponPickup(int nPlayer, int nSprite, int nWeapon, int nAddAmmo, in
         nPickupSound = StaticSound[kSoundWeapon];
     }
 
-    if (nWeapon == 2) {
+    if (nWeapon == kWeaponM60) {
         CheckClip(nPlayer);
     }
 
-    if (nItem <= 50)
+    if (g_kexMode)
+    {
+        DestroyItemAnim(nSprite);
+        mydeletesprite(nSprite);
+    }
+    else if (nItem <= 50)
     {
         PlayerCheckItemRespawnOrDelete(nSprite, nItem);
     }
@@ -1227,7 +1410,10 @@ static void WeaponPickup(int nPlayer, int nSprite, int nWeapon, int nAddAmmo, in
     }
 
     SetItemPickupMessage(nPlayer, nItem);
-    TintPalette(rTint * 4, gTint * 4, 0);
+    if (g_kexMode)
+        ItemFlash();
+    else
+        TintPalette(rTint * 4, gTint * 4, 0);
 
     if (nPickupSound > -1) {
         PlayLocalSound(nPickupSound, 0);
@@ -1252,7 +1438,10 @@ static void PlayerPickupKey(int nPlayer, int nKey, int nSprite, int nItem)
         }
 
         SetItemPickupMessage(nPlayer, nItem);
-        TintPalette(0, 16 * 4, 0);
+        if (g_kexMode)
+            ItemFlash();
+        else
+            TintPalette(0, 16 * 4, 0);
     }
 }
 
@@ -1315,6 +1504,12 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
             case 27:
             case 55:
             {
+                if (g_kexMode && nItem == 9)
+                {
+                    WeaponPickup(nPlayer, nPickupSprite, kWeaponGrenade, 0, nItem, rTint, gTint);
+                    return;
+                }
+
                 if (AddAmmo(nPlayer, 4, 1))
                 {
                     nPickupSound = StaticSound[kSoundAmmoPickup];
@@ -1367,13 +1562,79 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                 break;
             }
 
-            case 10: // Pickable item
-            case 15: // Pickable item
+            case 10: // Pickable item (Kex: full weapon-power orb)
+            {
+                if (g_kexMode && sprite[nPickupSprite].hitag == KEX_POWER_DROP_HITAG)
+                {
+                    if (KexInv_PickupPower(nPlayer))
+                    {
+                        nPickupSound = StaticSound[kSoundWeapon];
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                    return;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagFullHealth:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupFullHealth(nPlayer))
+                        return;
+                    nPickupSound = StaticSound[kSoundMana2];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagFullAmmo:
+            {
+                if (g_kexMode)
+                {
+                    KexInv_PickupFullAmmo(nPlayer);
+                    nPickupSound = StaticSound[kSoundWeapon];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagAmmo:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupAmmo(nPlayer, sprite[nPickupSprite].hitag))
+                        return;
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagHealth:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupHealth(nPlayer, sprite[nPickupSprite].hitag))
+                        return;
+                    nPickupSound = StaticSound[kSound9];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
             case 16: // Reserved
-            case 24:
             case 35:
-            case 41:
-            case 42:
             case 43:
             case 44:
             case 51:
@@ -1646,7 +1907,11 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
             case 23: // Sobek Mask
             {
                 if (g_kexMode)
+                {
                     KexInv_GiveArtifact(nPlayer, kKexArtiMask);
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
                 if (GrabItem(nPlayer, kItemMask))
                 {
                     PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
@@ -1788,6 +2053,9 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
 
             case 59: // Scarab (Checkpoint)
             {
+                if (g_kexMode && !KexCheckpoint_Mark(nPlayer, nPickupSprite))
+                    return;
+
                 if (nLocalPlayer == nPlayer)
                 {
                     short nAnim = sprite[nPickupSprite].owner;
@@ -1798,12 +2066,76 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                     changespritestat(nPickupSprite, 899);
                 }
 
-                SetSavePoint(nPlayer, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum, sprite[nPlayerSprite].ang);
+                if (!g_kexMode)
+                    SetSavePoint(nPlayer, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y,
+                                 sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
+                                 sprite[nPlayerSprite].ang);
                 return;
             }
 
             case 60: // Golden Sarcophagus (End Level)
             {
+                // Map_Tomb2 is source map index 22.  Accept the original
+                // bridge's 24 tag too so already-converted data still enters
+                // Tomb End; fresh conversion writes 22.
+                if (g_kexMode && (sprite[nPickupSprite].hitag == 22
+                                  || sprite[nPickupSprite].hitag == 24))
+                {
+                    KexTravel_ChangeMap(22); // Obj_Ramses_Body -> Map_Tomb2
+                    // Native commits the newly selected destination and the
+                    // updated unlock vector to the active campaign slot.
+                    menu_GameSave(SavePosition);
+                    DestroyItemAnim(nPickupSprite);
+                    mydeletesprite(nPickupSprite);
+                    return;
+                }
+                if (g_kexMode && sprite[nPickupSprite].hitag == 1)
+                {
+                    // Obj_WarpPryamid requests a save before returning to
+                    // the campaign's Tomb hub (Map_Tomb1).
+                    SetSavePoint(nPlayer, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y,
+                                 sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
+                                 sprite[nPlayerSprite].ang);
+                    KexTravel_ChangeMap(0);
+                    // requestSave is evaluated after mapDestination, so the
+                    // slot records KEX_TOMB rather than the level being left.
+                    menu_GameSave(SavePosition);
+                    DestroyItemAnim(nPickupSprite);
+                    mydeletesprite(nPickupSprite);
+                    return;
+                }
+                if (g_kexMode && sprite[nPickupSprite].hitag == 0)
+                {
+                    // Obj_Camel is a Kex travel object: its destination is
+                    // the overworld, not the next numeric Build level.
+                    const char *next = KexMenu_ChooseNextMap(gUserMapFilename);
+                    if (next)
+                    {
+                        KexCampaign_StagePlayer(nPlayer);
+                        Bstrncpyz(gUserMapFilename, next, BMAX_PATH);
+                        bUserMap = true;
+                        levelnew = levelnum;
+                        menu_GameSave(SavePosition);
+                        DestroyItemAnim(nPickupSprite);
+                        mydeletesprite(nPickupSprite);
+                    }
+                    return;
+                }
+                // TOMBEND's Obj_Choppa is the remaster's travel object. Its
+                // giveArtifacts 63 flag completes the artifact set before
+                // FinishLevel selects the good or bad ending movie.
+                int const kexChoppa = g_kexMode && sprite[nPickupSprite].hitag == 63;
+                if (kexChoppa)
+                {
+                    for (int i = 0; i < kKexArtiCount; i++)
+                        KexInv_GiveArtifact(nPlayer, i);
+                    // Obj_Choppa's mapDestination -2 is terminal and its
+                    // requestSave runs after giveArtifacts. Mark the numeric
+                    // loop sentinel before saving so loading this slot cannot
+                    // replay TOMBEND or award the ending repeatedly.
+                    levelnew = 100;
+                    menu_GameSave(SavePosition);
+                }
                 if (!bInDemo) {
                     FinishLevel();
                 }
@@ -1819,7 +2151,10 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
         }
 
         SetItemPickupMessage(nPlayer, nItem);
-        TintPalette(rTint * 4, gTint * 4, 0);
+        if (g_kexMode)
+            ItemFlash();
+        else
+            TintPalette(rTint * 4, gTint * 4, 0);
 
         if (nPickupSound > -1) {
             PlayLocalSound(nPickupSound, 0);
@@ -1899,7 +2234,19 @@ void FuncPlayer(int a, int nDamage, int nRun)
                 PlayerList[nPlayer].nHealth -= nDamage;
                 if (nPlayer == nLocalPlayer)
                 {
-                    TintPalette(nDamage, 0, 0);
+                    // kexPuppet::OnDamage skips the ordinary red flash for
+                    // a surviving force-field electrocution, whose green
+                    // ElectrocuteFlash is started by KexForce_OnWallHit.
+                    if (!g_kexMode || !KexForce_IsElectrocuted(nPlayerSprite)
+                        || PlayerList[nPlayer].nHealth <= 0)
+                    {
+                        if (g_kexMode)
+                            KexHud_DamageFlash();
+                        else
+                            TintPalette(nDamage, 0, 0);
+                    }
+                    if (g_kexMode)
+                        KexPlayer_DamageFeedback(nPlayer, nPlayerSprite, nSprite2);
                     SetHealthFrame(-1);
                 }
             }
@@ -1928,7 +2275,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
                             PlayerList[nPlayer].nFrame = 0;
                             PlayerList[nPlayer].nAction = 4;
 
-                            if (nSprite2 > -1)
+                            if (!g_kexMode && nSprite2 > -1)
                             {
                                 nPlayerSwear[nPlayer]--;
                                 if (nPlayerSwear[nPlayer] <= 0)
@@ -2091,13 +2438,13 @@ void FuncPlayer(int a, int nDamage, int nRun)
             int x = (sPlayerInput[nPlayer].xVel * 4) >> 2;
             int y = (sPlayerInput[nPlayer].yVel * 4) >> 2;
 
-            // The dolphin: at sixteen team dolls the remaster swims three
-            // times as fast.
+            // The Dolphin ability begins at ten team dolls and doubles the
+            // remaster's swimming acceleration.
             if (g_kexMode && (SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater)
                 && KexInv_DollCount(nPlayer) >= KEX_DOLLS_DOLPHIN)
             {
-                x *= 3;
-                y *= 3;
+                x *= 2;
+                y *= 2;
             }
             int z = (sprite[nPlayerSprite].zvel * 4) >> 2;
 
@@ -2275,7 +2622,31 @@ void FuncPlayer(int a, int nDamage, int nRun)
                         }
                     }
 
-                    if (zVel >= 6500)
+                    if (g_kexMode)
+                    {
+                        // kexPuppet::CheckFallDamage(): its 60 Hz velocity
+                        // unit is 96 Build Z units, while this port updates
+                        // at 30 Hz. Thus 28.5 * 96 * 2 = 5472 here, and
+                        // (-amt * 16) becomes (zVel - 5472) / 12.
+                        int nDamage = (zVel - 5472) / 12;
+                        nDamage *= KexInv_AnkhCount(nPlayer) + 1;
+
+                        if (nDamage > 0)
+                        {
+                            sprite[nPlayerSprite].xvel >>= 2;
+                            sprite[nPlayerSprite].yvel >>= 2;
+
+                            runlist_DamageEnemy(nPlayerSprite, -1, (short)nDamage);
+
+                            if (PlayerList[nPlayer].nHealth <= 0)
+                            {
+                                int const sound = KexSound_Get("jon_fdie");
+                                if (sound >= 0)
+                                    D3PlayFX(sound, nPlayerSprite);
+                            }
+                        }
+                    }
+                    else if (zVel >= 6500)
                     {
                         sprite[nPlayerSprite].xvel >>= 2;
                         sprite[nPlayerSprite].yvel >>= 2;
@@ -2506,7 +2877,7 @@ loc_1AB8E:
             // loc_1AEF5:
             if (PlayerList[nPlayer].nHealth > 0)
             {
-                if (PlayerList[nPlayer].nMaskAmount > 0)
+                if (!g_kexMode && PlayerList[nPlayer].nMaskAmount > 0)
                 {
                     PlayerList[nPlayer].nMaskAmount--;
                     if (PlayerList[nPlayer].nMaskAmount == 150 && nPlayer == nLocalPlayer) {
@@ -2514,7 +2885,11 @@ loc_1AB8E:
                     }
                 }
 
-                if (!PlayerList[nPlayer].invincibility)
+                if (g_kexMode)
+                {
+                    KexAirSupply_Update(nPlayer, nPlayerSprite, var_5C);
+                }
+                else if (!PlayerList[nPlayer].invincibility)
                 {
                     // Handle air
                     nBreathTimer[nPlayer]--;
@@ -2608,34 +2983,37 @@ loc_1AB8E:
                         }
                     }
 
-                    // CHECKME - wrong place?
-                    if (nSectFlag & kSectUnderwater)
+                    if (!g_kexMode)
                     {
-                        if (PlayerList[nPlayer].nAir < 50)
+                        // CHECKME - wrong place?
+                        if (nSectFlag & kSectUnderwater)
                         {
-                            D3PlayFX(StaticSound[kSoundJonGasp], nPlayerSprite);
+                            if (PlayerList[nPlayer].nAir < 50)
+                            {
+                                D3PlayFX(StaticSound[kSoundJonGasp], nPlayerSprite);
+                            }
+
+                            nBreathTimer[nPlayer] = 1;
                         }
 
-                        nBreathTimer[nPlayer] = 1;
-                    }
+                        airpages = 0;
 
-                    airpages = 0;
-
-                    nBreathTimer[nPlayer]--;
-                    if (nBreathTimer[nPlayer] <= 0)
-                    {
-                        nBreathTimer[nPlayer] = 90;
-                        if (nPlayer == nLocalPlayer)
+                        nBreathTimer[nPlayer]--;
+                        if (nBreathTimer[nPlayer] <= 0)
                         {
-                            // animate lungs
-                            BuildStatusAnim(132, 0);
+                            nBreathTimer[nPlayer] = 90;
+                            if (nPlayer == nLocalPlayer)
+                            {
+                                // animate lungs
+                                BuildStatusAnim(132, 0);
+                            }
                         }
-                    }
 
-                    if (PlayerList[nPlayer].nAir < 100)
-                    {
-                        PlayerList[nPlayer].nAir = 100;
-                        SetAirFrame();
+                        if (PlayerList[nPlayer].nAir < 100)
+                        {
+                            PlayerList[nPlayer].nAir = 100;
+                            SetAirFrame();
+                        }
                     }
                 }
 
@@ -2673,9 +3051,13 @@ loc_1AB8E:
 
                 int nPickupSprite;
 
+                // kexPlayer::TryUse traces from the actor origin through its
+                // 95.25-unit radius plus 64 units: 159.25 * WORLD(6), rounded
+                // to 956 Build units. Keep DOS's native 1024-unit reach.
+                int const useRange = g_kexMode ? 956 : 1024;
                 // neartag finds the nearest sector, wall, and sprite which has its hitag and/or lotag set to a value.
                 neartag(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum, sprite[nPlayerSprite].ang,
-                    &nearTagSector, &nearTagWall, &nearTagSprite, (int32_t*)&nearHitDist, 1024, 2, NULL);
+                    &nearTagSector, &nearTagWall, &nearTagSprite, (int32_t*)&nearHitDist, useRange, 2, NULL);
 
                 feebtag(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
                     &nPickupSprite, var_30, 768);
@@ -2710,14 +3092,21 @@ loc_1AB8E:
                     {
                         ClearSpaceBar(nPlayer);
 
-                        if (nearTagWall >= 0 && wall[nearTagWall].lotag > 0)
+                        if (nearTagWall >= 0 && wall[nearTagWall].lotag > 0
+                            && (!g_kexMode || KexUse_WallAllowed(nearTagWall)))
                         {
                             runlist_SignalRun(wall[nearTagWall].lotag - 1, nPlayer | 0x40000);
                         }
 
-                        if (nearTagSector >= 0 && sector[nearTagSector].lotag > 0)
+                        if (nearTagSector >= 0 && sector[nearTagSector].lotag > 0
+                            && (!g_kexMode || KexUse_SectorAllowed(nearTagSector)))
                         {
-                            runlist_SignalRun(sector[nearTagSector].lotag - 1, nPlayer | 0x40000);
+                            // Kex event type 7 is a channel-driven door, but
+                            // UseWallSpecial() leaves it shut on direct use
+                            // and prints "$str_92".  Its construction marker
+                            // is Kex-only, so classic maps retain this path.
+                            if (!KexSealedDoor_Use(nearTagSector))
+                                runlist_SignalRun(sector[nearTagSector].lotag - 1, nPlayer | 0x40000);
                         }
                     }
 
@@ -2997,7 +3386,11 @@ loc_1BD2E:
             else // else, player's health is less than 0
             {
                 // loc_1C0E9
-                if (buttons & kButtonOpen)
+                if (g_kexMode && nTotalPlayers == 1)
+                {
+                    KexCheckpoint_DeathTick(nPlayer);
+                }
+                else if (buttons & kButtonOpen)
                 {
                     ClearSpaceBar(nPlayer);
 
@@ -3177,7 +3570,57 @@ public:
 
 void PlayerLoadSave::Load()
 {
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Read(nBreathTimer, sizeof(nBreathTimer));
+        Read(s_kexNeedGasp, sizeof(s_kexNeedGasp));
+        Read(nPlayerSwear, sizeof(nPlayerSwear));
+        Read(nPlayerPushSect, sizeof(nPlayerPushSect));
+        Read(nDeathType, sizeof(nDeathType));
+        Read(nPlayerScore, sizeof(nPlayerScore));
+        Read(nPlayerColor, sizeof(nPlayerColor));
+        Read(nPlayerDY, sizeof(nPlayerDY));
+        Read(nPlayerDX, sizeof(nPlayerDX));
+        Read(playerNames, sizeof(playerNames));
+        Read(nPistolClip, sizeof(nPistolClip));
+        Read(nXDamage, sizeof(nXDamage));
+        Read(nYDamage, sizeof(nYDamage));
+        Read(nDoppleSprite, sizeof(nDoppleSprite));
+        Read(namelen, sizeof(namelen));
+        Read(nPlayerOldWeapon, sizeof(nPlayerOldWeapon));
+        Read(nPlayerClip, sizeof(nPlayerClip));
+        Read(nPlayerPushSound, sizeof(nPlayerPushSound));
+        Read(nTauntTimer, sizeof(nTauntTimer));
+        Read(nPlayerTorch, sizeof(nPlayerTorch));
+        Read(nPlayerWeapons, sizeof(nPlayerWeapons));
+        Read(nPlayerLives, sizeof(nPlayerLives));
+        Read(nPlayerItem, sizeof(nPlayerItem));
+        Read(PlayerList, sizeof(PlayerList));
+        Read(nPlayerInvisible, sizeof(nPlayerInvisible));
+        Read(nPlayerDouble, sizeof(nPlayerDouble));
+        Read(nPlayerViewSect, sizeof(nPlayerViewSect));
+        Read(nPlayerFloorSprite, sizeof(nPlayerFloorSprite));
+        Read(sPlayerSave, sizeof(sPlayerSave));
+        Read(totalvel, sizeof(totalvel));
+        Read(eyelevel, sizeof(eyelevel));
+        Read(oeyelevel, sizeof(oeyelevel));
+        Read(nNetStartSprite, sizeof(nNetStartSprite));
+        Read(&nStandHeight, sizeof(nStandHeight));
+        Read(nPlayerGrenade, sizeof(nPlayerGrenade));
+        Read(nGrenadePlayer, sizeof(nGrenadePlayer));
+        Read(word_D282A, sizeof(word_D282A));
+        Read(&PlayerCount, sizeof(PlayerCount));
+        Read(&nNetStartSprites, sizeof(nNetStartSprites));
+        Read(&nCurStartSprite, sizeof(nCurStartSprite));
+        // This is a local presentation handle, not world state. The joiner
+        // keeps its assigned local player and derives the correct sprite from
+        // the restored all-player table instead of inheriting the host's.
+        nLocalSpr = PlayerList[nLocalPlayer].nSprite;
+        return;
+    }
+
     Read(&nBreathTimer[nLocalPlayer], sizeof(nBreathTimer[nLocalPlayer]));
+    Read(&s_kexNeedGasp[nLocalPlayer], sizeof(s_kexNeedGasp[nLocalPlayer]));
     Read(&nPlayerSwear[nLocalPlayer], sizeof(nPlayerSwear[nLocalPlayer]));
     Read(&nPlayerPushSect[nLocalPlayer], sizeof(nPlayerPushSect[nLocalPlayer]));
     Read(&nDeathType[nLocalPlayer], sizeof(nDeathType[nLocalPlayer]));
@@ -3227,7 +3670,53 @@ void PlayerLoadSave::Load()
 
 void PlayerLoadSave::Save()
 {
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Write(nBreathTimer, sizeof(nBreathTimer));
+        Write(s_kexNeedGasp, sizeof(s_kexNeedGasp));
+        Write(nPlayerSwear, sizeof(nPlayerSwear));
+        Write(nPlayerPushSect, sizeof(nPlayerPushSect));
+        Write(nDeathType, sizeof(nDeathType));
+        Write(nPlayerScore, sizeof(nPlayerScore));
+        Write(nPlayerColor, sizeof(nPlayerColor));
+        Write(nPlayerDY, sizeof(nPlayerDY));
+        Write(nPlayerDX, sizeof(nPlayerDX));
+        Write(playerNames, sizeof(playerNames));
+        Write(nPistolClip, sizeof(nPistolClip));
+        Write(nXDamage, sizeof(nXDamage));
+        Write(nYDamage, sizeof(nYDamage));
+        Write(nDoppleSprite, sizeof(nDoppleSprite));
+        Write(namelen, sizeof(namelen));
+        Write(nPlayerOldWeapon, sizeof(nPlayerOldWeapon));
+        Write(nPlayerClip, sizeof(nPlayerClip));
+        Write(nPlayerPushSound, sizeof(nPlayerPushSound));
+        Write(nTauntTimer, sizeof(nTauntTimer));
+        Write(nPlayerTorch, sizeof(nPlayerTorch));
+        Write(nPlayerWeapons, sizeof(nPlayerWeapons));
+        Write(nPlayerLives, sizeof(nPlayerLives));
+        Write(nPlayerItem, sizeof(nPlayerItem));
+        Write(PlayerList, sizeof(PlayerList));
+        Write(nPlayerInvisible, sizeof(nPlayerInvisible));
+        Write(nPlayerDouble, sizeof(nPlayerDouble));
+        Write(nPlayerViewSect, sizeof(nPlayerViewSect));
+        Write(nPlayerFloorSprite, sizeof(nPlayerFloorSprite));
+        Write(sPlayerSave, sizeof(sPlayerSave));
+        Write(totalvel, sizeof(totalvel));
+        Write(eyelevel, sizeof(eyelevel));
+        Write(oeyelevel, sizeof(oeyelevel));
+        Write(nNetStartSprite, sizeof(nNetStartSprite));
+        Write(&nStandHeight, sizeof(nStandHeight));
+        Write(nPlayerGrenade, sizeof(nPlayerGrenade));
+        Write(nGrenadePlayer, sizeof(nGrenadePlayer));
+        Write(word_D282A, sizeof(word_D282A));
+        Write(&PlayerCount, sizeof(PlayerCount));
+        Write(&nNetStartSprites, sizeof(nNetStartSprites));
+        Write(&nCurStartSprite, sizeof(nCurStartSprite));
+        return;
+    }
+
     Write(&nBreathTimer[nLocalPlayer], sizeof(nBreathTimer[nLocalPlayer]));
+    Write(&s_kexNeedGasp[nLocalPlayer], sizeof(s_kexNeedGasp[nLocalPlayer]));
     Write(&nPlayerSwear[nLocalPlayer], sizeof(nPlayerSwear[nLocalPlayer]));
     Write(&nPlayerPushSect[nLocalPlayer], sizeof(nPlayerPushSect[nLocalPlayer]));
     Write(&nDeathType[nLocalPlayer], sizeof(nDeathType[nLocalPlayer]));

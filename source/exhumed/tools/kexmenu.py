@@ -31,6 +31,7 @@ TILE_ARROW_LEFT = 7013
 TILE_KEYCAP     = 7014      # key-cap plate on the hint bar
 TILE_BLACK      = 7015      # flat black, for banners and panel borders
 TILE_TITLE      = 7016      # the console title card, behind PRESS START
+TILE_OVERWORLD_ORIGINAL = 7017  # alternate original-console overworld map
 TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame (31)
 TILE_HUD_HEAD_L = 7060      # the remaster's status bar
 TILE_HUD_HEAD_R = 7061
@@ -45,12 +46,26 @@ TILE_HUD_AIR_FRONT = 7069
 TILE_HUD_DOLPHIN = 7070     # the team-doll reward badges, top left
 TILE_HUD_VULTURE = 7071
 TILE_HUD_SPARK  = 7072      # the jewel's heading spark, cut from hud.png
+TILE_HUD_WINGS  = 7073      # widescreen replacement for the scarab ornaments
+TILE_HUD_WINGS_R= 7074
 TILE_ROW        = 7003      # menu row, unselected
 TILE_ROW_SEL    = 7004      # menu row, selected (red)
 TILE_BTN        = 7005      # dialog button, unselected
 TILE_BTN_SEL    = 7006      # dialog button, selected
 TILE_FONT_BASE  = 7100      # gold body / dark outline: menu entries
 TILE_FONT_ALT   = 7300      # the atlas as shipped: blue body / gold outline
+# ASCII occupies the historical contiguous ranges above.  The 26 accented and
+# punctuation glyphs used by the remaster's French/German/Spanish UI live in
+# the free tail before the creature art begins at 7600.
+TILE_FONT_ALT_EXTRA_BASE = 7450
+TILE_FONT_EXTRA_BASE     = 7480
+# The original-console map has its own 31-frame cursor and four arrows.  This
+# tail is free after the extended font but before the creature art at 7600.
+TILE_EYE_ORIGINAL_BASE = 7550
+TILE_ARROW_ORIGINAL_UP = 7581
+TILE_ARROW_ORIGINAL_RIGHT = 7582
+TILE_ARROW_ORIGINAL_DOWN = 7583
+TILE_ARROW_ORIGINAL_LEFT = 7584
 TILE_INV_WEAPON = 7400      # the status screen: eight weapon icons
 TILE_INV_KEY    = 7410      # four keys, dim then lit (7410+2*key+lit)
 TILE_INV_ARTIFACT = 7420    # six artifacts
@@ -96,6 +111,13 @@ ART = [
 OW_AX, OW_AW = 0.1800, 0.6450     # original u -> repaint u
 OW_AY, OW_AH = -0.0050, 1.0100    # original v -> repaint v
 OVERWORLD_W, OVERWORLD_H = 1200, 614
+OVERWORLD_ORIGINAL_W, OVERWORLD_ORIGINAL_H = 640, 512
+
+# Italian has a text table but no matching Ramses speech or cinematics.  The
+# runtime therefore displays this table and deliberately falls back to English
+# for its spoken/movie presentation.
+UI_LANGUAGES = (('en', 'english'), ('fr', 'french'),
+                ('de', 'german'), ('es', 'spanish'), ('it', 'italian'))
 
 KFONT_LINE = re.compile(r'^\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)')
 
@@ -135,6 +157,15 @@ def extract(kexdir, outdir, verbose=True):
             real = have.get(name.lower())
             return z.read(real) if real else None
 
+        localizations = {}
+        for code, language in UI_LANGUAGES:
+            blob = grab('localization/loc_%s.txt' % language)
+            if blob is None:
+                continue
+            localizations[code] = dict(re.findall(
+                r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]*)"',
+                blob.decode('utf-8').replace('\r', '')))
+
         dds = grab('gfx/overworld.dds')
         if dds is not None:
             ddspath = os.path.join(artdir, 'overworld.dds')
@@ -146,6 +177,23 @@ def extract(kexdir, outdir, verbose=True):
             owsize = (OVERWORLD_W, OVERWORLD_H)
             lines.append((TILE_OVERWORLD, 'kexart/overworld.png'))
             if verbose: print("  tile %d  %-30s %dx%d" % (TILE_OVERWORLD, 'overworld.dds', OVERWORLD_W, OVERWORLD_H))
+
+        # g_useOriginalOverworldScreen is a real remaster option, not a
+        # recolour of the HD painting. Preserve its original 640x512 image as
+        # a second tile so the native menu can swap the exact source art.
+        original = grab('gfx/overworld_orig.png')
+        if original is not None:
+            original_path = os.path.join(artdir, 'overworld_orig.png')
+            open(original_path, 'wb').write(original)
+            original_w, original_h, _ = png.read(original_path)
+            if (original_w, original_h) != (OVERWORLD_ORIGINAL_W, OVERWORLD_ORIGINAL_H):
+                raise ValueError('gfx/overworld_orig.png is %dx%d, expected %dx%d'
+                                 % (original_w, original_h, OVERWORLD_ORIGINAL_W,
+                                    OVERWORLD_ORIGINAL_H))
+            lines.append((TILE_OVERWORLD_ORIGINAL, 'kexart/overworld_orig.png'))
+            if verbose: print("  tile %d  %-30s %dx%d" %
+                              (TILE_OVERWORLD_ORIGINAL, 'overworld_orig.png',
+                               original_w, original_h))
 
         for name, tile, resize in ART:
             blob = grab(name)
@@ -211,21 +259,24 @@ def extract(kexdir, outdir, verbose=True):
             lines.append((TILE_CURSOR_R, 'kexart/cursor_r.png'))
             if verbose: print("  tile %d  %-30s %dx%d" % (TILE_CURSOR_R, 'cursor_r.png', cw, ch))
 
-        # The overworld marker is the Eye of Ra, spinning: the remaster ships it
-        # as a 31-frame sheet plus a sprite table (index -> rect) and an
-        # animation table naming the frame order. Both are parsed rather than
-        # eyeballed, so the spin plays in the order Kex plays it. The four
-        # direction arrows live on the same sheet.
-        eyecount = 0
-        spritetxt = grab('sprites/misc/overworld_hd_sprite.txt')
-        animtxt = grab('sprites/misc/overworld_hd_anim.txt')
-        sheet = grab('sprites/misc/overworld_hd.png')
-        if spritetxt is not None: spritetxt = spritetxt.decode('latin-1')
-        if animtxt is not None: animtxt = animtxt.decode('latin-1')
-        if spritetxt and animtxt and sheet:
-            sheetpath = os.path.join(artdir, 'overworld_hd.png')
+        # Both map paintings have their own source cursor sheet. Parse their
+        # sprite/animation tables instead of treating the original setting as
+        # an HD map behind an HD cursor.
+        def extract_overworld_cursor(label, sprite_name, anim_name, sheet_name,
+                                     cursor_name, eye_base, arrows):
+            spritetxt = grab(sprite_name)
+            animtxt = grab(anim_name)
+            sheet = grab(sheet_name)
+            if spritetxt is None or animtxt is None or sheet is None:
+                return 0
+            spritetxt = spritetxt.decode('latin-1')
+            animtxt = animtxt.decode('latin-1')
+            # The original cursor sheet is also named overworld.png. Keep this
+            # decoder scratch file distinct from the HD map tile written above.
+            sheetpath = os.path.join(artdir, 'cursor_sheet_%s.png' % label)
             open(sheetpath, 'wb').write(sheet)
             ow, oh, orgba = png.read(sheetpath)
+            os.remove(sheetpath)
             rects = {}
             for m in re.finditer(r'sprite\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', spritetxt):
                 i, x, y, w, h = (int(v) for v in m.groups())
@@ -236,31 +287,51 @@ def extract(kexdir, outdir, verbose=True):
                 if not m: return []
                 return [int(v) for v in re.findall(r'"[^"]*"\s*,\s*(\d+)', m.group(1))]
 
-            os.makedirs(os.path.join(artdir, 'eye'), exist_ok=True)
-            for n, idx in enumerate(anim_frames('mapcursor_hd')):
+            cursor_dir = os.path.join(artdir, label)
+            os.makedirs(cursor_dir, exist_ok=True)
+            count = 0
+            for n, idx in enumerate(anim_frames(cursor_name)):
                 r = rects.get(idx)
                 if r is None: continue
                 x, y, w, h = r
-                fn = 'kexart/eye/f%02d.png' % n
-                png.write(os.path.join(outdir, fn), w, h, png.crop(ow, oh, orgba, x, y, w, h))
-                lines.append((TILE_EYE_BASE + n, fn))
-                eyecount = n + 1
+                fn = 'kexart/%s/f%02d.png' % (label, n)
+                png.write(os.path.join(outdir, fn), w, h,
+                          png.crop(ow, oh, orgba, x, y, w, h))
+                lines.append((eye_base + n, fn))
+                count = n + 1
 
-            for name, tile in (('maparrow_up_hd', TILE_ARROW_UP),
-                               ('maparrow_right_hd', TILE_ARROW_RIGHT),
-                               ('maparrow_down_hd', TILE_ARROW_DOWN),
-                               ('maparrow_left_hd', TILE_ARROW_LEFT)):
+            for name, tile in arrows:
                 f = anim_frames(name)
-                if not f: continue
-                r = rects.get(f[0])
-                if r is None: continue
-                x, y, w, h = r
+                if not f or f[0] not in rects: continue
+                x, y, w, h = rects[f[0]]
                 fn = 'kexart/%s.png' % name
-                png.write(os.path.join(outdir, fn), w, h, png.crop(ow, oh, orgba, x, y, w, h))
+                png.write(os.path.join(outdir, fn), w, h,
+                          png.crop(ow, oh, orgba, x, y, w, h))
                 lines.append((tile, fn))
-            if verbose: print("  overworld cursor: %d spin frames + 4 arrows" % eyecount)
+            if verbose: print("  %s overworld cursor: %d spin frames + 4 arrows" %
+                              (label, count))
+            return count
+
+        eyecount = extract_overworld_cursor(
+            'eye', 'sprites/misc/overworld_hd_sprite.txt',
+            'sprites/misc/overworld_hd_anim.txt', 'sprites/misc/overworld_hd.png',
+            'mapcursor_hd', TILE_EYE_BASE,
+            (('maparrow_up_hd', TILE_ARROW_UP),
+             ('maparrow_right_hd', TILE_ARROW_RIGHT),
+             ('maparrow_down_hd', TILE_ARROW_DOWN),
+             ('maparrow_left_hd', TILE_ARROW_LEFT)))
+        original_eyecount = extract_overworld_cursor(
+            'eye_orig', 'sprites/misc/overworld_sprite.txt',
+            'sprites/misc/overworld_anim.txt', 'sprites/misc/overworld.png',
+            'mapcursor', TILE_EYE_ORIGINAL_BASE,
+            (('maparrow_up', TILE_ARROW_ORIGINAL_UP),
+             ('maparrow_right', TILE_ARROW_ORIGINAL_RIGHT),
+             ('maparrow_down', TILE_ARROW_ORIGINAL_DOWN),
+             ('maparrow_left', TILE_ARROW_ORIGINAL_LEFT)))
+        if eyecount or original_eyecount:
             with open(os.path.join(outdir, 'kexanim.txt'), 'w') as f:
                 f.write("eyeframes %d\n" % eyecount)
+                f.write("originaleyeframes %d\n" % original_eyecount)
 
         # Flat plates the layout needs and the remaster does not ship as art:
         # a black square (tiled for banners and the panels' black surround) and
@@ -326,7 +397,10 @@ def extract(kexdir, outdir, verbose=True):
                                  ('gfx/airsupply_back.png',  TILE_HUD_AIR_BACK,  (64, 53)),
                                  ('gfx/airsupply_front.png', TILE_HUD_AIR_FRONT, (64, 53)),
                                  ('gfx/dolphin.png',         TILE_HUD_DOLPHIN,   (16, 27)),
-                                 ('gfx/vulture.png',         TILE_HUD_VULTURE,   (28, 27))):
+                                 ('gfx/vulture.png',         TILE_HUD_VULTURE,   (28, 27)),
+                                 # The 96x24 wings are the remaster's wider
+                                 # replacement for each 32-unit scarab.
+                                 ('gfx/wings.png',            TILE_HUD_WINGS,    (74, 18))):
             blob = grab(name)
             if blob is None: continue
             fn = 'kexart/' + os.path.basename(name)
@@ -336,6 +410,19 @@ def extract(kexdir, outdir, verbose=True):
             if (w_, h_) != size:
                 png.write(tmp, size[0], size[1], png.resize(w_, h_, pix, *size))
             lines.append((tile, fn))
+            if name == 'gfx/wings.png':
+                # Build has no horizontal-flip bit for rotatesprite.  The
+                # right ornament is the mirrored copy used by Kex.
+                w_, h_, pix = png.read(tmp)
+                mirror = bytearray(w_ * h_ * 4)
+                for yy in range(h_):
+                    for xx in range(w_):
+                        a = (yy * w_ + xx) * 4
+                        b = (yy * w_ + (w_ - 1 - xx)) * 4
+                        mirror[b:b + 4] = pix[a:a + 4]
+                fnr = 'kexart/wings_r.png'
+                png.write(os.path.join(outdir, fnr), w_, h_, mirror)
+                lines.append((TILE_HUD_WINGS_R, fnr))
         # Flat fills, sampled from the same capture. These go down *under* the
         # frame: the slot is cut out of the frame art (alpha 0 at x 31..117,
         # rows 6..9), so the hole clips the fill to the slot's slanted end.
@@ -435,8 +522,21 @@ def extract(kexdir, outdir, verbose=True):
     upscale = max(1, int(round((smallscale or 1.0) / (scale or 1.0)))) if small else 1
     os.makedirs(os.path.join(artdir, 'font'), exist_ok=True)
     os.makedirs(os.path.join(artdir, 'fontalt'), exist_ok=True)
+    # Keep the established ASCII tile IDs intact, then add exactly the
+    # non-ASCII codepoints that the four supported UI tables require.
+    codepoints = set(range(32, 127))
+    for strings in localizations.values():
+        for text in strings.values():
+            # Some localization-table entries belong to Kex UI screens that
+            # Build does not implement (for example German m_loading uses an
+            # ellipsis the shipped font has no glyph for).  Only slice glyphs
+            # the remaster's font actually provides; the verifier separately
+            # requires every emitted Build UI string to be covered.
+            codepoints.update(ord(ch) for ch in text
+                              if ord(ch) >= 32 and (ord(ch) in glyphs or ord(ch) in small))
+    extra = {cp: i for i, cp in enumerate(sorted(codepoints - set(range(32, 127))))}
     metrics = []
-    for cp in range(32, 127):
+    for cp in sorted(codepoints):
         g = glyphs.get(cp)
         src = (aw, ah, gold, argba, 1)
         if g is None:
@@ -446,7 +546,7 @@ def extract(kexdir, outdir, verbose=True):
             src = (sw, sh, sgold, srgba, upscale)
         x, y, w, h, yo = g
         if w <= 0 or h <= 0:
-            metrics.append((cp, -1, 0, 0, yo)); continue
+            metrics.append((cp, -1, -1, 0, 0, yo)); continue
         atw, ath, agold, araw, mul = src
         gpix = png.crop(atw, ath, agold, x, y, w, h)
         apix = png.crop(atw, ath, araw,  x, y, w, h)
@@ -458,10 +558,15 @@ def extract(kexdir, outdir, verbose=True):
         fna = 'kexart/fontalt/g%03d.png' % cp
         png.write(os.path.join(outdir, fn),  w, h, gpix)
         png.write(os.path.join(outdir, fna), w, h, apix)
-        tile = TILE_FONT_BASE + (cp - 32)
+        if cp < 127:
+            tile = TILE_FONT_BASE + (cp - 32)
+            alt_tile = TILE_FONT_ALT + (cp - 32)
+        else:
+            tile = TILE_FONT_EXTRA_BASE + extra[cp]
+            alt_tile = TILE_FONT_ALT_EXTRA_BASE + extra[cp]
         lines.append((tile, fn))
-        lines.append((TILE_FONT_ALT + (cp - 32), fna))
-        metrics.append((cp, tile, w, h, yo))
+        lines.append((alt_tile, fna))
+        metrics.append((cp, tile, alt_tile, w, h, yo))
 
     from kexmap import write_def
     write_def(os.path.join(outdir, 'kexmenu.def'), lines,
@@ -471,38 +576,25 @@ def extract(kexdir, outdir, verbose=True):
     # Pickup captions, in the remaster's own words. Build PowerSlave already has
     # a SetItemPickupMessage(); this just supplies the remaster's wording for the
     # items that exist in both, keyed by the Build lotag the converter assigns.
-    loc_txt = None
-    with zipfile.ZipFile(kpf) as z:
-        for n in z.namelist():
-            if n.lower().endswith('localization/loc_english.txt'):
-                loc_txt = z.read(n).decode('latin-1'); break
-    if loc_txt:
-        strs = dict(re.findall(r'(str_\d+)\s*=\s*"([^"]*)"', loc_txt.replace('\r', '')))
-        # Build lotag -> localization key. Only items that mean the same thing in
-        # both games; anything ambiguous is left to the original wording.
-        PICKUPS = {
-            9:  'str_095',   # grenade / Amun bomb
-            12: 'str_106',   # small health
-            14: 'str_107',   # full health
-            23: 'str_101',   # Sobek mask
-            28: 'str_093',   # pistol
-            29: 'str_094',   # M-60
-            30: 'str_096',   # flame thrower
-            32: 'str_097',   # cobra staff
-            33: 'str_098',   # ring of Ra
-            45: 'str_112',   # the four symbols
-            46: 'str_113',
-            47: 'str_114',
-            48: 'str_115',
-            11: 'str_111',   # map
-            31: 'str_099',   # the Manacle
-        }
+    # Build lotag -> localization key. Only items that mean the same thing in
+    # both games; anything ambiguous is left to the original wording.
+    PICKUPS = {
+        10: 'str_149', 15: 'str_107', 24: 'str_110', 9: 'str_095',
+        12: 'str_106', 41: 'str_109', 42: 'str_106', 23: 'str_101',
+        28: 'str_093', 29: 'str_094', 30: 'str_096', 32: 'str_097',
+        33: 'str_098', 45: 'str_112', 46: 'str_113', 47: 'str_114',
+        48: 'str_115', 11: 'str_111', 31: 'str_099',
+    }
+    for code, _language in UI_LANGUAGES:
+        strs = localizations.get(code, {})
         rows = [(lot, strs[k]) for lot, k in sorted(PICKUPS.items()) if k in strs]
-        if rows:
-            with open(os.path.join(outdir, 'kexpickup.txt'), 'w') as f:
-                for lot, txt in rows:
-                    f.write("%d %s\n" % (lot, txt))
-            if verbose: print("  pickup captions: %d" % len(rows))
+        if not rows:
+            continue
+        filename = 'kexpickup.txt' if code == 'en' else 'kexpickup_%s.txt' % code
+        with open(os.path.join(outdir, filename), 'w') as f:
+            for lot, text in rows:
+                f.write("%d %s\n" % (lot, text))
+        if verbose: print("  pickup captions (%s): %d" % (code, len(rows)))
 
     # The overworld: the remaster picks levels off a hand-painted map rather
     # than a list. mapInfo.txt has each level's position on it and how the
@@ -514,7 +606,6 @@ def extract(kexdir, outdir, verbose=True):
                     return z.read(n).decode('latin-1')
             return None
         mapinfo = read('defs/mapinfo.txt')
-        loc = read('localization/loc_english.txt')
         dolls = read('defs/actors/teamdolls.txt') or ''
 
     # kexinv.txt: every string the status screen and the collectible pickups
@@ -522,23 +613,62 @@ def extract(kexdir, outdir, verbose=True):
     # the weapon and artifact descriptions with their embedded "\n" left as the
     # two characters, and "${0}" where a count goes; the engine expands both.
     # The team dolls' names are the pickupMessage of each doll's actor def.
-    if loc:
-        strs = dict(re.findall(r'(str_\d+)\s*=\s*"([^"]*)"', loc.replace('\r', '')))
-        INV = [('status', 'str_088'), ('page0', 'str_044'), ('page1', 'str_045'),
-               ('page2', 'str_046'), ('page3', 'str_047'),
-               ('noarti', 'str_064'), ('doll', 'str_071'), ('trans', 'str_072'),
-               ('transfull', 'str_073'), ('transn', 'str_074'), ('trans0', 'str_075'),
-               ('maxhp', 'str_108'), ('mapname', 'str_111')]
-        INV += [('weap%d' % i, 'str_%03d' % (56 + i)) for i in range(8)]
-        INV += [('arti%d' % i, 'str_%03d' % (65 + i)) for i in range(6)]
-        INV += [('artiname%d' % i, 'str_%03d' % (100 + i)) for i in range(6)]
-        rows = [(k, strs[sk]) for k, sk in INV if sk in strs]
-        names = re.findall(r'Actor\s+TD_Doll(\d+).*?pickupMessage\s+"([^"]*)"', dolls, re.S)
-        rows += [('dollname%d' % (int(n) - 1), txt) for n, txt in names]
-        with open(os.path.join(outdir, 'kexinv.txt'), 'w') as f:
-            for k, txt in rows:
-                f.write("%s %s\n" % (k, txt))
-        if verbose: print("  inventory strings: %d (%d doll names)" % (len(rows), len(names)))
+    INV = [('status', 'str_088'), ('page0', 'str_044'), ('page1', 'str_045'),
+           ('page2', 'str_046'), ('page3', 'str_047'),
+           ('noarti', 'str_064'), ('doll', 'str_071'), ('trans', 'str_072'),
+           ('transfull', 'str_073'), ('transn', 'str_074'), ('trans0', 'str_075'),
+           ('maxhp', 'str_108'), ('mapname', 'str_111'),
+           ('difficultytitle', 'm_select_difficulty'),
+           ('difficulty0', 'm_difficulty_normal'),
+           ('difficulty1', 'm_difficulty_hard'),
+           ('difficulty2', 'm_difficulty_pharaoh')]
+    INV += [('weap%d' % i, 'str_%03d' % (56 + i)) for i in range(8)]
+    INV += [('arti%d' % i, 'str_%03d' % (65 + i)) for i in range(6)]
+    INV += [('artiname%d' % i, 'str_%03d' % (100 + i)) for i in range(6)]
+    INV += [(key, key) for key in ('m_new_game', 'm_load_game', 'm_options',
+            'm_about', 'm_quit', 'm_game_paused', 'm_resume',
+            'm_reload_last_checkpoint', 'm_restart_level',
+            'm_exit_title_screen', 'm_go_back', 'm_yes', 'm_no',
+            'm_press_start', 'm_prompt_select', 'm_prompt_back', 'm_prompt_menu',
+            'm_overwrite_game_confirm', 'm_quit_game_confirm',
+            'm_reload_checkpoint_confirm', 'm_reload_level_confirm',
+            'm_exit_game_confirm', 'm_empty_slot', 'm_audio_settings',
+            'm_display_settings', 'm_antialiasing', 'm_anisotrophy', 'm_fov',
+            'm_hudSettings', 'm_showPlayTime', 'm_hudtext', 'm_crosshairsize',
+            'm_game_settings', 'm_checkpoints', 'm_overworldScreen',
+            'm_new', 'm_original',
+            'm_viewBobSpeed', 'm_viewBobHeight', 'm_turnSway',
+            'm_weaponJumpBobbing',
+            'm_mouse_settings', 'm_msens_x', 'm_msens_y',
+            'm_gamepad_settings', 'm_vibration', 'm_vibration_volume',
+            'm_joylookspeed_x', 'm_joylookspeed_y', 'm_joymovesens',
+            'm_joyinvertlook', 'm_deadzone', 'm_lstick', 'm_rstick',
+            'm_bindings', 'm_bind_weaponwheel', 'm_bind_inventory',
+            'm_bind_automap', 'm_bind_mapzoomin', 'm_bind_mapzoomout',
+            'm_bind_screenshot',
+            'm_bind_forward', 'm_bind_backward', 'm_bind_use',
+            'm_bind_strafe_left', 'm_bind_strafe_right', 'm_bind_attack',
+            'm_bind_jump', 'm_bind_weap_0', 'm_bind_weap_1',
+            'm_bind_weap_2', 'm_bind_weap_3', 'm_bind_weap_4',
+            'm_bind_weap_5', 'm_bind_weap_6', 'm_bind_weap_7',
+            'm_bind_weap_next', 'm_bind_weap_prev', 'm_bind_turn_left',
+            'm_bind_turn_right', 'm_next_page', 'm_bind_prompt',
+            'm_prompt_cancel',
+            'm_on', 'm_off', 'm_language_settings', 'm_language')]
+    doll_names = re.findall(r'Actor\s+TD_Doll(\d+).*?pickupMessage\s+"([^"]*)"', dolls, re.S)
+    for code, _language in UI_LANGUAGES:
+        strs = localizations.get(code, {})
+        rows = [(key, strs[value]) for key, value in INV if value in strs]
+        rows += [('dollname%d' % (int(number) - 1), text)
+                 for number, text in doll_names]
+        if not rows:
+            continue
+        filename = 'kexinv.txt' if code == 'en' else 'kexinv_%s.txt' % code
+        with open(os.path.join(outdir, filename), 'w') as f:
+            for key, text in rows:
+                f.write("%s %s\n" % (key, text))
+        if verbose: print("  inventory strings (%s): %d (%d doll names)" %
+                          (code, len(rows), len(doll_names)))
 
     if mapinfo:
         # Every level names its own track; the OGGs sit beside the .kpf.
@@ -551,38 +681,43 @@ def extract(kexdir, outdir, verbose=True):
                     f.write("%s%s %s\n" % (KEX_MAP_PREFIX, mp, tr))
             if verbose: print("  music: %d levels" % len(pairs))
 
-        names = {}
-        if loc:
-            for m in re.finditer(r'(str_\d+)\s*=\s*"([^"]*)"', loc):
-                names[m.group(1)] = m.group(2)
         blocks = re.findall(r'Map\s+(\w+)\s*\{(.*?)\n\}', mapinfo, re.S)
         order = [b[0] for b in blocks]
-        rows = []
-        for ident, body in blocks:
-            def field(key, default=''):
-                m = re.search(key + r'\s+("?)([^"\n]*)\1', body)
-                return m.group(2).strip() if m else default
-            title = field('title')
-            title = names.get(title.lstrip('$'), title.lstrip('$'))
-            mapfile = KEX_MAP_PREFIX + os.path.basename(field('map')).upper()
-            links = []
-            for d in ('north', 'east', 'south', 'west'):
-                nxt = field('nextmap_' + d, '')
-                links.append(order.index(nxt) if nxt in order else -1)
-            # Carried into the repainted map's pixel space here, so the game
-            # never has to know the two maps differ.
-            ox = float(field('overworld_x', '0')) / 640.0
-            oy = float(field('overworld_y', '0')) / 512.0
-            w_, h_ = owsize if owsize else (640, 512)
-            px = int(round((OW_AX + ox * OW_AW) * w_)) if owsize else int(ox * 640)
-            py = int(round((OW_AY + oy * OW_AH) * h_)) if owsize else int(oy * 512)
-            rows.append((mapfile, str(px), str(py), title, links))
-        with open(os.path.join(outdir, 'kexworld.txt'), 'w') as f:
-            f.write("# map x y north east south west title\n")
-            for mapfile, x, y, title, links in rows:
-                f.write("%s %s %s %d %d %d %d %s\n"
-                        % (mapfile, x, y, links[0], links[1], links[2], links[3], title))
-        if verbose: print("  overworld: %d levels" % len(rows))
+        for code, _language in UI_LANGUAGES:
+            names = localizations.get(code, {})
+            rows = []
+            for ident, body in blocks:
+                def field(key, default=''):
+                    m = re.search(key + r'\s+("?)([^"\n]*)\1', body)
+                    return m.group(2).strip() if m else default
+                title = field('title')
+                title = names.get(title.lstrip('$'), title.lstrip('$'))
+                mapfile = KEX_MAP_PREFIX + os.path.basename(field('map')).upper()
+                links = []
+                for d in ('north', 'east', 'south', 'west'):
+                    nxt = field('nextmap_' + d, '')
+                    links.append(order.index(nxt) if nxt in order else -1)
+                # Store source-pixel coordinates alongside their transformed
+                # repaint position. The menu's original-overworld option must
+                # put each node at the exact mapInfo location, not an inverse
+                # approximation of a rounded HD coordinate.
+                original_x = int(float(field('overworld_x', '0')))
+                original_y = int(float(field('overworld_y', '0')))
+                ox = original_x / float(OVERWORLD_ORIGINAL_W)
+                oy = original_y / float(OVERWORLD_ORIGINAL_H)
+                w_, h_ = owsize if owsize else (640, 512)
+                px = int(round((OW_AX + ox * OW_AW) * w_)) if owsize else int(ox * 640)
+                py = int(round((OW_AY + oy * OW_AH) * h_)) if owsize else int(oy * 512)
+                rows.append((mapfile, str(px), str(py), str(original_x), str(original_y),
+                             title, links))
+            filename = 'kexworld.txt' if code == 'en' else 'kexworld_%s.txt' % code
+            with open(os.path.join(outdir, filename), 'w') as f:
+                f.write("# map repaint_x repaint_y original_x original_y north east south west title\n")
+                for mapfile, x, y, original_x, original_y, title, links in rows:
+                    f.write("%s %s %s %s %s %d %d %d %d %s\n"
+                            % (mapfile, x, y, original_x, original_y,
+                               links[0], links[1], links[2], links[3], title))
+            if verbose: print("  overworld (%s): %d levels" % (code, len(rows)))
 
     # The campaign's first level, so "NEW GAME" starts the remaster's campaign
     # rather than the original game's level 1. mapInfo.txt lists the maps in
@@ -600,10 +735,10 @@ def extract(kexdir, outdir, verbose=True):
             if verbose: print("  campaign starts at %s" % m.group(1).upper())
 
     with open(os.path.join(outdir, 'kexfont.txt'), 'w') as f:
-        f.write("# codepoint tile width height yoffset   (font scale %g)\n" % scale)
+        f.write("# codepoint tile alttile width height yoffset   (font scale %g)\n" % scale)
         f.write("scale %g\n" % scale)
-        for cp, tile, w, h, yo in metrics:
-            f.write("%d %d %d %d %d\n" % (cp, tile, w, h, yo))
+        for cp, tile, alt_tile, w, h, yo in metrics:
+            f.write("%d %d %d %d %d %d\n" % (cp, tile, alt_tile, w, h, yo))
 
     if verbose:
         print("  %d glyphs sliced from bigfont (atlas %dx%d, scale %g)"

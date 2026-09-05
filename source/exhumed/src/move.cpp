@@ -27,8 +27,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "init.h"
 #include "lighting.h"
 #include "kexbreak.h"
+#include "kextactile.h"
 #include "kexinv.h"
 #include "ramses.h"
+#include "wasp.h"
+#include "roach.h"
+#include "set.h"
+#include "lavadude.h"
+#include "scorp.h"
+#include "queen.h"
 #include "bubbles.h"
 #include "object.h"
 #include "player.h"
@@ -41,7 +48,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "anims.h"
 #include "random.h"
 #include "bullet.h"
+#include "grenade.h"
 #include "save.h"
+#include "timer.h"
 #include <string.h>
 #include <assert.h>
 #ifndef __WATCOMC__
@@ -66,6 +75,459 @@ short nBodySprite[50];
 int hihit, sprceiling, sprfloor, lohit;
 
 short nChunkSprite[kMaxChunks];
+
+// A_Quake writes the local KEX player's shake-time directly: it is neither
+// spatial nor cumulative. Keep its visual-only random stream private so an
+// authored camera shake can never perturb native gameplay RNG decisions.
+static int s_kexQuakeTicks;
+static int s_kexQuakeYaw;
+static uint32_t s_kexQuakeRandom = UINT32_C(0x4b455831);
+static int s_kexQuakeTest = -1;
+static int s_kexTossTest = -1;
+static uint32_t s_kexTossRandom;
+// kexPuppet tracks independent lavaTicks and slimeTicks at 60 Hz. The native
+// game loop is 30 Hz, so every entry here consumes two source updates.
+enum { kKexHazardLavaTick = 0, kKexHazardSlimeTick = 1 };
+static uint8_t s_kexHazardTicks[kMaxPlayers][2];
+
+int KexHazard_IsActive(int nPlayer)
+{
+    return g_kexMode && (unsigned)nPlayer < (unsigned)kMaxPlayers
+        && (s_kexHazardTicks[nPlayer][kKexHazardLavaTick]
+            || s_kexHazardTicks[nPlayer][kKexHazardSlimeTick]);
+}
+
+static void KexHazard_ResetPlayer(short nSprite, uint8_t nHazards)
+{
+    int const nPlayer = GetPlayerFromSprite(nSprite);
+    if ((unsigned)nPlayer >= (unsigned)kMaxPlayers)
+        return;
+    if (nHazards & kKexHazardLava)
+        s_kexHazardTicks[nPlayer][kKexHazardLavaTick] = 0;
+    if (nHazards & kKexHazardSlime)
+        s_kexHazardTicks[nPlayer][kKexHazardSlimeTick] = 0;
+}
+
+static void KexHazard_DamagePlayer(short nSprite, uint8_t nHazard, int reset)
+{
+    int const nPlayer = GetPlayerFromSprite(nSprite);
+    if ((unsigned)nPlayer >= (unsigned)kMaxPlayers)
+        return;
+
+    int const tick = nHazard == kKexHazardLava
+        ? kKexHazardLavaTick : kKexHazardSlimeTick;
+    // LavaDamage and SlimeDamage reset their own timer on a moving floor
+    // contact. The caller distinguishes a landing/ground face from a
+    // vertical lava wall, whose plane does not trigger LavaDamage's reset.
+    if (reset)
+    {
+        s_kexHazardTicks[nPlayer][tick] = 0;
+        return;
+    }
+
+    bool const anklets = KexInv_HasArtifact(nPlayer, kKexArtiAnklets);
+    int const period = nHazard == kKexHazardSlime && anklets ? 64 : 32;
+    int const previous = s_kexHazardTicks[nPlayer][tick];
+    s_kexHazardTicks[nPlayer][tick] = (uint8_t)(previous + 2);
+
+    // Source checks (++ticks & (period - 1)) == 1.  Advancing two source
+    // updates per native tick can cross that phase on either update.
+    if ((previous & (period - 1)) != 0 && (previous & (period - 1)) != period - 1)
+        return;
+
+    int nDamage;
+    if (nHazard == kKexHazardLava)
+    {
+        // Lava kills outright without the Anklets; with them it deals 50
+        // source health points each 32 source updates.
+        nDamage = anklets ? 50 : max(1, ((int)PlayerList[nPlayer].nHealth + 3) / 4);
+    }
+    else
+    {
+        // Slime is 375 source points/32 ticks normally, but five points/64
+        // ticks with the Anklets. runlist_DamageEnemy multiplies by four.
+        nDamage = anklets ? 5 : 375;
+    }
+    runlist_DamageEnemy(nSprite, -1, (short)nDamage);
+
+    // OnDamage handles a surviving lava/slime hit's sizzle. A fatal hit
+    // returns from OnDamage first, then the caller adds this exact pair.
+    if (PlayerList[nPlayer].nHealth <= 0)
+    {
+        int const sizzle = KexSound_Get("jon_pois");
+        if (sizzle >= 0)
+            D3PlayFX(sizzle, nSprite);
+        int const death = KexSound_Get("k_jdie2");
+        if (death >= 0)
+            D3PlayFX(death, nSprite);
+    }
+}
+
+static int KexQuakeRandomInt()
+{
+    s_kexQuakeRandom = s_kexQuakeRandom * UINT32_C(1664525)
+        + UINT32_C(221297);
+    int const r = (int)((s_kexQuakeRandom & 0x7fff)
+        + ((s_kexQuakeRandom >> 15) & 0x7fff)
+        + (s_kexQuakeRandom >> 31));
+    return ((r & 0x7fff) + (r >> 15)) & 0x7fff;
+}
+
+static int KexQuakeRandomCenti()
+{
+    // kexRand::CFloat(): Max(20000) - 10000, expressed without float state.
+    return KexQuakeRandomInt() % 20000 - 10000;
+}
+
+void KexQuake(int nTicks)
+{
+    if (!g_kexMode)
+        return;
+    // The KEX action is an assignment, so a short event can deliberately
+    // replace a longer current shake instead of extending it.
+    s_kexQuakeTicks = max(0, nTicks);
+    KexTactile_Quake();
+}
+
+int KexQuakeYaw()
+{
+    return g_kexMode ? s_kexQuakeYaw : 0;
+}
+
+static void KexQuake_Tick()
+{
+    if (!g_kexMode || s_kexQuakeTicks <= 0)
+    {
+        s_kexQuakeYaw = 0;
+        return;
+    }
+
+    // player.cpp writes shakeVector then decrements shakeTime; render uses it
+    // only while the remaining time is nonzero. Match that final blank tick.
+    if (--s_kexQuakeTicks <= 0)
+    {
+        s_kexQuakeYaw = 0;
+        if ((unsigned)nLocalPlayer < (unsigned)kMaxPlayers)
+            nQuake[nLocalPlayer] = 0;
+        return;
+    }
+
+    // KEX applies CFloat()*32*0.125 degrees of yaw and CFloat()*32*0.5
+    // vertical units. Build yaw is 2048 units/circle and a KEX Z unit is 96.
+    s_kexQuakeYaw = (KexQuakeRandomCenti() * 2048) / (10000 * 90);
+    int const vertical = (KexQuakeRandomCenti() * 1536) / 10000;
+    if ((unsigned)nLocalPlayer < (unsigned)kMaxPlayers)
+        nQuake[nLocalPlayer] = (short)vertical;
+}
+
+static void KexQuake_TestTick()
+{
+    if (s_kexQuakeTest == -1)
+        s_kexQuakeTest = g_kexMode && Bgetenv("VB_KEX_QUAKE_TEST") ? 0 : -2;
+    if (s_kexQuakeTest != 0 || (unsigned)nLocalPlayer >= (unsigned)kMaxPlayers)
+        return;
+
+    int const savedTicks = s_kexQuakeTicks;
+    int const savedYaw = s_kexQuakeYaw;
+    uint32_t const savedRandom = s_kexQuakeRandom;
+    short const savedQuake = nQuake[nLocalPlayer];
+
+    KexQuake(60);
+    KexQuake(8); // source assignment, not max/accumulate behavior
+    bool okay = s_kexQuakeTicks == 8;
+    for (int i = 0; i < 7; i++)
+    {
+        KexQuake_Tick();
+        okay &= s_kexQuakeTicks == 7 - i;
+    }
+    KexQuake_Tick();
+    okay &= s_kexQuakeTicks == 0 && s_kexQuakeYaw == 0
+        && nQuake[nLocalPlayer] == 0;
+
+    s_kexQuakeTicks = savedTicks;
+    s_kexQuakeYaw = savedYaw;
+    s_kexQuakeRandom = savedRandom;
+    nQuake[nLocalPlayer] = savedQuake;
+    OSD_Printf("Kex quake test: %s (local fixed-duration assignment and final blank tick)\n",
+               okay ? "PASS" : "FAIL");
+    s_kexQuakeTest = -2;
+}
+
+// Every shipped A_TossActor call has this exact recipe: origin + (0,0,32),
+// horizontal Range(-8,8), vertical Range(4,16).  KEX coordinates use WORLD
+// = 6 in X/Y and SCALE(16)*WORLD in Z; its actor clock is 60 Hz while
+// PCExhumed's is 30 Hz.  Sprite x/y velocity is kept in the same <<8 form as
+// MoveCreature(), so one source step moves xvel/64 Build units.
+static constexpr int kKexTossWorld = 6;
+static constexpr int kKexTossZUnit = 16 * kKexTossWorld;
+static constexpr int kKexTossXYVelocityUnit = kKexTossWorld * 64;
+static constexpr int kKexTossGravity = (3 * kKexTossZUnit) / 4;
+static constexpr int kKexTossMinXYVelocity = kKexTossXYVelocityUnit / 8;
+static constexpr int16_t kKexTossChunkMarker = -2;
+static constexpr int16_t kKexTossBouncyChunkMarker = -3;
+static constexpr int16_t kKexTossGibExpireBase = -1000;
+
+static bool KexTossIsBouncyMarker(int marker)
+{
+    return marker <= kKexTossBouncyChunkMarker
+        && marker >= kKexTossBouncyChunkMarker - kKexTossBounceSoundFlesh;
+}
+
+static KexTossBounceSound KexTossBouncySoundForMarker(int marker)
+{
+    return (KexTossBounceSound)(kKexTossBouncyChunkMarker - marker);
+}
+
+static int KexTossRandomInt()
+{
+    // math/random.cpp:kexRand::Int(), including its folded 15-bit output.
+    s_kexTossRandom = s_kexTossRandom * UINT32_C(1664525) + UINT32_C(221297);
+    uint32_t const r = (s_kexTossRandom & 0x7fff)
+        + ((s_kexTossRandom >> 15) & 0x7fff) + (s_kexTossRandom >> 31);
+    return ((r & 0x7fff) + (r >> 15)) & 0x7fff;
+}
+
+static int KexTossRangeForRoll(int roll, int minimum, int maximum)
+{
+    // kexRand::Range(min,max) orders its 0..9999 roll from max toward min.
+    int64_t const numerator = (int64_t)maximum * 10000
+        + (int64_t)(minimum - maximum) * roll;
+    return numerator >= 0 ? (int)((numerator + 5000) / 10000)
+        : -(int)((-numerator + 5000) / 10000);
+}
+
+static int KexTossRange(int minimum, int maximum)
+{
+    return KexTossRangeForRoll(KexTossRandomInt() % 10000, minimum, maximum);
+}
+
+static void KexTossPreserveClassicRandomCursor()
+{
+    // BuildCreatureChunk used these 18 DOS-RNG bits before this KEX bridge.
+    // Preserve that synced cursor while A_TossActor uses the independent
+    // remaster kexRand stream.
+    (void)RandomSize(5);
+    (void)RandomSize(5);
+    (void)RandomSize(8);
+}
+
+static int KexTossClipdist(int nPic, bool bouncy)
+{
+    // kexActor collision uses its authored radius, unscaled: every vase,
+    // barrel and boulder shard is radius 32; creature gibs are radius 28
+    // except the three fish-gib actors, which are radius 32. Build's signed
+    // clipdist is measured in quarters of a world unit.
+    int const radius = bouncy || (nPic >= 7820 && nPic <= 7822) ? 32 : 28;
+    return radius * kKexTossWorld / 4;
+}
+
+static int KexTossActorHeight(int nPic, bool bouncy)
+{
+    // These are the actual kexSlaveActor heights on the toss targets. The
+    // regular creature gibs share 56, fish gibs use 64, and every bouncy prop
+    // or boulder shard uses 32. Build sprite.z is the KEX actor origin, so a
+    // ceiling contact must include that authored height.
+    int const height = bouncy ? 32 : (nPic >= 7820 && nPic <= 7822 ? 64 : 56);
+    return height * kKexTossZUnit;
+}
+
+static int KexTossGroundFriction(int velocity)
+{
+    // kexActor::UpdateVelocity() removes components below AMOVE_MIN (.125).
+    // x/y are stored at six Build units times 64 fixed-point units per KEX
+    // world unit, so that source threshold is exactly 48 here.
+    velocity /= 2;
+    return klabs(velocity) < kKexTossMinXYVelocity ? 0 : velocity;
+}
+
+static bool KexTossAtRest(short nSprite)
+{
+    int const nSector = sprite[nSprite].sectnum;
+    if ((unsigned)nSector >= (unsigned)numsectors)
+        return false;
+
+    // A_DestroyAtRest(0.01) accepts a point on its KEX floor with a zero
+    // post-friction velocity. movesprite() keeps the Build proxy exactly on
+    // that floor after a downward contact.
+    return sprite[nSprite].z >= getflorzofslope(nSector, sprite[nSprite].x,
+                                                  sprite[nSprite].y)
+        && sprite[nSprite].xvel == 0 && sprite[nSprite].yvel == 0
+        && sprite[nSprite].zvel == 0;
+}
+
+static int KexTossBounceVelocity(int velocity)
+{
+    // CheckFloorAndCeilings snaps source origin to its floor, then stores
+    // -(old velocity) * (1.2 - defaultGravity). With .75 gravity that is a
+    // .45 reflection; Build Z has the opposite sign but the same equation.
+    return -velocity * 45 / 100;
+}
+
+static char const *KexTossBounceSoundName(KexTossBounceSound sound, int variant)
+{
+    // The values are the exact bounceSound_1..3 strings on the KEX shard
+    // actors. flesh01..03 already have the enemy blood aliases; glass and
+    // wood have no DOS counterpart and are emitted as KEX-only sound names.
+    static char const *const soundNames[][3] = {
+        { "k_gls1", "k_gls2", "k_gls3" },
+        { "k_wood1", "k_wood2", "k_wood3" },
+        { "blood_1", "blood_2", "blood_3" },
+    };
+    if ((unsigned)sound >= ARRAY_SSIZE(soundNames))
+        return NULL;
+    return soundNames[sound][variant % 3];
+}
+
+static void KexTossPlayBounceSound(short nSprite, KexTossBounceSound sound,
+                                   int sourceStep)
+{
+    // kexActor chooses bounceSounds[session.GetTime() % 3]. Session time is
+    // milliseconds and its fixed actor clock is 60 Hz, so derive the two
+    // source instants represented by this 30-Hz native update without using
+    // or perturbing the gameplay random stream.
+    int const milliseconds = (int)(((int64_t)(int32_t)totalclock * 1000) / TICRATE)
+        + sourceStep * (1000 / 60);
+    char const *const name = KexTossBounceSoundName(sound, milliseconds % 3);
+    int const nSound = name ? KexSound_Get(name) : -1;
+    if (nSound >= 0)
+        D3PlayFX(nSound, nSprite);
+}
+
+static bool KexTossGibExpireTick(short nSprite)
+{
+    int ticks = sprite[nSprite].extra <= kKexTossGibExpireBase
+        ? -sprite[nSprite].extra - (-kKexTossGibExpireBase) : 0;
+
+    // kexActor::UpdateMovement decrements expires once per source tick only
+    // when movement is zero. Health 100 reaches zero on tick 100, then the
+    // original scale loses 1/32 per tick and vanishes on tick 131.
+    ++ticks;
+    if (ticks >= 131)
+        return true;
+    if (ticks >= 100)
+    {
+        int const repeat = 64 * (131 - ticks) / 32;
+        sprite[nSprite].xrepeat = max(1, repeat);
+        sprite[nSprite].yrepeat = max(1, repeat);
+    }
+    sprite[nSprite].extra = kKexTossGibExpireBase - ticks;
+    return false;
+}
+
+static void KexTossSourcePhysicsStep(short nSprite, int bouncySound,
+                                     int sourceStep)
+{
+    int const nSector = sprite[nSprite].sectnum;
+    if ((unsigned)nSector >= (unsigned)numsectors)
+        return;
+    bool const bouncy = bouncySound >= 0;
+
+    int const floor = getflorzofslope(nSector, sprite[nSprite].x,
+                                      sprite[nSprite].y);
+    bool const airborne = sprite[nSprite].z < floor;
+    if (airborne)
+        sprite[nSprite].zvel += kKexTossGravity;
+    else
+    {
+        sprite[nSprite].xvel = KexTossGroundFriction(sprite[nSprite].xvel);
+        sprite[nSprite].yvel = KexTossGroundFriction(sprite[nSprite].yvel);
+    }
+
+    // kexActor::CheckFloorAndCeilings tests the ceiling before the floor,
+    // and its normal actor path reverses Z velocity without snapping to the
+    // plane. The old bridge omitted this entirely, letting an upward shard
+    // pass through a low ceiling until the next floor contact.
+    int const ceiling = getceilzofslope(nSector, sprite[nSprite].x,
+                                        sprite[nSprite].y);
+    if (sprite[nSprite].z - KexTossActorHeight(sprite[nSprite].picnum, bouncy)
+        + sprite[nSprite].zvel <= ceiling)
+        sprite[nSprite].zvel = -sprite[nSprite].zvel;
+
+    // The bouncy shard actors perform their floor reflection before moving,
+    // which makes the rebound leave from the floor in this same source tick.
+    if (bouncy && airborne && sprite[nSprite].zvel > 4 * kKexTossGravity
+        && sprite[nSprite].z + sprite[nSprite].zvel >= floor)
+    {
+        sprite[nSprite].z = floor;
+        sprite[nSprite].zvel = KexTossBounceVelocity(sprite[nSprite].zvel);
+        sprite[nSprite].xvel = KexTossGroundFriction(sprite[nSprite].xvel);
+        sprite[nSprite].yvel = KexTossGroundFriction(sprite[nSprite].yvel);
+        KexTossPlayBounceSound(nSprite, (KexTossBounceSound)bouncySound,
+                               sourceStep);
+    }
+
+    // kexActor::UpdateMovement takes this pre-move sector snapshot before
+    // CModel::MoveActor. It owns the air-to-water splash callback after a
+    // successful sector transition, not the old PCExhumed chunk loop.
+    short const oldSector = sprite[nSprite].sectnum;
+    int const oldX = sprite[nSprite].x;
+    int const oldY = sprite[nSprite].y;
+    int const oldZ = sprite[nSprite].z;
+    int const nMove = movesprite(nSprite, sprite[nSprite].xvel << 8,
+                                 sprite[nSprite].yvel << 8,
+                                 sprite[nSprite].zvel, 0, 0, CLIPMASK1);
+    short const newSector = sprite[nSprite].sectnum;
+    KexWaterSplash_OnTransition(oldSector, oldX, oldY, oldZ, newSector,
+                                sprite[nSprite].x, sprite[nSprite].y);
+    int const landedFloor = getflorzofslope(sprite[nSprite].sectnum,
+                                            sprite[nSprite].x, sprite[nSprite].y);
+    if (sprite[nSprite].z >= landedFloor)
+    {
+        sprite[nSprite].z = landedFloor;
+        if (bouncy && sprite[nSprite].zvel > 4 * kKexTossGravity)
+        {
+            sprite[nSprite].zvel = KexTossBounceVelocity(sprite[nSprite].zvel);
+            sprite[nSprite].xvel = KexTossGroundFriction(sprite[nSprite].xvel);
+            sprite[nSprite].yvel = KexTossGroundFriction(sprite[nSprite].yvel);
+            KexTossPlayBounceSound(nSprite, (KexTossBounceSound)bouncySound,
+                                   sourceStep);
+        }
+        else
+            sprite[nSprite].zvel = 0;
+    }
+
+    // kexCModel::MoveActor() reports a failed horizontal collision by clearing
+    // movement and velocity. A floor contact is handled above and preserves
+    // horizontal velocity so the next source tick applies its .5 friction.
+    if ((nMove & 0xC000) == 0x8000 || (nMove & 0xC000) == 0xC000)
+        sprite[nSprite].xvel = sprite[nSprite].yvel = sprite[nSprite].zvel = 0;
+}
+
+static void KexToss_TestTick()
+{
+    if (s_kexTossTest == -1)
+        s_kexTossTest = g_kexMode && Bgetenv("VB_KEX_TOSS_TEST") ? 0 : -2;
+    if (s_kexTossTest != 0)
+        return;
+
+    int airX = 3072, airY = -1536, airZ = -960;
+    airZ += kKexTossGravity;
+    int const groundX = KexTossGroundFriction(95);
+    int const groundY = KexTossGroundFriction(-95);
+    bool const okay = KexTossRangeForRoll(0, -8 * kKexTossXYVelocityUnit,
+                                           8 * kKexTossXYVelocityUnit) == 3072
+        && KexTossRangeForRoll(9999, -8 * kKexTossXYVelocityUnit,
+                                8 * kKexTossXYVelocityUnit) == -3071
+        && KexTossRangeForRoll(0, -16 * kKexTossZUnit,
+                                -4 * kKexTossZUnit) == -384
+        && KexTossRangeForRoll(9999, -16 * kKexTossZUnit,
+                                -4 * kKexTossZUnit) == -1536
+        && KexTossClipdist(7808, false) == 42
+        && KexTossClipdist(7820, false) == 48
+        && KexTossClipdist(7849, true) == 48
+        && KexTossActorHeight(7808, false) == 56 * kKexTossZUnit
+        && KexTossActorHeight(7820, false) == 64 * kKexTossZUnit
+        && KexTossActorHeight(7849, true) == 32 * kKexTossZUnit
+        && !Bstrcmp(KexTossBounceSoundName(kKexTossBounceSoundGlass, 0), "k_gls1")
+        && !Bstrcmp(KexTossBounceSoundName(kKexTossBounceSoundWood, 2), "k_wood3")
+        && !Bstrcmp(KexTossBounceSoundName(kKexTossBounceSoundFlesh, 1), "blood_2")
+        && airX == 3072 && airY == -1536 && airZ == -888
+        && groundX == 0 && groundY == 0
+        && KexTossBounceVelocity(960) == -432;
+    OSD_Printf("Kex toss test: %s (A_TossActor +32, +/-8, +4..16; gib expiry, bouncy 60 Hz .5/.75/sounds)\n",
+               okay ? "PASS" : "FAIL");
+    s_kexTossTest = -2;
+}
 
 
 signed int lsqrt(int a1)
@@ -160,22 +622,45 @@ signed int lsqrt(int a1)
     return result;
 }
 
+static void KexAcquire_TestTick();
+
 void MoveThings()
 {
     UndoFlashes();
     DoLights();
+    KexImpactLight_Tick(); // exact short Fx_FireballExplode dlight; no-op elsewhere
     KexLight_Tick();      // the remaster's fires and torches; no-op elsewhere
     KexFlash_Tick();      // and its hit flash
     KexInv_CaptionTick(); // and its pickup captions
     KexTele_Tick();       // its teleport pads; no-op elsewhere
+    KexForce_Tick();      // its force-field electrocution feedback
+    KexHudFlash_Tick();   // source red damage and blue pickup feedback
     KexInv_Tick();        // the collectibles self-test; no-op elsewhere
     KexScripted_Tick();   // the casket lids; no-op elsewhere
+    KexPlate_Tick();      // the remaster's floor-trigger plates; no-op elsewhere
+    KexRemote_Tick();     // its REMOTE_TRIGGER dispatcher; no-op elsewhere
     KexBeam_Tick();       // the laser beams; no-op elsewhere
     KexScript_Tick();     // the level scripts; no-op elsewhere
+    int const kexRamses = KexRamses_Tick(); // authored KEX spirit cinematic
+    KexFlyer_TestTick();  // deterministic crow/wasp/seedling probe; env-only
+    KexAcquire_TestTick(); // shared KEX sight/FOV acquisition probe; env-only
+    KexSpiderLeap_TestTick(); // remaster Spider/Scorpion leap/landing probe; env-only
+    KexSentry_TestTick(); // exact Sentry cadence/callback probe; env-only
+    KexSet_TestTick();     // exact Set cadence/callback/health probe; env-only
+    KexSelkis_TestTick();  // exact Selkis lifecycle/death probe; env-only
+    KexQueen_TestTick();   // exact Queen body/pod/snake/tail probe; env-only
+    KexBullet_TestTick();  // exact remaster enemy projectile recipes; env-only
+    KexGrenade_TestTick(); // exact Amun-bomb charge/throw/lifecycle probe; env-only
+    KexMantis_TestTick();  // exact Mantis attack variants/cadence probe; env-only
+    KexTrap_TestTick();    // exact shared spawner-factory cadence/stagger probe; env-only
+    KexGibDeath_TestTick();// exact shared Fx_Gibs01 visual/drop callback probe; env-only
+    KexBirdFeather_TestTick(); // exact Obj_Bird_Feathers loop/fall probe; env-only
+    KexQuake_TestTick();       // exact A_Quake assignment/lifetime probe; env-only
+    KexToss_TestTick();        // exact shared A_TossActor launch/physics probe; env-only
 
     if (nFreeze)
     {
-        if (nFreeze == 1 || nFreeze == 2) {
+        if ((nFreeze == 1 || nFreeze == 2) && !kexRamses) {
             DoSpiritHead();
         }
     }
@@ -185,11 +670,16 @@ void MoveThings()
         runlist_CleanRunRecs();
     }
 
+    KexQuake_Tick(); // local-only A_Quake shake after all current callbacks
+
     MoveStatus();
     DoBubbleMachines();
     DoDrips();
+    KexFloat_Tick();      // paired floating slabs from the remaster
+    KexPad_Tick();        // paired KEX drop pads
     DoMovingSects();
     DoRegenerates();
+    KexTactile_Tick(); // authored 200 Hz KEX controller curves, resampled at 30 Hz
 
     if (nCameraDist >= 0)
     {
@@ -213,6 +703,15 @@ void ResetMoveFifo()
     localclock = (int)totalclock;
     movefifoend = 0;
     movefifopos = 0;
+    s_kexQuakeTicks = 0;
+    s_kexQuakeYaw = 0;
+    s_kexQuakeRandom = UINT32_C(0x4b455831);
+    // game.cpp seeds kexRand from the timer when a game state begins.
+    s_kexTossRandom = ((uint32_t)(timerGetTicks() >> 4) * 2 + 1) * UINT32_C(69069);
+    s_kexQuakeTest = -1;
+    s_kexTossTest = -1;
+    KexTactile_Reset();
+    memset(s_kexHazardTicks, 0, sizeof(s_kexHazardTicks));
 }
 
 // not used
@@ -331,7 +830,130 @@ int BelowNear(short nSprite)
     }
 }
 
-int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clipdist)
+static int32_t KexNoStanding_Filter(int16_t nSector, void *userdata)
+{
+    vec3_t const *const pos = (vec3_t const *)userdata;
+    return !KexNoStanding_Sector(nSector) || inside(pos->x, pos->y, nSector) == 1;
+}
+
+static void KexGetZRange(vec3_t *pos, int16_t nSector,
+                         int32_t *ceilingz, int32_t *ceilinghit,
+                         int32_t *floorz, int32_t *floorhit,
+                         int32_t wallDist, uint32_t clipMask)
+{
+    if (KexNoStanding_Active())
+        getzrange_filtered(pos, nSector, ceilingz, ceilinghit, floorz, floorhit,
+                           wallDist, clipMask, KexNoStanding_Filter, pos);
+    else
+        getzrange(pos, nSector, ceilingz, ceilinghit, floorz, floorhit, wallDist, clipMask);
+}
+
+static int KexSectorHit(int hit)
+{
+    return (hit & 0xC000) == 0x4000 ? (hit & 0x3FFF) : -1;
+}
+
+// A read-only runtime probe for the retail sector-flag regression. For every
+// flagged sector it samples points just across a portal, where the actor's
+// origin is in the neighbour but its radius still overlaps the flagged
+// polygon. At least some authored ledges should differ between ordinary
+// Build edge support and the filtered Kex result.
+void KexNoStanding_Test(void)
+{
+    if (!g_kexMode || !Bgetenv("VB_KEX_NOEDGE_TEST"))
+        return;
+
+    int marked = 0, portals = 0, samples = 0, suppressed = 0, shown = 0;
+    for (int s = 0; s < numsectors; s++)
+    {
+        if (!KexNoStanding_Sector(s))
+            continue;
+        marked++;
+
+        int const first = sector[s].wallptr;
+        int const end = first + sector[s].wallnum;
+        for (int w = first; w < end; w++)
+        {
+            int const ns = wall[w].nextsector;
+            if ((unsigned)ns >= (unsigned)numsectors)
+                continue;
+            portals++;
+
+            int const w2 = wall[w].point2;
+            int64_t const dx = (int64_t)wall[w2].x - wall[w].x;
+            int64_t const dy = (int64_t)wall[w2].y - wall[w].y;
+            int64_t const adx = dx < 0 ? -dx : dx;
+            int64_t const ady = dy < 0 ? -dy : dy;
+            int64_t const den = adx > ady ? adx : ady;
+            if (!den)
+                continue;
+
+            bool foundPoint = false;
+            vec3_t pos = {};
+            static int const distance[] = { 4, 8, 16, 32, 64, 96, 127 };
+            for (int q = 1; q <= 3 && !foundPoint; q++)
+            {
+                int const mx = wall[w].x + (int)(dx * q / 4);
+                int const my = wall[w].y + (int)(dy * q / 4);
+                for (int d : distance)
+                {
+                    int const ox = (int)(-dy * d / den);
+                    int const oy = (int)( dx * d / den);
+                    for (int sign = -1; sign <= 1; sign += 2)
+                    {
+                        int const x = mx + sign * ox;
+                        int const y = my + sign * oy;
+                        if (inside(x, y, ns) == 1 && inside(x, y, s) != 1)
+                        {
+                            pos.x = x;
+                            pos.y = y;
+                            foundPoint = true;
+                            break;
+                        }
+                    }
+                    if (foundPoint)
+                        break;
+                }
+            }
+            if (!foundPoint)
+                continue;
+
+            int sc, sf, nc, nf;
+            getzsofslope((int16_t)s, pos.x, pos.y, &sc, &sf);
+            getzsofslope((int16_t)ns, pos.x, pos.y, &nc, &nf);
+            int const top = sc > nc ? sc : nc;
+            int const bottom = sf < nf ? sf : nf;
+            if (bottom - top <= 2048)
+                continue;
+            pos.z = top + (bottom - top) / 2;
+
+            int c1, ch1, f1, fh1, c2, ch2, f2, fh2;
+            getzrange(&pos, (int16_t)ns, &c1, &ch1, &f1, &fh1, 128, CLIPMASK0);
+            getzrange_filtered(&pos, (int16_t)ns, &c2, &ch2, &f2, &fh2, 128, CLIPMASK0,
+                               KexNoStanding_Filter, &pos);
+            samples++;
+
+            int const floorSector = KexSectorHit(fh1);
+            int const ceilingSector = KexSectorHit(ch1);
+            bool const removedFloor = floorSector >= 0 && KexNoStanding_Sector(floorSector)
+                && inside(pos.x, pos.y, (int16_t)floorSector) != 1 && (f1 != f2 || fh1 != fh2);
+            bool const removedCeiling = ceilingSector >= 0 && KexNoStanding_Sector(ceilingSector)
+                && inside(pos.x, pos.y, (int16_t)ceilingSector) != 1 && (c1 != c2 || ch1 != ch2);
+            if (!removedFloor && !removedCeiling)
+                continue;
+
+            suppressed += removedFloor + removedCeiling;
+            if (shown++ < 4)
+                OSD_Printf("Kex no-edge test: sector %d from %d at (%d,%d): floor %d/%d -> %d/%d, ceiling %d/%d -> %d/%d\n",
+                           s, ns, pos.x, pos.y, f1, fh1, f2, fh2, c1, ch1, c2, ch2);
+        }
+    }
+    OSD_Printf("Kex no-edge test: %d marked sectors, %d portals, %d samples, %d edge surfaces suppressed\n",
+               marked, portals, samples, suppressed);
+}
+
+int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clipdist,
+                int kexWasAirborne)
 {
     spritetype* pSprite = &sprite[nSprite];
     short nSector = pSprite->sectnum;
@@ -363,12 +985,36 @@ int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clip
         ebp = eax;
     }
 
-    // loc_151E7:
-    while (ebp > sector[pSprite->sectnum].floorz && SectBelow[pSprite->sectnum] >= 0)
+    // loc_151E7: converted KEX maps use YAX for authored vertical links,
+    // including floor/ceiling Toggle faces activated at runtime. Prefer the
+    // polygon-selected YAX neighbour at the sprite's XY, then retain the
+    // original game's SectBelow/SectAbove path as a fallback.
+    int lower = -1;
+#ifdef YAX_ENABLE
+    if (g_kexMode && numyaxbunches > 0)
+        lower = yax_getneighborsect(pSprite->x, pSprite->y, pSprite->sectnum, YAX_FLOOR);
+#endif
+    if (lower < 0)
+        lower = SectBelow[pSprite->sectnum];
+    int floorSurface = g_kexMode
+        ? getflorzofslope(pSprite->sectnum, pSprite->x, pSprite->y)
+        : sector[pSprite->sectnum].floorz;
+    while (ebp > floorSurface && lower >= 0)
     {
-        edi = SectBelow[pSprite->sectnum];
+        edi = lower;
 
         mychangespritesect(nSprite, edi);
+        floorSurface = g_kexMode
+            ? getflorzofslope(pSprite->sectnum, pSprite->x, pSprite->y)
+            : sector[pSprite->sectnum].floorz;
+#ifdef YAX_ENABLE
+        lower = g_kexMode && numyaxbunches > 0
+            ? yax_getneighborsect(pSprite->x, pSprite->y, pSprite->sectnum, YAX_FLOOR) : -1;
+#else
+        lower = -1;
+#endif
+        if (lower < 0)
+            lower = SectBelow[pSprite->sectnum];
     }
 
     if (edi != nSector)
@@ -388,18 +1034,40 @@ int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clip
     }
     else
     {
-        while ((ebp < sector[pSprite->sectnum].ceilingz) && (SectAbove[pSprite->sectnum] >= 0))
+        int upper = -1;
+#ifdef YAX_ENABLE
+        if (g_kexMode && numyaxbunches > 0)
+            upper = yax_getneighborsect(pSprite->x, pSprite->y, pSprite->sectnum, YAX_CEILING);
+#endif
+        if (upper < 0)
+            upper = SectAbove[pSprite->sectnum];
+        int ceilingSurface = g_kexMode
+            ? getceilzofslope(pSprite->sectnum, pSprite->x, pSprite->y)
+            : sector[pSprite->sectnum].ceilingz;
+        while (ebp < ceilingSurface && upper >= 0)
         {
-            edi = SectAbove[pSprite->sectnum];
+            edi = upper;
 
             mychangespritesect(nSprite, edi);
+            ceilingSurface = g_kexMode
+                ? getceilzofslope(pSprite->sectnum, pSprite->x, pSprite->y)
+                : sector[pSprite->sectnum].ceilingz;
+#ifdef YAX_ENABLE
+            upper = g_kexMode && numyaxbunches > 0
+                ? yax_getneighborsect(pSprite->x, pSprite->y, pSprite->sectnum, YAX_CEILING) : -1;
+#else
+            upper = -1;
+#endif
+            if (upper < 0)
+                upper = SectAbove[pSprite->sectnum];
         }
     }
 
     // This function will keep the player from falling off cliffs when you're too close to the edge.
     // This function finds the highest and lowest z coordinates that your clipping BOX can get to.
-    getzrange_old(pSprite->x, pSprite->y, pSprite->z - 256, pSprite->sectnum,
-        &sprceiling, &hihit, &sprfloor, &lohit, 128, CLIPMASK0);
+    vec3_t zrangePos = { pSprite->x, pSprite->y, pSprite->z - 256 };
+    KexGetZRange(&zrangePos, pSprite->sectnum,
+                 &sprceiling, &hihit, &sprfloor, &lohit, 128, CLIPMASK0);
 
     int mySprfloor = sprfloor;
 
@@ -449,8 +1117,27 @@ int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clip
                 {
                     nRet |= 0x20000;
 
+                    uint8_t const kexHazards = KexHazard[pSprite->sectnum];
                     short nSectDamage = SectDamage[pSprite->sectnum];
-
+                    if (g_kexMode && pSprite->statnum == 100)
+                    {
+                        // GroundMove resets each timer when its floor lacks
+                        // that flag. A first floor contact after falling
+                        // resets instead of dealing an immediate hazard tick.
+                        KexHazard_ResetPlayer(nSprite,
+                            (kKexHazardLava | kKexHazardSlime) & ~kexHazards);
+                        if (kexHazards & kKexHazardLava)
+                            KexHazard_DamagePlayer(nSprite, kKexHazardLava,
+                                                   kexWasAirborne);
+                        if (kexHazards & kKexHazardSlime)
+                            KexHazard_DamagePlayer(nSprite, kKexHazardSlime,
+                                                   kexWasAirborne);
+                        // The tag-96 marker may still be an ordinary native
+                        // damaging sector in a converted map. Only the two
+                        // reserved KEX face markers bypass its classic path.
+                        if (kexHazards != kKexHazardNone)
+                            nSectDamage = 0;
+                    }
                     if (nSectDamage != 0)
                     {
                         if (pSprite->hitag < 15)
@@ -460,10 +1147,6 @@ int movespritez(short nSprite, int z, int height, int UNUSED(flordist), int clip
                         }
                         nSectDamage >>= 2;
                         nSectDamage = nSectDamage - (nSectDamage>>2);
-                        // The Protective Anklets: half damage from lava and slime.
-                        if (g_kexMode && pSprite->statnum == 100
-                            && KexInv_HasArtifact(GetPlayerFromSprite(nSprite), kKexArtiAnklets))
-                            nSectDamage >>= 1;
                         if (nSectDamage) {
                             runlist_DamageEnemy(nSprite, -1, nSectDamage);
                         }
@@ -518,6 +1201,9 @@ int movesprite(short nSprite, int dx, int dy, int dz, int UNUSED(ceildist), int 
     spritetype *pSprite = &sprite[nSprite];
     bTouchFloor = kFalse;
 
+    if (g_kexMode && pSprite->statnum == 100 && KexForce_StunMove(nSprite))
+        return 0;
+
     int x = pSprite->x;
     int y = pSprite->y;
     int z = pSprite->z;
@@ -530,6 +1216,8 @@ int movesprite(short nSprite, int dx, int dy, int dz, int UNUSED(ceildist), int 
     assert(nSector >= 0 && nSector < kMaxSectors);
 
     int floorZ = sector[nSector].floorz;
+    int const kexWasAirborne = g_kexMode && pSprite->statnum == 100
+        && pSprite->z < getflorzofslope(nSector, pSprite->x, pSprite->y);
 
     int nRet = 0;
 
@@ -539,7 +1227,7 @@ int movesprite(short nSprite, int dx, int dy, int dz, int UNUSED(ceildist), int 
         dy >>= 1;
     }
 
-    nRet |= movespritez(nSprite, dz, nSpriteHeight, flordist, nClipDist);
+    nRet |= movespritez(nSprite, dz, nSpriteHeight, flordist, nClipDist, kexWasAirborne);
 
     nSector = pSprite->sectnum; // modified in movespritez so re-grab this variable
 
@@ -566,7 +1254,32 @@ int movesprite(short nSprite, int dx, int dy, int dz, int UNUSED(ceildist), int 
         CheckSectorFloor(overridesect, pSprite->z, &dx, &dy);
     }
 
+    KexWall_ClipBegin(nSprite, clipmask);
     nRet |= (uint16_t)clipmove_old(&pSprite->x, &pSprite->y, &pSprite->z, &nSector, dx, dy, nClipDist, nSpriteHeight, flordist, clipmask);
+    KexWall_ClipEnd();
+
+    // kexPuppet::OnCollide runs the same hazard callbacks for a solid wall
+    // face as for a floor face.  The converter writes its source face flag to
+    // the private wall.extra values below; ordinary Build wall collisions are
+    // intentionally unchanged.
+    if (g_kexMode && pSprite->statnum == 100 && (nRet & 0xC000) == 0x8000)
+    {
+        int const nWall = nRet & 0x3FFF;
+        if ((unsigned)nWall < (unsigned)numwalls)
+        {
+            // kexPuppet::OnCollide handles a force field before evaluating
+            // its lava/slime flags. A Scepter collision permanently removes
+            // only the linked field group; otherwise it electrocutes the
+            // player at the remaster's contact cadence.
+            KexForce_OnWallHit(nSprite, nWall);
+            uint8_t const hazard = wall[nWall].extra == kKexHazardWallLava
+                ? kKexHazardLava : wall[nWall].extra == kKexHazardWallSlime
+                ? kKexHazardSlime : kKexHazardNone;
+            if (hazard != kKexHazardNone)
+                KexHazard_DamagePlayer(nSprite, hazard,
+                    hazard == kKexHazardSlime && kexWasAirborne);
+        }
+    }
 
     if ((nSector != pSprite->sectnum) && nSector >= 0)
     {
@@ -639,9 +1352,28 @@ void Gravity(short nSprite)
     }
 }
 
+int KexScaleCreatureMove(short nSprite, int nMove)
+{
+    if (!g_kexMode || KexDifficulty_Get() != kKexDifficultyPharaoh
+        || (unsigned)nSprite >= (unsigned)kMaxSprites)
+        return nMove;
+
+    // Converted KEX AIs occupy the original creature statnums. Player 100 is
+    // deliberately excluded, as are bullets, chunks, props, and map movers.
+    int const stat = sprite[nSprite].statnum;
+    if (stat != 99 && (stat < 101 || stat > 122))
+        return nMove;
+
+    // kexSlaveAI's constructor multiplies moveSpeed by 1.1 on Pharaoh.
+    return (int)((int64_t)nMove * 11 / 10);
+}
+
 int MoveCreature(short nSprite)
 {
-    return movesprite(nSprite, sprite[nSprite].xvel << 8, sprite[nSprite].yvel << 8, sprite[nSprite].zvel, 15360, -5120, CLIPMASK0);
+    return movesprite(nSprite,
+                      KexScaleCreatureMove(nSprite, sprite[nSprite].xvel << 8),
+                      KexScaleCreatureMove(nSprite, sprite[nSprite].yvel << 8),
+                      sprite[nSprite].zvel, 15360, -5120, CLIPMASK0);
 }
 
 int MoveCreatureWithCaution(int nSprite)
@@ -712,6 +1444,217 @@ int PlotCourseToSprite(int nSprite1, int nSprite2)
     return ksqrt(diff);
 }
 
+int KexContactRadius2(short nSprite)
+{
+    // kexPlayerPuppet hardcodes radius 95.25 while the classic Build player
+    // needs clipdist 58 for its own movement. Do not use that smaller native
+    // collision proxy for remaster scripts such as A_CheckMelee and
+    // A_SpiderPushAway. In twice-Build units, 95.25 * WORLD(6) is 1143.
+    static constexpr int kKexPlayerContactRadius2 = 1143;
+    if ((unsigned)nSprite < (unsigned)MAXSPRITES && sprite[nSprite].statnum == 100)
+        return kKexPlayerContactRadius2;
+
+    // Every converted non-player creature is assigned its authored radius as
+    // Build clipdist * 4. Double it here to retain one half Build unit.
+    return (unsigned)nSprite < (unsigned)MAXSPRITES ? sprite[nSprite].clipdist * 8 : 0;
+}
+
+static bool KexMeleeRangeAtTargetZ(short nSprite, short nTarget,
+                                   int nReach, int64_t targetZ);
+
+int KexMeleeRange(short nSprite, short nTarget, int nReach)
+{
+    // A_CheckMelee compares the two raw origins, even for a flying actor.
+    int64_t const targetZ = (unsigned)nTarget < (unsigned)MAXSPRITES
+        ? sprite[nTarget].z : 0;
+    return KexMeleeRangeAtTargetZ(nSprite, nTarget, nReach, targetZ);
+}
+
+static bool KexMeleeRangeAtTargetZ(short nSprite, short nTarget,
+                                   int nReach, int64_t targetZ)
+{
+    if ((unsigned)nSprite >= (unsigned)MAXSPRITES
+        || (unsigned)nTarget >= (unsigned)MAXSPRITES
+        || !(sprite[nTarget].cstat & 0x101) || nReach < 0)
+        return 0;
+
+    // Script distances use WORLD=6; Build z uses 16 units per XY unit. Keep
+    // all components in twice-Build-XY units so the player puppet's authored
+    // 95.25 KEX radius remains exact. Check each axis first so even corrupt
+    // coordinates cannot overflow the squared-distance calculation.
+    int64_t const radius = (int64_t)KexContactRadius2(nSprite)
+        + KexContactRadius2(nTarget) + (int64_t)nReach * 12;
+    int64_t const dx = ((int64_t)sprite[nTarget].x - sprite[nSprite].x) * 2;
+    int64_t const dy = ((int64_t)sprite[nTarget].y - sprite[nSprite].y) * 2;
+    int64_t const dz = (targetZ - sprite[nSprite].z) / 8;
+
+    if (dx < -radius || dx > radius || dy < -radius || dy > radius
+        || dz < -radius || dz > radius)
+        return 0;
+
+    return dx * dx + dy * dy + dz * dz <= radius * radius;
+}
+
+static bool KexAIFlying(short nSprite)
+{
+    // Every KEX caller of the common melee bridge currently has a dedicated
+    // status list. AI_Fish is the only one whose KEX definition has flying.
+    return (unsigned)nSprite < (unsigned)MAXSPRITES
+        && sprite[nSprite].statnum == 103;
+}
+
+int KexActorHeightBuild(short nSprite)
+{
+    // KexDrop_ActorHeight is the central source-definition table for every
+    // native remaster controller (including the Wasp/Bird/Seedling identity
+    // packed into hitag). Do not derive this from rendered repeat: KEX traces
+    // and flying melee callbacks operate on logical actor dimensions.
+    if ((unsigned)nSprite >= (unsigned)MAXSPRITES)
+        return 0;
+    if (sprite[nSprite].statnum == 100) // kexPuppet, not an enemy drop actor
+        return 160 * 16 * 6;
+    if (sprite[nSprite].statnum == 121)
+    {
+        // The exact Queen body, snake head and seed pod deliberately share
+        // one native status list but retain KEX heights 256, 48 and 32.
+        if (sprite[nSprite].clipdist == 48)
+            return 48 * 16 * 6;
+        if (sprite[nSprite].clipdist == 54)
+            return 32 * 16 * 6;
+    }
+    int const height = KexDrop_ActorHeight(nSprite);
+    return height > 0 ? height * 16 * 6 : GetSpriteHeight(nSprite);
+}
+
+bool KexMeleeAttackRange(short nSprite, short nTarget, int nReach)
+{
+    int64_t targetZ = (unsigned)nTarget < (unsigned)MAXSPRITES
+        ? sprite[nTarget].z : 0;
+    // A_MeleeAttack lifts the target by half *the target's* logical height
+    // for flying attackers. AI_Fish is the only current bridge caller.
+    if (KexAIFlying(nSprite))
+        targetZ -= KexActorHeightBuild(nTarget) / 2;
+    return KexMeleeRangeAtTargetZ(nSprite, nTarget, nReach, targetZ);
+}
+
+bool KexAIWithinSightDistance(int xDistance, int yDistance)
+{
+    // kexAI's constructor and definition fallback use sightDistance = 3000.
+    // KEX maps use six Build X/Y units per authored world unit. Check the
+    // strict source boundary directly instead of inheriting the native
+    // controller's various 40/50/60/100/1000-unit search radii.
+    static constexpr int kKexAISightDistance = 3000 * 6;
+    return xDistance > -kKexAISightDistance && xDistance < kKexAISightDistance
+        && yDistance > -kKexAISightDistance && yDistance < kKexAISightDistance;
+}
+
+static bool KexAILookAllAround(short nSprite)
+{
+    if ((unsigned)nSprite >= (unsigned)MAXSPRITES)
+        return false;
+
+    // Exact KEX definition flags for every native-controller actor that can
+    // use FindPlayer. Anubis, Mummy, Bird, Set and Selkis retain kexAI's
+    // 1.04-radian forward cone; the rest wake from every direction.
+    switch (sprite[nSprite].statnum)
+    {
+        case  99: // AI_Spider / AI_Scorp
+        case 103: // AI_Fish
+        case 104: // AI_Bastet
+        case 105: // AI_Sentry
+        case 118: // AI_Mantis
+        case 121: // AI_Queen / snake host
+            return true;
+        case 107: // AI_Wasp / AI_Bird / AI_Seedling
+            return sprite[nSprite].hitag != 1; // only AI_Bird lacks the flag
+        default:
+            return false;
+    }
+}
+
+static int s_kexAcquireTest = -1;
+
+static void KexAcquire_TestTick()
+{
+    if (s_kexAcquireTest < 0)
+        s_kexAcquireTest = g_kexMode && Bgetenv("VB_KEX_COMMON_ENEMY_TEST") ? 1 : 0;
+    if (!s_kexAcquireTest)
+        return;
+    s_kexAcquireTest = 0;
+
+    // InitPlayer has completed by this point. Move only the puppet's
+    // coordinates inside its current sector and restore its whole sprite
+    // before the simulation advances.
+    short const nPlayer = nTotalPlayers > 0 ? PlayerList[nLocalPlayer].nSprite : -1;
+    bool acquireOkay = (unsigned)nPlayer < (unsigned)MAXSPRITES
+        && sprite[nPlayer].sectnum >= 0;
+    short nProbe = -1;
+    if (acquireOkay)
+    {
+        SPRITE const savedPlayer = sprite[nPlayer];
+        nProbe = insertsprite(savedPlayer.sectnum, 101); // AI_Anubis
+        acquireOkay = nProbe >= 0;
+        if (acquireOkay)
+        {
+            sprite[nPlayer].x = savedPlayer.x + 16;
+            sprite[nPlayer].y = savedPlayer.y;
+            sprite[nPlayer].z = savedPlayer.z;
+            sprite[nPlayer].cstat = (savedPlayer.cstat | 0x101) & ~0x8000;
+            sprite[nProbe].x = savedPlayer.x;
+            sprite[nProbe].y = savedPlayer.y;
+            sprite[nProbe].z = savedPlayer.z;
+            sprite[nProbe].cstat = 0x101;
+            sprite[nProbe].ang = getangle(16, 0);
+            acquireOkay = FindPlayer(nProbe, 0) == nPlayer;
+            sprite[nProbe].ang = (sprite[nProbe].ang + 339) & kAngleMask;
+            acquireOkay = acquireOkay && FindPlayer(nProbe, 0) == -1;
+            sprite[nPlayer] = savedPlayer;
+        }
+    }
+    if (nProbe >= 0)
+        mydeletesprite(nProbe);
+    OSD_Printf("Kex common enemy acquisition test: %s "
+               "(logical-centre LOS and 1.04-radian forward cone)\n",
+               acquireOkay ? "PASS" : "FAIL");
+}
+
+bool KexAIEnterMeleeRange(short nSprite, short nTarget, int nReach)
+{
+    if ((unsigned)nSprite >= (unsigned)MAXSPRITES
+        || (unsigned)nTarget >= (unsigned)MAXSPRITES
+        || sprite[nSprite].sectnum < 0 || sprite[nTarget].sectnum < 0
+        || !(sprite[nTarget].cstat & 0x101))
+        return false;
+
+    int64_t targetZ = sprite[nTarget].z;
+    if (KexAIFlying(nSprite))
+    {
+        // kexAI::CheckMeleeRange lifts the target by the *source* stepHeight.
+        // AI_Fish defines 28 source units, which maps to 2688 Build Z units.
+        targetZ -= 28 * 16 * 6;
+    }
+    if (!KexMeleeRangeAtTargetZ(nSprite, nTarget, nReach, targetZ))
+        return false;
+
+    int const dx = sprite[nTarget].x - sprite[nSprite].x;
+    int const dy = sprite[nTarget].y - sprite[nSprite].y;
+    if (!KexAIWithinSightDistance(dx, dy))
+        return false;
+    if (!KexAILookAllAround(nSprite)
+        && AngleDiff(sprite[nSprite].ang, getangle(dx, dy)) > 338)
+        return false;
+
+    // CheckTargetSight traces from the centres of the logical actors, not
+    // from their render extents. Build Z is down-positive.
+    int const sourceZ = sprite[nSprite].z - KexActorHeightBuild(nSprite) / 2;
+    int const visibleTargetZ = sprite[nTarget].z
+        - KexActorHeightBuild(nTarget) / 2;
+    return cansee(sprite[nSprite].x, sprite[nSprite].y, sourceZ,
+                  sprite[nSprite].sectnum, sprite[nTarget].x,
+                  sprite[nTarget].y, visibleTargetZ,
+                  sprite[nTarget].sectnum) != 0;
+}
+
 int FindPlayer(int nSprite, int nDistance)
 {
     int var_18 = 0;
@@ -728,7 +1671,9 @@ int FindPlayer(int nSprite, int nDistance)
     int y = sprite[nSprite].y;
     short nSector = sprite[nSprite].sectnum;
 
-    int z = sprite[nSprite].z - GetSpriteHeight(nSprite);
+    int z = g_kexMode
+        ? sprite[nSprite].z - KexActorHeightBuild(nSprite) / 2
+        : sprite[nSprite].z - GetSpriteHeight(nSprite);
 
     nDistance <<= 8;
 
@@ -744,13 +1689,21 @@ int FindPlayer(int nSprite, int nDistance)
 
         if ((sprite[nPlayerSprite].cstat & 0x101) && (!(sprite[nPlayerSprite].cstat & 0x8000)))
         {
-            int v9 = klabs(sprite[nPlayerSprite].x - x);
+            int const dx = sprite[nPlayerSprite].x - x;
+            int const dy = sprite[nPlayerSprite].y - y;
+            bool const withinSight = g_kexMode
+                ? KexAIWithinSightDistance(dx, dy)
+                : klabs(dx) < nDistance && klabs(dy) < nDistance;
 
-            if (v9 < nDistance)
+            if (withinSight && (!g_kexMode || KexAILookAllAround(nSprite)
+                || AngleDiff(sprite[nSprite].ang, getangle(dx, dy)) <= 338))
             {
-                int v10 = klabs(sprite[nPlayerSprite].y - y);
-
-                if (v10 < nDistance && cansee(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z - 7680, sprite[nPlayerSprite].sectnum, x, y, z, nSector))
+                int const targetZ = g_kexMode
+                    ? sprite[nPlayerSprite].z - KexActorHeightBuild(nPlayerSprite) / 2
+                    : sprite[nPlayerSprite].z - 7680;
+                if (cansee(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y,
+                            targetZ, sprite[nPlayerSprite].sectnum,
+                            x, y, z, nSector))
                 {
                     break;
                 }
@@ -1172,6 +2125,7 @@ void SetQuake(short nSprite, int nVal)
 
 int AngleChase(int nSprite, int nSprite2, int ebx, int ecx, int push1)
 {
+    ebx = KexScaleCreatureMove((short)nSprite, ebx);
     int nClipType = sprite[nSprite].statnum != 107;
 
     /* bjd - need to handle cliptype to clipmask change that occured in later build engine version */
@@ -1397,7 +2351,8 @@ int GrabChunkSprite()
     return nSprite;
 }
 
-int BuildCreatureChunk(int nVal, int nPic)
+static int BuildCreatureChunkImpl(int nVal, int nPic, int kexTossMode,
+                                  KexTossBounceSound bouncySound = kKexTossBounceSoundGlass)
 {
     int var_14;
 
@@ -1429,15 +2384,32 @@ int BuildCreatureChunk(int nVal, int nPic)
     sprite[nSprite].shade = -12;
     sprite[nSprite].pal = 0;
 
-    sprite[nSprite].xvel = (RandomSize(5) - 16) << 7;
-    sprite[nSprite].yvel = (RandomSize(5) - 16) << 7;
-    sprite[nSprite].zvel = (-(RandomSize(8) + 512)) << 3;
-
-    if (var_14)
+    if (kexTossMode)
     {
-        sprite[nSprite].xvel *= 4;
-        sprite[nSprite].yvel *= 4;
-        sprite[nSprite].zvel *= 2;
+        // actionDef.cpp:kexActionTossActor spawns at origin+(0,0,32), then
+        // adds Range(-8,8), Range(-8,8), Range(4,16).  Build Z increases
+        // downward, hence the negative origin/launch conversion.
+        sprite[nSprite].z -= 32 * kKexTossZUnit;
+        KexTossPreserveClassicRandomCursor();
+        sprite[nSprite].xvel = KexTossRange(-8 * kKexTossXYVelocityUnit,
+                                             8 * kKexTossXYVelocityUnit);
+        sprite[nSprite].yvel = KexTossRange(-8 * kKexTossXYVelocityUnit,
+                                             8 * kKexTossXYVelocityUnit);
+        sprite[nSprite].zvel = KexTossRange(-16 * kKexTossZUnit,
+                                             -4 * kKexTossZUnit);
+    }
+    else
+    {
+        sprite[nSprite].xvel = (RandomSize(5) - 16) << 7;
+        sprite[nSprite].yvel = (RandomSize(5) - 16) << 7;
+        sprite[nSprite].zvel = (-(RandomSize(8) + 512)) << 3;
+
+        if (var_14)
+        {
+            sprite[nSprite].xvel *= 4;
+            sprite[nSprite].yvel *= 4;
+            sprite[nSprite].zvel *= 2;
+        }
     }
 
     sprite[nSprite].xrepeat = 64;
@@ -1446,15 +2418,48 @@ int BuildCreatureChunk(int nVal, int nPic)
     sprite[nSprite].yoffset = 0;
     sprite[nSprite].picnum = nPic;
     sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].clipdist = 40;
+    sprite[nSprite].clipdist = kexTossMode
+        ? KexTossClipdist(nPic, kexTossMode == 2) : 40;
 
 //	GrabTimeSlot(3);
 
-    sprite[nSprite].extra = -1;
+    sprite[nSprite].extra = kexTossMode == 2
+                         ? kKexTossBouncyChunkMarker - bouncySound
+                         : kexTossMode ? kKexTossChunkMarker : -1;
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSprite, kRunCreatureChunk);
     sprite[nSprite].hitag = runlist_AddRunRec(NewRun, nSprite, kRunCreatureChunk);
 
     return nSprite | 0xD0000; // TODO: FIXME
+}
+
+int BuildCreatureChunk(int nVal, int nPic)
+{
+    return BuildCreatureChunkImpl(nVal, nPic, 0);
+}
+
+int KexTossCreatureChunk(int nVal, int nPic)
+{
+    // The KEX path is opt-in at the exact action call sites.  Keep this guard
+    // so tools or older maps that invoke it outside KEX mode remain classic.
+    return g_kexMode ? BuildCreatureChunkImpl(nVal, nPic, 1)
+                     : BuildCreatureChunk(nVal, nPic);
+}
+
+int KexTossBouncyCreatureChunk(int nVal, int nPic, KexTossBounceSound sound)
+{
+    return g_kexMode ? BuildCreatureChunkImpl(nVal, nPic, 2, sound)
+                     : BuildCreatureChunk(nVal, nPic);
+}
+
+static void DestroyCreatureChunk(short nSprite)
+{
+    runlist_DoSubRunRec(sprite[nSprite].owner);
+    runlist_FreeRun(sprite[nSprite].lotag - 1);
+    runlist_SubRunRec(sprite[nSprite].hitag);
+
+    changespritestat(nSprite, 0);
+    sprite[nSprite].hitag = 0;
+    sprite[nSprite].lotag = 0;
 }
 
 void FuncCreatureChunk(int a, int UNUSED(b), int nRun)
@@ -1466,6 +2471,37 @@ void FuncCreatureChunk(int a, int UNUSED(b), int nRun)
 
     if (nMessage != 0x20000)
         return;
+
+    bool const bouncyToss = KexTossIsBouncyMarker(sprite[nSprite].extra);
+    bool const gibToss = sprite[nSprite].extra == kKexTossChunkMarker
+        || sprite[nSprite].extra <= kKexTossGibExpireBase;
+    if (g_kexMode && (bouncyToss || gibToss))
+    {
+        int const bouncySound = bouncyToss
+            ? KexTossBouncySoundForMarker(sprite[nSprite].extra) : -1;
+        for (int sourceStep = 0; sourceStep < 2; sourceStep++)
+        {
+            // Tick() runs UpdateSprite (and therefore A_DestroyAtRest) before
+            // UpdateMovement. Creature gibs have no such action: expires=1
+            // decrements at the end of precisely the source tick that stops.
+            if (bouncyToss && KexTossAtRest(nSprite))
+            {
+                DestroyCreatureChunk(nSprite);
+                return;
+            }
+            KexTossSourcePhysicsStep(nSprite, bouncySound, sourceStep);
+            if (!bouncyToss && KexTossAtRest(nSprite)
+                && KexTossGibExpireTick(nSprite))
+            {
+                DestroyCreatureChunk(nSprite);
+                return;
+            }
+        }
+        int const nSector = sprite[nSprite].sectnum;
+        if ((unsigned)nSector < (unsigned)numsectors)
+            sprite[nSprite].pal = sector[nSector].ceilingpal;
+        return;
+    }
 
     Gravity(nSprite);
 
@@ -1527,13 +2563,7 @@ void FuncCreatureChunk(int a, int UNUSED(b), int nRun)
         }
     }
 
-    runlist_DoSubRunRec(sprite[nSprite].owner);
-    runlist_FreeRun(sprite[nSprite].lotag - 1);
-    runlist_SubRunRec(sprite[nSprite].hitag);
-
-    changespritestat(nSprite, 0);
-    sprite[nSprite].hitag = 0;
-    sprite[nSprite].lotag = 0;
+    DestroyCreatureChunk(nSprite);
 }
 
 short UpdateEnemy(short *nEnemy)
@@ -1564,8 +2594,19 @@ void MoveLoadSave::Load()
     Read(&overridesect, sizeof(overridesect));
 
     Read(&nCurBodyNum, sizeof(nCurBodyNum));
-    Read(nBodySprite, sizeof(nBodySprite[0]) * nCurBodyNum);
+    // An ordinary EXSV only restores the prefix constructed by the legacy
+    // single-player loader.  EXSN instead resumes a live multiplayer world:
+    // the cursor can point at any reusable body/chunk/gun slot, so leaving the
+    // tail from the staging level would make a later allocation diverge.
+    Read(nBodySprite, LoadSave::IsNetworkSnapshot()
+        ? sizeof(nBodySprite) : sizeof(nBodySprite[0]) * nCurBodyNum);
     Read(&nBodyTotal, sizeof(nBodyTotal));
+
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Read(&nCurBodyGunNum, sizeof(nCurBodyGunNum));
+        Read(nBodyGunSprite, sizeof(nBodyGunSprite));
+    }
 
     Read(&hihit, sizeof(hihit));
     Read(&sprceiling, sizeof(sprceiling));
@@ -1573,7 +2614,10 @@ void MoveLoadSave::Load()
     Read(&lohit, sizeof(lohit));
 
     Read(&nCurChunkNum, sizeof(nCurChunkNum));
-    Read(nChunkSprite, sizeof(nChunkSprite[0]) * nCurChunkNum);
+    Read(nChunkSprite, LoadSave::IsNetworkSnapshot()
+        ? sizeof(nChunkSprite) : sizeof(nChunkSprite[0]) * nCurChunkNum);
+    if (LoadSave::IsNetworkSnapshot())
+        Read(&nChunkTotal, sizeof(nChunkTotal));
 }
 
 void MoveLoadSave::Save()
@@ -1585,8 +2629,15 @@ void MoveLoadSave::Save()
     Write(&overridesect, sizeof(overridesect));
 
     Write(&nCurBodyNum, sizeof(nCurBodyNum));
-    Write(nBodySprite, sizeof(nBodySprite[0]) * nCurBodyNum);
+    Write(nBodySprite, LoadSave::IsNetworkSnapshot()
+        ? sizeof(nBodySprite) : sizeof(nBodySprite[0]) * nCurBodyNum);
     Write(&nBodyTotal, sizeof(nBodyTotal));
+
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Write(&nCurBodyGunNum, sizeof(nCurBodyGunNum));
+        Write(nBodyGunSprite, sizeof(nBodyGunSprite));
+    }
 
     Write(&hihit, sizeof(hihit));
     Write(&sprceiling, sizeof(sprceiling));
@@ -1594,7 +2645,10 @@ void MoveLoadSave::Save()
     Write(&lohit, sizeof(lohit));
 
     Write(&nCurChunkNum, sizeof(nCurChunkNum));
-    Write(nChunkSprite, sizeof(nChunkSprite[0]) * nCurChunkNum);
+    Write(nChunkSprite, LoadSave::IsNetworkSnapshot()
+        ? sizeof(nChunkSprite) : sizeof(nChunkSprite[0]) * nCurChunkNum);
+    if (LoadSave::IsNetworkSnapshot())
+        Write(&nChunkTotal, sizeof(nChunkTotal));
 }
 
 static MoveLoadSave* myLoadSave;

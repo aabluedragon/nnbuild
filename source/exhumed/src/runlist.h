@@ -40,6 +40,18 @@ enum messageTypes
     k0xA0000 = 0xA0000,
 };
 
+// Transient KEX damage-kind context. The native runlist message only carries
+// source and magnitude, but the remaster's death selectors distinguish fire
+// and explosions from ordinary overkill. Callers set this only around the
+// synchronous runlist_DamageEnemy() dispatch and restore the previous value.
+enum KexDamageType
+{
+    kKexDamageGeneric = 0,
+    kKexDamageExplosion,
+    kKexDamageFire,
+    kKexDamageAcid,
+};
+
 enum runTypes
 {
     kRunElev = 0,
@@ -107,6 +119,7 @@ extern RunChannel sRunChannels[kMaxChannels];
 extern short NewRun;
 extern int nRadialOwner;
 extern short nRadialSpr;
+extern int nKexDamageType;
 
 void runlist_InitRun();
 

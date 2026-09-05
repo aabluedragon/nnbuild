@@ -3328,19 +3328,26 @@ static int polymost_kexTessellate(vec2f_t const *dpxy, int32_t n, int32_t method
     };
     if (s.kind == 1)
     {
-        float const L = Bsqrtf((s.n1.x - s.n0.x) * (s.n1.x - s.n0.x) + (s.n1.y - s.n0.y) * (s.n1.y - s.n0.y));
-        // columns: world grid positions along the wall, from the wall's start
-        // (the field is on the world grid, but the seams fall where the wall's
-        // own cells do to within a sample; from the start is what the sample
-        // density asks for)
-        int ncol = (int)(L / KEX_TESS_CELL);
-        float stepc = KEX_TESS_CELL;
-        if (ncol > KEX_TESS_MAXCUT) { ncol = KEX_TESS_MAXCUT; stepc = L / (ncol + 1); }
-        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
-        for (int k = 1; k <= ncol; k++)
+        // The cell boundaries are where the world x or y crosses a multiple
+        // of the baked-field cell: the samples sit on that grid, so the cuts
+        // must too. This keeps the renderer's interpolation boundaries in
+        // the same places as the remaster's light-field samples.
+        float ts[2 * KEX_TESS_MAXCUT]; int nts = 0;
+        for (int axis = 0; axis < 2; axis++)
         {
-            float const t = (k * stepc) / L;
-            if (t <= 0.f || t >= 1.f) continue;
+            float const p0 = axis ? s.n0.y : s.n0.x, p1 = axis ? s.n1.y : s.n1.x;
+            if (Bfabsf(p1 - p0) < 1.f) continue;
+            float const lo = min(p0, p1), hi = max(p0, p1);
+            for (float g = ceilf(lo / KEX_TESS_CELL) * KEX_TESS_CELL; g < hi && nts < 2 * KEX_TESS_MAXCUT; g += KEX_TESS_CELL)
+            {
+                float const t = (g - p0) / (p1 - p0);
+                if (t > 0.001f && t < 0.999f) ts[nts++] = t;
+            }
+        }
+        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
+        for (int k = 0; k < nts; k++)
+        {
+            float const t = ts[k];
             float const r = 1.f / ((1.f - t) * a + t * b);
             float const f = (Bfabsf(s.ryp1 - s.ryp0) < 1e-9f) ? t : (r - s.ryp0) / (s.ryp1 - s.ryp0);
             float const x = s.x0 + f * (s.x1 - s.x0);

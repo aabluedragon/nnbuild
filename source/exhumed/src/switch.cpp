@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "engine.h"
 #include "player.h"
 #include "sound.h"
+#include "kexbreak.h"
 #include "save.h"
 #include "status.h"
 #include <string.h>
@@ -54,10 +55,33 @@ short SwitchCount = -1;
 int8_t LinkMap[kMaxLinks][8];
 Switch SwitchData[kMaxSwitches];
 
+// kexWorld::UseLockedDoor prints one source-localized key requirement for the
+// four remaster door events. Build stores its key requirement as a bit at
+// 12..15, so the source event can be recovered without a map-side marker.
+static char const *KexLockedDoor_Message(uint16_t keyMask)
+{
+    if (!g_kexMode)
+        return NULL;
+    switch (keyMask)
+    {
+        case 1 << 12: return "You Need the Symbol of Power";
+        case 1 << 13: return "You Need the Symbol of Time";
+        case 1 << 14: return "You Need the Symbol of War";
+        case 1 << 15: return "You Need the Symbol of Earth";
+    }
+    return NULL;
+}
+
+// VB_KEXLOCK_TEST sends one real missing-key press through FuncSwPressSector
+// during its normal 0x10000 setup run. It is test-only and remains disabled
+// for every regular KEX and classic map.
+static int s_kexLockedDoorTest = -1;
+
 
 void InitLink()
 {
     LinkCount = kMaxLinks;
+    s_kexLockedDoorTest = -1;
 }
 
 int BuildLink(int nCount, ...)
@@ -255,6 +279,17 @@ int BuildSwStepOn(int nChannel, int nLink, int nSector)
     return nSwitch;
 }
 
+int BuildKexSwStepOn(int nChannel, int nSector)
+{
+    int const nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
+    if (nSwitch >= 0)
+        // field_14 is unused by sector step switches. Unlike Build's generic
+        // link map, Kex's event tag is not a channel state: a player entry
+        // always starts the lift in its active state (1).
+        SwitchData[nSwitch].field_14 = 1;
+    return nSwitch;
+}
+
 void FuncSwStepOn(int a, int UNUSED(b), int nRun)
 {
     short nSwitch = RunData[nRun].nVal;
@@ -263,12 +298,17 @@ void FuncSwStepOn(int a, int UNUSED(b), int nRun)
     short nLink = SwitchData[nSwitch].nLink;
     short nChannel = SwitchData[nSwitch].nChannel;
     short nSector = SwitchData[nSwitch].nSector;
+    int nMessage = a & 0x7F0000;
 
+    if (SwitchData[nSwitch].field_14)
+    {
+        if (nMessage == 0x50000)
+            runlist_ChangeChannel(nChannel, 1);
+        return;
+    }
     assert(sRunChannels[nChannel].c < 8);
 
     int8_t var_14 = LinkMap[nLink][sRunChannels[nChannel].c];
-
-    int nMessage = a & 0x7F0000;
 
     switch (nMessage)
     {
@@ -448,6 +488,16 @@ void FuncSwPressSector(int a, int UNUSED(b), int nRun)
             short nSector = SwitchData[nSwitch].nSector;
 
             SwitchData[nSwitch].field_C = runlist_AddRunRec(sector[nSector].lotag - 1, RunData[nRun].nVal, RunData[nRun].nRef);
+            if (s_kexLockedDoorTest < 0)
+                s_kexLockedDoorTest = g_kexMode && Bgetenv("VB_KEXLOCK_TEST") ? 1 : 0;
+            if (s_kexLockedDoorTest && SwitchData[nSwitch].field_12
+                && (PlayerList[nLocalPlayer].keys & SwitchData[nSwitch].field_12) != SwitchData[nSwitch].field_12)
+            {
+                s_kexLockedDoorTest = 0;
+                // Re-enter the exact player-use message branch rather than
+                // duplicating it in the regression probe.
+                FuncSwPressSector(nLocalPlayer | 0x40000, 0, nRun);
+            }
             return;
         }
 
@@ -464,7 +514,12 @@ void FuncSwPressSector(int a, int UNUSED(b), int nRun)
                     short nSprite = PlayerList[nPlayer].nSprite;
                     PlayFXAtXYZ(StaticSound[nSwitchSound], sprite[nSprite].x, sprite[nSprite].y, 0, sprite[nSprite].sectnum);
 
-                    StatusMessage(300, "YOU NEED THE KEY FOR THIS DOOR");
+                    char const * const message = KexLockedDoor_Message(SwitchData[nSwitch].field_12);
+                    StatusMessage(300, "%s", message ? message : "YOU NEED THE KEY FOR THIS DOOR");
+                    if (Bgetenv("VB_KEXLOCK_TEST"))
+                        OSD_Printf("Kex locked-door test: %s (mask %x -> %s)\n",
+                                   message ? "PASS" : "FAIL", SwitchData[nSwitch].field_12,
+                                   message ? message : "missing");
                 }
             }
         }
@@ -539,7 +594,8 @@ void FuncSwPressWall(int a, int UNUSED(b), int nRun)
             short nWall = SwitchData[nSwitch].nWall;
             short nSector = SwitchData[nSwitch].nSector; // CHECKME - where is this set??
 
-            PlayFXAtXYZ(StaticSound[nSwitchSound], wall[nWall].x, wall[nWall].y, 0, nSector);
+            if (!KexSwitch_PlaySound(nWall, a & 0xFFFF))
+                PlayFXAtXYZ(StaticSound[nSwitchSound], wall[nWall].x, wall[nWall].y, 0, nSector);
             return;
         }
     }

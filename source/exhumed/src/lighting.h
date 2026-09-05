@@ -29,6 +29,7 @@ extern short nFlashDepth;
 void InitLights();
 void AddFlash(short nSector, int x, int y, int z, int val);
 void Kex_SpriteGlow(short nSector, int x, int y, int peak, int shift, int nDepth);
+void Kex_TransientGlow(short nSector, int x, int y, int peak, int radius);
 void SetTorch(int nPlayer, int bTorchOnOff);
 void UndoFlashes();
 void DoLights();

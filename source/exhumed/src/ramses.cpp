@@ -35,7 +35,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "gun.h"
 #include "kexbreak.h"
 #include "kexinv.h"
+#include "kextable.h"
 #include "init.h"
+#include "input.h"
+#include <math.h>
 
 
 #define kSpiritX   106
@@ -75,24 +78,213 @@ short nTalkTime = 0;
 
 
 // ---------------------------------------------------------------------------
-// The remaster's Ramses. His speeches ship complete in the .kpf: the audio as
-// ramses/SP_<LANG><NN>.wav in four languages, and the lip-sync as AngelScript
-// const-int arrays in scripts/ramses/SP_*.txt, one 4-bit head state per 1/30s
-// of audio -- bit 3 is the mouth. Everything else about the spirit head --
-// the swirlies, the materialise, the eyes and blinks, the mouth tiles -- is
-// this file's own machinery and works untouched; all a speech IS to it is a
-// list of totalclock timestamps at which the mouth toggles (the .PUP format),
-// so the kex path derives those timestamps from the bit-3 edges of the script
-// array (one entry = 4 ticks of the 120 Hz clock) and plays the wav through
-// the music channel, which is what CDplaying() watches anyway. Which speech:
-// the hub script picks by the artifacts collected; artifacts do not exist
-// here yet, so the weapon that marks the same stage of the game stands in.
+// The remaster's Ramses. Its .kpf carries the complete 55-frame materialise,
+// twelve manually selected talk poses, 21-frame vanish and TOMBEND resting
+// body, plus one 4-bit facial state per 1/30 second of each speech. Converted
+// KEX installs use those assets and the retail level-script timings directly.
+// The original pixel-head/PUP machinery below remains the fallback and the
+// unchanged presentation for DOS maps.
 // ---------------------------------------------------------------------------
-int kex_language = 0;      // cvar: 0 english, 1 french, 2 german, 3 spanish
+int kex_language = 0;      // cvar: English, French, German, Spanish, Italian
+
+int KexLanguage_Index()
+{
+    return clamp(kex_language, 0, 4);
+}
+
+int KexLanguage_VoiceIndex()
+{
+    // The KPF has Italian text only. Its remaster presentation falls back to
+    // English because there are no Italian Ramses scripts or movie files.
+    int const language = KexLanguage_Index();
+    return language == 4 ? 0 : language;
+}
+
+char const *KexLanguage_Code()
+{
+    static char const * const codes[] = { "en", "fr", "de", "es", "it" };
+    return codes[KexLanguage_Index()];
+}
 
 static short sKexPup[1200];
+static uint8_t sKexTalkData[8192];
+static int sKexTalkCount;
 static uint8_t sKexWasHidden[(kMaxSprites + 7) >> 3];
 static int nKexSpeaking = 0;
+
+enum KexRamsesPhase
+{
+    kKexRamsesNone,
+    kKexRamsesPrelude,
+    kKexRamsesSpawn,
+    kKexRamsesTalk,
+    kKexRamsesVanish,
+};
+
+enum { kKexRamsesSpawnAnim, kKexRamsesTalkAnim, kKexRamsesVanishAnim,
+       kKexRamsesBodyAnim, kKexRamsesAnimCount };
+
+struct KexRamsesAnim
+{
+    int first, count, repeat, ticks;
+};
+
+static KexRamsesAnim s_kexRamsesAnim[kKexRamsesAnimCount];
+static int s_kexRamsesArtLoaded = -1;
+static int s_kexRamsesNative;
+static int s_kexRamsesPhase;
+static int s_kexRamsesFrame;
+static int s_kexRamsesNextFrame;
+static int s_kexRamsesPhaseClock;
+static int s_kexRamsesSpawnClock;
+static int s_kexRamsesBodyMoveClock;
+static int s_kexRamsesTalkClock;
+static int s_kexRamsesEndClock;
+static int s_kexRamsesSkipClock;
+static int s_kexRamsesRearmClock;
+static int s_kexRamsesPadSector = -1;
+static uint8_t s_kexRamsesPadSet[kMaxSectors];
+static int s_kexRamsesPadCount;
+static int s_kexRamsesBaseZ;
+static int s_kexRamsesTalkMask;
+static int s_kexRamsesBobTicks;
+static int s_kexRamsesSeenPhases;
+static int s_kexRamsesSawBody;
+static int s_kexRamsesTestStarted;
+
+static bool Kex_RamsesArtParse(char *line, int)
+{
+    char phase[16];
+    int first, count, repeat, ticks;
+    if (Bsscanf(line, "%15s %d %d %d %d", phase, &first, &count, &repeat, &ticks) != 5
+        || first <= 0 || count <= 0 || repeat <= 0 || ticks < 0)
+        return false;
+
+    int which = -1;
+    if (!Bstrcmp(phase, "spawn")) which = kKexRamsesSpawnAnim;
+    else if (!Bstrcmp(phase, "talk")) which = kKexRamsesTalkAnim;
+    else if (!Bstrcmp(phase, "vanish")) which = kKexRamsesVanishAnim;
+    else if (!Bstrcmp(phase, "body")) which = kKexRamsesBodyAnim;
+    if (which < 0)
+        return false;
+    s_kexRamsesAnim[which] = { first, count, repeat, ticks };
+    return true;
+}
+
+static int Kex_RamsesLoadArt(void)
+{
+    if (s_kexRamsesArtLoaded >= 0)
+        return s_kexRamsesArtLoaded;
+    Bmemset(s_kexRamsesAnim, 0, sizeof(s_kexRamsesAnim));
+    KexTable_Load("kexramses.txt", kKexRamsesAnimCount, Kex_RamsesArtParse);
+    s_kexRamsesArtLoaded = 1;
+    for (auto const &a : s_kexRamsesAnim)
+        s_kexRamsesArtLoaded &= a.first > 0 && a.count > 0;
+    return s_kexRamsesArtLoaded;
+}
+
+// TOMB_script.txt's script 2 lerps the player to (0, 2816, -864) in Kex
+// coordinates while turning toward ramsesOrigin (-13, 3143, -734). The map
+// converter uses WORLD=6, flips Y, and stores Kex Z as -z*16*WORLD, so these
+// are the corresponding Build positions. Level scripts restart on the same
+// 30 Hz simulation cadence as Exhumed; the authored interpolation is 1/16 per
+// restart. Visual animation itself is selected at render time below.
+#define KEX_TOMB_CAMERA_X 0
+#define KEX_TOMB_CAMERA_Y (-2816 * 6)
+#define KEX_TOMB_CAMERA_Z (864 * 16 * 6)
+#define KEX_TOMB_RAMSES_X (-13 * 6)
+#define KEX_TOMB_RAMSES_Y (-3143 * 6)
+#define KEX_TOMB_RAMSES_Z (734 * 16 * 6)
+#define KEX_TOMBEND_CAMERA_X 0
+#define KEX_TOMBEND_CAMERA_Y (-2816 * 6)
+#define KEX_TOMBEND_CAMERA_Z (224 * 16 * 6)
+#define KEX_TOMBEND_RAMSES_X 0
+#define KEX_TOMBEND_RAMSES_Y (-3136 * 6)
+#define KEX_TOMBEND_RAMSES_Z (64 * 16 * 6)
+static int s_kexCameraMove;
+
+static int Kex_IsTomb(void)
+{
+    char nameUp[BMAX_PATH];
+    Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+    Bstrupr(nameUp);
+    return Bstrstr(nameUp, "TOMB.MAP") != NULL && Bstrstr(nameUp, "TOMBEND") == NULL;
+}
+
+static int Kex_IsTombEnd(void)
+{
+    char nameUp[BMAX_PATH];
+    Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
+    Bstrupr(nameUp);
+    return Bstrstr(nameUp, "TOMBEND") != NULL;
+}
+
+static void Kex_RamsesCameraTick(void)
+{
+    if (!s_kexCameraMove)
+        return;
+    int const nPlayerSprite = PlayerList[nLocalPlayer].nSprite;
+    if ((unsigned)nPlayerSprite >= (unsigned)kMaxSprites)
+        return;
+
+    int const tombEnd = Kex_IsTombEnd();
+    int const cameraX = tombEnd ? KEX_TOMBEND_CAMERA_X : KEX_TOMB_CAMERA_X;
+    int const cameraY = tombEnd ? KEX_TOMBEND_CAMERA_Y : KEX_TOMB_CAMERA_Y;
+    int const cameraZ = tombEnd ? KEX_TOMBEND_CAMERA_Z : KEX_TOMB_CAMERA_Z;
+    int const ramsesX = tombEnd ? KEX_TOMBEND_RAMSES_X : KEX_TOMB_RAMSES_X;
+    int const ramsesY = tombEnd ? KEX_TOMBEND_RAMSES_Y : KEX_TOMB_RAMSES_Y;
+    int const ramsesZ = tombEnd ? KEX_TOMBEND_RAMSES_Z : KEX_TOMB_RAMSES_Z;
+
+    auto &pl = PlayerList[nLocalPlayer];
+    auto &p = sprite[nPlayerSprite];
+    pl.opos = p.xyz;
+    pl.q16oangle = pl.q16angle;
+    pl.q16ohoriz = pl.q16horiz;
+
+    p.x += (cameraX - p.x) / 16;
+    p.y += (cameraY - p.y) / 16;
+    p.z += (cameraZ - p.z) / 16;
+    if (abs(cameraX - p.x) <= 15 && abs(cameraY - p.y) <= 15
+        && abs(cameraZ - p.z) <= 15)
+    {
+        p.x = cameraX;
+        p.y = cameraY;
+        p.z = cameraZ;
+    }
+
+    int16_t nSector = p.sectnum;
+    updatesectorz(p.x, p.y, p.z, &nSector);
+    if (nSector >= 0)
+    {
+        if (p.sectnum != nSector)
+            mychangespritesect(nPlayerSprite, nSector);
+        nPlayerViewSect[nLocalPlayer] = nSector;
+    }
+
+    int const targetAngle = getangle(ramsesX - p.x, ramsesY - p.y);
+    int angle = fix16_to_int(pl.q16angle) & kAngleMask;
+    int angleDelta = ((targetAngle - angle + 1024) & kAngleMask) - 1024;
+    if (abs(angleDelta) < 16)
+        angle = targetAngle;
+    else
+        angle = (angle + angleDelta / 16) & kAngleMask;
+    pl.q16angle = fix16_from_int(angle);
+    p.ang = angle;
+
+    // Build z has sixteen sub-units per horizontal world unit. Aim from the
+    // rendered eye, not the player's floor-aligned sprite origin.
+    int const dx = ramsesX - p.x;
+    int const dy = ramsesY - p.y;
+    int const distance = max(1, Blrintf(sqrtf((float)dx * dx + (float)dy * dy)));
+    int desiredHoriz = 92;
+    if (!(tombEnd && s_kexRamsesPhase == kKexRamsesPrelude))
+        desiredHoriz = clamp(92 + (8 * (ramsesZ - (p.z + eyelevel[nLocalPlayer]))) / distance,
+                             0, 184);
+    fix16_t const desired = fix16_from_int(desiredHoriz);
+    fix16_t const horizDelta = desired - pl.q16horiz;
+    pl.q16horiz = abs(horizDelta) < F16(1) ? desired : pl.q16horiz + horizDelta / 16;
+    nVertPan[nLocalPlayer] = pl.q16horiz;
+}
 
 // Which speech: transcribed from GetRamsesDialog() in the remaster's
 // scripts/map/TOMB_script.txt (talk event N is SP_xxNN+1). The artifacts rank
@@ -122,10 +314,30 @@ static int Kex_RamsesSpeech(void)
     return alt ? 2 : 1;
 }
 
+static int Kex_RamsesDuration(int nSpeech)
+{
+    // GetRamsesDialog() and TOMBEND script 9. These deliberately outlive a
+    // few of the wavs, so CDplaying() is not the event timer.
+    static uint8_t const seconds[] = {
+        0, 120, 20, 38, 34, 31, 28, 30, 24, 22, 28, 30, 30, 47, 43,
+    };
+    return (unsigned)nSpeech < ARRAY_SIZE(seconds) ? seconds[nSpeech] : 30;
+}
+
+static int Kex_RamsesTalkFrame(int frame)
+{
+    int talkFrame = 0;
+    if (frame & 2) talkFrame += 6;
+    if (frame & 1) talkFrame += 3;
+    if (frame & 4) talkFrame += 1;
+    else if (frame & 8) talkFrame += 2;
+    return talkFrame;
+}
+
 static int Kex_RamsesStart(void)
 {
     static char const * const langs[] = { "ENG", "FRE", "GER", "SPA" };
-    char const *lang = langs[clamp(kex_language, 0, 3)];
+    char const *lang = langs[KexLanguage_VoiceIndex()];
     int const nSpeech = Kex_RamsesSpeech();
 
     char path[80];
@@ -137,22 +349,41 @@ static int Kex_RamsesStart(void)
     char *buf = (char *)Xmalloc(len + 1);
     kread(fil, buf, len); buf[len] = 0; kclose(fil);
 
-    // Mouth-open (bit 3) edges -> .PUP-style toggle timestamps.
+    // Parse only the array body. Scanning the declaration too consumes the
+    // speech number in g_SP_ENG01 as sample zero and shifts every expression.
+    char *body = Bstrchr(buf, '{');
+    char *bodyEnd = Bstrrchr(buf, '}');
+    if (!body || !bodyEnd || bodyEnd <= body)
+    {
+        Xfree(buf);
+        return 0;
+    }
+    *bodyEnd = 0;
+
+    // Keep all four authored facial bits for the native twelve-pose actor and
+    // also derive mouth edges for the procedural fallback.
     int prev = 0, n = 0, idx = 0;
-    for (char *p = buf; *p; )
+    s_kexRamsesTalkMask = 0;
+    for (char *p = body + 1; *p; )
     {
         while (*p && !isdigit((unsigned char)*p)) p++;
         if (!*p) break;
         int const v = (int)strtol(p, &p, 10);
-        if (((v ^ prev) & 8) && n < (int)ARRAY_SIZE(sKexPup))
+        if ((unsigned)v > 15)
+            continue;
+        if (idx < (int)ARRAY_SIZE(sKexTalkData))
         {
-            sKexPup[n++] = (short)(idx << 2);
-            prev = v;
+            sKexTalkData[idx] = (uint8_t)v;
+            s_kexRamsesTalkMask |= 1 << Kex_RamsesTalkFrame(v);
         }
+        if (((v ^ prev) & 8) && n < (int)ARRAY_SIZE(sKexPup))
+            sKexPup[n++] = (short)(idx << 2);
+        prev = v;
         idx++;
     }
     Xfree(buf);
-    if (n == 0)
+    sKexTalkCount = min(idx, (int)ARRAY_SIZE(sKexTalkData));
+    if (sKexTalkCount == 0)
         return 0;
 
     Bsprintf(path, "ramses/SP_%s%02d.wav", lang, nSpeech);
@@ -162,19 +393,204 @@ static int Kex_RamsesStart(void)
     nPupData = (short)(n * 2);
     bSubTitles = kFalse;       // nothing to caption: the kpf ships no transcripts
     nKexSpeaking = 1;
-    KexScripted_Trigger(0);     // TOMB's $script 1 raises the casket lid
+    s_kexCameraMove = Kex_IsTomb() || Kex_IsTombEnd();
+    s_kexRamsesTalkClock = (int)totalclock;
+    s_kexRamsesEndClock = s_kexRamsesTalkClock + Kex_RamsesDuration(nSpeech) * 120;
+    s_kexRamsesSkipClock = s_kexRamsesTalkClock + 4 * 120;
+    if (Bgetenv("VB_KEXRAMSES_VISUAL_TEST"))
+        s_kexRamsesEndClock = min(s_kexRamsesEndClock, s_kexRamsesTalkClock + 3 * 120);
+    OSD_Printf("Kex Ramses: speech %d, %d facial samples, %d scripted seconds\n",
+               nSpeech, sKexTalkCount, Kex_RamsesDuration(nSpeech));
+    return 1;
+}
+
+static void Kex_RamsesSetAnim(int which, int frame)
+{
+    if ((unsigned)nSpiritSprite >= (unsigned)kMaxSprites
+        || (unsigned)which >= (unsigned)kKexRamsesAnimCount)
+        return;
+    KexRamsesAnim const &anim = s_kexRamsesAnim[which];
+    if (anim.count <= 0)
+        return;
+    frame = clamp(frame, 0, anim.count - 1);
+    auto &sp = sprite[nSpiritSprite];
+    sp.picnum = (int16_t)(anim.first + frame);
+    sp.xrepeat = sp.yrepeat = (uint8_t)anim.repeat;
+    sp.shade = -96;
+    sp.cstat |= 0x82;                 // translucent, centred on the actor origin
+    sp.cstat &= (int16_t)~0x8000;
+}
+
+static void Kex_RamsesBeginAnim(int phase, int which)
+{
+    s_kexRamsesPhase = phase;
+    s_kexRamsesSeenPhases |= 1 << phase;
+    s_kexRamsesFrame = 0;
+    s_kexRamsesPhaseClock = (int)totalclock;
+    s_kexRamsesNextFrame = s_kexRamsesPhaseClock
+                          + max(1, s_kexRamsesAnim[which].ticks);
+    Kex_RamsesSetAnim(which, 0);
+}
+
+void KexRamses_Reset(void)
+{
+    nKexSpeaking = 0;
+    s_kexCameraMove = 0;
+    s_kexRamsesNative = 0;
+    s_kexRamsesPhase = kKexRamsesNone;
+    s_kexRamsesFrame = 0;
+    s_kexRamsesNextFrame = 0;
+    s_kexRamsesPhaseClock = 0;
+    s_kexRamsesSpawnClock = 0;
+    s_kexRamsesBodyMoveClock = 0;
+    s_kexRamsesTalkClock = 0;
+    s_kexRamsesEndClock = 0;
+    s_kexRamsesSkipClock = 0;
+    s_kexRamsesRearmClock = 0;
+    s_kexRamsesPadSector = -1;
+    Bmemset(s_kexRamsesPadSet, 0, sizeof(s_kexRamsesPadSet));
+    s_kexRamsesPadCount = 0;
+    s_kexRamsesBaseZ = 0;
+    s_kexRamsesTalkMask = 0;
+    s_kexRamsesBobTicks = 0;
+    s_kexRamsesSeenPhases = 0;
+    s_kexRamsesSawBody = 0;
+    s_kexRamsesTestStarted = 0;
+    s_kexRamsesSpokenBefore = 0;
+    sKexTalkCount = 0;
+}
+
+static int Kex_RamsesNativeInit(void)
+{
+    if (!g_kexMode || (!Kex_IsTomb() && !Kex_IsTombEnd())
+        || (unsigned)nSpiritSprite >= (unsigned)kMaxSprites || !Kex_RamsesLoadArt())
+        return 0;
+
+    int const nPlayerSprite = PlayerList[nLocalPlayer].nSprite;
+    if ((unsigned)nPlayerSprite >= (unsigned)kMaxSprites)
+        return 0;
+
+    auto &sp = sprite[nSpiritSprite];
+    nSpiritRepeatX = sp.xrepeat;
+    nSpiritRepeatY = sp.yrepeat;
+    s_kexRamsesBaseZ = sp.z;
+    s_kexRamsesPadSector = sprite[nPlayerSprite].sectnum;
+    Bmemset(s_kexRamsesPadSet, 0, sizeof(s_kexRamsesPadSet));
+    s_kexRamsesPadCount = 0;
+    for (int i = 0; i < numsectors; i++)
+    {
+        if (SectFlag[i] & 0x8000)
+        {
+            s_kexRamsesPadSet[i] = 1;
+            s_kexRamsesPadCount++;
+        }
+    }
+    if (!s_kexRamsesPadCount && (unsigned)s_kexRamsesPadSector < (unsigned)numsectors)
+    {
+        s_kexRamsesPadSet[s_kexRamsesPadSector] = 1;
+        s_kexRamsesPadCount = 1;
+    }
+    s_kexRamsesRearmClock = 0;
+    s_kexRamsesTalkMask = 0;
+    s_kexRamsesBobTicks = 0;
+    s_kexRamsesSeenPhases = 1 << kKexRamsesPrelude;
+    s_kexRamsesSawBody = 0;
+    s_kexRamsesNative = 1;
+    s_kexRamsesPhase = kKexRamsesPrelude;
+    s_kexRamsesPhaseClock = (int)totalclock;
+    s_kexCameraMove = 1;
+    nKexSpeaking = 0;
+    nHeadStage = 0;
+
+    StopCD();
+    KexScripted_Trigger(0);            // TOMB opens the casket at once
+    if (Kex_IsTombEnd())
+    {
+        // Body starts at ramsesOrigin.z + 512. Script 6 begins after 0.5s,
+        // subtracting two KEX z units per 30 Hz restart until the 7s spawn.
+        sp.z = s_kexRamsesBaseZ - 352 * 16 * 6;
+        Kex_RamsesSetAnim(kKexRamsesBodyAnim, 0);
+        s_kexRamsesSawBody = 1;
+        s_kexRamsesBodyMoveClock = (int)totalclock + 60;
+        s_kexRamsesSpawnClock = (int)totalclock + 7 * 120;
+    }
+    else
+    {
+        sp.cstat |= 0x8000;
+        s_kexRamsesBodyMoveClock = 0;
+        s_kexRamsesSpawnClock = (int)totalclock + 60; // delay(0.5f)
+    }
+
+    OSD_Printf("Kex Ramses: authored %s prelude started\n",
+               Kex_IsTombEnd() ? "TOMBEND body" : "TOMB casket");
     return 1;
 }
 
 // The Build game ends the level when Ramses finishes -- his speech IS its
-// intro cinematic. In the remaster's hub he vanishes and play resumes, so
-// this puts back everything InitSpiritHead() took: the other sprites, the
-// player's freeze, the one-shot pad flag, and the level's own music.
+// intro cinematic. In the remaster's hub he vanishes and play resumes, except
+// that TOMBEND immediately takes the incomplete-transmitter branch into the
+// bad ending. This puts back everything InitSpiritHead() took: the other
+// sprites, the player's freeze, the one-shot pad flag, and the level's music.
 static void Kex_RamsesEnd(void)
 {
     OSD_Printf("Kex Ramses: speech over, play resumes\n");
     nKexSpeaking = 0;
+    s_kexCameraMove = 0;
     KexScript_RamsesEnd();      // TOMB's crypt door
+
+    if (s_kexRamsesNative)
+    {
+        int const visualTest = Bgetenv("VB_KEXRAMSES_VISUAL_TEST") != NULL;
+        int const incompleteEnding = Kex_IsTombEnd()
+                                  && KexInv_TransCount(0) < KEX_TRANS_PIECES
+                                  && !visualTest;
+
+        for (int i = 0; i < numsectors; i++)
+            if (s_kexRamsesPadSet[i])
+                SectFlag[i] &= 0x7FFF;
+        nFreeze = 0;
+        StopCD();
+        StopAllSounds();
+        StopLocalSound();
+
+        // TOMBEND's incomplete branch calls EndGame before ChangeAnim.
+        if (incompleteEnding)
+        {
+            sprite[nSpiritSprite].cstat |= 0x8000;
+            sprite[nSpiritSprite].xrepeat = (uint8_t)nSpiritRepeatX;
+            sprite[nSpiritSprite].yrepeat = (uint8_t)nSpiritRepeatY;
+            sprite[nSpiritSprite].z = s_kexRamsesBaseZ;
+            s_kexRamsesNative = 0;
+            s_kexRamsesPhase = kKexRamsesNone;
+            OSD_Printf("Kex Ramses: transmitter incomplete, starting bad ending\n");
+            FinishLevel();
+            return;
+        }
+
+        if (Kex_IsTombEnd())
+        {
+            KexScripted_Trigger(1);     // sink the bier on the good ending
+            nQuake[nLocalPlayer] = 4096;
+            int const quake = KexSound_Get("k_quake");
+            if (quake >= 0)
+                PlayLocalSound(quake, 0);
+        }
+        else
+        {
+            // The repeatable KEX event rearms four seconds later. Build's
+            // touch flag must wait until the player has actually left the pad,
+            // otherwise standing still starts another speech immediately.
+            s_kexRamsesRearmClock = (int)totalclock + 4 * 120;
+        }
+
+        Kex_RamsesBeginAnim(kKexRamsesVanish, kKexRamsesVanishAnim);
+        char const *track = Kex_MusicForMap(gUserMapFilename);
+        if (track)
+            playMusicFile(track, true);
+        return;
+    }
+
+    // Procedural KEX fallback: retain the old all-sprite restoration path.
     // TOMBEND's EndRamsesEvent sinks the bier, on the good ending only.
     if (KexInv_TransCount(0) >= KEX_TRANS_PIECES)
         KexScripted_Trigger(1);
@@ -193,9 +609,191 @@ static void Kex_RamsesEnd(void)
 
     nFreeze = 0;
     fadecdaudio();
+    if (Kex_IsTombEnd() && KexInv_TransCount(0) < KEX_TRANS_PIECES)
+    {
+        OSD_Printf("Kex Ramses: transmitter incomplete, starting bad ending\n");
+        FinishLevel();
+        return;
+    }
     char const *track = Kex_MusicForMap(gUserMapFilename);
     if (track)
         playMusicFile(track, true);
+}
+
+static int Kex_RamsesAdvanceAnim(int which)
+{
+    KexRamsesAnim const &anim = s_kexRamsesAnim[which];
+    int const ticks = max(1, anim.ticks);
+    while ((int)totalclock >= s_kexRamsesNextFrame)
+    {
+        s_kexRamsesNextFrame += ticks;
+        if (++s_kexRamsesFrame >= anim.count)
+            return 1;
+        Kex_RamsesSetAnim(which, s_kexRamsesFrame);
+    }
+    return 0;
+}
+
+static void Kex_RamsesFinishNative(void)
+{
+    int const wasTombEnd = Kex_IsTombEnd();
+    auto &sp = sprite[nSpiritSprite];
+    sp.cstat |= 0x8000;
+    sp.xrepeat = (uint8_t)nSpiritRepeatX;
+    sp.yrepeat = (uint8_t)nSpiritRepeatY;
+    sp.z = s_kexRamsesBaseZ;
+    s_kexRamsesPhase = kKexRamsesNone;
+    s_kexRamsesNative = 0;
+
+    if (Bgetenv("VB_KEXRAMSES_VISUAL_TEST"))
+    {
+        int const expectedPhases = (1 << kKexRamsesPrelude) | (1 << kKexRamsesSpawn)
+                                 | (1 << kKexRamsesTalk) | (1 << kKexRamsesVanish);
+        int const bad = s_kexRamsesAnim[kKexRamsesSpawnAnim].count != 55
+                     || s_kexRamsesAnim[kKexRamsesTalkAnim].count != 12
+                     || s_kexRamsesAnim[kKexRamsesVanishAnim].count != 21
+                     || s_kexRamsesAnim[kKexRamsesBodyAnim].count != 1
+                     || !s_kexRamsesTalkMask || (s_kexRamsesTalkMask & ~0xFFF)
+                     || sKexTalkCount <= 0
+                     || s_kexRamsesSeenPhases != expectedPhases
+                     || s_kexRamsesSawBody != wasTombEnd || nFreeze != 0;
+        OSD_Printf("Kex Ramses visual test: %s (spawn %d, talk %d/mask %03x, "
+                   "vanish %d, body %d/%d, samples %d)\n",
+                   bad ? "FAIL" : "PASS",
+                   s_kexRamsesAnim[kKexRamsesSpawnAnim].count,
+                   s_kexRamsesAnim[kKexRamsesTalkAnim].count,
+                   s_kexRamsesTalkMask,
+                   s_kexRamsesAnim[kKexRamsesVanishAnim].count,
+                   s_kexRamsesAnim[kKexRamsesBodyAnim].count,
+                   s_kexRamsesSawBody, sKexTalkCount);
+    }
+}
+
+int KexRamses_Tick(void)
+{
+    // A repeatable KEX sector fires on entry, not every frame spent inside it.
+    // Rearm only after both the authored four seconds and a real departure.
+    if (g_kexMode && s_kexRamsesRearmClock
+        && (int)totalclock >= s_kexRamsesRearmClock
+        && s_kexRamsesPadCount > 0)
+    {
+        int const nPlayerSprite = PlayerList[nLocalPlayer].nSprite;
+        if ((unsigned)nPlayerSprite < (unsigned)kMaxSprites
+            && ((unsigned)sprite[nPlayerSprite].sectnum >= (unsigned)numsectors
+                || !s_kexRamsesPadSet[sprite[nPlayerSprite].sectnum]))
+        {
+            for (int i = 0; i < numsectors; i++)
+                if (s_kexRamsesPadSet[i])
+                    SectFlag[i] |= 0x8000;
+            s_kexRamsesRearmClock = 0;
+            OSD_Printf("Kex Ramses: repeatable pad rearmed (%d sectors)\n",
+                       s_kexRamsesPadCount);
+        }
+    }
+
+    // Unattended presentation probe. It starts the real cinematic after the
+    // map has settled; its dialogue timer is shortened in Kex_RamsesStart().
+    if (g_kexMode && !s_kexRamsesTestStarted && Bgetenv("VB_KEXRAMSES_VISUAL_TEST")
+        && totalmoves >= 30 && !nFreeze && (Kex_IsTomb() || Kex_IsTombEnd())
+        && (unsigned)nSpiritSprite < (unsigned)kMaxSprites)
+    {
+        s_kexRamsesTestStarted = 1;
+        nFreeze = 1;
+        StopAllSounds();
+        StopLocalSound();
+        InitSpiritHead();
+        if (!s_kexRamsesNative)
+            OSD_Printf("Kex Ramses visual test: FAIL (authored presentation unavailable)\n");
+    }
+
+    if (!g_kexMode || !s_kexRamsesNative)
+        return 0;
+
+    auto &sp = sprite[nSpiritSprite];
+    switch (s_kexRamsesPhase)
+    {
+        case kKexRamsesPrelude:
+            Kex_RamsesCameraTick();
+            if (s_kexRamsesBodyMoveClock)
+            {
+                while ((int)totalclock >= s_kexRamsesBodyMoveClock
+                       && s_kexRamsesBodyMoveClock < s_kexRamsesSpawnClock)
+                {
+                    sp.z += 2 * 16 * 6;
+                    s_kexRamsesBodyMoveClock += 4;
+                }
+            }
+            if ((int)totalclock >= s_kexRamsesSpawnClock)
+            {
+                sp.z = s_kexRamsesBaseZ;
+                Kex_RamsesBeginAnim(kKexRamsesSpawn, kKexRamsesSpawnAnim);
+                if (!Kex_RamsesStart())
+                {
+                    OSD_Printf("Kex Ramses: facial script unavailable, aborting presentation\n");
+                    sp.cstat |= 0x8000;
+                    sp.xrepeat = (uint8_t)nSpiritRepeatX;
+                    sp.yrepeat = (uint8_t)nSpiritRepeatY;
+                    s_kexRamsesNative = 0;
+                    s_kexRamsesPhase = kKexRamsesNone;
+                    s_kexCameraMove = 0;
+                    nFreeze = 0;
+                }
+            }
+            break;
+
+        case kKexRamsesSpawn:
+            Kex_RamsesCameraTick();
+            if (Kex_RamsesAdvanceAnim(kKexRamsesSpawnAnim))
+            {
+                s_kexRamsesBobTicks = 0;
+                Kex_RamsesBeginAnim(kKexRamsesTalk, kKexRamsesTalkAnim);
+            }
+            break;
+
+        case kKexRamsesTalk:
+        {
+            Kex_RamsesCameraTick();
+            int const sample = ((int)totalclock - s_kexRamsesTalkClock) / 4;
+            int const talkFrame = (unsigned)sample < (unsigned)sKexTalkCount
+                                ? Kex_RamsesTalkFrame(sKexTalkData[sample]) : 0;
+            Kex_RamsesSetAnim(kKexRamsesTalkAnim, talkFrame);
+            sp.z = s_kexRamsesBaseZ
+                 - Blrintf(8.f * 16.f * 6.f * sinf(s_kexRamsesBobTicks * 0.025f));
+            s_kexRamsesBobTicks++;
+
+            int const buttons = sPlayerInput[nLocalPlayer].buttons;
+            if ((int)totalclock >= s_kexRamsesEndClock
+                || ((int)totalclock >= s_kexRamsesSkipClock
+                    && (buttons & (kButtonOpen | kButtonFire | kButtonJump))))
+                Kex_RamsesEnd();
+            break;
+        }
+
+        case kKexRamsesVanish:
+            if (Kex_RamsesAdvanceAnim(kKexRamsesVanishAnim))
+                Kex_RamsesFinishNative();
+            break;
+    }
+    return s_kexRamsesNative;
+}
+
+int KexRamses_ViewTile(int nSprite)
+{
+    if (!s_kexRamsesNative || nSprite != nSpiritSprite)
+        return -1;
+
+    int which = -1;
+    if (s_kexRamsesPhase == kKexRamsesSpawn)
+        which = kKexRamsesSpawnAnim;
+    else if (s_kexRamsesPhase == kKexRamsesVanish)
+        which = kKexRamsesVanishAnim;
+    if (which < 0)
+        return sprite[nSprite].picnum;
+
+    KexRamsesAnim const &anim = s_kexRamsesAnim[which];
+    int const frame = clamp(((int)totalclock - s_kexRamsesPhaseClock)
+                            / max(1, anim.ticks), 0, anim.count - 1);
+    return anim.first + frame;
 }
 
 void InitSpiritHead()
@@ -206,6 +804,9 @@ void InitSpiritHead()
 
     nSpiritRepeatX = sprite[nSpiritSprite].xrepeat;
     nSpiritRepeatY = sprite[nSpiritSprite].yrepeat;
+
+    if (Kex_RamsesNativeInit())
+        return;
 
     if (!waloff[kTileRamsesNormal]) tileLoad(kTileRamsesNormal); // Ramses Normal Head
     // The gold head is read below without ever being drawn first; every other
@@ -294,6 +895,8 @@ void InitSpiritHead()
     lNextStateChange = (int)totalclock;
     lHeadStartClock = (int)totalclock;
 
+    if (g_kexMode)
+        KexScripted_Trigger(0);
     if (!(g_kexMode && Kex_RamsesStart()))
     {
         sprintf(filename, "LEV%d.PUP", levelnum);
@@ -355,7 +958,12 @@ int DoSpiritHead()
 {
     static short word_964E6 = 0;
 
+    if (s_kexRamsesNative)
+        return 1;
+
     nVertPan[0] += (nDestVertPan[0] - nVertPan[0]) / 4;
+    if (nKexSpeaking)
+        Kex_RamsesCameraTick();
 
     tileInvalidate(kTileRamsesWorkTile, -1, -1);
 
@@ -627,8 +1235,9 @@ int DoSpiritHead()
             }
             else if (nKexSpeaking)
             {
-                // The remaster's hub: Ramses finishes and play resumes.
-                if (!CDplaying())
+                // The remaster schedules this event from the level script;
+                // several wavs are shorter than that authored duration.
+                if ((int)totalclock >= s_kexRamsesEndClock)
                     Kex_RamsesEnd();
             }
             else if (!bSubTitles)

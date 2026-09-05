@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define __kextable_h__
 
 // The tables kexmap.py writes alongside the converted levels -- kexbreak.txt,
-// kexlight.txt, kexfont.txt, kexworld.txt -- are all the same shape: one record
+// kexdrop.txt, kexlight.txt, kexfont.txt, kexworld.txt -- are all the same shape: one record
 // per line, "#" starting a comment line, fields separated by spaces. This reads
 // any of them, and _write_table() in kexmap.py writes what it expects.
 //

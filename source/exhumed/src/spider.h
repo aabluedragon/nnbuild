@@ -30,5 +30,8 @@ void InitSpider();
 int GetSpiderSprite(int nSpider);
 int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle, int bScorp = 0);   // VibeBuild32: bScorp draws it from SCORPION.SEQ
 void FuncSpider(int a, int b, int nRun);
+int KexSpiderOwnsDeathDrop(int nSprite);
+int KexSpiderIdentityTest();
+void KexSpiderLeap_TestTick();
 
 #endif

@@ -82,18 +82,42 @@ void ClearSpaceBar(short nPlayer)
 
 void GetLocalInput()
 {
-    int i;
-    for (i = 6; i >= 0; i--)
+    // The original game has seven numbered weapon buttons.  PowerSlave
+    // Exhumed adds the Manacle as slot 8 and puts Amun Bomb before the flame
+    // thrower.  Keep the classic packet path byte-for-byte as it was (for
+    // its demos and controls), but encode the remaster's authored ordering
+    // when this is a -kex session.
+    int weapon = 0;
+    if (g_kexMode)
     {
-        if (BUTTON(gamefunc_Weapon_1+i))
-            break;
+        static int const s_kexWeaponForSlot[] = {
+            0, 1, 2, 4, 3, 5, 6, 7
+        };
+        for (int slot = (int)ARRAY_SIZE(s_kexWeaponForSlot) - 1; slot >= 0; slot--)
+        {
+            if (BUTTON(gamefunc_Weapon_1 + slot))
+            {
+                weapon = s_kexWeaponForSlot[slot] + 1;
+                break;
+            }
+        }
     }
-    i++;
+    else
+    {
+        for (int i = 6; i >= 0; i--)
+        {
+            if (BUTTON(gamefunc_Weapon_1 + i))
+            {
+                weapon = i + 1;
+                break;
+            }
+        }
+    }
 
     if (PlayerList[nLocalPlayer].nHealth)
     {
         lLocalButtons = (BUTTON(gamefunc_Crouch) << 4) | (BUTTON(gamefunc_Fire) << 3)
-                      | (BUTTON(gamefunc_Jump)<<0) | (i<<13);
+                      | (BUTTON(gamefunc_Jump)<<0) | (weapon<<13);
     }
     else
     {

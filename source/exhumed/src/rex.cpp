@@ -71,12 +71,9 @@ void InitRexs()
 
 int BuildRex(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel)
 {
-    RexCount--;
-
-    int nRex = RexCount;
-    if (nRex < 0) {
+    if (RexCount <= 0)
         return -1;
-    }
+    int const nRex = --RexCount;
 
     if (nSprite == -1)
     {

@@ -80,6 +80,8 @@ enum {
 	gamefunc_Weapon_5,
 	gamefunc_Weapon_6,
 	gamefunc_Weapon_7,
+	gamefunc_Weapon_8,
+	gamefunc_Weapon_Wheel,
 	gamefunc_Pause,
 	gamefunc_Map,
 	gamefunc_Zoom_In,
@@ -104,6 +106,7 @@ enum {
 
 extern const char gamefunctions[kMaxGameFunctions][kMaxGameFuncLen];
 extern const char keydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen];
+extern const char kexkeydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen];
 extern const char oldkeydefaults[kMaxGameFunctions * 2][kMaxGameFuncLen];
 
 typedef struct {

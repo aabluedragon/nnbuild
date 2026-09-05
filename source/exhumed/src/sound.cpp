@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "exhumed.h"
 #include "config.h"
 #include "sound.h"
+#include "kextactile.h"
 #include "init.h"
 #include "object.h"
 #include "player.h"
@@ -1337,11 +1338,15 @@ short PlayFXAtXYZ(unsigned short nSound, int x, int y, int z, int nSector)
 
 short D3PlayFX(unsigned short nSound, short nSprite)
 {
+    int const index = nSound & 0x1ff;
+    if ((unsigned)index < (unsigned)nSoundCount)
+        KexTactile_OnSound(szSoundName[index], nSprite);
     return PlayFX2(nSound, nSprite);
 }
 
 void StopSpriteSound(short nSprite)
 {
+    KexTactile_StopSprite(nSprite & 0x0fff);
     if (!dig)
         return;
 
@@ -1357,6 +1362,7 @@ void StopSpriteSound(short nSprite)
 
 void StopAllSounds(void)
 {
+    KexTactile_StopAll();
     if (!dig)
         return;
 
