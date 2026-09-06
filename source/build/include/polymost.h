@@ -157,7 +157,7 @@ static FORCE_INLINE float polymost_getanisotropy(int filtered = 0)
 }
 
 // VibeBuild32: per-vertex shading from a light field (see polymost.cpp)
-typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t sectnum; int32_t isceil; } polymost_kexsurf_t;
+typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t sectnum, wallnum; int32_t isceil; } polymost_kexsurf_t;
 extern polymost_kexsurf_t polymost_kexsurf;
 extern int32_t polymost_kexVertexLight;
 extern int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback);

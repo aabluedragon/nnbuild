@@ -1350,14 +1350,15 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
 
         start = len(walls)
         for i,(k,fis) in enumerate(edges):
-            portal = None; pspan = -1.0
+            portal = None; portal_fi = -1; pspan = -1.0
             for fi in fis:
                 if isinstance(fi, _Cut):
                     portal = fi; break
                 f = m.faces[fi]
                 if f.link >= 0:
                     lo,hi = _zspan(m,f)
-                    if hi-lo >= pspan: pspan = hi-lo; portal = f
+                    if hi-lo >= pspan:
+                        pspan = hi-lo; portal = f; portal_fi = fi
             portal_flags = 0
             portal_alts = []
             if portal is not None and not isinstance(portal, _Cut):
@@ -1391,13 +1392,15 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                                             texture=tex, bounds=bounds,
                                             nextwall=-1, nextsector=-1))
             if fis and not isinstance(fis[0], _Cut):
-                solid = next((m.faces[fi] for fi in fis if m.faces[fi].link < 0), m.faces[fis[0]])
+                solid_fi = next((fi for fi in fis if m.faces[fi].link < 0), fis[0])
+                solid = m.faces[solid_fi]
             else:
                 # A side the source never gave a face: either synthesised by
                 # _edges to close the ring, where nothing is ever drawn and it
                 # stays solid, or the seam of a contour split, which is a
                 # portal into the other half. Either way the sector's floor
                 # lends the texture.
+                solid_fi = min(s.wallEnd + 2, m.nface - 1)
                 solid = ff_face
             # Build shows exactly xrepeat*8 texels across a wall (polymost's
             # u spans wal->xrepeat*8). Kex's compiled UVs put one 64-pixel
@@ -1421,7 +1424,9 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
                               # nothing at all.
                               shade=(KEX_SHADE_MIN if (solid.flags & KEX_FACE_SELFLIT)
                                      else _shade_at(m, solid if _lit(solid) else ff_face,
-                                                    (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0))))
+                                                    (k[0] + k[2]) / 2.0, (k[1] + k[3]) / 2.0)),
+                              _kex_light_face=solid_fi,
+                              _kex_mask_light_face=portal_fi))
             # Kex keeps rendering and collision independent. A portal face
             # may be untextured yet Solid, textured but passable, Invisible,
             # or actor-selective. Build's masked art is therefore assigned
@@ -1505,6 +1510,8 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
         ckey = _flat_cells(m, cf) if not cheinum and cf.link < 0 else None
         sects.append(dict(floorsky=(ff.tileStart < 0 and ff.link < 0),
                           _fcomp_f=fkey, _fcomp_c=ckey,
+                          _kex_light_floor_face=min(s.wallEnd + 2, m.nface - 1),
+                          _kex_light_ceiling_face=min(s.wallEnd + 1, m.nface - 1),
                           yax_ceil=(cf.link if cf.tileStart < 0 else -1),
                           yax_floor=(ff.link if ff.tileStart < 0 else -1),
                           wallptr=start, wallnum=len(walls)-start,
@@ -1584,6 +1591,7 @@ def convert(m, tilebase=4096, switch_pairs=None, ramses=None):
             # textured passable face whose reverse face is Solid, so copying
             # the block bits here would erase a real one-way opening.
             o['overpicnum'] = w['overpicnum']; o['cstat'] |= w['cstat'] & 16
+            o['_kex_mask_light_face'] = w.get('_kex_mask_light_face', -1)
             # This is renderer glue, not a second authored face.  If the
             # source is a Toggle face, opening it must remove this copied view
             # from the reverse side without changing that side's collision.
@@ -1901,14 +1909,18 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
                     flo, fhi = _zspan(m, f)
                     ok = flo >= hi - 1.0 if above else fhi <= lo + 1.0
                     if ok and (best is None or (fhi - flo) > best[0]):
-                        best = (fhi - flo, f)
+                        best = (fhi - flo, fi)
                 return best[1] if best else None
-            above = band(fis, True)
-            below = band(n.get('_fis'), False)
+            above_fi = band(fis, True)
+            below_fi = band(n.get('_fis'), False)
+            above = m.faces[above_fi] if above_fi is not None else None
+            below = m.faces[below_fi] if below_fi is not None else None
             if above is not None:
                 w['picnum'] = _pic(m, above, tilebase)
+                w['_kex_light_face'] = above_fi
             elif below is not None:
                 w['picnum'] = _pic(m, below, tilebase)
+                w['_kex_light_face'] = below_fi
             elif w['picnum'] < 0 and ff is not None:
                 w['picnum'] = _pic(m, ff, tilebase)
             upper = B['ceilingz'] - A['ceilingz']      # > 0: our part above the opening
@@ -1960,37 +1972,62 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
         w.pop('_fis', None); w.pop('_portal', None); w.pop('_ff', None)
 
 
-def write_lit(path, m):
-    """The level's baked light field, for the engine's per-vertex shading.
+def write_lit(path, m, sects, walls, ranges):
+    """Write the KEX baked-light field with emitted-surface provenance.
 
-    Kex bakes its lighting into the tile vertices -- one RGBA sample at every
-    128-unit cell corner of every textured face -- and draws each face as a
-    Gouraud mosaic of them: the fire pot's glow falls off across the wall
-    behind it, the floor darkens toward the corners. Build has one shade per
-    wall and one per floor, which the converter carries by cutting surfaces
-    into pieces, and the result is a flat shade per piece with a seam between
-    them. So the samples go out beside the map as "x y z lum" in Build units
-    (luminance 0..255), and in Kex mode the renderer shades every polygon
-    vertex from the field around it (KexVL_* in the engine).
+    KEXLIT2 keeps every source face separate. The older position-only table
+    averaged colours where a floor, wall, or portal band shared a vertex, so
+    Polymost could blend unrelated surfaces. Each generated Build surface now
+    points at the source face it renders; the MAP geometry remains untouched.
     """
-    acc = {}
-    for s in m.sectors:
-        for fi in range(s.faceStart, min(s.wallEnd + 3, m.nface)):
-            f = m.faces[fi]
-            if f.tileStart < 0 or f.tileVertStart < 0 or f.tileVertEnd < f.tileVertStart:
-                continue
-            for vi in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
-                x, y, z, (r, g, b, a) = m.verts[vi]
-                key = (int(round(x * WORLD)), int(round(-y * WORLD)), int(round(-z * SCALE * WORLD)))
-                lum = (r * 30 + g * 59 + b * 11) / 100.0
-                t = acc.get(key)
-                if t is None: acc[key] = [lum, 1]
-                else: t[0] += lum; t[1] += 1
+    keep, remap = sector_remap(sects, ranges)
+    wremap = {}
+    for old in keep:
+        start, count = ranges[old]
+        for i in range(count):
+            wremap[start + i] = len(wremap)
+
+    surfaces = []
+    for old in keep:
+        s = sects[old]
+        base = remap[old] * 2
+        surfaces.append((2, base, s.get('_kex_light_floor_face', -1)))
+        surfaces.append((2, base + 1, s.get('_kex_light_ceiling_face', -1)))
+    for old in keep:
+        start, count = ranges[old]
+        for i in range(count):
+            w = walls[start + i]
+            base = wremap[start + i] * 2
+            surfaces.append((1, base, w.get('_kex_light_face', -1)))
+            if 'overpicnum' in w:
+                surfaces.append((1, base + 1, w.get('_kex_mask_light_face', -1)))
+
+    face_ids = sorted({face for _kind, _id, face in surfaces
+                       if 0 <= face < m.nface and _lit(m.faces[face])})
+    samples = []
+    for face in face_ids:
+        f = m.faces[face]
+        acc = {}
+        for vi in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
+            x, y, z, (r, g, b, _a) = m.verts[vi]
+            key = (int(round(x * WORLD)), int(round(-y * WORLD)),
+                   int(round(-z * SCALE * WORLD)))
+            lum = (r * 30 + g * 59 + b * 11) / 100.0
+            total = acc.get(key)
+            if total is None:
+                acc[key] = [lum, 1]
+            else:
+                total[0] += lum; total[1] += 1
+        samples.extend((face, x, y, z, int(round(total / count)))
+                       for (x, y, z), (total, count) in sorted(acc.items()))
+
     with open(path, 'w') as f:
-        f.write("%d\n" % len(acc))
-        for (x, y, z), (tot, n) in sorted(acc.items()):
-            f.write("%d %d %d %d\n" % (x, y, z, int(round(tot / n))))
-    return len(acc)
+        f.write("KEXLIT2 %d %d\n" % (len(samples), len(surfaces)))
+        for face, x, y, z, lum in samples:
+            f.write("%d %d %d %d %d\n" % (face, x, y, z, lum))
+        for kind, ident, face in sorted(surfaces):
+            f.write("%d %d %d\n" % (kind, ident, face))
+    return len(samples)
 
 
 def _split_long(edge_cache):
@@ -7052,9 +7089,10 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
         # Build PowerSlave has no sector teleporter, so the engine reads these
         # rows instead.
         teleports.extend(_teleport_rows(m, remap, mapkey))
-        write_lit(os.path.join(outdir, KEX_MAP_PREFIX + name.upper().rsplit('.', 1)[0] + '.LIT'), m)
         ns, nw, nsp = write_build(os.path.join(outdir, KEX_MAP_PREFIX + name.upper()),
                                   sects, walls, ranges, start, sprites)
+        write_lit(os.path.join(outdir, KEX_MAP_PREFIX + name.upper().rsplit('.', 1)[0] + '.LIT'),
+                  m, sects, walls, ranges)
         portals = sum(1 for w in walls if w['nextsector'] >= 0)
         if verbose:
             print("  %-16s %4d kex sectors -> %4d build sectors, %5d walls, %4d portals, "

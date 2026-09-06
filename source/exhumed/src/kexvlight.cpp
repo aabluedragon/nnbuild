@@ -10,22 +10,26 @@
 // z lum" in Build units, and polymost asks here for the shade at every
 // polygon vertex it draws in Kex mode (polymost_kexShadeAt).
 //
-// The query is an inverse-distance blend of the samples within reach of the
-// point, bucketed on a grid so it costs a few dozen samples per vertex; the
-// luminance goes through the converter's own curve, so a vertex lands on the
-// same shade the piece as a whole would have had.
+// KEXLIT2 additionally records which source face each emitted Build surface
+// represents. The query then blends only that face's samples, rather than
+// averaging a floor, wall and portal band that happen to share a coordinate.
+// Older position-only sidecars retain their spatial-grid lookup.
 #include "compat.h"
 #include "build.h"
 #include "polymost.h"
 #include "exhumed.h"
 #include "kexbreak.h"
 
-struct KexVLSample { int32_t x, y, z; int32_t lum; };
+struct KexVLSample { int32_t x, y, z, lum, face; };
+struct KexVLFace { int32_t face, first, count; };
+struct KexVLSurface { int32_t kind, ident, face; };
 
 static KexVLSample *s_samples;
+static KexVLFace   *s_faces;
+static KexVLSurface *s_surfaces;
 static int32_t     *s_order;       // sample indices sorted by cell
 static int32_t     *s_cellStart;   // cell -> first index in s_order, ncells+1 entries
-static int          s_n;
+static int          s_n, s_nfaces, s_nsurfaces, s_v2;
 static int32_t      s_minx, s_miny, s_cw, s_ch;
 static char         s_loaded[BMAX_PATH];
 
@@ -37,9 +41,11 @@ static char         s_loaded[BMAX_PATH];
 void KexVL_Free(void)
 {
     Xfree(s_samples); s_samples = NULL;
+    Xfree(s_faces); s_faces = NULL;
+    Xfree(s_surfaces); s_surfaces = NULL;
     Xfree(s_order); s_order = NULL;
     Xfree(s_cellStart); s_cellStart = NULL;
-    s_n = 0; s_loaded[0] = 0;
+    s_n = s_nfaces = s_nsurfaces = s_v2 = 0; s_loaded[0] = 0;
 }
 
 int KexVL_Ready(void) { return s_n > 0; }
@@ -63,25 +69,79 @@ void KexVL_Load(char const *mapfile)
     kread(h, buf, len); buf[len] = 0; kclose(h);
 
     char *p = buf;
-    int n = (int)strtol(p, &p, 10);
-    if (n <= 0) { Xfree(buf); return; }
+    int const v2 = !Bstrncmp(p, "KEXLIT2", 7)
+        && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
+    int nSurface = 0;
+    int n;
+    if (v2)
+    {
+        p += 7;
+        n = (int)strtol(p, &p, 10);
+        nSurface = (int)strtol(p, &p, 10);
+    }
+    else
+    {
+        n = (int)strtol(p, &p, 10);
+    }
+    if (n <= 0 || (v2 && nSurface < 0)) { Xfree(buf); return; }
     s_samples = (KexVLSample *)Xmalloc(n * sizeof(KexVLSample));
     int cnt = 0;
     int32_t minx = INT32_MAX, miny = INT32_MAX, maxx = INT32_MIN, maxy = INT32_MIN;
     while (cnt < n)
     {
         char *q;
+        long face = -1;
+        if (v2)
+        {
+            face = strtol(p, &q, 10); if (q == p) break; p = q;
+        }
         long x = strtol(p, &q, 10); if (q == p) break; p = q;
         long y = strtol(p, &q, 10); if (q == p) break; p = q;
         long z = strtol(p, &q, 10); if (q == p) break; p = q;
         long l = strtol(p, &q, 10); if (q == p) break; p = q;
         KexVLSample &s = s_samples[cnt++];
-        s.x = (int32_t)x; s.y = (int32_t)y; s.z = (int32_t)z; s.lum = (int32_t)l;
+        s.x = (int32_t)x; s.y = (int32_t)y; s.z = (int32_t)z;
+        s.lum = (int32_t)l; s.face = (int32_t)face;
         minx = min(minx, s.x); maxx = max(maxx, s.x); miny = min(miny, s.y); maxy = max(maxy, s.y);
     }
-    Xfree(buf);
-    if (!cnt) { KexVL_Free(); return; }
+    if (!cnt) { Xfree(buf); KexVL_Free(); return; }
     s_n = cnt;
+    if (v2)
+    {
+        // write_lit() orders samples by source face and surface rows by their
+        // (kind, identity) lookup key. Preserve that compact representation:
+        // even the largest retail face has only 238 sample corners.
+        s_faces = (KexVLFace *)Xmalloc(cnt * sizeof(KexVLFace));
+        for (int i = 0; i < cnt; )
+        {
+            int const first = i, face = s_samples[i].face;
+            while (i < cnt && s_samples[i].face == face)
+                i++;
+            s_faces[s_nfaces++] = { face, first, i - first };
+        }
+        s_surfaces = (KexVLSurface *)Xmalloc(nSurface * sizeof(KexVLSurface));
+        while (s_nsurfaces < nSurface)
+        {
+            char *q;
+            long kind = strtol(p, &q, 10); if (q == p) break; p = q;
+            long ident = strtol(p, &q, 10); if (q == p) break; p = q;
+            long face = strtol(p, &q, 10); if (q == p) break; p = q;
+            s_surfaces[s_nsurfaces++] = { (int32_t)kind, (int32_t)ident, (int32_t)face };
+        }
+        s_v2 = s_nsurfaces == nSurface;
+        if (!s_v2)
+        {
+            KexVL_Free();
+            Xfree(buf);
+            return;
+        }
+        Xfree(buf);
+        Bstrncpyz(s_loaded, path, sizeof(s_loaded));
+        OSD_Printf("Kex light field: %d face samples, %d surfaces from %s\n",
+                   s_n, s_nsurfaces, path);
+        return;
+    }
+    Xfree(buf);
     s_minx = minx; s_miny = miny;
     s_cw = (maxx - minx) / KEXVL_CELL + 1;
     s_ch = (maxy - miny) / KEXVL_CELL + 1;
@@ -129,10 +189,91 @@ static inline int32_t KexVL_ShadeOfLum(float lum)
     return clamp((int32_t)Blrintf(ns * (1.f - f)), -128, ns - 2);
 }
 
+static int KexVL_FindFace(int face)
+{
+    int lo = 0, hi = s_nfaces;
+    while (lo < hi)
+    {
+        int const mid = (lo + hi) >> 1;
+        if (s_faces[mid].face < face) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < s_nfaces && s_faces[lo].face == face ? lo : -1;
+}
+
+static int KexVL_FindSurface(int kind, int ident)
+{
+    int lo = 0, hi = s_nsurfaces;
+    while (lo < hi)
+    {
+        int const mid = (lo + hi) >> 1;
+        KexVLSurface const &s = s_surfaces[mid];
+        if (s.kind < kind || (s.kind == kind && s.ident < ident)) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < s_nsurfaces && s_surfaces[lo].kind == kind
+        && s_surfaces[lo].ident == ident ? lo : -1;
+}
+
+static int KexVL_FaceLum(int face, float x, float y, float z, float *lum)
+{
+    int const entry = KexVL_FindFace(face);
+    if (entry < 0)
+        return 0;
+    KexVLFace const &f = s_faces[entry];
+    float wsum = 0.f, lsum = 0.f, nearest2 = 1e30f; int nearest = -1;
+    float const r2max = KEXVL_RADIUS * KEXVL_RADIUS;
+    for (int i = f.first; i < f.first + f.count; i++)
+    {
+        KexVLSample const &s = s_samples[i];
+        float const dx = s.x - x, dy = s.y - y, dz = (s.z - z) * (1.f / 16.f);
+        float const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > r2max) continue;
+        if (d2 < nearest2) { nearest2 = d2; nearest = i; }
+        float const w = 1.f / ((d2 + KEXVL_SOFT) * (d2 + KEXVL_SOFT));
+        wsum += w; lsum += w * s.lum;
+    }
+    if (wsum <= 0.f)
+        return 0;
+    *lum = nearest >= 0 && nearest2 < KEXVL_SNAP * KEXVL_SNAP
+        ? (float)s_samples[nearest].lum : lsum / wsum;
+    return 1;
+}
+
+static int KexVL_CurrentFace(void)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    int kind, ident;
+    if (s.kind == 2)
+    {
+        kind = 2;
+        ident = s.sectnum * 2 + (s.isceil != 0);
+    }
+    else if (s.kind == 1 && (unsigned)s.wallnum < (unsigned)numwalls)
+    {
+        kind = 1;
+        int const masked = wall[s.wallnum].overpicnum > 0
+            && globalpicnum == wall[s.wallnum].overpicnum;
+        ident = s.wallnum * 2 + masked;
+    }
+    else
+        return -1;
+    int const entry = KexVL_FindSurface(kind, ident);
+    return entry >= 0 ? s_surfaces[entry].face : -1;
+}
+
 int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
 {
     if (!s_n)
         return fallback;
+    if (s_v2)
+    {
+        float lum;
+        int const face = KexVL_CurrentFace();
+        if (face >= 0 && KexVL_FaceLum(face, x, y, z, &lum))
+            return KexVL_ShadeOfLum(lum);
+        return fallback;
+    }
     int const cx = (int)((x - s_minx) / KEXVL_CELL), cy = (int)((y - s_miny) / KEXVL_CELL);
     float wsum = 0.f, lsum = 0.f, nearest2 = 1e30f; int nearest = -1;
     float const r2max = KEXVL_RADIUS * KEXVL_RADIUS;

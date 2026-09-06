@@ -298,6 +298,63 @@ def verify_tactile(z):
     return out
 
 
+def verify_manacle(z):
+    """Keep the charged Manacle beam on the remaster's single aim line."""
+    out = []
+    names = {name.lower(): name for name in z.namelist()}
+    pspr = names.get('scripts/p_pspr.txt')
+    if pspr is None:
+        return ['retail Manacle action source is missing']
+
+    source = z.read(pspr).decode('latin-1').replace('\r', '')
+    start = source.find('void A_FireBolts(')
+    brace = source.find('{', start)
+    if start < 0 or brace < 0:
+        return ['retail A_FireBolts action is missing']
+    depth = 0
+    end = -1
+    for i in range(brace, len(source)):
+        if source[i] == '{':
+            depth += 1
+        elif source[i] == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end < 0:
+        return ['retail A_FireBolts action is unterminated']
+
+    retail = re.sub(r'\s+', '', source[start:end])
+    for needle in ('for(inti=0;i<manacleChargeTime+1;++i)',
+                   'bolt.GetRotation().z=actor.GetRotation().z;',
+                   'bolt.GetRotation().x=actor.GetRotation().x;',
+                   'dir.x=(Math::Sin(actor.GetRotation().z)*cp)*64.0f;',
+                   'dir.y=(Math::Cos(actor.GetRotation().z)*cp)*64.0f;'):
+        if needle not in retail:
+            out.append('retail A_FireBolts contract changed: %s' % needle)
+    if 'A_Quake(' in retail:
+        out.append('retail A_FireBolts unexpectedly applies a quake')
+
+    srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+    try:
+        native = re.sub(r'\s+', '', open(os.path.join(srcdir, 'gun.cpp')).read())
+    except OSError as exc:
+        return out + ['cannot read native Manacle release: %s' % exc]
+    start = native.find('casekWeaponManacle:')
+    end = native.find('casekWeaponMummified:', start)
+    release = native[start:end] if start >= 0 and end >= 0 else ''
+    for needle in ('intconstnBolts=1+s_manacleCharge[nPlayer];',
+                   'for(inti=0;i<nBolts;i++)',
+                   'BuildBullet(nPlayerSprite,18,ebp,ebx,nHeight,nAngle,var_50,var_1C);',
+                   'KexManacle_LastShot=nBolts;'):
+        if needle not in release:
+            out.append('native Manacle release changed: %s' % needle)
+    for forbidden in ('intconstspread=', '(nAngle+', 'nQuake[nPlayer]='):
+        if forbidden in release:
+            out.append('native Manacle release has non-retail %s' % forbidden)
+    return out
+
+
 def verify_controller_defaults():
     """A fresh cfg must make the remaster's controller UI and haptics usable."""
     out = []
@@ -4275,8 +4332,8 @@ def verify_player_travel():
     return out
 
 
-def verify_light_fields(outdir):
-    """Every converted KEX map must retain its renderer-consumed light field."""
+def verify_light_fields(z, outdir):
+    """Every converted KEX map must retain face-local retail light samples."""
     out = []
     try:
         files = os.listdir(outdir)
@@ -4288,44 +4345,110 @@ def verify_light_fields(outdir):
     if not maps:
         return ['converted KEX directory has no maps']
 
+    source_names = {name.lower(): name for name in z.namelist()}
     for name in maps:
         stem = os.path.splitext(name)[0]
         path = os.path.join(outdir, stem + '.LIT')
         try:
             lines = open(path, encoding='ascii').read().splitlines()
-            declared = int(lines[0])
+            header = lines[0].split()
+            if len(header) != 3 or header[0] != 'KEXLIT2':
+                raise ValueError('not a KEXLIT2 sidecar')
+            declared, mapped = int(header[1]), int(header[2])
         except (OSError, ValueError, IndexError) as exc:
             out.append('%s is missing or malformed: %s' % (os.path.basename(path), exc))
             continue
 
-        samples = []
+        samples, surfaces = [], []
         malformed = False
-        for line in lines[1:]:
+        if len(lines) != 1 + declared + mapped or declared <= 0:
+            malformed = True
+        for line in lines[1:1 + declared]:
             try:
                 fields = tuple(int(value) for value in line.split())
             except ValueError:
                 malformed = True
                 break
-            if len(fields) != 4:
+            if len(fields) != 5:
                 malformed = True
                 break
             samples.append(fields)
-        if (malformed or declared <= 0 or declared != len(samples)
-                or any(lum < 0 or lum > 255 for _x, _y, _z, lum in samples)
-                or len({sample[:3] for sample in samples}) != len(samples)):
-            out.append('%s has an invalid sample table (%d declared, %d parsed)'
-                       % (os.path.basename(path), declared, len(samples)))
+        for line in lines[1 + declared:]:
+            try:
+                fields = tuple(int(value) for value in line.split())
+            except ValueError:
+                malformed = True
+                break
+            if len(fields) != 3:
+                malformed = True
+                break
+            surfaces.append(fields)
+        if (malformed or declared != len(samples) or mapped != len(surfaces)
+                or any(lum < 0 or lum > 255 for _face, _x, _y, _z, lum in samples)
+                or samples != sorted(samples)
+                or len({sample[:4] for sample in samples}) != len(samples)
+                or surfaces != sorted(surfaces)
+                or len(set(surfaces)) != len(surfaces)):
+            out.append('%s has an invalid KEXLIT2 table (%d samples, %d surfaces)'
+                       % (os.path.basename(path), declared, mapped))
+            continue
+
+        source = source_names.get(('maps/' + stem[4:] + '.map').lower()) \
+            if stem.upper().startswith('KEX_') else None
+        if source is None:
+            out.append('%s has no retail source map for its light field' % stem)
+            continue
+        try:
+            m = K.locate(z.read(source))
+            build_sectors, build_walls = load_build(os.path.join(outdir, name))
+        except (ValueError, struct.error, OSError) as exc:
+            out.append('%s cannot validate face provenance: %s' % (stem, exc))
+            continue
+
+        expected_surface = {(2, i): None for i in range(len(build_sectors) * 2)}
+        expected_surface.update(((1, i * 2), None) for i in range(len(build_walls)))
+        actual_surface = {(kind, ident): face for kind, ident, face in surfaces}
+        missing = sorted(set(expected_surface) - set(actual_surface))
+        if missing:
+            out.append('%s lacks %d emitted-surface light mappings' % (stem, len(missing)))
+        if any(face < -1 or face >= m.nface for _kind, _ident, face in surfaces):
+            out.append('%s maps a surface to an invalid source face' % stem)
+
+        wanted_faces = {face for face in actual_surface.values()
+                        if 0 <= face < m.nface and K._lit(m.faces[face])}
+        expected_samples = set()
+        for face in wanted_faces:
+            f = m.faces[face]
+            acc = {}
+            for vi in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
+                x, y, z_, (r, g, b, _a) = m.verts[vi]
+                key = (int(round(x * K.WORLD)), int(round(-y * K.WORLD)),
+                       int(round(-z_ * K.SCALE * K.WORLD)))
+                lum = (r * 30 + g * 59 + b * 11) / 100.0
+                total = acc.get(key)
+                if total is None:
+                    acc[key] = [lum, 1]
+                else:
+                    total[0] += lum; total[1] += 1
+            expected_samples.update((face, x, y, z_, int(round(total / count)))
+                                    for (x, y, z_), (total, count) in acc.items())
+        if set(samples) != expected_samples:
+            out.append('%s face-local samples differ from retail vertex lighting' % stem)
 
     srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
         vlight = re.sub(r'\s+', '', open(os.path.join(srcdir, 'kexvlight.cpp')).read())
         bridge = re.sub(r'\s+', '', open(os.path.join(srcdir, 'kexbreak.cpp')).read())
+        polymost = re.sub(r'\s+', '', open(os.path.join(srcdir, '..', '..', 'build', 'src', 'polymost.cpp')).read())
     except OSError as exc:
         return out + ['cannot read native KEX light-field bridge: %s' % exc]
     for needle, source in (
             ('Bstrncat(path,".LIT",sizeof(path)-Bstrlen(path)-1)', vlight),
+            ('KEXLIT2', vlight), ('KexVL_CurrentFace', vlight),
+            ('KexVL_FaceLum', vlight), ('s.wallnum', vlight),
             ('polymost_kexShadeAt=KexVL_ShadeAt', bridge),
-            ('polymost_kexVertexLight=KexVL_Ready()&&!Bgetenv("VB_KEX_FLATLIGHT")', bridge)):
+            ('polymost_kexVertexLight=KexVL_Ready()&&!Bgetenv("VB_KEX_FLATLIGHT")', bridge),
+            ('sectnum,wallnum,0', polymost)):
         if needle not in source:
             out.append('native KEX light-field bridge changed: %s' % needle)
     return out
@@ -8355,11 +8478,12 @@ def main():
             ("PLAYERDMG", verify_player_damage),
             ("PLAYERUSE", verify_player_use),
             ("TRAVEL", verify_player_travel),
-            ("LIGHTFIELD", lambda: verify_light_fields(outdir)),
+            ("LIGHTFIELD", lambda: verify_light_fields(z, outdir)),
             ("INTERPOLATION", verify_sprite_interpolation),
             ("LEVELTEX", lambda: verify_level_textures(z, include_testmaps)),
             ("SOUNDS", lambda: verify_sound_aliases(z, outdir)),
             ("TACTILE", lambda: verify_tactile(z)),
+            ("MANACLE", lambda: verify_manacle(z)),
             ("CONTROLLER", verify_controller_defaults),
             ("ACTORPOOLS", verify_actor_pool_guards),
             ("INPUTCOMPAT", lambda: verify_input_compat(z)),

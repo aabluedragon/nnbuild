@@ -1020,18 +1020,16 @@ loc_flag:
 
                 case kWeaponManacle:
                 {
-                    // One bolt, plus one per charge step, in a shallow fan.
+                    // A_FireBolts emits one bolt plus one per charge step. Each
+                    // uses the same authored player aim; it is a stacked beam,
+                    // not a spread shot.
                     int const nBolts = 1 + s_manacleCharge[nPlayer];
                     int var_50 = (fix16_to_int(sPlayerInput[nPlayer].horizon) - 92) << 2;
                     nHeight -= var_50;
                     if (sPlayerInput[nPlayer].nTarget >= 0)
                         var_50 = sPlayerInput[nPlayer].nTarget + 10000;
                     for (int i = 0; i < nBolts; i++)
-                    {
-                        int const spread = (i - (nBolts - 1) / 2) * 24 + ((nBolts & 1) ? 0 : 12);
-                        BuildBullet(nPlayerSprite, 18, ebp, ebx, nHeight, (nAngle + spread) & kAngleMask, var_50, var_1C);
-                    }
-                    nQuake[nPlayer] = 64 + 32 * s_manacleCharge[nPlayer];
+                        BuildBullet(nPlayerSprite, 18, ebp, ebx, nHeight, nAngle, var_50, var_1C);
                     KexManacle_LastShot = nBolts;
                     s_manacleCharge[nPlayer] = 0;
                     s_manacleTicks[nPlayer] = 0;

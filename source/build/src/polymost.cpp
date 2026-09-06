@@ -128,7 +128,7 @@ static float* drawpolyVerts = defaultDrawpolyVertsArray;
 // polymost1Vert.glsl already reads as v_color = gl_Color.
 int32_t polymost_kexVertexLight = 0;
 int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback) = NULL;
-polymost_kexsurf_t polymost_kexsurf = { 0, {0.f,0.f}, {0.f,0.f}, 0.f, 0.f, 0.f, 0.f, -1, 0 };
+polymost_kexsurf_t polymost_kexsurf = { 0, {0.f,0.f}, {0.f,0.f}, 0.f, 0.f, 0.f, 0.f, -1, -1, 0 };
 static float  kexColors[30000 * 4];
 static float  kexCurColor[4] = { 1.f, 1.f, 1.f, 1.f };
 static int    kexColorsEnabled = 0;
@@ -5151,7 +5151,7 @@ static void polymost_internal_nonparallaxed(vec2f_t n0, vec2f_t n1, float ryp0, 
 
     float ft[4] = { fglobalposx, fglobalposy, fcosglobalang, fsinglobalang };
     polymost_kexsurf_t const kexsurf_wall = polymost_kexsurf;
-    polymost_kexsurf = { 2, n0, n1, x0, x1, ryp0, ryp1, sectnum, !have_floor };
+    polymost_kexsurf = { 2, n0, n1, x0, x1, ryp0, ryp1, sectnum, -1, !have_floor };
 
     buildgl_outputDebugMessage(3, "polymost_internal_nonparallaxed(n0:{x:%f, y:%f}, n1:{x:%f, y:%f}, ryp0:%f, ryp1:%f, x0:%f, x1:%f, y0:%f, y1:%f, sectnum:%d)",
                                   n0.x, n0.y, n1.x, n1.y, ryp0, ryp1, x0, x1, y0, y1, sectnum);
@@ -5756,7 +5756,7 @@ static void polymost_drawalls(int32_t const bunch)
         bitmap_set(didwall, wallnum);
 
         ryp0 *= gyxscale; ryp1 *= gyxscale;
-        polymost_kexsurf = { 1, n0, n1, x0, x1, ryp0, ryp1, sectnum, 0 };
+        polymost_kexsurf = { 1, n0, n1, x0, x1, ryp0, ryp1, sectnum, wallnum, 0 };
 
         float cz, fz;
 
@@ -7582,7 +7582,7 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
     ryp0 *= gyxscale; ryp1 *= gyxscale;
     polymost_kexsurf = { 1, { (wal2->x - wal->x) * t0 + wal->x, (wal2->y - wal->y) * t0 + wal->y },
                             { (wal2->x - wal->x) * t1 + wal->x, (wal2->y - wal->y) * t1 + wal->y },
-                         x0, x1, ryp0, ryp1, sectnum, 0 };
+                         x0, x1, ryp0, ryp1, sectnum, wallIndex, 0 };
 
     xtex.d = (ryp0-ryp1)*gxyaspect / (x0-x1);
     ytex.d = 0;

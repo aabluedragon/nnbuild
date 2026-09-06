@@ -2619,9 +2619,11 @@ The weapon runs on the stock state machine with the grenade's "hold the last
 frame" trick in state 2: while fire is down the charge counter climbs one
 step every `KEX_MANACLE_CHARGE_TICKS` (12) up to `KEX_MANACLE_MAX_CHARGE`
 (8); letting go moves to state 3, whose first frame fires 1 + charge bolts
-spread 24 angle units apart and shakes the view. The bolt is bullet type 18
-(100 damage, the beam bolt's `kSeqArrow` art, so it looks like the laser
-traps' shot), so it uses the trap art already carried.
+on the exact same authored aim line: the remaster's `A_FireBolts` loop sets
+every beam to the player's current yaw and pitch, with no added spread or
+weapon-local view quake. The bolt is bullet type 18 (100 damage, the beam
+bolt's `kSeqArrow` art, so it looks like the laser traps' shot), so it uses
+the trap art already carried.
 
 `MANACLE.SEQ` is written by `build_manacle_seq()` in kexmap.py in the
 layout the `WeaponInfo` row expects (raise, lower, idle, charge = the
