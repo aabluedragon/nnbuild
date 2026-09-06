@@ -43,6 +43,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "anims.h"
 #include "runlist.h"
 #include "bullet.h"
+#include "random.h"
 #include "trigdat.h"
 #include "object.h"
 #include "save.h"
@@ -162,6 +163,105 @@ void InitWeapons()
 static uint8_t s_manacleTicks[kMaxPlayers];
 static uint8_t s_manacleCharge[kMaxPlayers];
 int KexManacle_LastShot;        // bolts fired by the last release, for the self-test
+
+// A_HitScan gives M60 a RFloatVal(0.0416) roll around both player-view axes.
+// One full Build turn is 2*pi radians, so its signed 16-bit random fraction
+// is 27 Build angles at the endpoint. Keep both independently sampled, just
+// as the two callback arguments are evaluated by KEX.
+static int KexM60SpreadAngle()
+{
+    constexpr int kKexM60SpreadAngle = 27;
+    int const signedRandom = RandomSize(16) - 32768;
+    return (int)(((int64_t)signedRandom * kKexM60SpreadAngle) / 65536);
+}
+
+// machete_fire_left/right both call A_PlayerMelee(160, 20, 80, ...). The
+// source action launches a ray from the player actor's 80-unit raised point,
+// follows the current view pitch, and limits the *three-dimensional* trace to
+// 160 KEX world units. The native sword predates free look, has a 150-unit
+// horizontal trace and carries 25 damage, so it cannot represent this action
+// in KEX mode without a dedicated bridge.
+enum : int
+{
+    kKexMacheteReach = 160,
+    kKexMacheteDamage = 20,
+    kKexMacheteHeight = 80,
+};
+
+static bool KexMacheteInRange(int x0, int y0, int z0,
+                              int x1, int y1, int z1)
+{
+    // Converted XY is six Build units per KEX unit. Build Z is sixteen times
+    // that scale, so reduce it to the same six-unit scale before measuring.
+    int64_t const dx = (int64_t)x1 - x0;
+    int64_t const dy = (int64_t)y1 - y0;
+    int64_t const dz = ((int64_t)z1 - z0) / 16;
+    int64_t const limit = (int64_t)kKexMacheteReach * 6;
+    return dx * dx + dy * dy + dz * dz <= limit * limit;
+}
+
+static int KexPlayerMacheteTrace(short nPlayer, int *x, int *y, int *z,
+                                 short *nSector)
+{
+    short const nSprite = PlayerList[nPlayer].nSprite;
+    int const pitch = (fix16_to_int(sPlayerInput[nPlayer].horizon) - 92) << 2;
+    int const yaw = sprite[nSprite].ang;
+    int const cosPitch = Cos(pitch);
+    int const xvect = mulscale14(Cos(yaw), cosPitch);
+    int const yvect = mulscale14(Sin(yaw), cosPitch);
+
+    // In KEX, actor Z is up-positive. The source endpoint uses the same
+    // forward direction as projectiles, while Build's Z axis is down-positive
+    // and is sixteen times its XY world scale.
+    vec3_t const start = {
+        sprite[nSprite].x,
+        sprite[nSprite].y,
+        sprite[nSprite].z - kKexMacheteHeight * 16 * 6,
+    };
+    hitdata_t hitData;
+    hitscan(&start, *nSector, xvect, yvect, -Sin(pitch) * 16, &hitData,
+            CLIPMASK1);
+
+    if (!KexMacheteInRange(start.x, start.y, start.z,
+                           hitData.x, hitData.y, hitData.z))
+        return 0;
+
+    *x = hitData.x;
+    *y = hitData.y;
+    *z = hitData.z;
+    *nSector = hitData.sect;
+    if (hitData.sprite > -1)
+        return hitData.sprite | 0xC000;
+    if (hitData.wall > -1)
+        return hitData.wall | 0x8000;
+    return 0;
+}
+
+static bool KexMacheteContractMatches()
+{
+    int const reach = kKexMacheteReach * 6;
+    return kKexMacheteDamage == 20 && kKexMacheteHeight == 80
+        && KexMacheteInRange(0, 0, 0, reach, 0, 0)
+        && !KexMacheteInRange(0, 0, 0, reach + 1, 0, 0);
+}
+
+static int s_kexWeaponSelftest = -1;
+
+static void KexWeapon_RunSelftest(short nSprite)
+{
+    if (s_kexWeaponSelftest < 0)
+        s_kexWeaponSelftest = g_kexMode && Bgetenv("VB_KEX_WEAPON_TEST") ? 1 : 0;
+    if (s_kexWeaponSelftest != 1)
+        return;
+
+    s_kexWeaponSelftest = 2;
+    int const nPitch = (fix16_to_int(sPlayerInput[nLocalPlayer].horizon) - 92) << 2;
+    bool const exact = KexMacheteContractMatches()
+        && KexCobraStaff_PlayerTest(nSprite, nPitch);
+    OSD_Printf("Kex player weapon test: %s (machete range/damage/height %d/%d/%d, cobra -32/80/8)\n",
+               exact ? "PASS" : "FAIL", kKexMacheteReach,
+               kKexMacheteDamage, kKexMacheteHeight);
+}
 
 // The console remaster puts the grenade before the flame thrower. Keep the
 // DOS numeric enum for save/demo compatibility, but use the remaster's order
@@ -457,6 +557,9 @@ void CheckClip(short nPlayer)
 void MoveWeapons(short nPlayer)
 {
     static int dword_96E22 = 0;
+
+    if (nPlayer == nLocalPlayer)
+        KexWeapon_RunSelftest(PlayerList[nPlayer].nSprite);
 
     short nSectFlag = SectFlag[nPlayerViewSect[nPlayer]];
 
@@ -887,10 +990,6 @@ loc_flag:
                 // loc_27266:
                 case kWeaponSword:
                 {
-                    nHeight += (92 - fix16_to_int(sPlayerInput[nPlayer].horizon)) << 6;
-
-                    theZ += nHeight;
-
                     int var_28;
 
                     if (PlayerList[nPlayer].nWeaponState == 2) {
@@ -900,11 +999,24 @@ loc_flag:
                         var_28 = 9;
                     }
 
-                    int cRange = CheckCloseRange(nPlayer, &theX, &theY, &theZ, &nSectorB);
+                    int cRange;
+                    if (g_kexMode)
+                    {
+                        cRange = KexPlayerMacheteTrace(nPlayer, &theX, &theY,
+                                                       &theZ, &nSectorB);
+                    }
+                    else
+                    {
+                        nHeight += (92 - fix16_to_int(sPlayerInput[nPlayer].horizon)) << 6;
+                        theZ += nHeight;
+                        cRange = CheckCloseRange(nPlayer, &theX, &theY, &theZ,
+                                                 &nSectorB);
+                    }
 
                     if (cRange)
                     {
-                        short nDamage = BulletInfo[kWeaponSword].nDamage;
+                        short nDamage = g_kexMode ? kKexMacheteDamage
+                                                   : BulletInfo[kWeaponSword].nDamage;
 
                         if (nPlayerDouble[nPlayer]) {
                             nDamage *= 2;
@@ -1014,13 +1126,29 @@ loc_flag:
                     int var_50 = (fix16_to_int(sPlayerInput[nPlayer].horizon) - 92) << 2;
                     nHeight -= var_50;
 
-                    if (sPlayerInput[nPlayer].nTarget >= 0)
+                    int nShotAngle = nAngle;
+                    if (g_kexMode && nWeapon == kWeaponM60)
                     {
-                                                assert(sprite[sPlayerInput[nPlayer].nTarget].sectnum < kMaxSectors);
+                        // m60_fire calls A_HitScan(4000, .0416, .0416,
+                        // 20, 20, 96, ...): source aim plus independently
+                        // signed yaw/pitch spread. The classic hit-scan
+                        // target shortcut below would otherwise erase it.
+                        nShotAngle = (nShotAngle + KexM60SpreadAngle())
+                            & kAngleMask;
+                        var_50 += KexM60SpreadAngle();
+                    }
+
+                    // A_HitScan traces the player actor's current rotation;
+                    // it has no target parameter. Retain DOS target snapping
+                    // outside KEX mode for demo/legacy compatibility only.
+                    if (!g_kexMode && sPlayerInput[nPlayer].nTarget >= 0)
+                    {
+                        assert(sprite[sPlayerInput[nPlayer].nTarget].sectnum < kMaxSectors);
                         var_50 = sPlayerInput[nPlayer].nTarget + 10000;
                     }
 
-                    BuildBullet(nPlayerSprite, nAmmoType, ebp, ebx, nHeight, nAngle, var_50, var_1C);
+                    BuildBullet(nPlayerSprite, nAmmoType, ebp, ebx, nHeight,
+                                nShotAngle, var_50, var_1C);
                     break;
                 }
 
@@ -1031,6 +1159,17 @@ loc_flag:
                 }
                 case kWeaponStaff:
                 {
+                    if (g_kexMode && KexCobraStaff_Available())
+                    {
+                        // cobra_staff_anim's cstafffire calls
+                        // A_FireProjectile(Proj_Cobra_Green, 0, 0,
+                        // -32, 80, 8); it has neither the DOS snake nor
+                        // that controller's quake/recoil side effects.
+                        int const nPitch = (fix16_to_int(
+                            sPlayerInput[nPlayer].horizon) - 92) << 2;
+                        KexCobraStaff_PlayerFire(nPlayerSprite, nPitch);
+                        break;
+                    }
                     BuildSnake(nPlayer, nHeight);
                     nQuake[nPlayer] = 512;
 
@@ -1058,7 +1197,9 @@ loc_flag:
                     int const nBolts = 1 + s_manacleCharge[nPlayer];
                     int var_50 = (fix16_to_int(sPlayerInput[nPlayer].horizon) - 92) << 2;
                     nHeight -= var_50;
-                    if (sPlayerInput[nPlayer].nTarget >= 0)
+                    // A_FireBolts uses player yaw/pitch directly; unlike the
+                    // DOS arrow, it never locks onto the renderer's target.
+                    if (!g_kexMode && sPlayerInput[nPlayer].nTarget >= 0)
                         var_50 = sPlayerInput[nPlayer].nTarget + 10000;
                     for (int i = 0; i < nBolts; i++)
                         BuildBullet(nPlayerSprite, 18, ebp, ebx, nHeight, nAngle, var_50, var_1C);

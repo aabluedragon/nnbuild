@@ -124,13 +124,17 @@ void KexPad_Init(void);
 void KexPad_Tick(void);
 void KexPad_ChannelFired(int nChannel);
 
-// The Scepter vase swarm, Eye of Ra player weapon (Proj_Ra_Fire), and Shawl
-// cobra trio (Proj_Cobra_Green) are simulated as short-lived Kex-break
-// runlist actors using the generated projectile tiles from kexdrop.txt.
+// The Scepter vase swarm, Eye of Ra player weapon (Proj_Ra_Fire), and green
+// cobra projectiles (the Shawl vase trio and Cobra Staff) are simulated as
+// Kex-break runlist actors using the generated projectile tiles from
+// kexdrop.txt.
 void KexBouncyBalls_Spawn(int nSector, int x, int y, int z, int offset);
 int  KexRaFire_Available(void);
 int  KexRaFire_PlayerFire(short nSprite, int nPitch);
 int  KexRaFire_PlayerTest(short nSprite, int nPitch); // env-only projectile probe
+int  KexCobraStaff_Available(void);
+int  KexCobraStaff_PlayerFire(short nSprite, int nPitch);
+int  KexCobraStaff_PlayerTest(short nSprite, int nPitch); // env-only weapon probe
 void KexBreakLoadSaveConstruct(void);
 //
 // The remaster's laser beams (kexSlaveLaserBeam): a standing force field from

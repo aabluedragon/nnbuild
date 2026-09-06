@@ -7486,6 +7486,49 @@ def verify_projectiles(z, outdir):
             frames.append(frame_body)
         return frames
 
+    # A_HitScan carries the direct damage independently of the native DOS
+    # bullet records reused by the player controller. Pistol/M60 are 15/20 in
+    # the remaster, whereas the classic records are 25/15.
+    hitscan_specs = (
+        ('sprites/weapons/pistol_anim.txt', 'pistol_fire', 1,
+         (3000.0, 0.0, 0.0, 15.0, 15.0, 96.0)),
+        ('sprites/weapons/m60_anim.txt', 'm60_fire', 3,
+         (4000.0, .0416, .0416, 20.0, 20.0, 96.0)),
+    )
+    hitscan_re = re.compile(
+        r'A_HitScan\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*,\s*'
+        r'([-+\d.]+)\s*,\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*,\s*'
+        r'([-+\d.]+)\s*,\s*"Fx_BulletPuff"\s*\)')
+    for rel, anim, count, wanted in hitscan_specs:
+        real = names.get(rel.lower())
+        text = z.read(real).decode('latin-1').replace('\r', '') if real else ''
+        actual = [tuple(float(v) for v in hit.groups())
+                  for frame in animation_frames(text, anim)
+                  for hit in hitscan_re.finditer(frame)]
+        if len(actual) != count or any(values != wanted for values in actual):
+            out.append('%s lost its authored %s hit-scan contract: %s'
+                       % (anim, count, actual))
+
+    # A_PlayerMelee's three numeric arguments are range, damage and the
+    # player-puppet height above its origin. Both machete swings keep the
+    # same combat ray but select their matching solid/object follow-up anim.
+    machete_real = names.get('sprites/weapons/machete_anim.txt')
+    machete_text = z.read(machete_real).decode('latin-1').replace('\r', '') \
+        if machete_real else ''
+    melee_re = re.compile(
+        r'A_PlayerMelee\(\s*([-+\d.]+)\s*,\s*([-+\d.]+)\s*,\s*'
+        r'([-+\d.]+)\s*,\s*"weapons/machete_hit_solid_(left|right)"\s*,\s*'
+        r'"weapons/machete_hit_object_(left|right)"\s*\)')
+    melee_actual = [(tuple(float(v) for v in hit.groups()[:3]),
+                     hit.group(4), hit.group(5))
+                    for hit in melee_re.finditer(machete_text)]
+    if (len(melee_actual) != 2
+            or any(values != (160.0, 20.0, 80.0) or solid != obj
+                   for values, solid, obj in melee_actual)
+            or {solid for _values, solid, _obj in melee_actual} != {'left', 'right'}):
+        out.append('machete swings lost their authored A_PlayerMelee(160,20,80) contract: %s'
+                   % melee_actual)
+
     # Direct projectile damage and death-animation radial damage are distinct
     # contracts. In particular, the red cobras have zero direct damage but a
     # live blast callback. Audit every gameplay-relevant impact animation.
@@ -7878,6 +7921,12 @@ def verify_projectiles(z, outdir):
         'kexbreak.cpp': (
             'KexBouncyBalls_Spawn',
             'KexRaFire_Available', 'KexRaFire_PlayerFire',
+            'KexCobraStaff_Available', 'KexCobraStaff_PlayerFire',
+            'KexCobraStaff_PlayerTest', 'staticKexCobraLaunchKexCobraStaffExpected(',
+            'kKexCobraCallbackDistance=-32', 'kKexCobraHeight=80',
+            'kKexCobraSpeed=8*6', 's.ticks=-1;',
+            'KexVaseCobra_Move', 'KexCobraFaceTarget',
+            'kKexCobraTurnStep=25', 'if(s.ticks>0&&--s.ticks<=0)',
             'turns[8]={-81,81,-27,27,27,-27,81,-81};',
             'side=(nGameTicks&1)?-32:32;',
             'launch.z=sprite[nSprite].z-32*16*6;',
@@ -7907,6 +7956,21 @@ def verify_projectiles(z, outdir):
             'BuildKexPlayerFlameProjectile(nPlayerSprite,nPitch);',
             'KexRaFire_PlayerFire(nPlayerSprite,nPitch);',
             'if(!g_kexMode||!KexRaFire_Available())',
+            'if(g_kexMode&&KexCobraStaff_Available())',
+            'KexCobraStaff_PlayerFire(nPlayerSprite,nPitch);',
+            'staticintKexM60SpreadAngle()',
+            'kKexM60SpreadAngle=27',
+            'if(g_kexMode&&nWeapon==kWeaponM60)',
+            'nShotAngle=(nShotAngle+KexM60SpreadAngle())&kAngleMask;',
+            'var_50+=KexM60SpreadAngle();',
+            'if(!g_kexMode&&sPlayerInput[nPlayer].nTarget>=0)',
+            'kKexMacheteReach=160', 'kKexMacheteDamage=20',
+            'kKexMacheteHeight=80', 'staticintKexPlayerMacheteTrace(',
+            'hitscan(&start,*nSector,xvect,yvect,-Sin(pitch)*16,&hitData,CLIPMASK1);',
+            'KexMacheteInRange(start.x,start.y,start.z,hitData.x,hitData.y,hitData.z)',
+            'cRange=KexPlayerMacheteTrace(nPlayer,&theX,&theY,&theZ,&nSectorB);',
+            'shortnDamage=g_kexMode?kKexMacheteDamage:BulletInfo[kWeaponSword].nDamage;',
+            'VB_KEX_WEAPON_TEST',
             'nWeapon!=kWeaponFlamer||PlayerList[nPlayer].nWeaponFrame==1'),
         'snake.cpp': (
             'g_kexMode?100:BulletInfo[kWeaponStaff].nDamage',
@@ -7999,6 +8063,14 @@ def verify_projectiles(z, outdir):
             'kKexSpawnerLaserHeight=8*16*6',
             'KexSpawnerLaunchSpeed', 'KexSpawnerProjectile',
             'KexMoveSpawnerProjectile',
+            'if(nType==1)return15;', 'if(nType==2)return20;',
+            'staticintKexHitScanRange(intnType)',
+            'if(nType==1)return3000;', 'if(nType==2)return4000;',
+            'staticboolKexHitScanInRange(',
+            'int64_tconstlimit=(int64_t)range*6;',
+            '!KexHitScanInRange(nType,x,y,z,x2,y2,z2)',
+            'KexBulletDamage(1)==15', 'KexBulletDamage(2)==20',
+            'KexHitScanRange(1)==3000', 'KexHitScanRange(2)==4000',
             'KexBulletDamage(15)==100', 'KexBulletRadius(15)==36',
             'KexBoulderReflect', 'KexMoveBoulder',
             'KexBoulderStopped', 'KexBoulderHandleBounce',

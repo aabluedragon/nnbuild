@@ -39,6 +39,7 @@
 #include "sound.h"
 #include "move.h"
 #include "player.h"
+#include "input.h"
 #include "spider.h"
 #include "wasp.h"
 #include "scorp.h"
@@ -1344,6 +1345,26 @@ static int KexVaseRa_Move(int nSprite, KexVaseShot const &s)
     return nVal;
 }
 
+static int KexVaseCobra_Move(int nSprite, KexVaseShot const &s)
+{
+    // A_SetSourceOwner prevents a player-fired cobra from immediately
+    // colliding with the puppet from which its negative callback distance
+    // launches it. Vase cobras have no source and retain their normal path.
+    int sourceCstat = 0;
+    if ((unsigned)s.nSource < (unsigned)kMaxSprites && s.nSource != nSprite
+        && sprite[s.nSource].statnum == 100)
+    {
+        sourceCstat = sprite[s.nSource].cstat;
+        sprite[s.nSource].cstat &= ~0x101;
+    }
+    int const nVal = movesprite(nSprite, s.vx, s.vy, s.vz,
+                                16, 16, CLIPMASK1);
+    if ((unsigned)s.nSource < (unsigned)kMaxSprites && s.nSource != nSprite
+        && sprite[s.nSource].statnum == 100)
+        sprite[s.nSource].cstat = sourceCstat;
+    return nVal;
+}
+
 static void KexVaseRa_ReflectFromActor(KexVaseShot &s, int nSprite, int nHit)
 {
     int const dx = sprite[nSprite].x - sprite[nHit].x;
@@ -1352,6 +1373,49 @@ static void KexVaseRa_ReflectFromActor(KexVaseShot &s, int nSprite, int nHit)
     int const distance = max(1, ksqrt((dx / extent) * (dx / extent)
                                      + (dy / extent) * (dy / extent)) * extent);
     KexVaseRa_Reflect(s, dx * 16384 / distance, dy * 16384 / distance, 0);
+}
+
+static int KexCobraTarget(KexVaseShot const &s)
+{
+    // Vase cobras seek the local player. A staff-fired cobra keeps the KEX
+    // player puppet's current acquired target, if any; noHomingThrust means
+    // this affects its orientation only, never its launch vector.
+    if (s.nSource >= 0 && s.nSource < kMaxSprites
+            && sprite[s.nSource].sectnum >= 0
+            && sprite[s.nSource].statnum == 100)
+    {
+        int const nPlayer = GetPlayerFromSprite(s.nSource);
+        if (nPlayer >= 0)
+        {
+            int const target = sPlayerInput[nPlayer].nTarget;
+            if (target >= 0 && target < kMaxSprites
+                    && sprite[target].sectnum >= 0
+                    && (sprite[target].cstat & 0x101))
+                return target;
+        }
+        return -1;
+    }
+
+    int const nPlayer = PlayerList[nLocalPlayer].nSprite;
+    return nPlayer >= 0 && sprite[nPlayer].sectnum >= 0 ? nPlayer : -1;
+}
+
+static void KexCobraFaceTarget(int nSprite, int nTarget)
+{
+    if (nTarget < 0)
+        return;
+
+    // Proj_Cobra_Green's .0765625-radian homingTurnAngles is 25 on Build's
+    // 2048-angle circle. Its noHomingThrust flag deliberately leaves motion
+    // untouched; only the displayed cobra direction follows the target.
+    constexpr int kKexCobraTurnStep = 25;
+    int const wanted = GetMyAngle(sprite[nTarget].x - sprite[nSprite].x,
+                                  sprite[nTarget].y - sprite[nSprite].y);
+    int delta = (wanted - sprite[nSprite].ang + 1024) & kAngleMask;
+    if (delta >= 1024)
+        delta -= 2048;
+    sprite[nSprite].ang = (sprite[nSprite].ang
+        + clamp(delta, -kKexCobraTurnStep, kKexCobraTurnStep)) & kAngleMask;
 }
 
 static void KexVaseShot_Tick(int nShot)
@@ -1375,33 +1439,9 @@ static void KexVaseShot_Tick(int nShot)
     }
 
     if (s.cobra)
-    {
-        int const nPlayer = PlayerList[nLocalPlayer].nSprite;
-        if (nPlayer >= 0)
-        {
-            int const angle = GetMyAngle(sprite[nPlayer].x - sprite[nSprite].x,
-                                         sprite[nPlayer].y - sprite[nSprite].y);
-            int const speed = 96;
-            int const tx = (Cos(angle) * speed) >> 10;
-            int const ty = (Sin(angle) * speed) >> 10;
-            // Proj_Cobra_Green has homingMaxPitch 1.57 and gravity 0. Use a
-            // bounded vertical component as well; Build z grows downward.
-            int const dx = sprite[nPlayer].x - sprite[nSprite].x;
-            int const dy = sprite[nPlayer].y - sprite[nSprite].y;
-            // Keep the squared distance inside ksqrt's 32-bit input even on
-            // the largest converted maps.
-            int const dscale = max(1, max(klabs(dx), klabs(dy)) / 16000 + 1);
-            int const planar = max(1, ksqrt((dx / dscale) * (dx / dscale)
-                                           + (dy / dscale) * (dy / dscale)) * dscale);
-            int const tz = clamp((sprite[nPlayer].z - sprite[nSprite].z) * speed / planar,
-                                 -speed, speed);
-            s.vx = (s.vx * 15 + tx) / 16;
-            s.vy = (s.vy * 15 + ty) / 16;
-            s.vz = (s.vz * 15 + tz) / 16;
-        }
-    }
+        KexCobraFaceTarget(nSprite, KexCobraTarget(s));
     int const nVal = s.cobra
-        ? movesprite(nSprite, s.vx, s.vy, s.vz, 16, 16, CLIPMASK1)
+        ? KexVaseCobra_Move(nSprite, s)
         : KexVaseRa_Move(nSprite, s);
     if (nVal)
     {
@@ -1471,7 +1511,7 @@ static void KexVaseShot_Tick(int nShot)
     }
     if (!s.cobra)
         s.vz += 72; // Proj_Ra_Fire's default KEX gravity is 0.75
-    if (--s.ticks <= 0)
+    if (s.ticks > 0 && --s.ticks <= 0)
     {
         if (!s.cobra)
             KexVaseRa_Explode(nSprite);
@@ -1635,6 +1675,97 @@ int KexRaFire_PlayerTest(short nSprite, int nPitch)
             KexVaseShot_Remove(nShot);
     }
     totalmoves = savedTicks;
+    return exact;
+}
+
+struct KexCobraLaunch
+{
+    int x, y, z, vx, vy, vz, angle;
+};
+
+static KexCobraLaunch KexCobraStaffExpected(short nSprite, int nPitch)
+{
+    // cobra_staff_anim uses A_FireProjectile("Proj_Cobra_Green", 0, 0,
+    // -32, 80, 8). As with the flame, the player puppet's exact radius is
+    // 95.25 KEX units (1143 half-Build units), not its render clipdist.
+    constexpr int kKexPlayerRadius2 = 1143;
+    constexpr int kKexCobraCallbackDistance = -32;
+    constexpr int kKexCobraHeight = 80;
+    constexpr int kKexCobraSpeed = 8 * 6;
+    int const yaw = sprite[nSprite].ang;
+    int const fx = mulscale14(Cos(yaw), Cos(nPitch));
+    int const fy = mulscale14(Sin(yaw), Cos(nPitch));
+    int const fz = Sin(nPitch);
+    int const distance2 = kKexPlayerRadius2
+        + 2 * kKexCobraCallbackDistance * 6;
+    KexCobraLaunch launch;
+    launch.x = sprite[nSprite].x
+        + (int)(((int64_t)fx * distance2) / (2 * 16384));
+    launch.y = sprite[nSprite].y
+        + (int)(((int64_t)fy * distance2) / (2 * 16384));
+    launch.z = sprite[nSprite].z
+        - (int)(((int64_t)fz * distance2) / (2 * 16384))
+        - kKexCobraHeight * 16 * 6;
+    launch.vx = fx * kKexCobraSpeed;
+    launch.vy = fy * kKexCobraSpeed;
+    launch.vz = -(int)(((int64_t)fz * kKexCobraSpeed * 16) / 16384);
+    launch.angle = yaw;
+    return launch;
+}
+
+int KexCobraStaff_Available(void)
+{
+    return g_kexMode && s_kexCobraTile > 0;
+}
+
+int KexCobraStaff_PlayerFire(short nSprite, int nPitch)
+{
+    if (!KexCobraStaff_Available() || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0)
+        return -1;
+
+    KexCobraLaunch const launch = KexCobraStaffExpected(nSprite, nPitch);
+    int const nShot = KexVaseShot_Create(sprite[nSprite].sectnum,
+        s_kexCobraTile, launch.x, launch.y, launch.z, 1, nSprite);
+    if (nShot < 0)
+        return -1;
+
+    KexVaseShot &s = s_vaseShot[nShot];
+    s.vx = launch.vx;
+    s.vy = launch.vy;
+    s.vz = launch.vz;
+    // Proj_Cobra_Green has no expires field. Its authored lifetime ends only
+    // when impactWallsOnly lets it reach a wall/floor/ceiling death action.
+    s.ticks = -1;
+    sprite[s.nSprite].ang = launch.angle;
+    return s.nSprite;
+}
+
+int KexCobraStaff_PlayerTest(short nSprite, int nPitch)
+{
+    if (!KexCobraStaff_Available() || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0)
+        return 0;
+
+    KexCobraLaunch const wanted = KexCobraStaffExpected(nSprite, nPitch);
+    int const nProjectile = KexCobraStaff_PlayerFire(nSprite, nPitch);
+    int const nShot = KexVaseShot_Find(nProjectile);
+    if (nShot < 0)
+        return 0;
+
+    KexVaseShot const &s = s_vaseShot[nShot];
+    spritetype const &p = sprite[nProjectile];
+    int joints = 0;
+    for (int const nJoint : s.nJoint)
+        joints += nJoint >= 0;
+    int const expectedJoints = s_kexCobraJointTile > 0 ? 4 : 0;
+    int const exact = s.cobra && s.nSource == nSprite && s.ticks == -1
+        && p.x == wanted.x && p.y == wanted.y && p.z == wanted.z
+        && s.vx == wanted.vx && s.vy == wanted.vy && s.vz == wanted.vz
+        && p.ang == wanted.angle && p.owner == nSprite && p.clipdist == 16
+        && p.xrepeat == 32 && p.yrepeat == 32 && p.shade == -64
+        && p.pal == 0 && p.extra == -1 && joints == expectedJoints;
+    KexVaseShot_Remove(nShot);
     return exact;
 }
 

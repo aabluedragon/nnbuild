@@ -1342,6 +1342,40 @@ three-frame flight plus fifteen-art/one-blank-frame sizzle. `KEXFLAME.SEQ` and t
 projectile probe keep its generated data and native launch/impact path in
 lockstep without changing classic Exhumed behavior.
 
+Pistol and M60 retain their instantaneous hit-scan presentation, but their
+damage comes from the remaster callbacks rather than the incompatible DOS
+bullet records: `A_HitScan` specifies 15 for the pistol and 20 for the M60
+(with the M60's authored 0.0416 yaw/pitch spread). The KEX-only damage adapter
+preserves those values while leaving classic Exhumed's 25/15 records intact.
+Both hit-scans and the Manacle beam now trace the player aim directly, rather
+than the DOS renderer's target snap; the M60 samples independent signed yaw
+and pitch rolls. The KEX rays also stop at the callbacks' 3000/4000-unit
+ranges, measured in the same three-dimensional world space as the remaster,
+instead of inheriting Build's unlimited instant-hit sentinel. The verifier
+reads all four retail callback frames and the projectile probe asserts their
+effective damage and range values.
+
+The KEX machete no longer inherits the DOS horizontal 150-unit, 25-damage
+close-range test. Both source swings call `A_PlayerMelee(160, 20, 80, ...)`:
+the KEX-only bridge traces the current yaw and pitch from the puppet's
+80-unit-raised origin, clips the result to the authored 160-unit 3-D reach,
+and supplies 20 logical damage to the existing creature/prop damage path.
+Classic sword behavior remains untouched. `VB_KEX_WEAPON_TEST=1` reports the
+live range/damage/height contract, while the verifier reads both retail
+left/right callbacks and guards the native bridge.
+
+The Cobra Staff now fires the remaster's `Proj_Cobra_Green` instead of
+entering the DOS eight-segment snake controller. Its `cstafffire` callback's
+`A_FireProjectile(..., -32, 80, 8)` muzzle is resolved against the player
+puppet's exact radius and current yaw/pitch; it has no legacy quake or recoil.
+The green cobra retains its fixed launch vector under `noHomingThrust`, while
+its rendered direction can turn toward the acquired target by the authored
+0.0765625-radian (25 Build-angle) maximum. It has no expiry timer and dies on
+the authored wall/floor/ceiling route, which already invokes the four-puff
+`A_CStaffExplode` and `A_RadialBlast(512, 100)` sequence. The weapon probe
+also validates the live muzzle, motion, appearance, source ownership, and
+joint profile.
+
 The KEX Ring of Ra is likewise a physical `Proj_Ra_Fire`, not the DOS
 target-following `Ra[]` eye. Every firing frame launches the fullbright,
 radius-33, height-64, 20-damage orb from an alternating `+/-32` side muzzle;

@@ -55,8 +55,9 @@ static int KexBulletTile(int nType)
     return -1;
 }
 
-// Several KEX projectiles reuse native bullet records.  Keep their shipped
-// damage values without changing those records for classic gameplay:
+// Several KEX attacks reuse native bullet records. Keep their shipped damage
+// values without changing those records for classic gameplay: the player's
+// Pistol/M60 hit-scans (types 1/2) are 15/20 rather than the DOS 25/15,
 // Proj_Anubis (type 8) is 20, Proj_Fireball (type 10) is 100, and
 // Proj_Blaster (type 13) is 30 and the laser-spawner's Proj_Beam (type 15) is
 // 100. Both red cobras (types 9/16) have zero direct damage but a separate
@@ -65,6 +66,10 @@ static int KexBulletDamage(int nType)
 {
     if (g_kexMode)
     {
+        if (nType == 1)
+            return 15;
+        if (nType == 2)
+            return 20;
         if (nType == 8)
             return 20;
         if (nType == 9)
@@ -86,6 +91,38 @@ static int KexBulletDamage(int nType)
     }
 
     return BulletInfo[nType].nDamage;
+}
+
+// A_HitScan's first argument is a finite KEX-world reach. The classic
+// instant-hit bullet records use it only as a large-value sentinel and hence
+// trace indefinitely; retain that behavior outside KEX mode.
+static int KexHitScanRange(int nType)
+{
+    if (!g_kexMode)
+        return 0;
+    // pistol_fire: A_HitScan(3000, ...)
+    if (nType == 1)
+        return 3000;
+    // m60_fire: A_HitScan(4000, ...)
+    if (nType == 2)
+        return 4000;
+    return 0;
+}
+
+static bool KexHitScanInRange(int nType, int x0, int y0, int z0,
+                              int x1, int y1, int z1)
+{
+    int const range = KexHitScanRange(nType);
+    if (!range)
+        return true;
+
+    // Converted XY is six Build units per KEX unit while Z is 16*6. Divide
+    // the latter by sixteen so all three dimensions share the six-unit scale.
+    int64_t const dx = (int64_t)x1 - x0;
+    int64_t const dy = (int64_t)y1 - y0;
+    int64_t const dz = ((int64_t)z1 - z0) / 16;
+    int64_t const limit = (int64_t)range * 6;
+    return dx * dx + dy * dy + dz * dz <= limit * limit;
 }
 
 static int KexBulletRadius(int nType)
@@ -1326,6 +1363,20 @@ MOVEEND:
             hitwall = hitData.wall;
         }
 
+        // KEX's player A_HitScan callbacks stop at their authored range.
+        // Do this after Build's ray query so portals and slopes still choose
+        // the correct first obstruction, but before any damage or puff is
+        // committed. An out-of-range contact has no hit feedback at all.
+        if (!KexHitScanInRange(nType, x, y, z, x2, y2, z2))
+        {
+            x2 = x;
+            y2 = y;
+            z2 = z;
+            hitsprite = -1;
+            hitwall = -1;
+            hitsect = -1;
+        }
+
         lasthitx = x2;
         lasthity = y2;
         lasthitz = z2;
@@ -1972,6 +2023,12 @@ static bool KexBulletImpactContractMatches()
         && seedling.radius == 0 && seedling.damage == 0
         && KexBulletSuppressClassicRadial(11)
         && KexBulletSuppressClassicRadial(12)
+        && KexBulletDamage(1) == 15
+        && KexBulletDamage(2) == 20
+        && KexHitScanRange(1) == 3000
+        && KexHitScanRange(2) == 4000
+        && KexHitScanInRange(1, 0, 0, 0, 3000 * 6, 0, 0)
+        && !KexHitScanInRange(1, 0, 0, 0, 3000 * 6 + 1, 0, 0)
         && KexBulletDamage(14) == 100
         && KexBulletRadius(14) == 25 && KexBulletRadius(17) == 25
         && KexBulletRepeat(17, 25, 0) == 80;
