@@ -538,12 +538,21 @@ void MoveWeapons(short nPlayer)
                             {
                                 if (nWeapon == kWeaponRing)
                                 {
-                                    if (Ra[nPlayer].nTarget == -1)
-                                        break;
+                                    // KEX's Ring of Ra does not arm the DOS
+                                    // target-following eye. Its fire frame
+                                    // calls A_FireRa, which launches a real
+                                    // Proj_Ra_Fire even when no target is
+                                    // acquired. Keep the old controller as
+                                    // the non-KEX/fallback path.
+                                    if (!g_kexMode || !KexRaFire_Available())
+                                    {
+                                        if (Ra[nPlayer].nTarget == -1)
+                                            break;
 
-                                    Ra[nPlayer].nAction = 0;
-                                    Ra[nPlayer].nFrame  = 0;
-                                    Ra[nPlayer].field_C = 1;
+                                        Ra[nPlayer].nAction = 0;
+                                        Ra[nPlayer].nFrame  = 0;
+                                        Ra[nPlayer].field_C = 1;
+                                    }
                                 }
 
                                 PlayerList[nPlayer].nWeaponState = 2;
@@ -1030,6 +1039,15 @@ loc_flag:
                     break;
                 }
                 case kWeaponRing:
+                    if (g_kexMode && KexRaFire_Available())
+                    {
+                        // scripts/p_pspr.txt A_FireRa: the direct player
+                        // puppet launch uses its own alternating side offset
+                        // and a small, authored eight-tick aim wave.
+                        int const nPitch = (fix16_to_int(
+                            sPlayerInput[nPlayer].horizon) - 92) << 2;
+                        KexRaFire_PlayerFire(nPlayerSprite, nPitch);
+                    }
                     break;
 
                 case kWeaponManacle:

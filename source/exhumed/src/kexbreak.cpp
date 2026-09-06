@@ -124,7 +124,7 @@ static int s_kexPowerTimer;
 #define KEX_MAX_VASE_SHOTS 128
 struct KexVaseShot
 {
-    int16_t nSprite, nRunFree;
+    int16_t nSprite, nRunHead, nRunFree, nSource;
     int16_t nJoint[4];
     int32_t trailx[4], traily[4], trailz[4];
     int32_t vx, vy, vz;
@@ -132,7 +132,6 @@ struct KexVaseShot
     uint8_t cobra;
 };
 static KexVaseShot s_vaseShot[KEX_MAX_VASE_SHOTS];
-static int s_vaseShots;
 
 static bool KexDrop_ParseLine(char *line, int nRec)
 {
@@ -953,7 +952,6 @@ void KexBreak_Init(void)
     Bmemset(s_flashSeen, 0, sizeof(s_flashSeen));
     KexDrop_LoadTable();
     s_kexPowerTimer = 5;
-    s_vaseShots = 0;
     for (auto &s : s_vaseShot)
         s.nSprite = -1;
     s_props = 0;
@@ -1191,12 +1189,11 @@ static void KexDrop_OrbSelfTest(void)
     s_orbTestEffect[GetAnimSprite(nHealth)] = 2;
 }
 
-// The Scepter vase branch fires twenty Proj_Ra_Fire actors with no target.
-// Build's bullet pool has fixed directional motion, so these use the existing
+// The Scepter vase branch and player Eye of Ra both create Proj_Ra_Fire
+// actors. Build's bullet pool has fixed directional motion, so these use the
 // Kex-break run type with a small independent motion record. The movement
-// follows the same collision flags as CreatureChunk: walls reflect the
-// horizontal vector, floors/ceilings reflect Z, and an enemy takes the Kex
-// projectile's 20 damage.
+// follows the KEX actor definition: a 33-radius, 64-high, fullbright projectile
+// with 20 direct damage, 0.75 gravity, perfect bounces and a 120-tick expiry.
 static void KexVaseShot_Remove(int nShot)
 {
     KexVaseShot &s = s_vaseShot[nShot];
@@ -1206,11 +1203,19 @@ static void KexVaseShot_Remove(int nShot)
     for (int i = 0; i < (int)ARRAY_SIZE(s.nJoint); i++)
         if (s.nJoint[i] >= 0)
             mydeletesprite(s.nJoint[i]);
-    runlist_DoSubRunRec(sprite[nSprite].owner);
+    runlist_DoSubRunRec(s.nRunHead);
     runlist_FreeRun(sprite[nSprite].lotag - 1);
     runlist_SubRunRec(s.nRunFree);
     s.nSprite = -1;
     mydeletesprite(nSprite);
+}
+
+static int KexVaseShot_Find(int nSprite)
+{
+    for (int i = 0; i < KEX_MAX_VASE_SHOTS; i++)
+        if (s_vaseShot[i].nSprite == nSprite)
+            return i;
+    return -1;
 }
 
 static void KexVaseCobra_Explode(int nSprite)
@@ -1255,6 +1260,98 @@ static void KexVaseRa_Explode(int nSprite)
     if (s_breakSelftestActive)
         OSD_Printf("Kex vase: Scepter Ra-fire expiry (%s +2 impact)\n",
                    exact ? "exact" : "fallback");
+}
+
+struct KexRaLaunch
+{
+    int x, y, z, vx, vy, vz, angle;
+};
+
+static KexRaLaunch KexRaPlayerExpected(short nSprite, int nPitch,
+                                       int nGameTicks)
+{
+    // scripts/p_pspr.txt A_FireRa fires from alternating +/-32-unit side
+    // offsets, with its yaw curve driven by GameTicks & 7. Build's forward
+    // vector is the KEX yaw vector after conversion, so the source's Build
+    // angle is the direct basis for both the side offset and shot direction.
+    static int const turns[8] = { -81, 81, -27, 27, 27, -27, 81, -81 };
+    int const side = (nGameTicks & 1) ? -32 : 32;
+    int const angle = (sprite[nSprite].ang + turns[nGameTicks & 7]) & kAngleMask;
+    int const cp = Cos(nPitch);
+    int const sp = Sin(nPitch);
+    KexRaLaunch launch;
+    launch.x = sprite[nSprite].x
+        + mulscale14(Cos(sprite[nSprite].ang + 512), side * 6);
+    launch.y = sprite[nSprite].y
+        + mulscale14(Sin(sprite[nSprite].ang + 512), side * 6);
+    launch.z = sprite[nSprite].z - 32 * 16 * 6;
+    launch.vx = mulscale14(Cos(angle), cp) * (16 * 6);
+    launch.vy = mulscale14(Sin(angle), cp) * (16 * 6);
+    launch.vz = -(int)(((int64_t)(12 * 16384 - 18 * sp) * 16 * 6) / 16384);
+    launch.angle = angle;
+    return launch;
+}
+
+int KexRaFire_Available(void)
+{
+    return g_kexMode && s_kexRaTile > 0;
+}
+
+static void KexVaseRa_Reflect(KexVaseShot &s, int nx, int ny, int nz)
+{
+    // Proj_Ra_Fire's bouncePower is 2.0: subtract twice the normal
+    // projection, yielding a full reflection in the shared KEX metric where
+    // XY is Q14 Build movement and Z is Build-Z times 1024.
+    int64_t vx = s.vx;
+    int64_t vy = s.vy;
+    int64_t vz = -(int64_t)s.vz * 1024;
+    int64_t const dot = (vx * nx + vy * ny + vz * nz) / 16384;
+    vx -= (2 * dot * nx) / 16384;
+    vy -= (2 * dot * ny) / 16384;
+    vz -= (2 * dot * nz) / 16384;
+    s.vx = (int)vx;
+    s.vy = (int)vy;
+    s.vz = (int)(-vz / 1024);
+}
+
+static int KexVaseRa_Move(int nSprite, KexVaseShot const &s)
+{
+    // The source art is a one-frame billboard; KEX collision instead uses
+    // the actor definition's height and zero step height. Temporarily size
+    // Build's art-derived collision proxy to that authored 64-unit height.
+    constexpr int kRaHeight = 64 * 16 * 6;
+    uint8_t const visualRepeat = sprite[nSprite].yrepeat;
+    int const tileHeight = max(1, (int)tilesiz[sprite[nSprite].picnum].y);
+    sprite[nSprite].yrepeat = (uint8_t)clamp(
+        (kRaHeight + tileHeight * 2) / (tileHeight * 4), 1, 255);
+
+    // SetSourceOwner(actor) prevents the projectile colliding with its own
+    // player puppet on the first movement tick. Run-list ownership lives in
+    // KexVaseShot, leaving sprite.owner free to carry this KEX source owner.
+    int sourceCstat = 0;
+    if ((unsigned)s.nSource < (unsigned)kMaxSprites && s.nSource != nSprite
+        && sprite[s.nSource].statnum == 100)
+    {
+        sourceCstat = sprite[s.nSource].cstat;
+        sprite[s.nSource].cstat &= ~0x101;
+    }
+    int const nVal = movesprite(nSprite, s.vx, s.vy, s.vz,
+                                kRaHeight, 0, CLIPMASK1);
+    if ((unsigned)s.nSource < (unsigned)kMaxSprites && s.nSource != nSprite
+        && sprite[s.nSource].statnum == 100)
+        sprite[s.nSource].cstat = sourceCstat;
+    sprite[nSprite].yrepeat = visualRepeat;
+    return nVal;
+}
+
+static void KexVaseRa_ReflectFromActor(KexVaseShot &s, int nSprite, int nHit)
+{
+    int const dx = sprite[nSprite].x - sprite[nHit].x;
+    int const dy = sprite[nSprite].y - sprite[nHit].y;
+    int const extent = max(1, max(klabs(dx), klabs(dy)) / 16000 + 1);
+    int const distance = max(1, ksqrt((dx / extent) * (dx / extent)
+                                     + (dy / extent) * (dy / extent)) * extent);
+    KexVaseRa_Reflect(s, dx * 16384 / distance, dy * 16384 / distance, 0);
 }
 
 static void KexVaseShot_Tick(int nShot)
@@ -1303,17 +1400,20 @@ static void KexVaseShot_Tick(int nShot)
             s.vz = (s.vz * 15 + tz) / 16;
         }
     }
-    int const nVal = movesprite(nSprite, s.vx, s.vy, s.vz, 16, 16, CLIPMASK1);
+    int const nVal = s.cobra
+        ? movesprite(nSprite, s.vx, s.vy, s.vz, 16, 16, CLIPMASK1)
+        : KexVaseRa_Move(nSprite, s);
     if (nVal)
     {
         int const kind = nVal & 0x3C000;
         if (kind == 0xC000)
         {
             int const nHit = nVal & 0x3FFF;
-            if (!s.cobra && sprite[nHit].statnum > 99 && sprite[nHit].statnum < 200)
+            if (!s.cobra && nHit != s.nSource && (KexBreak_IsProp(nHit)
+                    || (sprite[nHit].statnum > 99 && sprite[nHit].statnum < 200)))
                 runlist_DamageEnemy(nHit, nSprite, 20);
         }
-        if (nVal & 0x20000)
+        if (s.cobra && (nVal & 0x20000))
         {
             KexVaseShot_Remove(nShot);
             return;
@@ -1331,21 +1431,26 @@ static void KexVaseShot_Tick(int nShot)
         }
         else if (kind == 0x10000)
         {
-            s.vz = -s.vz * 3 / 4;
+            KexVaseRa_Reflect(s, 0, 0, 16384);
+        }
+        else if (kind == 0x20000)
+        {
+            KexVaseRa_Reflect(s, 0, 0, 16384);
         }
         else if (kind == 0x8000)
         {
             int const normal = GetWallNormal(nVal & 0x3FFF);
-            int const dot = (s.vx * Cos(normal) + s.vy * Sin(normal)) >> 14;
-            s.vx -= 2 * dot * Cos(normal);
-            s.vy -= 2 * dot * Sin(normal);
+            KexVaseRa_Reflect(s, Cos(normal), Sin(normal), 0);
         }
         else if (kind == 0xC000)
         {
-            // Actor impact is not a wall stop for a bouncy Kex projectile;
-            // keep its velocity and let the next tick move it clear.
-            s.vx = -s.vx * 3 / 4;
-            s.vy = -s.vy * 3 / 4;
+            // Proj_Ra_Fire deals its 20 direct damage on actor contact, then
+            // stays alive because bouncy is set. Its normal is the hit
+            // actor-to-projectile direction, just as the KEX physics actor
+            // separates a pair of colliders.
+            int const nHit = nVal & 0x3FFF;
+            if (nHit != s.nSource)
+                KexVaseRa_ReflectFromActor(s, nSprite, nHit);
         }
     }
     if (s.cobra)
@@ -1365,7 +1470,7 @@ static void KexVaseShot_Tick(int nShot)
         }
     }
     if (!s.cobra)
-        s.vz += 96; // light gravity, matching the remaster's bouncing orb
+        s.vz += 72; // Proj_Ra_Fire's default KEX gravity is 0.75
     if (--s.ticks <= 0)
     {
         if (!s.cobra)
@@ -1374,36 +1479,49 @@ static void KexVaseShot_Tick(int nShot)
     }
 }
 
-static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
+static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
+                              int cobra, int nSource)
 {
-    int const tile = cobra ? s_kexCobraTile : s_kexRaTile;
-    if (s_vaseShots >= KEX_MAX_VASE_SHOTS || tile <= 0)
-        return;
+    int nShot = -1;
+    for (int i = 0; i < KEX_MAX_VASE_SHOTS; i++)
+        if (s_vaseShot[i].nSprite < 0)
+        {
+            nShot = i;
+            break;
+        }
+    if (nShot < 0 || tile <= 0)
+        return -1;
     int const nSprite = insertsprite(nSector, 200);
     if (nSprite < 0)
-        return;
-    int const nShot = s_vaseShots++;
+        return -1;
     KexVaseShot &s = s_vaseShot[nShot];
     Bmemset(&s, 0, sizeof(s));
     s.nSprite = nSprite;
+    s.nRunHead = -1;
     s.nRunFree = -1;
+    s.nSource = nSource;
     for (auto &nJoint : s.nJoint)
         nJoint = -1;
     sprite[nSprite].x = x;
     sprite[nSprite].y = y;
-    sprite[nSprite].z = z - (cobra ? 20 : 64) * 16 * 6;
+    sprite[nSprite].z = z;
     sprite[nSprite].cstat = 0;
-    sprite[nSprite].shade = -64;
+    sprite[nSprite].shade = cobra ? -64 : -127;
     sprite[nSprite].pal = 0;
-    sprite[nSprite].xrepeat = sprite[nSprite].yrepeat = 32;
-    sprite[nSprite].clipdist = 16;
+    sprite[nSprite].xrepeat = sprite[nSprite].yrepeat = cobra ? 32 : 40;
+    sprite[nSprite].clipdist = cobra ? 16 : (33 * 6 + 2) / 4;
     sprite[nSprite].picnum = tile;
-    sprite[nSprite].owner = -1;
-    sprite[nSprite].extra = -1;
+    sprite[nSprite].owner = nSource; // A_SetSourceOwner for player Ra fire
+    sprite[nSprite].extra = cobra ? -1 : 5;
     sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1,
-                                               KEX_VASE_SHOT_BASE + nShot, kRunKexBreak);
+    s.nRunHead = runlist_AddRunRec(sprite[nSprite].lotag - 1,
+                                   KEX_VASE_SHOT_BASE + nShot, kRunKexBreak);
     s.nRunFree = runlist_AddRunRec(NewRun, KEX_VASE_SHOT_BASE + nShot, kRunKexBreak);
+
+    short nActualSector = nSector;
+    updatesectorz(x, y, z, &nActualSector);
+    if (nActualSector >= 0 && nActualSector != nSector)
+        mychangespritesect(nSprite, nActualSector);
 
     if (cobra && s_kexCobraJointTile > 0)
     {
@@ -1429,22 +1547,95 @@ static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
     }
 
     s.cobra = cobra;
+    s.ticks = cobra ? 180 : 120;
+    return nShot;
+}
+
+static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
+{
+    int const tile = cobra ? s_kexCobraTile : s_kexRaTile;
+    int const nShot = KexVaseShot_Create(nSector, tile, x, y,
+        z - (cobra ? 20 : 64) * 16 * 6, cobra, -1);
+    if (nShot < 0)
+        return;
+    KexVaseShot &s = s_vaseShot[nShot];
+
     if (cobra)
     {
         int const dir = RandomWord() & kAngleMask;
-        s.vx = (Cos(dir) * 96) >> 10;
-        s.vy = (Sin(dir) * 96) >> 10;
+        s.vx = Cos(dir) * 96;
+        s.vy = Sin(dir) * 96;
         s.vz = 0;
     }
     else
     {
         int const angle = RandomSize(15) * 1024 / 32768; // 0..pi radians
         int const amount = RandomSize(15) * 16 / 32768;
-        s.vx = (Sin(angle) * amount * 6) >> 10;
-        s.vy = (Cos(angle) * amount * 6) >> 10;
+        s.vx = Sin(angle) * amount * 6;
+        s.vy = Cos(angle) * amount * 6;
         s.vz = -(24 + RandomSize(8) * 24 / 255) * 16 * 6 / 30;
     }
-    s.ticks = cobra ? 180 : 120;
+}
+
+int KexRaFire_PlayerFire(short nSprite, int nPitch)
+{
+    if (!KexRaFire_Available() || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0)
+        return -1;
+
+    KexRaLaunch const launch = KexRaPlayerExpected(nSprite, nPitch, totalmoves);
+    int const nShot = KexVaseShot_Create(sprite[nSprite].sectnum, s_kexRaTile,
+        launch.x, launch.y, launch.z, 0, nSprite);
+    if (nShot < 0)
+        return -1;
+
+    KexVaseShot &s = s_vaseShot[nShot];
+    s.vx = launch.vx;
+    s.vy = launch.vy;
+    s.vz = launch.vz;
+    sprite[s.nSprite].ang = launch.angle;
+    return s.nSprite;
+}
+
+int KexRaFire_PlayerTest(short nSprite, int nPitch)
+{
+    if (!KexRaFire_Available() || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0)
+        return 0;
+
+    int const savedTicks = totalmoves;
+    int exact = 1;
+    for (int tick = 0; tick < 8; tick++)
+    {
+        totalmoves = (savedTicks & ~7) | tick;
+        KexRaLaunch const wanted = KexRaPlayerExpected(nSprite, nPitch,
+                                                       totalmoves);
+        int const nProjectile = KexRaFire_PlayerFire(nSprite, nPitch);
+        int const nShot = KexVaseShot_Find(nProjectile);
+        if (nShot < 0)
+        {
+            exact = 0;
+            continue;
+        }
+
+        KexVaseShot const &s = s_vaseShot[nShot];
+        spritetype const &p = sprite[nProjectile];
+        int const profile = !s.cobra && s.nSource == nSprite && s.ticks == 120
+            && p.x == wanted.x && p.y == wanted.y && p.z == wanted.z
+            && s.vx == wanted.vx && s.vy == wanted.vy && s.vz == wanted.vz
+            && p.ang == wanted.angle && p.owner == nSprite
+            && p.clipdist == (33 * 6 + 2) / 4
+            && p.xrepeat == 40 && p.yrepeat == 40
+            && p.shade == -127 && p.pal == 0 && p.extra == 5;
+        KexVaseShot_Tick(nShot);
+        int const ticked = s_vaseShot[nShot].nSprite == nProjectile
+            && s_vaseShot[nShot].ticks == 119;
+        exact &= profile && ticked;
+        if (s_vaseShot[nShot].nSprite >= 0)
+            KexVaseShot_Remove(nShot);
+    }
+    totalmoves = savedTicks;
+    return exact;
 }
 
 static void KexVaseShot_Swarm(int nSector, int x, int y, int z)
@@ -1828,13 +2019,41 @@ static void KexBreak_Shatter(int nProp)
     mydeletesprite(nSprite);
 }
 
+// The short-lived KEX projectiles are native run-list actors rather than
+// BulletList entries. Their sprites and run records are part of the ordinary
+// world snapshot; retain the matching motion/source records so a mid-flight
+// save restores the same active projectiles and ownership rules.
+class KexBreakLoadSave : public LoadSave
+{
+public:
+    virtual void Load();
+    virtual void Save();
+};
+
+void KexBreakLoadSave::Load()
+{
+    Read(s_vaseShot, sizeof(s_vaseShot));
+}
+
+void KexBreakLoadSave::Save()
+{
+    Write(s_vaseShot, sizeof(s_vaseShot));
+}
+
+static KexBreakLoadSave *s_kexBreakLoadSave;
+
+void KexBreakLoadSaveConstruct(void)
+{
+    s_kexBreakLoadSave = new KexBreakLoadSave();
+}
+
 void FuncKexBreak(int a, int b, int nRun)
 {
     int const nProp = RunData[nRun].nVal;
     if (nProp >= KEX_VASE_SHOT_BASE)
     {
         int const nShot = nProp - KEX_VASE_SHOT_BASE;
-        if ((unsigned)nShot < (unsigned)s_vaseShots && (a & kMessageMask) == k0x20000)
+        if ((unsigned)nShot < KEX_MAX_VASE_SHOTS && (a & kMessageMask) == k0x20000)
             KexVaseShot_Tick(nShot);
         return;
     }
@@ -3628,12 +3847,19 @@ static void KexToggle_SaveTestMutate(void);  // defined with the Toggle state be
 // VB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
 // compare the player's place and health -- the per-sector tables the save
 // carries are kMaxSectors wide, and the levels past 1024 sectors are where
-// that has to hold.
+// that has to hold. VB_KEX_RA_SAVE_TEST adds a live player Proj_Ra_Fire to
+// the snapshot, checking the native Kex-break motion/source record as well.
 static void Kex_SaveTest(void)
 {
     static int s_ticks = -1, sx, sy, sect, hp, queenPrepared;
+    static int raTest, raShot, raSprite, raX, raY, raZ, raVx, raVy, raVz;
+    static int raTicks, raSource;
     if (s_ticks < 0)
+    {
         s_ticks = getenv("VB_KEXSAVE_TEST") ? 0 : 1000000;
+        raTest = Bgetenv("VB_KEX_RA_SAVE_TEST") != NULL;
+        raShot = raSprite = -1;
+    }
     if (s_ticks >= 1000000)
         return;
     int const nSprite = PlayerList[nLocalPlayer].nSprite;
@@ -3642,6 +3868,19 @@ static void Kex_SaveTest(void)
         queenPrepared = !Bgetenv("VB_KEX_QUEEN_SAVE_TEST")
             || KexQueen_SaveTestPrepare();
         sx = sprite[nSprite].x; sy = sprite[nSprite].y; sect = sprite[nSprite].sectnum; hp = PlayerList[nLocalPlayer].nHealth;
+        if (raTest)
+        {
+            raSprite = KexRaFire_PlayerFire(nSprite, 0);
+            raShot = KexVaseShot_Find(raSprite);
+            if (raShot >= 0)
+            {
+                KexVaseShot const &ra = s_vaseShot[raShot];
+                raX = sprite[raSprite].x; raY = sprite[raSprite].y;
+                raZ = sprite[raSprite].z;
+                raVx = ra.vx; raVy = ra.vy; raVz = ra.vz;
+                raTicks = ra.ticks; raSource = ra.nSource;
+            }
+        }
         void testsave(); testsave();
         OSD_Printf("Kex save test: saved at (%d,%d) sector %d health %d, %d sectors\n", sx, sy, sect, hp, numsectors);
     }
@@ -3655,9 +3894,18 @@ static void Kex_SaveTest(void)
             && PlayerList[nLocalPlayer].nHealth == hp;
         bool const queenOkay = !Bgetenv("VB_KEX_QUEEN_SAVE_TEST")
             || (queenPrepared && KexQueen_SaveTestValidate());
-        OSD_Printf("Kex save test: loaded at (%d,%d) sector %d health %d, %d sectors -> %s\n",
+        bool const raOkay = !raTest || (raShot >= 0
+            && s_vaseShot[raShot].nSprite == raSprite
+            && s_vaseShot[raShot].nSource == raSource
+            && s_vaseShot[raShot].ticks == raTicks
+            && s_vaseShot[raShot].vx == raVx && s_vaseShot[raShot].vy == raVy
+            && s_vaseShot[raShot].vz == raVz
+            && sprite[raSprite].x == raX && sprite[raSprite].y == raY
+            && sprite[raSprite].z == raZ && sprite[raSprite].owner == raSource);
+        OSD_Printf("Kex save test: loaded at (%d,%d) sector %d health %d, %d sectors%s -> %s\n",
                    sprite[n2].x, sprite[n2].y, sprite[n2].sectnum, PlayerList[nLocalPlayer].nHealth, numsectors,
-                   playerOkay && queenOkay ? "OK" : "MISMATCH");
+                   raTest ? " + Ra projectile" : "",
+                   playerOkay && queenOkay && raOkay ? "OK" : "MISMATCH");
     }
 }
 

@@ -2422,6 +2422,12 @@ void KexBullet_TestTick()
         if (nFlame >= 0)
             DestroyBullet(nFlame);
     }
+
+    // A_FireRa is a separate player callback, not an AI BulletList recipe:
+    // it starts from alternating side muzzles and uses the complete eight
+    // GameTicks aim wave. Exercise the actual Kex-break projectile path,
+    // including its authored actor profile and source ownership.
+    bool const playerRaExact = KexRaFire_PlayerTest(nTarget, 256) != 0;
     mydeletesprite(nSource);
 
     if (KexBulletImpactContractMatches())
@@ -2436,9 +2442,11 @@ void KexBullet_TestTick()
         passed |= 1u << (ARRAY_SIZE(recipes) + 7);
     if (playerFlameExact)
         passed |= 1u << (ARRAY_SIZE(recipes) + 8);
+    if (playerRaExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 9);
 
-    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 9)) - 1;
-    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre+player-flame %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; player flame muzzle/lifetime/fizzle/sizzle; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
+    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 10)) - 1;
+    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre+player-flame+player-ra %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; player flame muzzle/lifetime/fizzle/sizzle; player Ra alternating muzzle, aim wave, owner and actor profile; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
                passed == wanted ? "PASS" : "FAIL", passed, wanted);
     s_kexBulletTest = -2;
 }

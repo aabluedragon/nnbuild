@@ -830,7 +830,7 @@ def verify_network_snapshot_state():
     try:
         save = re.sub(r'\s+', '', open(os.path.join(source_dir, 'save.cpp')).read())
         for needle in ('staticcharconstkNetworkSnapshotSig[]="EXSN";',
-                       'staticuint16_tconstkNetworkSnapshotVersion=2;',
+                       'staticuint16_tconstkNetworkSnapshotVersion=3;',
                        'intLoadSave::IsNetworkSnapshot()',
                        'voidLoadSave::LoadNetworkSnapshot(constchar*pzFile)',
                        'voidLoadSave::SaveNetworkSnapshot(constchar*pzFile)',
@@ -4145,7 +4145,7 @@ def verify_forcefields(z, outdir):
             out.append('native contact force-field rule changed: %s' % needle)
     if 'KexWall_ForceOpen' in native:
         out.append('force fields are globally passable to a Scepter holder')
-    if 'kSaveVersion=10004' not in save:
+    if 'kSaveVersion=10005' not in save:
         out.append('force-field save-format revision is missing')
     if 'KexForce_StunMove(nSprite)' not in move:
         out.append('electrocution no longer blocks remaster player movement')
@@ -4258,7 +4258,7 @@ def verify_air_supply():
                    'x*=2', 'y*=2'):
         if needle not in player:
             out.append('Kex Dolphin swim rule changed: %s' % needle)
-    if 'kSaveVersion=10004' not in save:
+    if 'kSaveVersion=10005' not in save:
         out.append('Kex air-state save-format revision is missing')
     return out
 
@@ -7262,6 +7262,11 @@ def verify_projectiles(z, outdir):
         'Proj_Boulder_Piece': {'radius': 32, 'height': 32, 'scale': 1,
                                'moveable': 1, 'bouncy': 1,
                                'gravity': .75},
+        'Proj_Ra_Fire': {'radius': 33, 'height': 64, 'stepHeight': 0,
+                         'scale': 1, 'health': 5, 'damage': 20,
+                         'fullbright': 1, 'moveable': 1, 'bouncy': 1,
+                         'expires': 1, 'friction': 0, 'gravity': .75,
+                         'bouncePower': 2},
         'Proj_AmunBomb': {'radius': 9, 'height': 16, 'scale': .5,
                           'damage': 0, 'fullbright': 1, 'moveable': 1,
                           'bouncy': 0, 'expires': 0, 'gravity': .75},
@@ -7572,6 +7577,11 @@ def verify_projectiles(z, outdir):
                 or 'A_Destroy()' not in frames[1]):
             out.append('%s lost its +2 spawn/sound non-radial contract' % anim)
 
+    rafire_loop = read_anim('sprites/projectiles/rafire_anim.txt',
+                            'rafire_loop')
+    if len(rafire_loop) != 1 or not re.search(r'\bsprites\b', rafire_loop[0]):
+        out.append('Proj_Ra_Fire lost its one-frame loop')
+
     sentry_destroy = read_anim('sprites/monsters/sentry_anim.txt',
                                'sentry_projectile_destroy')
     beam_destroy = read_anim('sprites/projectiles/beam_anim.txt',
@@ -7615,6 +7625,35 @@ def verify_projectiles(z, outdir):
     pspr_text = z.read(pspr_real).decode('latin-1').replace('\r', '') \
         if pspr_real else ''
     pspr_compact = re.sub(r'\s+', '', pspr_text)
+    fire_ra = re.search(r'void\s+A_FireRa\s*\([^)]*\)', pspr_text)
+    fire_ra_body = K._brace_block(pspr_text, fire_ra.end())[0] if fire_ra else ''
+    fire_ra_compact = re.sub(r'\s+', '', fire_ra_body)
+    fire_ra_checks = (
+        'if((actor.GetGameTicks()&1)==0)',
+        'offset=32.0f;', 'offset=-32.0f;',
+        '@ra=actor.FireActor("Proj_Ra_Fire",x,y,z);',
+        'switch(actor.GetGameTicks()&7)',
+        'case0:case7:rAn=-0.25f;', 'case1:case6:rAn=0.25f;',
+        'case2:case5:rAn=-0.08333f;', 'case3:case4:rAn=0.08333f;',
+        'dir.x=(Math::Sin(rotation.z+rAn)*cp)*16.0f;',
+        'dir.y=(Math::Cos(rotation.z+rAn)*cp)*16.0f;',
+        'dir.z=12.0f+(18.0f*-sp);',
+        'ra.SetTarget(actor);', 'ra.SetSourceOwner(actor);')
+    for needle in fire_ra_checks:
+        if needle not in fire_ra_compact:
+            out.append('retail A_FireRa callback no longer contains %s' % needle)
+
+    ring_ra_real = names.get('sprites/weapons/ring_of_ra_anim.txt')
+    ring_ra_text = z.read(ring_ra_real).decode('latin-1').replace('\r', '') \
+        if ring_ra_real else ''
+    ring_ra_fire = animation_frames(ring_ra_text, 'ring_ra_fire')
+    if (len(ring_ra_fire) != 2
+            or 'A_FireRa()' not in ring_ra_fire[0]
+            or 'A_ConsumeAmmo(1)' not in ring_ra_fire[0]
+            or 'A_PlayLocalSound("sounds/rafire.wav")' not in ring_ra_fire[0]
+            or 'goto "weapons/ring_ra_idle"' not in ring_ra_fire[1]
+            or 'delay 0' not in ring_ra_fire[1]):
+        out.append('ring_ra_fire lost its authored FireRa/ammo/sound contract')
     bomb_script_checks = (
         'floatbombChargeThrow=16.0f;',
         'bomb.GetVelocity()=(dir*bombChargeThrow);',
@@ -7838,6 +7877,15 @@ def verify_projectiles(z, outdir):
             'VB_KEX_MANTIS_TEST'),
         'kexbreak.cpp': (
             'KexBouncyBalls_Spawn',
+            'KexRaFire_Available', 'KexRaFire_PlayerFire',
+            'turns[8]={-81,81,-27,27,27,-27,81,-81};',
+            'side=(nGameTicks&1)?-32:32;',
+            'launch.z=sprite[nSprite].z-32*16*6;',
+            'launch.vz=-(int)(((int64_t)(12*16384-18*sp)*16*6)/16384);',
+            'KexVaseRa_Reflect', 's.vz+=72;',
+            'KexBreak_IsProp(nHit)',
+            'KexBreakLoadSaveConstruct',
+            'VB_KEX_RA_SAVE_TEST', 's_vaseShot[raShot].ticks==raTicks',
             'z-offset*16*6',
             'KexProjectile_StartCobraBurst(',
             'KexProjectile_SpawnFireballImpact(',
@@ -7857,6 +7905,8 @@ def verify_projectiles(z, outdir):
             'if(!g_kexMode)AddAmmo(nPlayer,kWeaponGrenade,-1);',
             'KexGrenade_Charge(nPlayer);',
             'BuildKexPlayerFlameProjectile(nPlayerSprite,nPitch);',
+            'KexRaFire_PlayerFire(nPlayerSprite,nPitch);',
+            'if(!g_kexMode||!KexRaFire_Available())',
             'nWeapon!=kWeaponFlamer||PlayerList[nPlayer].nWeaponFrame==1'),
         'snake.cpp': (
             'g_kexMode?100:BulletInfo[kWeaponStaff].nDamage',
@@ -7920,7 +7970,7 @@ def verify_projectiles(z, outdir):
             'KexFlameRepeat(30)==147',
             'KexBulletSpawnFlameSizzle',
             'SeqSize[AnimList[nSizzle].nSeq]==16',
-            'player-flame',
+            'player-flame+player-ra', 'KexRaFire_PlayerTest',
             'KexBulletTargetCenterZ',
             'sprite[nTarget].z-KexActorHeightBuild(nTarget)/2',
             'logicalTargetCenterExact',

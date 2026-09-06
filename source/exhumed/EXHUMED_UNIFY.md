@@ -1342,6 +1342,18 @@ three-frame flight plus fifteen-art/one-blank-frame sizzle. `KEXFLAME.SEQ` and t
 projectile probe keep its generated data and native launch/impact path in
 lockstep without changing classic Exhumed behavior.
 
+The KEX Ring of Ra is likewise a physical `Proj_Ra_Fire`, not the DOS
+target-following `Ra[]` eye. Every firing frame launches the fullbright,
+radius-33, height-64, 20-damage orb from an alternating `+/-32` side muzzle;
+its eight-`GameTicks` aim wave, 16-unit speed, upward 12-unit bias and
+pitch response mirror `A_FireRa`. The orb owns the remaster's 0.75 gravity,
+perfect bounce, 120-tick expiry and `rafire_explode` impact effect. The
+classic controller remains the fallback for non-KEX data. Active Ra actors
+serialize with their source owner and motion state, and the projectile probe
+checks all eight launch phases without changing classic Exhumed behavior.
+`VB_KEXSAVE_TEST=1 VB_KEX_RA_SAVE_TEST=1` additionally saves and restores a
+live player orb, checking its position, owner, velocity and lifetime.
+
 Projectile death callbacks are independent of direct actor damage and run on
 wall, actor, floor and ceiling impacts. Both red Cobra types therefore retain
 zero direct damage but execute the authored radius-224, 50-damage blast; their
