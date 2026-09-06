@@ -209,7 +209,7 @@ static void KexMummyPlayDeathSound(short nSprite)
     static char const *const deathSounds[] = {
         "m_deth_kex1", "m_deth_kex2", "m_deth_kex3"
     };
-    unsigned const choice = (uint32_t)RandomLong() % ARRAY_SIZE(deathSounds);
+    unsigned const choice = KexRandomMax(ARRAY_SIZE(deathSounds));
     int const sound = KexSound_Get(deathSounds[choice]);
     if (sound >= 0)
         D3PlayFX(sound, nSprite);

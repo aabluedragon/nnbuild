@@ -83,6 +83,17 @@ int RandomSize(int nSize)
     return randSize;
 }
 
+int KexRandomMax(int max)
+{
+    if (max <= 1)
+        return 0;
+
+    // KEX's Max(n) consumes a full random value for an integer in [0,n).
+    // Scaling a 16-bit word avoids the severe skew from reducing a shorter
+    // bit range modulo an arbitrary bound (notably 3, 10, 15 and 20000).
+    return (int)(((uint64_t)RandomWord() * (uint32_t)max) >> 16);
+}
+
 class RandomLoadSave : public LoadSave
 {
 public:

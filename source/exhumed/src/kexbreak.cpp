@@ -13,9 +13,10 @@
 //         action A_Destroy() } }
 //
 // and the actor def gives `health 30`, `shootable 1`, `solid 1`. The shard art
-// is already in the prop's own idle anim -- frame 0 is the intact pot and the
-// frames after it are the shards, which is why holding the pot on frame 0
-// (noAdvanceFrames) is what stops it flickering into a sliver of debris.
+// is already in the prop's own idle anim. Ordinary props have one intact frame
+// followed by shards; the two explosive vases have sixteen random idle frames
+// followed by five shards. The table preserves that boundary so the random
+// selection cannot turn a vase into debris before it is broken.
 // kexmap.py writes that out as kexbreak.txt, including the exact authored
 // local-sound recipe: none, glass, wood or flesh. Exploding vases and the mine
 // deliberately use none because their explosion/countdown owns the audio.
@@ -80,6 +81,7 @@ struct KexBreakType
     int16_t blasttoggle;                // A_RadialBlast's open-Toggle-faces argument
     int16_t breaksound;                 // KexBreakSound, extracted from the authored death animation
     int16_t spawnheight;                // actor height, KEX units: A_RandomVaseItem origin + height
+    int16_t variantcount;               // intact randomizeFrames range before shard0
 };
 
 struct KexBreakProp
@@ -107,6 +109,11 @@ static int          s_mineTest;    // VB_KEX_MINE_TEST: exact authored countdown
 static int          s_mineTestProp;
 static int          s_mineTestSteps;
 static int          s_mineTestPassed;
+static int          s_variantTest; // VB_KEXBREAK_VARIANT_TEST: exploding-vase art/range audit
+static int          s_overflowSaveTest; // VB_KEX_TOSS_OVERFLOW_SAVE_TEST
+static int          s_overflowSavePhase;
+static int          s_overflowSaveExpected;
+static int          s_overflowSaveTicks;
 static int          s_orbTest;           // VB_KEXDROP_ORB_TEST: exact delayed drop actors
 static int          s_orbTestStarted;
 static int          s_orbTestExpected;
@@ -181,11 +188,11 @@ static bool KexBreak_ParseLine(char *line, int nRec)
 {
     int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0;
     int sight = 0, fuse = 0, wood = 0, blasttoggle = 0, breaksound = -1;
-    int spawnheight = 0;
-    int const fields = Bsscanf(line, "%d %d %d %d %d %d %d %d %d %d %d %d %d",
+    int spawnheight = 0, variants = 1;
+    int const fields = Bsscanf(line, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d",
                                &tile, &health, &shard0, &nshards, &clipdist, &br,
                                &bd, &sight, &fuse, &wood, &blasttoggle, &breaksound,
-                               &spawnheight);
+                               &spawnheight, &variants);
     if (fields < 4)
         return false;
 
@@ -210,6 +217,7 @@ static bool KexBreak_ParseLine(char *line, int nRec)
     t.sight = sight; t.fuse = fuse; t.blasttoggle = !!blasttoggle;
     t.breaksound = breaksound;
     t.spawnheight = clamp(spawnheight, 0, 4095);
+    t.variantcount = clamp(variants, 1, 255);
     return true;
 }
 
@@ -811,6 +819,12 @@ static void KexBreak_Arm(int nSprite, int nType)
 
     int const nProp = s_props++;
 
+    // randomizeFrames picks a stable authored idle pose when KEX constructs
+    // an explosive vase. It is not an animation and it must happen before
+    // this Build sprite becomes a blocking, damageable prop.
+    if (s_type[nType].variantcount > 1)
+        sprite[nSprite].picnum = s_type[nType].tile
+            + KexRandomMax(s_type[nType].variantcount);
     sprite[nSprite].cstat |= 0x101;      // blocking + hitscan
     // Build clips a sprite at clipdist<<2, so the prop blocks the same circle
     // the remaster gives it rather than Build's default.
@@ -993,6 +1007,10 @@ void KexBreak_Init(void)
     s_mineTestProp = -1;
     s_mineTestSteps = 0;
     s_mineTestPassed = 1;
+    s_variantTest = Bgetenv("VB_KEXBREAK_VARIANT_TEST") != NULL;
+    s_overflowSaveTest = Bgetenv("VB_KEX_TOSS_OVERFLOW_SAVE_TEST") != NULL;
+    s_overflowSavePhase = 0;
+    s_overflowSaveExpected = s_overflowSaveTicks = 0;
     s_orbTest = Bgetenv("VB_KEXDROP_ORB_TEST") != NULL;
     s_orbTestStarted = 0;
     s_orbTestExpected = s_orbTestCallbacks = s_orbTestPassed = 0;
@@ -1020,6 +1038,31 @@ void KexBreak_Init(void)
     }
     if (s_props)
         OSD_Printf("Kex breakables: %d props armed from %d types\n", s_props, s_types);
+    if (s_variantTest)
+    {
+        int types = 0, validTypes = 0, props = 0, validProps = 0;
+        for (int i = 0; i < s_types; i++)
+        {
+            KexBreakType const &t = s_type[i];
+            if (t.variantcount <= 1)
+                continue;
+            types++;
+            validTypes += t.variantcount == 16 && t.nshards == 5
+                && t.shard0 == t.tile + t.variantcount;
+        }
+        for (int i = 0; i < s_props; i++)
+        {
+            KexBreakType const &t = s_type[s_prop[i].nType];
+            if (t.variantcount <= 1)
+                continue;
+            props++;
+            int const tile = sprite[s_prop[i].nSprite].picnum;
+            validProps += tile >= t.tile && tile < t.tile + t.variantcount;
+        }
+        bool const okay = types == 2 && validTypes == types && validProps == props;
+        OSD_Printf("Kex exploding-vase variant test: %s (%d/%d source types, %d/%d live props)\n",
+                   okay ? "PASS" : "FAIL", validTypes, types, validProps, props);
+    }
     if (s_mineTest)
     {
         for (int i = 0; i < s_props; i++)
@@ -2059,7 +2102,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
             {
                 if (s_kexPowerTile > 0)
                     KexDrop_Spawn(nSector, x, y, z, 10, KEX_POWER_DROP_HITAG, s_kexPowerTile);
-                s_kexPowerTimer = 10 + (RandomSize(8) % 10);
+                s_kexPowerTimer = 10 + KexRandomMax(10);
                 if (s_breakSelftestActive)
                     OSD_Printf("Kex vase: weapon power spawned in sector %d\n", nSector);
                 return;
@@ -2305,6 +2348,14 @@ void FuncKexBreak(int a, int b, int nRun)
                 OSD_Printf("Kex break puff test: %s (%d/%d exact +32 puffs)\n",
                            puffOkay ? "PASS" : "FAIL",
                            s_vasePuffsSpawned, s_vasePuffsExpected);
+
+                if (s_overflowSaveTest)
+                {
+                    s_overflowSaveExpected = KexTossOverflowCount();
+                    s_overflowSavePhase = s_overflowSaveExpected > 0 ? 1 : -1;
+                    if (s_overflowSavePhase < 0)
+                        OSD_Printf("Kex toss overflow save test: FAIL (no live overflow shards)\n");
+                }
 
                 if (s_scorpTest)
                 {
@@ -4069,6 +4120,56 @@ static void Kex_LookAtDebug(void)
 
 static void KexToggle_SaveTestMutate(void);  // defined with the Toggle state below
 
+// The KEX debris overflow is intentionally outside the DOS reusable-chunk
+// ring. Its identity lives entirely in saved sprite state, so exercise an
+// actual save/reload while those overflow shards are airborne and then prove
+// their normal at-rest cleanup. The filename is explicit: unattended probes
+// must not touch a user's save slot.
+static void KexOverflowSaveTest_Tick(void)
+{
+    if (!s_overflowSaveTest || s_overflowSavePhase < 1)
+        return;
+
+    char const *const path = Bgetenv("VB_KEX_OVERFLOW_SAVE_FILE");
+    if (!path || !path[0])
+        return;
+
+    if (s_overflowSavePhase == 1)
+    {
+        LoadSave::SaveGame(path);
+        s_overflowSavePhase = 2;
+        return;
+    }
+    if (s_overflowSavePhase == 2)
+    {
+        LoadSave::LoadGame(path);
+        int const live = KexTossOverflowCount();
+        if (live != s_overflowSaveExpected)
+        {
+            OSD_Printf("Kex toss overflow save test: FAIL (%d/%d overflow shards after reload)\n",
+                       live, s_overflowSaveExpected);
+            s_overflowSavePhase = -1;
+            return;
+        }
+        s_overflowSavePhase = 3;
+        return;
+    }
+
+    int const live = KexTossOverflowCount();
+    if (live == 0)
+    {
+        OSD_Printf("Kex toss overflow save test: PASS (%d saved/reloaded overflow shards, cleanup complete)\n",
+                   s_overflowSaveExpected);
+        s_overflowSavePhase = -1;
+    }
+    else if (++s_overflowSaveTicks > 300)
+    {
+        OSD_Printf("Kex toss overflow save test: FAIL (%d/%d overflow shards did not settle)\n",
+                   live, s_overflowSaveExpected);
+        s_overflowSavePhase = -1;
+    }
+}
+
 // VB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
 // compare the player's place and health -- the per-sector tables the save
 // carries are kMaxSectors wide, and the levels past 1024 sectors are where
@@ -4209,6 +4310,7 @@ void KexBeam_Tick(void)
     KexSwitch_TestTick();
     KexSealedDoor_Tick();
     KexScript_BossTick();
+    KexOverflowSaveTest_Tick();
     Kex_SaveTest();
     // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
     // n, looking along it, for a visual check without a hand on the keys.

@@ -243,9 +243,9 @@ int KexGibDeath_Spawn(int x, int y, int z, short nSector,
 static int KexBirdFeatherCenteredOffset(int sourceUnits)
 {
     // kexRand::CFloat() is [-1, 1), implemented as
-    // (Max(20000)-10000)/10000. The native RNG differs, but this preserves
-    // the exact source range and consumes one independent random value.
-    int const random = RandomSize(15) % 20000 - 10000;
+    // (Max(20000)-10000)/10000. Keep the source's even full-range selection:
+    // reducing a 15-bit value modulo 20000 favored the negative half.
+    int const random = KexRandomMax(20000) - 10000;
     return (random * sourceUnits * 6) / 10000;
 }
 
@@ -267,7 +267,7 @@ int KexBirdFeather_Spawn(int x, int y, int z, short nSector)
     {
         // Obj_Bird_Feathers has randomizeFrames. Spawn changes to frame zero
         // first, then chooses a visual frame without executing its actions.
-        AnimList[nAnim].nFrame = RandomSize(4) % kKexBirdFeatherLifetime;
+        AnimList[nAnim].nFrame = KexRandomMax(kKexBirdFeatherLifetime);
     }
     return nAnim;
 }

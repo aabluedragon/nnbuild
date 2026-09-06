@@ -589,7 +589,7 @@ void FuncRoach(int a, int nDamage, int nRun)
                     if (g_kexMode && RoachList[nRoach].field_2 == 1 && RandomSize(8) >= 240)
                     {
                         static char const * const chatter[] = { "roch_act2", "roch_act3", "roch_act4" };
-                        int const sound = KexSound_Get(chatter[RandomSize(2) % ARRAY_SIZE(chatter)]);
+                        int const sound = KexSound_Get(chatter[KexRandomMax(ARRAY_SIZE(chatter))]);
                         if (sound >= 0)
                             D3PlayFX(sound, nSprite);
                     }

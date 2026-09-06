@@ -265,17 +265,42 @@ static constexpr int kKexTossGravity = (3 * kKexTossZUnit) / 4;
 static constexpr int kKexTossMinXYVelocity = kKexTossXYVelocityUnit / 8;
 static constexpr int16_t kKexTossChunkMarker = -2;
 static constexpr int16_t kKexTossBouncyChunkMarker = -3;
+// The DOS ring holds 75 reusable chunk sprites. KEX can legitimately toss
+// more than that in a same-tick chain of explosive vases, so overflow pieces
+// use disposable sprites and a saved marker distinct from the classic ring.
+static constexpr int16_t kKexTossOverflowChunkMarker = -7;
+static constexpr int16_t kKexTossOverflowBouncyChunkMarker = -8;
 static constexpr int16_t kKexTossGibExpireBase = -1000;
 
 static bool KexTossIsBouncyMarker(int marker)
 {
-    return marker <= kKexTossBouncyChunkMarker
-        && marker >= kKexTossBouncyChunkMarker - kKexTossBounceSoundFlesh;
+    return (marker <= kKexTossBouncyChunkMarker
+            && marker >= kKexTossBouncyChunkMarker - kKexTossBounceSoundFlesh)
+        || (marker <= kKexTossOverflowBouncyChunkMarker
+            && marker >= kKexTossOverflowBouncyChunkMarker - kKexTossBounceSoundFlesh);
 }
 
 static KexTossBounceSound KexTossBouncySoundForMarker(int marker)
 {
-    return (KexTossBounceSound)(kKexTossBouncyChunkMarker - marker);
+    int const base = marker <= kKexTossOverflowBouncyChunkMarker
+        ? kKexTossOverflowBouncyChunkMarker : kKexTossBouncyChunkMarker;
+    return (KexTossBounceSound)(base - marker);
+}
+
+static bool KexTossIsOverflowMarker(int marker)
+{
+    return marker == kKexTossOverflowChunkMarker
+        || (marker <= kKexTossOverflowBouncyChunkMarker
+            && marker >= kKexTossOverflowBouncyChunkMarker - kKexTossBounceSoundFlesh);
+}
+
+int KexTossOverflowCount(void)
+{
+    int count = 0;
+    for (int nSprite = headspritestat[899]; nSprite >= 0;
+         nSprite = nextspritestat[nSprite])
+        count += KexTossIsOverflowMarker(sprite[nSprite].extra);
+    return count;
 }
 
 static int KexTossRandomInt()
@@ -2351,12 +2376,31 @@ int GrabChunkSprite()
     return nSprite;
 }
 
+static int GrabKexOverflowChunkSprite()
+{
+    // Do not expand or retarget the classic ring: its cursor and allocation
+    // state are serialized for original maps. These KEX-only pieces carry a
+    // self-identifying marker and delete themselves when their toss ends.
+    int const nSprite = insertsprite(0, 899);
+    if (nSprite < 0)
+        return -1;
+    sprite[nSprite].cstat = 0x80;
+    return nSprite;
+}
+
 static int BuildCreatureChunkImpl(int nVal, int nPic, int kexTossMode,
                                   KexTossBounceSound bouncySound = kKexTossBounceSoundGlass)
 {
     int var_14;
 
     int nSprite = GrabChunkSprite();
+    bool bKexOverflow = false;
+
+    if (nSprite < 0 && g_kexMode && kexTossMode)
+    {
+        nSprite = GrabKexOverflowChunkSprite();
+        bKexOverflow = nSprite >= 0;
+    }
 
     if (nSprite == -1) {
         return -1;
@@ -2424,8 +2468,10 @@ static int BuildCreatureChunkImpl(int nVal, int nPic, int kexTossMode,
 //	GrabTimeSlot(3);
 
     sprite[nSprite].extra = kexTossMode == 2
-                         ? kKexTossBouncyChunkMarker - bouncySound
-                         : kexTossMode ? kKexTossChunkMarker : -1;
+        ? (bKexOverflow ? kKexTossOverflowBouncyChunkMarker
+                        : kKexTossBouncyChunkMarker) - bouncySound
+        : kexTossMode ? (bKexOverflow ? kKexTossOverflowChunkMarker
+                                      : kKexTossChunkMarker) : -1;
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSprite, kRunCreatureChunk);
     sprite[nSprite].hitag = runlist_AddRunRec(NewRun, nSprite, kRunCreatureChunk);
 
@@ -2453,10 +2499,16 @@ int KexTossBouncyCreatureChunk(int nVal, int nPic, KexTossBounceSound sound)
 
 static void DestroyCreatureChunk(short nSprite)
 {
+    bool const bKexOverflow = KexTossIsOverflowMarker(sprite[nSprite].extra);
     runlist_DoSubRunRec(sprite[nSprite].owner);
     runlist_FreeRun(sprite[nSprite].lotag - 1);
     runlist_SubRunRec(sprite[nSprite].hitag);
 
+    if (bKexOverflow)
+    {
+        mydeletesprite(nSprite);
+        return;
+    }
     changespritestat(nSprite, 0);
     sprite[nSprite].hitag = 0;
     sprite[nSprite].lotag = 0;

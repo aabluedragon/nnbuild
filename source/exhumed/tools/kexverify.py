@@ -2480,8 +2480,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
             if not line.strip() or line.startswith('#'):
                 continue
             row = tuple(map(int, line.split()))
-            if len(row) != 13:
-                out.append('breakable row has %d columns, expected 13: %s'
+            if len(row) != 14:
+                out.append('breakable row has %d columns, expected 14: %s'
                            % (len(row), row))
                 continue
             rows.append(row)
@@ -2501,6 +2501,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
     actors = K.load_kex_actors(z)
     names = {n.lower(): n for n in z.namelist()}
     expected = {}
+    exploding_art = {}
     puff_types = []
 
     # The retail definitions contain the twelve numbered vases and the barrel.
@@ -2531,16 +2532,25 @@ def verify_breakables(z, outdir, include_testmaps=False):
                         and actor.get('death')
                         and len(K._all_frames(z, names, actor['anim'])) > 1)
         exploding = False
+        idleframes = K._all_frames(z, names, actor['anim'])
+        shardframes = []
         if (not ordinary and actor.get('shootable') and actor.get('death')
                 and actor.get('randomize') and K._death_blast(z, names, actor['death'])):
-            exploding = bool(K._all_frames(
-                z, names, actor['death'].replace('_death', '_shards')))
+            idleframes = K._all_frames(z, names, actor['anim'],
+                                       K.KEX_EXPLODING_VASE_IDLE_FRAMES)
+            shardframes = K._all_frames(
+                z, names, actor['death'].replace('_death', '_shards'))
+            exploding = bool(shardframes)
         if not (mine or ordinary or exploding):
             continue
         recipe = (K.KEX_BREAK_SOUND_NONE if mine
                   else K._death_sound(z, names, actor['death']))
+        variants = len(idleframes) if exploding else 1
+        shards = len(shardframes) if exploding else (0 if mine else len(idleframes) - 1)
         expected[base] = (actor['name'], recipe,
-                          int(round(actor.get('height', 0))))
+                          int(round(actor.get('height', 0))), variants, shards)
+        if exploding:
+            exploding_art[base] = (actor_type, actor['name'], variants, shards)
         if ordinary:
             effect = K._death_spawn_effect(z, names, actor['death'])
             if effect == 'Fx_VaseExplodePuff':
@@ -2558,7 +2568,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
             out.append('breakable tile %d legacy wood bit disagrees with recipe %d'
                        % (tile, recipe))
 
-    for tile, (name, recipe, spawnheight) in sorted(expected.items()):
+    for tile, (name, recipe, spawnheight, variants, shards) in sorted(expected.items()):
         row = bytile.get(tile)
         if row is None:
             out.append('%s has no breakable metadata row' % name)
@@ -2568,10 +2578,20 @@ def verify_breakables(z, outdir, include_testmaps=False):
         elif row[12] != spawnheight:
             out.append('%s spawn height is %d, authored actor height is %d'
                        % (name, row[12], spawnheight))
+        elif row[13] != variants:
+            out.append('%s intact variant count is %d, authored count is %d'
+                       % (name, row[13], variants))
+        elif row[3] != shards:
+            out.append('%s shard count is %d, authored count is %d'
+                       % (name, row[3], shards))
+        elif shards and row[2] != tile + variants:
+            out.append('%s shard range starts at %d, expected %d after its idle variants'
+                       % (name, row[2], tile + variants))
     for tile in sorted(set(bytile) - set(expected)):
         out.append('unexpected breakable metadata for tile %d' % tile)
 
-    expected_counts = tuple(sum(recipe == i for _name, recipe, _height in expected.values())
+    expected_counts = tuple(sum(recipe == i for _name, recipe, _height, _variants, _shards
+                                in expected.values())
                             for i in range(K.KEX_BREAK_SOUND_FLESH + 1))
     actual_counts = tuple(sum(row[11] == i for row in rows)
                           for i in range(K.KEX_BREAK_SOUND_FLESH + 1))
@@ -2656,7 +2676,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
     if len(mine_actor_types) != 1:
         out.append('Magic 8 Ball actor type census changed: %s' % mine_actor_types)
     mine_actor_type = mine_actor_types[0] if len(mine_actor_types) == 1 else 13
-    mine_tiles = [tile for tile, (name, _recipe, _height) in expected.items()
+    mine_tiles = [tile for tile, (name, _recipe, _height, _variants, _shards) in expected.items()
                   if name == 'AI_Magic8Ball']
     if len(mine_tiles) != 1:
         out.append('Magic 8 Ball actor tile census changed: %s' % mine_tiles)
@@ -2692,6 +2712,37 @@ def verify_breakables(z, outdir, include_testmaps=False):
                            % expected_art_frames)
         except (OSError, ValueError, AssertionError, struct.error) as exc:
             out.append('Magic 8 Ball countdown PNG audit failed: %s' % exc)
+
+    # Obj_Vase_Explode01/02 use randomizeFrames, not a generic one-frame
+    # prop: all sixteen selected idle poses must be present before their five
+    # shard tiles, and all are composited into one stable actor canvas.
+    if len(exploding_art) != 2:
+        out.append('retail exploding-vase actor census changed: %s'
+                   % sorted(name for _type, name, _variants, _shards
+                            in exploding_art.values()))
+    for tile, (actor_type, name, variants, shards) in sorted(exploding_art.items()):
+        if (K.KEX_EXPLODING_VASE_IDLE_FRAMES != 16
+                or variants != K.KEX_EXPLODING_VASE_IDLE_FRAMES or shards != 5):
+            out.append('%s source art contract changed: %d idle variants, %d shards'
+                       % (name, variants, shards))
+        paths = []
+        for frame in range(variants + shards):
+            art_tile = tile + frame
+            rel = 'kexart/actors/a%03d_%d.png' % (actor_type, frame)
+            if not re.search(r'tilefromtexture\s+%d\s*\{\s*file\s+"%s"'
+                             % (art_tile, re.escape(rel)), deftext):
+                out.append('%s art tile %d is absent from exhumed.def'
+                           % (name, art_tile))
+                continue
+            paths.append(os.path.join(outdir, rel))
+        try:
+            import kexpng as _png
+            dims = {_png.read(path)[:2] for path in paths}
+            if len(paths) != variants + shards or len(dims) != 1:
+                out.append('%s variants and shards do not use one %d-frame canvas'
+                           % (name, variants + shards))
+        except (OSError, ValueError, AssertionError, struct.error) as exc:
+            out.append('%s PNG audit failed: %s' % (name, exc))
 
     effects = z.read(names['defs/actors/effects.txt']).decode('latin-1').replace('\r', '')
     actor_match = re.search(r'Actor\s+Fx_VaseExplodePuff\s*\{(.*?)\n\}',
@@ -2817,6 +2868,12 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'VB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
         'KexBreak_DropItem(intnSprite,KexBreakTypeconst&t)',
         'sprite[nSprite].z-t.spawnheight*16*6',
+        'int16_tvariantcount', 't.variantcount=clamp(variants,1,255);',
+        'KexRandomMax(s_type[nType].variantcount)',
+        'VB_KEXBREAK_VARIANT_TEST', 'Kexexploding-vasevarianttest:',
+        'VB_KEX_TOSS_OVERFLOW_SAVE_TEST', 'KexTossOverflowCount()',
+        'LoadSave::SaveGame(path);', 'LoadSave::LoadGame(path);',
+        'Kextossoverflowsavetest:PASS(',
         's_vaseScorpsAtHeight',
         'Kexbreakscorpiontest:',
         'staticvoidKexBreak_ArmMine(intnProp)',
@@ -3439,6 +3496,16 @@ def verify_ramses(z, outdir):
         for token in tokens:
             if re.sub(r'\s+', '', token) not in text:
                 out.append('retail scripted-sector source changed: %s' % token)
+    tombend_real = names.get('scripts/map/tombend_script.txt')
+    tombend_script = re.sub(r'\s+', '', z.read(tombend_real).decode('latin-1')) \
+        if tombend_real else ''
+    for token in ('CallDelayed(2,instigator,1.0f)',
+                  'FireActorEventFromTag(1010)',
+                  'CallDelayed(3,instigator,0)',
+                  'Player().SetShakeTime(Math::RandByte()&0x3F)',
+                  'delay(waitTime)', '$restart'):
+        if token not in tombend_script:
+            out.append('TOMBEND aftermath script changed: %s' % token)
     srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
         native = re.sub(r'\s+', '', open(os.path.join(srcdir, 'kexbreak.cpp')).read())
@@ -3453,6 +3520,19 @@ def verify_ramses(z, outdir):
                 out.append('native scripted-sector 60-to-30Hz bridge changed: %s' % needle)
     except OSError:
         out.append('cannot read native scripted-sector bridge')
+    try:
+        ramses = re.sub(r'\s+', '', open(os.path.join(srcdir, 'ramses.cpp')).read())
+        for needle in ('Kex_RamsesTombEndAftermathTick(void)',
+                       's_kexTombEndAftermathStartClock=(int)totalclock+120;',
+                       'KexQuake(32);',
+                       'KexQuake(shake);',
+                       'intconstshake=(uint8_t)RandomByte()&0x3f;',
+                       'intconstdelay=40+KexRandomMax(256);',
+                       'KexTOMBENDaftermathtest:PASS'):
+            if needle not in ramses:
+                out.append('native TOMBEND aftermath bridge changed: %s' % needle)
+    except OSError:
+        out.append('cannot read native TOMBEND aftermath bridge')
     try:
         mapper = re.sub(r'\s+', '', open(os.path.join(
             os.path.dirname(__file__), 'kexmap.py')).read())
@@ -4904,7 +4984,7 @@ def verify_flyers(z, outdir):
     for token in (
             'intKexBirdFeather_Spawn(',
             'BuildAnim(-1,kSeqKexBirdFeather,0,x,y,z,nSector,64,kAnimLoop)',
-            'AnimList[nAnim].nFrame=RandomSize(4)%kKexBirdFeatherLifetime;',
+            'AnimList[nAnim].nFrame=KexRandomMax(kKexBirdFeatherLifetime);',
             'intconstnextFrame=(nFrame+1)%kKexBirdFeatherLifetime;',
             'if(nextFrame==8||nextFrame==14)',
             'sprite[nSprite].zvel=kKexBirdFeatherFallVelocity;',
@@ -5059,6 +5139,54 @@ def verify_sentry(z, outdir):
                 out.append('Sentry sound alias is missing: %s' % alias)
     except OSError:
         out.append('kexsound.txt is missing')
+    return out
+
+
+def verify_kex_random_bounds():
+    """Protect remaster Max(n) calls from classic bit-width modulo skew."""
+    out = []
+    src = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+    try:
+        native = {}
+        for filename in ('random.cpp', 'random.h', 'anims.cpp', 'mummy.cpp',
+                         'roach.cpp', 'kexbreak.cpp'):
+            native[filename] = re.sub(
+                r'\s+', '', open(os.path.join(src, filename)).read())
+    except OSError as exc:
+        return ['cannot read KEX bounded-random bridge: %s' % exc]
+
+    for needle in ('intKexRandomMax(intmax)',
+                   'if(max<=1)return0;',
+                   '((uint64_t)RandomWord()*(uint32_t)max)>>16'):
+        if needle not in native['random.cpp']:
+            out.append('bounded KEX random helper changed: %s' % needle)
+    if 'intKexRandomMax(intmax);' not in native['random.h']:
+        out.append('bounded KEX random declaration changed')
+
+    expected = {
+        'anims.cpp': ('KexRandomMax(20000)',
+                      'KexRandomMax(kKexBirdFeatherLifetime)'),
+        'mummy.cpp': ('KexRandomMax(ARRAY_SIZE(deathSounds))',),
+        'roach.cpp': ('KexRandomMax(ARRAY_SIZE(chatter))',),
+        'kexbreak.cpp': ('s_kexPowerTimer=10+KexRandomMax(10)',),
+    }
+    for filename, needles in expected.items():
+        for needle in needles:
+            if needle not in native[filename]:
+                out.append('%s no longer uses bounded KEX randomness: %s'
+                           % (filename, needle))
+    stale = {
+        'anims.cpp': ('RandomSize(15)%20000',
+                      'RandomSize(4)%kKexBirdFeatherLifetime'),
+        'mummy.cpp': ('RandomLong()%ARRAY_SIZE(deathSounds)',),
+        'roach.cpp': ('RandomSize(2)%ARRAY_SIZE(chatter)',),
+        'kexbreak.cpp': ('RandomSize(8)%10',),
+    }
+    for filename, needles in stale.items():
+        for needle in needles:
+            if needle in native[filename]:
+                out.append('%s still has modulo-biased KEX randomness: %s'
+                           % (filename, needle))
     return out
 
 
@@ -6172,6 +6300,13 @@ def verify_common_enemies(z, outdir):
             'intKexActorHeightBuild(shortnSprite)',
             'intKexTossCreatureChunk(intnVal,intnPic)',
             'kKexTossChunkMarker=-2',
+            'kKexTossOverflowChunkMarker=-7',
+            'kKexTossOverflowBouncyChunkMarker=-8',
+            'staticintGrabKexOverflowChunkSprite()',
+            'if(nSprite<0&&g_kexMode&&kexTossMode)',
+            'intKexTossOverflowCount(void)',
+            'boolconstbKexOverflow=KexTossIsOverflowMarker(sprite[nSprite].extra);',
+            'if(bKexOverflow){mydeletesprite(nSprite);return;}',
             'sprite[nSprite].z-=32*kKexTossZUnit;',
             'KexTossRange(-8*kKexTossXYVelocityUnit,',
             'KexTossRange(-16*kKexTossZUnit,',
@@ -8996,6 +9131,7 @@ def main():
             ("TERRAIN", lambda: verify_steep_terrain(z, outdir)),
             ("FLYERS", lambda: verify_flyers(z, outdir)),
             ("SENTRY", lambda: verify_sentry(z, outdir)),
+            ("RANDOM", verify_kex_random_bounds),
             ("SET", lambda: verify_set(z, outdir)),
             ("QUEEN", lambda: verify_queen(z, outdir)),
             ("SELKIS", lambda: verify_selkis(z, outdir)),

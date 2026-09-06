@@ -31,6 +31,9 @@ char RandomByte();
 uint16_t RandomWord();
 int RandomLong();
 int RandomSize(int nSize);
+// kexSlaveRandomizer::Max(n): an unbiased full-word selection in [0,n).
+// This is for remaster behavior only; classic code keeps its historical RNG.
+int KexRandomMax(int max);
 // The synced RNG cursor. VibeBuild32 multiplayer folds it into the per-tick
 // state CRC: two machines that have consumed randomness differently have
 // already desynced, even if nothing has visibly moved apart yet.

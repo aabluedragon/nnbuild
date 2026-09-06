@@ -33,6 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "names.h"
 #include "player.h"
 #include "gun.h"
+#include "move.h"
 #include "kexbreak.h"
 #include "kexinv.h"
 #include "kextable.h"
@@ -151,6 +152,14 @@ static int s_kexRamsesBobTicks;
 static int s_kexRamsesSeenPhases;
 static int s_kexRamsesSawBody;
 static int s_kexRamsesTestStarted;
+// TOMBEND's EndRamsesEvent starts $script 2 one second after the good
+// address. That script starts $script 3, whose only persistent work is a
+// random, repeating quake. Keep its time in totalclock's 120-Hz units so the
+// source's seconds-based delay remains independent of the 30-Hz Build tick.
+static int s_kexTombEndAftermathStartClock;
+static int s_kexTombEndAftermathNextClock;
+static int s_kexTombEndAftermathPulses;
+static int s_kexTombEndAftermathTest;
 
 static bool Kex_RamsesArtParse(char *line, int)
 {
@@ -217,6 +226,39 @@ static int Kex_IsTombEnd(void)
     Bstrncpyz(nameUp, gUserMapFilename, sizeof(nameUp));
     Bstrupr(nameUp);
     return Bstrstr(nameUp, "TOMBEND") != NULL;
+}
+
+static void Kex_RamsesTombEndAftermathTick(void)
+{
+    if (!g_kexMode || !s_kexTombEndAftermathStartClock || !Kex_IsTombEnd()
+        || (int)totalclock < s_kexTombEndAftermathStartClock)
+        return;
+
+    if (!s_kexTombEndAftermathNextClock)
+        s_kexTombEndAftermathNextClock = (int)totalclock;
+    if ((int)totalclock < s_kexTombEndAftermathNextClock)
+        return;
+
+    // TOMBEND $script 3: SetShakeTime(Math::RandByte() & 0x3F), then
+    // quake.wav, delay(Randomizer::Float() * 2.13 + .3333), and restart.
+    // The initial start is delayed one second by $script 2. KEX's script
+    // clock is 120 Hz here: .3333 * 120 truncates to 40, while the randomized
+    // 2.13-second span contributes 0..255 more ticks.
+    int const shake = (uint8_t)RandomByte() & 0x3f;
+    KexQuake(shake);
+    int const quake = KexSound_Get("k_quake");
+    if (quake >= 0)
+        PlayLocalSound(quake, 0);
+    int const delay = 40 + KexRandomMax(256);
+    s_kexTombEndAftermathNextClock = (int)totalclock + delay;
+    s_kexTombEndAftermathPulses++;
+
+    if (s_kexTombEndAftermathTest && s_kexTombEndAftermathPulses == 2)
+    {
+        OSD_Printf("Kex TOMBEND aftermath test: PASS (script 2 delay, "
+                   "script 3 random shake 0..63, delay 40..295)\n");
+        s_kexTombEndAftermathTest = 0;
+    }
 }
 
 static void Kex_RamsesCameraTick(void)
@@ -457,6 +499,10 @@ void KexRamses_Reset(void)
     s_kexRamsesSawBody = 0;
     s_kexRamsesTestStarted = 0;
     s_kexRamsesSpokenBefore = 0;
+    s_kexTombEndAftermathStartClock = 0;
+    s_kexTombEndAftermathNextClock = 0;
+    s_kexTombEndAftermathPulses = 0;
+    s_kexTombEndAftermathTest = Bgetenv("VB_KEX_TOMBEND_AFTER_TEST") != NULL;
     sKexTalkCount = 0;
 }
 
@@ -570,10 +616,17 @@ static void Kex_RamsesEnd(void)
         if (Kex_IsTombEnd())
         {
             KexScripted_Trigger(1);     // sink the bier on the good ending
-            nQuake[nLocalPlayer] = 4096;
+            // EndRamsesEvent(): the immediate SetShakeTime(32) precedes
+            // its one-second CallDelayed(2). $script 2 then enters the
+            // recurring $script 3 earthquake below. This is deliberately
+            // KEX-only rather than the DOS nQuake amplitude path.
+            KexQuake(32);
             int const quake = KexSound_Get("k_quake");
             if (quake >= 0)
                 PlayLocalSound(quake, 0);
+            s_kexTombEndAftermathStartClock = (int)totalclock + 120;
+            s_kexTombEndAftermathNextClock = 0;
+            s_kexTombEndAftermathPulses = 0;
         }
         else
         {
@@ -671,6 +724,8 @@ static void Kex_RamsesFinishNative(void)
 
 int KexRamses_Tick(void)
 {
+    Kex_RamsesTombEndAftermathTick();
+
     // A repeatable KEX sector fires on entry, not every frame spent inside it.
     // Rearm only after both the authored four seconds and a real departure.
     if (g_kexMode && s_kexRamsesRearmClock

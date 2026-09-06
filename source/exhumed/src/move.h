@@ -79,6 +79,9 @@ enum KexTossBounceSound
 // bouncy=1 plus A_DestroyAtRest; creature gibs instead use expires=1. Each
 // shard also retains its three authored floor-bounce WAV variants.
 int KexTossBouncyCreatureChunk(int nVal, int nPic, KexTossBounceSound sound);
+// Live disposable KEX shards beyond the classic 75-slot ring. Used only by
+// the hidden save/reload regression probe.
+int KexTossOverflowCount(void);
 
 void BuildNear(int x, int y, int walldist, int nSector);
 int BelowNear(short nSprite);

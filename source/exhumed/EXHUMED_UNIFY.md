@@ -1317,6 +1317,10 @@ leaving the classic roach corpse. It also starts the shared gib-death actor at
 the authored +64 offset before deletion. Those five gib sprites remain on
 tiles 7800-7804. Exact-sequence detection confines these changes to generated
 KEX data; the stock sequence layout and classic behavior remain available.
+The chase callback keeps its authored one-in-sixteen chatter gate and selects
+each of the three recordings evenly, using the same full-range bounded KEX
+draw as other remaster-only random actions rather than the classic bit-count
+helper's modulo-biased result.
 
 Its `Proj_Blaster` also has a dedicated remaster projectile frame; KEX
 type-13 bullets render that 12x12 sprite on tile 7805. Enemy launches no
@@ -1837,7 +1841,9 @@ immediate, plays `birddeath.wav`, and emits seven transient
 crop on tile 7632 through its randomized 15-frame loop; it preserves the
 source's centred ±64/±64/±16 spawn range, f8/f14 half-unit downward writes,
 and 1.024-unit floor-removal gate instead of treating feathers as generic
-ballistic chunks. Identity is mirrored in `sprite.hitag`, so the unchanged
+ballistic chunks. Its random frame and centred offsets use a full-word bounded
+KEX sample, so arbitrary bounds such as 15 and 20000 remain even across the
+whole source range. Identity is mirrored in `sprite.hitag`, so the unchanged
 classic `Wasp` save struct can reconstruct bird, Wasp and Queen seedling
 records; older saves are recognized from the private tile ranges.
 `VB_KEX_FLYER_AUDIT=1` reports each identity's live stats and
@@ -1903,11 +1909,25 @@ retaining the historic eleven-column 3/11/1/0 fallback. `VB_KEXBREAK_SOUND_TEST=
 checks that table at runtime and,
 with `VB_KEXBREAK_TEST`, checks every shattered instance's dispatch; hidden,
 muted probes covered TOMB's glass, MARSH's flesh, MINES' wood, and their silent
-exploding props. Their bouncy shards likewise keep the authored `glass01..03`,
+exploding props. The two explosive vase types preserve their authored sixteen
+`randomizeFrames` idle poses (a stable one-time selection per prop) and keep
+their five debris sprites in the following tile range, rather than rendering
+every instance as the first pose or accidentally selecting a shard. The
+14-column `kexbreak.txt` carries that intact-range count; old 13-column tables
+remain one-variant compatible. `VB_KEXBREAK_VARIANT_TEST=1` validates both
+source rows and all live props while a map loads. Their bouncy shards likewise
+keep the authored `glass01..03`,
 `wood01..03`, or `flesh01..03` floor-rebound family: KEX selects its variant
 from session milliseconds modulo three when a fall exceeds four gravities, and
 the 60-Hz toss bridge reproduces that timing without using the native gameplay
-RNG. The remaining sounds with no Build counterpart get names
+RNG. Unlike the original 75-slot DOS chunk ring, KEX tosses can overflow into
+disposable, marker-tagged sprites; this only activates after the classic pool
+is full, preserves the original allocator and save layout, and lets a
+same-tick chain of explosive vases retain every authored shard.
+`VB_KEX_TOSS_OVERFLOW_SAVE_TEST=1` plus an absolute
+`VB_KEX_OVERFLOW_SAVE_FILE` performs a hidden live-shard save/reload and
+cleanup audit. The remaining
+sounds with no Build counterpart get names
 no VOC carries -- `k_trans`, `k_mine`, `k_bould`, `k_bldhit`, `k_anmele`,
 `k_setstp`, and TOMBEND's `k_quake` in `KEX_SOUNDS` -- and
 `KexSound_Get(name)` plays them:
@@ -1970,12 +1990,17 @@ state, so `-nosound` and a slightly short recording cannot end a speech early.
 
 No other level sprites or sectors are hidden or dimmed. Ending stops the speech
 without the blocking fade loop, starts the authored vanish, releases play,
-fires tag 1020 and restores the level music; a complete TOMBEND also sinks the
-bier and plays its quake, while the incomplete branch goes directly to the bad
-ending. A converted repeatable pad can span several Build sectors. The complete
-set is disabled during release and rearmed four seconds later only after the
-player leaves it, preventing a split piece from starting a second cinematic
-during the first one's vanish.
+fires tag 1020 and restores the level music. A complete TOMBEND sinks the bier,
+sets its immediate 32-tick shake, then follows `EndRamsesEvent()`'s delayed
+`$script 2`/`$script 3` aftermath: after one second it repeatedly plays
+`quake.wav`, assigns `RandByte() & 63` local shake ticks, and waits a randomized
+0.3333--2.4633 seconds before the next pulse. This stays entirely in the KEX
+path; the incomplete branch goes directly to the bad ending. A converted
+repeatable pad can span several Build sectors. The complete set is disabled
+during release and rearmed four seconds later only after the player leaves it,
+preventing a split piece from starting a second cinematic during the first
+one's vanish. `VB_KEX_TOMBEND_AFTER_TEST=1` proves the delayed second pulse
+under the hidden Ramses visual fixture.
 
 `kexverify.py` checks the 55/12/21/1 ranges, shared canvases, PNG/DEF coverage,
 and all 56 language/speech facial streams against their WAV rate and the runtime
