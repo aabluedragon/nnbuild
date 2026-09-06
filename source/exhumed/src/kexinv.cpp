@@ -296,6 +296,13 @@ static int s_menuLoadSelftest;
 static int s_menuLoadTestSlot;
 static int s_menuLoadTestPhase;
 
+// Environment-only test delays are expressed in native player ticks.  Count
+// down to zero so a value of one runs on the first tick instead of expiring.
+static bool KexInv_TestCountdownElapsed(int &ticks)
+{
+    return ticks > 0 && --ticks == 0;
+}
+
 static int KexCheckpoint_FindActor(int nActorId);
 static void KexInv_RunSaveSelftest(void);
 
@@ -974,7 +981,7 @@ static void KexInv_ShrineTick(void)
 // event-54 destination materialised an item at its authored Kex position.
 static void KexInv_ShrineTestPrepare(void)
 {
-    if (s_shrineTestPhase != 0 || !s_shrineSelftest || --s_shrineSelftest != 1)
+    if (s_shrineTestPhase != 0 || !KexInv_TestCountdownElapsed(s_shrineSelftest))
         return;
 
     int const nPlayer = nLocalPlayer;
@@ -1472,8 +1479,7 @@ void KexInv_Tick(void)
     KexInv_ShrineTestPrepare();
     KexInv_ShrineTick();
     KexInv_ShrineTestCheck();
-    if (s_travelTestPhase == 0 && s_travelSelftest
-        && --s_travelSelftest == 1)
+    if (s_travelTestPhase == 0 && KexInv_TestCountdownElapsed(s_travelSelftest))
         KexInv_RunTravelSelftest();
     if (s_travelTestPhase == 1 && s_travelTestPostTicks > 0
         && --s_travelTestPostTicks == 0)
@@ -1514,11 +1520,9 @@ void KexInv_Tick(void)
                    positionOK ? "authored" : "wrong");
         s_travelTestPhase = ok ? 3 : 2;
     }
-    if (s_menuLoadTestPhase == 0 && s_menuLoadSelftest
-        && --s_menuLoadSelftest == 1)
+    if (s_menuLoadTestPhase == 0 && KexInv_TestCountdownElapsed(s_menuLoadSelftest))
         KexInv_RunMenuLoadSelftest();
-    if (s_deathTestPhase == 0 && s_deathSelftest
-        && --s_deathSelftest == 1)
+    if (s_deathTestPhase == 0 && KexInv_TestCountdownElapsed(s_deathSelftest))
     {
         int const nPlayer = nLocalPlayer;
         int const nPlayerSprite = PlayerList[nPlayer].nSprite;
@@ -1551,10 +1555,9 @@ void KexInv_Tick(void)
     }
     else if (s_deathTestPhase == 1)
         s_deathTestTicks++;
-    if (s_checkpointTestPhase == 0 && s_checkpointSelftest
-        && --s_checkpointSelftest == 1)
+    if (s_checkpointTestPhase == 0 && KexInv_TestCountdownElapsed(s_checkpointSelftest))
         KexCheckpoint_RunSelftest();
-    if (s_difficultySelftest && --s_difficultySelftest == 1)
+    if (KexInv_TestCountdownElapsed(s_difficultySelftest))
         KexInv_RunDifficultySelftest();
     if (s_manacleTest > 0)
     {
@@ -1567,7 +1570,7 @@ void KexInv_Tick(void)
                        PlayerList[nLocalPlayer].nCurrentWeapon, PlayerList[nLocalPlayer].nWeaponState,
                        KexManacle_LastShot, PlayerList[nLocalPlayer].nAmmo[kWeaponManacle]);
     }
-    if (s_pickupSelftest && --s_pickupSelftest == 1)
+    if (KexInv_TestCountdownElapsed(s_pickupSelftest))
     {
         int const p = nLocalPlayer;
         bool initialAmmo = nPlayerWeapons[p] == (1 << kWeaponSword);
@@ -1625,7 +1628,7 @@ void KexInv_Tick(void)
                    PlayerList[p].nAmmo[kWeaponM60], PlayerList[p].nAmmo[kWeaponManacle],
                    nPlayerDouble[p]);
     }
-    if (!s_selftest || --s_selftest != 1)
+    if (!KexInv_TestCountdownElapsed(s_selftest))
         return;
     int taken = 0;
     for (int i = 0; i < kMaxSprites; i++)

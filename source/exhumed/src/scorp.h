@@ -35,5 +35,6 @@ void InitScorp();
 int BuildScorp(short nSprite, int x, int y, int z, short nSector, short nAngle, int nChannel);
 void FuncScorp(int, int, int);
 void KexSelkis_TestTick();
+bool KexSelkis_RemoveSprite(int nSprite); // script-side actor.Remove(), not death
 
 #endif

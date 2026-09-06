@@ -1430,6 +1430,10 @@ static void KexQueenSpawnSnakeExplosion(short nSprite)
 
 static void KexQueenBeginSnakeDeath(short nSprite)
 {
+    // A_QueenDeath fires the arena's tag 1010 with the first snake-death
+    // explosion, before the remaining explosion frames consume the actor.
+    if (g_kexMode && s_queenTest < 0)
+        KexScript_BossEvent(nSprite, "Queen snake death event");
     QueenHead.nAction = kKexQueenSnakeExplode;
     QueenHead.field_2 = 0;
     QueenHead.field_C = 0;
@@ -3259,7 +3263,12 @@ void KexQueen_TestTick()
         s_queenTestPlayer = nLocalPlayer;
         s_queenTestInvincibility
             = PlayerList[nLocalPlayer].invincibility;
-        PlayerList[nLocalPlayer].invincibility = 1;
+        // The full body-to-snake probe deliberately receives the body flap,
+        // charge and head-melee hits. Shield this env-only lifecycle through
+        // its roughly 270 native ticks, then restore the original timer in
+        // KexQueenTestFinish().
+        if (PlayerList[nLocalPlayer].invincibility < 900)
+            PlayerList[nLocalPlayer].invincibility = 900;
 
         int const base = SeqOffsets[kSeqQueen];
         bool flags = (FrameFlag[SeqBase[base + 45] + 1] & 0x80)

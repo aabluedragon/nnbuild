@@ -45,7 +45,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <assert.h>
 
 #define kMaxSequences	4096
-#define kMaxSEQFiles 97
+#define kMaxSEQFiles 98
 #define kMaxSEQFrames	18000
 #define kMaxSEQChunks	21000
 
@@ -174,7 +174,8 @@ const char *SeqNames[kMaxSEQFiles] =
   "kexhealthspawn", // VibeBuild32: exact Fx_HealthSpawn delayed orb; likewise
   "kexgibdeath",    // VibeBuild32: exact Fx_Gibs01 delayed drop actor; likewise
   "kexbirdfeather", // VibeBuild32: exact Obj_Bird_Feathers loop/fall actor; likewise
-  "kexwatersplash"  // VibeBuild32: exact Fx_WaterSplash surface-crossing actor; likewise
+  "kexwatersplash", // VibeBuild32: exact Fx_WaterSplash surface-crossing actor; likewise
+  "kexflame"        // VibeBuild32: exact Proj_Flame flight/sizzle actors; likewise
 };
 
 short SeqOffsets[kMaxSEQFiles];
@@ -200,7 +201,7 @@ static bool seq_IsOptional(const char *seqName)
         || !Bstrcasecmp(seqName, "kexwaterexp") || !Bstrcasecmp(seqName, "kexvasepuff")
         || !Bstrcasecmp(seqName, "kexammospawn") || !Bstrcasecmp(seqName, "kexhealthspawn")
         || !Bstrcasecmp(seqName, "kexgibdeath") || !Bstrcasecmp(seqName, "kexbirdfeather")
-        || !Bstrcasecmp(seqName, "kexwatersplash");
+        || !Bstrcasecmp(seqName, "kexwatersplash") || !Bstrcasecmp(seqName, "kexflame");
 }
 
 int seq_ReadSequence(const char *seqName)

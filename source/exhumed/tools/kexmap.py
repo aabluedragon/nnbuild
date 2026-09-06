@@ -3473,6 +3473,10 @@ KEX_GIB_DEATH_UNIQUE_FRAMES = 10
 KEX_GIB_DEATH_LIFETIME = 19               # A_RandomItem + destroy on blank tick 18
 KEX_WATER_SPLASH_TILE_BASE = 22014
 KEX_WATER_SPLASH_LIFETIME = 23             # Fx_WaterSplash destroys on source frame 22
+KEX_FLAME_TILE_BASE = 22037
+KEX_FLAME_FLIGHT_FRAMES = 3
+KEX_FLAME_SIZZLE_FRAMES = 8                # source frames 0,2,...14 at 30 Hz
+KEX_FLAME_LIFETIME = 15                    # 30 KEX updates at .5 fizzle each
 KEX_BIRD_FEATHER_LIFETIME = 15             # randomized, looped Obj_Bird_Feathers
 KEX_EXACT_SPIDER_TILE_SPAN = 200
 KEX_EXACT_MUMMY_TILE_SPAN = 200
@@ -5861,6 +5865,55 @@ def build_kex_water_splash_sequence(Z, outdir, verbose=True):
     return rows
 
 
+def build_kex_flame_sequence(Z, outdir, verbose=True):
+    """Write Proj_Flame's flight loop and impact sizzle at native cadence.
+
+    flameproj_loop advances every KEX tick, while PCExhumed updates its
+    projectile records at 30 Hz. The three-frame loop therefore remains a
+    three-frame loop, and the sixteen visible sizzle frames are sampled on
+    source frames 0, 2, ... 14 before frame 16 destroys the actor.
+    """
+    import kexseqtool
+
+    names = {n.lower(): n for n in Z.namelist()}
+    flight = parse_anim_full(Z, names, 'projectiles/flameproj_loop')
+    sizzle = parse_anim_full(Z, names, 'projectiles/flameproj_sizzle')
+    if (len(flight) != KEX_FLAME_FLIGHT_FRAMES
+            or any(f.get('delay') != 1 or not f.get('sprites')
+                   for f in flight)
+            or len(sizzle) != 17
+            or any(f.get('delay') != 1 or not f.get('sprites')
+                   for f in sizzle[:-1])
+            or not sizzle[-1].get('destroy')):
+        raise ValueError('Proj_Flame animation contract changed')
+
+    sizzle = sizzle[:KEX_FLAME_SIZZLE_FRAMES * 2:2]
+    flight_rows = _build_effect_frame_tiles(
+        Z, names, outdir, flight, 'kexart/flameflight', 'flame',
+        KEX_FLAME_TILE_BASE, (255, 255, 255), 'projectiles/flameproj_loop')
+    sizzle_rows = _build_effect_frame_tiles(
+        Z, names, outdir, sizzle, 'kexart/flamesizzle', 'flame',
+        KEX_FLAME_TILE_BASE + KEX_FLAME_FLIGHT_FRAMES, (255, 255, 255),
+        'projectiles/flameproj_sizzle')
+
+    count = KEX_FLAME_FLIGHT_FRAMES + KEX_FLAME_SIZZLE_FRAMES
+    seq = dict(tag=b'IH', centerx=0, centery=0,
+               seq_base=[0, KEX_FLAME_FLIGHT_FRAMES],
+               seq_size=[KEX_FLAME_FLIGHT_FRAMES, KEX_FLAME_SIZZLE_FRAMES],
+               seq_flag=[-1, -1], fr_base=list(range(count)),
+               fr_size=[1] * count, fr_flag=[4] * count,
+               ck_x=[0] * count, ck_y=[0] * count,
+               ck_pict=[KEX_FLAME_TILE_BASE + i for i in range(count)],
+               ck_flag=[0] * count, snd_names=[], snd_events=[], trailing=b'')
+    with open(os.path.join(outdir, 'KEXFLAME.SEQ'), 'wb') as f:
+        f.write(kexseqtool.write_seq_bytes(seq))
+    if verbose:
+        print('  flamethrower: exact 3-frame Proj_Flame loop plus '
+              '8-frame impact sizzle on tiles %d-%d' %
+              (KEX_FLAME_TILE_BASE, KEX_FLAME_TILE_BASE + count - 1))
+    return flight_rows + sizzle_rows
+
+
 def build_kex_bird_feather_sequence(Z, outdir, verbose=True):
     """Write Obj_Bird_Feathers' randomized, looping 15-frame actor SEQ.
 
@@ -6920,6 +6973,7 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
         orbspawndefs = build_kex_orb_spawn_sequences(z, outdir, verbose)
         gibdeathdefs = build_kex_gib_death_sequence(z, outdir, verbose)
         watersplashdefs = build_kex_water_splash_sequence(z, outdir, verbose)
+        flamedefs = build_kex_flame_sequence(z, outdir, verbose)
         build_kex_bird_feather_sequence(z, outdir, verbose)
     # AI_Sentry's exact action timing and eight-view layered art. The stock
     # Roach sequence compresses its ten-frame ranged attack to eight frames.
@@ -7149,6 +7203,8 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
     for tl, fn in gibdeathdefs:                # generic fullbright gib/death actor
         usable[tl] = fn
     for tl, fn in watersplashdefs:             # air-to-water splash actor
+        usable[tl] = fn
+    for tl, fn in flamedefs:                   # player Proj_Flame flight/sizzle
         usable[tl] = fn
 
     # The skies ship as 256x512 portrait tiles, and they are DOME maps, not

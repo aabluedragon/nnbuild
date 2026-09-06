@@ -123,7 +123,8 @@ enum {
     kSeqKexHealthSpawn,    // VibeBuild32: Fx_HealthSpawn delayed orb; optional
     kSeqKexGibDeath,       // VibeBuild32: Fx_Gibs01 + delayed A_RandomItem; optional
     kSeqKexBirdFeather,    // VibeBuild32: Obj_Bird_Feathers loop/fall actor; optional
-    kSeqKexWaterSplash     // VibeBuild32: Fx_WaterSplash surface-crossing actor; optional
+    kSeqKexWaterSplash,    // VibeBuild32: Fx_WaterSplash surface-crossing actor; optional
+    kSeqKexFlame           // VibeBuild32: Proj_Flame flight and sizzle actors; optional
 };
 
 struct actionSeq

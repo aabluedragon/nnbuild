@@ -41,6 +41,8 @@
 #include "player.h"
 #include "spider.h"
 #include "wasp.h"
+#include "scorp.h"
+#include "set.h"
 #include "anims.h"
 #include "object.h"
 #include "random.h"
@@ -90,6 +92,7 @@ static int          s_legacyBreakTable;    // pre-breaksound 11-column conversio
 static KexBreakProp s_prop[kMaxKexBreaks];
 static int          s_props;
 static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after N ticks
+static int          s_breakSelftestActive;
 static int          s_soundTest;  // VB_KEXBREAK_SOUND_TEST: exact table/playback census
 static int          s_soundExpected[kKexBreakSoundCount];
 static int          s_soundPlayed[kKexBreakSoundCount];
@@ -911,7 +914,7 @@ static void KexBreak_MineTick(int nProp)
                         sprite[nPlayer].y, targetZ, sprite[nPlayer].sectnum))
                 continue;
             KexBreak_ArmMine(nProp);
-            if (s_selftest)
+            if (s_breakSelftestActive)
                 OSD_Printf("Kex mine: prop %d armed by player %d\n", nProp, i);
             break;
         }
@@ -938,7 +941,7 @@ static void KexBreak_MineTick(int nProp)
                    okay ? "PASS" : "FAIL", s_mineTestSteps, t.fuse - 1);
         s_mineTestProp = -1;
     }
-    if (s_selftest)
+    if (s_breakSelftestActive)
         OSD_Printf("Kex mine: prop %d blasts\n", nProp);
     KexBreak_Shatter(nProp);
 }
@@ -955,6 +958,7 @@ void KexBreak_Init(void)
         s.nSprite = -1;
     s_props = 0;
     { char const *e = getenv("VB_KEXBREAK_TEST"); s_selftest = e ? Batoi(e) : 0; }
+    s_breakSelftestActive = 0;
     s_soundTest = Bgetenv("VB_KEXBREAK_SOUND_TEST") != NULL;
     Bmemset(s_soundExpected, 0, sizeof(s_soundExpected));
     Bmemset(s_soundPlayed, 0, sizeof(s_soundPlayed));
@@ -1226,7 +1230,7 @@ static void KexVaseCobra_Explode(int nSprite)
         AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x,
                  sprite[nSprite].y, sprite[nSprite].z, 128);
     }
-    if (s_selftest)
+    if (s_breakSelftestActive)
         OSD_Printf("Kex vase: Shawl cobra impact blast (%s four-puff death)\n",
                    exact ? "exact" : "fallback");
 }
@@ -1248,7 +1252,7 @@ static void KexVaseRa_Explode(int nSprite)
         if (sound >= 0)
             PlayFX2(sound, nSprite);
     }
-    if (s_selftest)
+    if (s_breakSelftestActive)
         OSD_Printf("Kex vase: Scepter Ra-fire expiry (%s +2 impact)\n",
                    exact ? "exact" : "fallback");
 }
@@ -1456,7 +1460,7 @@ void KexBouncyBalls_Spawn(int nSector, int x, int y, int z, int offset)
     // death burst gets the remaster's bounce, expiry, damage and art.
     for (int i = 0; i < 20; i++)
         KexVaseShot_Spawn(nSector, x, y, z - offset * 16 * 6, 0);
-    if (s_selftest)
+    if (s_breakSelftestActive)
         OSD_Printf("Kex Mantis: twenty Ra-fire death orbs spawned\n");
 }
 
@@ -1588,10 +1592,10 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     // 16x vertical and 6x world conversion used by the effect helpers.
     int const z = sprite[nSprite].z - t.spawnheight * 16 * 6;
     int const pharaoh = KexDifficulty_Get() == kKexDifficultyPharaoh;
-    int const powerTest = s_selftest && Bgetenv("VB_KEXBREAK_POWERTEST");
-    int const mapTest = s_selftest && Bgetenv("VB_KEXBREAK_MAPTEST");
-    int const scepterTest = s_selftest && Bgetenv("VB_KEXBREAK_SCEPTERTEST");
-    int const shawlTest = s_selftest && Bgetenv("VB_KEXBREAK_SHAWLTEST");
+    int const powerTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_POWERTEST");
+    int const mapTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_MAPTEST");
+    int const scepterTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTERTEST");
+    int const shawlTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SHAWLTEST");
 
     // Pharaoh destroys half of all vases without reaching the drop table.
     // This draw precedes Max(8) in the shipped script, which matters to the
@@ -1614,7 +1618,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         {
             if (s_kexMapTile > 0)
                 KexDrop_Spawn(nSector, x, y, z, 11, 0, s_kexMapTile);
-            if (s_selftest)
+            if (s_breakSelftestActive)
                 OSD_Printf("Kex vase: map scroll spawned in sector %d\n", nSector);
             return;
         }
@@ -1627,7 +1631,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
             {
                 if (s_kexPowerTile > 0)
                     KexDrop_Spawn(nSector, x, y, z, 10, KEX_POWER_DROP_HITAG, s_kexPowerTile);
-                if (s_selftest)
+                if (s_breakSelftestActive)
                     OSD_Printf("Kex vase: Pharaoh weapon power spawned in sector %d\n", nSector);
             }
         }
@@ -1640,7 +1644,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
                 if (s_kexPowerTile > 0)
                     KexDrop_Spawn(nSector, x, y, z, 10, KEX_POWER_DROP_HITAG, s_kexPowerTile);
                 s_kexPowerTimer = 10 + (RandomSize(8) % 10);
-                if (s_selftest)
+                if (s_breakSelftestActive)
                     OSD_Printf("Kex vase: weapon power spawned in sector %d\n", nSector);
                 return;
             }
@@ -1662,7 +1666,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         && s_kexRaTile > 0)
     {
         KexVaseShot_Swarm(nSector, x, y, z);
-        if (s_selftest)
+        if (s_breakSelftestActive)
             OSD_Printf("Kex vase: Scepter swarm spawned in sector %d\n", nSector);
         return;
     }
@@ -1671,7 +1675,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         && s_kexCobraTile > 0)
     {
         KexVaseCobra_Trio(nSector, x, y, z);
-        if (s_selftest)
+        if (s_breakSelftestActive)
             OSD_Printf("Kex vase: Shawl cobra trio spawned in sector %d\n", nSector);
         return;
     }
@@ -1684,13 +1688,13 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         {
             int const scepterHeld = !s_scorpTest
                 && (KexInv_HasArtifact(nLocalPlayer, kKexArtiScepter)
-                    || (s_selftest && Bgetenv("VB_KEXBREAK_SCEPTER_SUBTEST")));
+                    || (s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTER_SUBTEST")));
             if (scepterHeld
                 && (RandomSize(8) & 7) >= 3)
             {
                 lotag = kKexLotagAmmo; hitag = 1;
                 picnum = s_kexAmmoTile > 0 ? s_kexAmmoTile : 877;
-                if (s_selftest)
+                if (s_breakSelftestActive)
                     OSD_Printf("Kex vase: Scepter ammo sub-roll\n");
                 break;
             }
@@ -1707,7 +1711,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
                     && z < sprite[nSprite].z)
                     s_vaseScorpsAtHeight++;
             }
-            if (s_selftest && scepterHeld)
+            if (s_breakSelftestActive && scepterHeld)
                 OSD_Printf("Kex vase: Scepter scorpion sub-roll\n");
             return;
         }
@@ -1812,7 +1816,7 @@ static void KexBreak_Shatter(int nProp)
             break;
         nChunks++;
     }
-    if (s_selftest)
+    if (s_breakSelftestActive)
         OSD_Printf("Kex breakables: prop %d (tile %d) -> %d/%d shards\n",
                    nProp, t.tile, nChunks, t.nshards);
 
@@ -1845,8 +1849,9 @@ void FuncKexBreak(int a, int b, int nRun)
             KexBreak_MineTick(nProp);
             if (s_prop[nProp].nSprite < 0)
                 return;
-            if (s_selftest && --s_selftest == 1)
+            if (s_selftest > 0 && --s_selftest == 0)
             {
+                s_breakSelftestActive = 1;
                 for (int i = 0; i < s_props; i++)
                     if (s_prop[i].nSprite >= 0)
                     { s_prop[i].nHealth = 0; KexBreak_Shatter(i); }
@@ -5645,10 +5650,12 @@ static KexLoadRule const s_loadRule[] = {
 // same in both: $script 0 at load -- if the player already holds the level's
 // artifact (Selkis' scepter, Set's shawl), remove the boss (map actor 41 /
 // 67) and fire tag 1010, the exit; else poll every two seconds ($script 1)
-// and fire 1010 once the boss actor is gone. So the boss's death fires the
-// exit, and a returning player who beat it before finds it gone and the way
-// open. The boss is told apart by its statnum (scorp.cpp 122, set.cpp 120)
-// and, at load, killed the way KillCreatures() kills: by damage.
+// and fire 1010 once the boss actor is gone. The persistent Selkis and Set
+// corpses cannot satisfy that live-map poll, so their authored terminal
+// callbacks fire the exit directly (as does the Queen's first snake-death
+// explosion); the poll remains for an actor removed before a reload. Bosses
+// are told apart by statnum. At artifact-held load, the native script's
+// actor.Remove() bridge tears them down without a damage/death path.
 struct KexBossRule { char const *map; int16_t statnum; int8_t artifact; int16_t fire; };
 static KexBossRule const s_bossRule[] = {
     { "SELBUROW", 122, kKexArtiScepter, 1010 },   // Selkis
@@ -5714,6 +5721,7 @@ void KexScript_RamsesEnd(void)
 }
 static KexBossRule const *s_boss;     // this level's, or NULL
 static int s_bossTest;                // VB_KEXBOSS_TEST: 1 kill the boss at tick 60, 2 also hold its artifact first
+static int s_bossTestActive;
 static int s_bossPoll;                // the remaster's two-second script poll
 static uint8_t s_bossExitFired;
 
@@ -5724,6 +5732,16 @@ static void KexScript_BossFire(char const *why)
     s_bossExitFired = 1;
     Kex_FireChannel(Kex_ChannelIndex(s_boss->fire));
     OSD_Printf("Kex script: %s, tag %d fired (%s)\n", why, s_boss->fire, s_boss->map);
+    if (s_bossTestActive)
+        OSD_Printf("Kex boss test: PASS (boss rule %s fired exit tag %d)\n",
+                   s_boss->map, s_boss->fire);
+}
+
+void KexScript_BossEvent(int nSprite, char const *why)
+{
+    if (s_boss && (unsigned)nSprite < (unsigned)kMaxSprites
+        && sprite[nSprite].statnum == s_boss->statnum)
+        KexScript_BossFire(why);
 }
 
 static void KexScript_BossKill(void)
@@ -5732,8 +5750,27 @@ static void KexScript_BossKill(void)
     for (int i = headspritestat[s_boss->statnum]; i != -1 && n < 16; i = nextspritestat[i])
         list[n++] = i;
     for (int k = 0; k < n; k++)
-        for (int hit = 0; hit < 8 && sprite[list[k]].statnum == s_boss->statnum; hit++)
+        // Selkis has the largest single boss pool: 4000 KEX health, or
+        // 16000 native units. Ten 1600-unit test hits reach it exactly.
+        for (int hit = 0; hit < 10 && sprite[list[k]].statnum == s_boss->statnum; hit++)
             runlist_DamageEnemy(list[k], -1, 1600);
+}
+
+static int KexScript_BossRemove(void)
+{
+    int list[16], n = 0, removed = 0;
+    for (int i = headspritestat[s_boss->statnum]; i != -1 && n < 16; i = nextspritestat[i])
+        list[n++] = i;
+    for (int k = 0; k < n; k++)
+    {
+        // The artifact-level scripts call actor.Remove(), which suppresses
+        // all kill-side effects.  Only Selkis and Set have that script path.
+        if (s_boss->statnum == 122)
+            removed += KexSelkis_RemoveSprite(list[k]);
+        else if (s_boss->statnum == 120)
+            removed += KexSet_RemoveSprite(list[k]);
+    }
+    return removed;
 }
 
 void KexScript_BossDied(int nSprite)
@@ -5751,9 +5788,8 @@ static void KexScript_BossLoad(void)
         held |= KexInv_HasArtifact(i, s_boss->artifact);
     if (!held)
         return;
-    int const before = headspritestat[s_boss->statnum] != -1;
-    KexScript_BossKill();
-    if (before)
+    int const removed = KexScript_BossRemove();
+    if (removed)
         OSD_Printf("Kex script: the artifact is held, the boss removed (%s)\n", s_boss->map);
     KexScript_BossFire("the artifact is held");
 }
@@ -5767,6 +5803,11 @@ void KexScript_BossTick(void)
         else
             s_bossPoll = kTimerTicks;
     }
+    // Queen's body turns into a second, shootable snake form. Keep the
+    // fixture applying its deterministic fatal hit packet until the normal
+    // two-second disappearance poll sees the complete boss hierarchy gone.
+    if (s_bossTestActive && !s_bossExitFired)
+        KexScript_BossKill();
     // VB_KEXRAMSES_TEST=1: at tick 100, act as if Ramses had just finished
     // speaking (TOMB's crypt door), without the speech.
     static int s_ramsesTest = -1;
@@ -5786,8 +5827,17 @@ void KexScript_BossTick(void)
         if (i >= 0)
             ExplodeEnergyBlock(i);
     }
-    if (s_bossTest <= 0 || --s_bossTest != 1 || !s_boss)
+    if (s_bossTest <= 0 || --s_bossTest != 0)
         return;
+    if (!s_boss || headspritestat[s_boss->statnum] == -1)
+    {
+        OSD_Printf("Kex boss test: FAIL (rule %s, live actor stat %d)\n",
+                   s_boss ? s_boss->map : "missing", s_boss ? s_boss->statnum : -1);
+        return;
+    }
+    s_bossTestActive = 1;
+    OSD_Printf("Kex boss test: armed %s actor stat %d at native tick 60\n",
+               s_boss->map, s_boss->statnum);
     if (getenv("VB_KEXBOSS_TEST")[0] == '2')
     {
         KexInv_GiveArtifact(nLocalPlayer, s_boss->artifact);
@@ -5880,6 +5930,7 @@ void KexScript_Init(void)
         if (!Bstrcmp(base, r.map))
             s_boss = &r;
     { char const *e = getenv("VB_KEXBOSS_TEST"); s_bossTest = e ? 60 : 0; }
+    s_bossTestActive = 0;
     KexScript_BossLoad();
     for (int a = 0; a < kKexArtiCount; a++)
         for (int i = 0; i < nTotalPlayers; i++)

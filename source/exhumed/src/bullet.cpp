@@ -81,6 +81,8 @@ static int KexBulletDamage(int nType)
             return 30;
         if (nType == 16)
             return 0;
+        if (nType == 19)
+            return 5;
     }
 
     return BulletInfo[nType].nDamage;
@@ -97,6 +99,7 @@ static int KexBulletRadius(int nType)
         case 12: // Proj_Seedling
         case 13: // Proj_Blaster
         case 15: // Proj_Beam (laser spawner)
+        case 19: // Proj_Flame (player flamethrower)
             return 36;
         case 9:  // Proj_Cobra_Red
         case 16: // Proj_Cobra_Red_Selkis
@@ -116,7 +119,11 @@ static int KexBulletRepeat(int nType, int kexRadius, int classicRepeat)
         return classicRepeat;
     // Proj_Boulder is authored at scale 2.0; the other bridged projectiles
     // are scale 1.0. Forty is the native projection baseline for that scale.
-    return nType == 17 ? 80 : 40;
+    if (nType == 17)
+        return 80;
+    // Proj_Flame starts at the definition's 1/64 scale, then its script
+    // grows it as it fizzles. A one-repeat Build sprite is that first pixel.
+    return nType == 19 ? 1 : 40;
 }
 
 struct KexImpactBlast
@@ -217,6 +224,7 @@ struct Bullet
 enum
 {
     kKexBoulderType = 17,
+    kKexFlameType = 19,
     kKexSpawnerFireballSpeed = 12 * 6,
     kKexSpawnerLaserSpeed = 16 * 6,
     kKexSpawnerFireballHeight = 32 * 16 * 6,
@@ -254,6 +262,8 @@ static bool KexBulletExactImpactAvailable(int nType)
     {
         case 8:
             return seq_IsLoaded(kSeqKexAnuImpact);
+        case kKexFlameType:
+            return seq_IsLoaded(kSeqKexFlame);
         case 9:
         case 11:
         case 16:
@@ -277,7 +287,8 @@ static bool KexBulletUsesRemasterDeath(int nType)
     // Every native slot from Anubis through the remaster-only boulder is
     // bridged to an explicit KEX projectile death recipe. None may inherit a
     // DOS BulletInfo radial blast or actor-hit puff by accident.
-    return g_kexMode && nType >= 8 && nType <= kKexBoulderType;
+    return g_kexMode && ((nType >= 8 && nType <= kKexBoulderType)
+                         || nType == kKexFlameType);
 }
 
 static bool KexBulletSuppressClassicRadial(int nType)
@@ -370,8 +381,27 @@ static int KexBulletSpawnAnubisImpact(int x, int y, int z, short nSector)
     return nAnim >= 0 ? nAnim : kKexImpactHandledNoAnim;
 }
 
-static bool KexBulletHandleDeathVisual(int nType, int x, int y, int z,
-                                       short nSector)
+static int KexBulletSpawnFlameSizzle(int x, int y, int z, short nSector,
+                                     int nRepeat, int nShade,
+                                     bool bTranslucent)
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqKexFlame)
+            || (unsigned)nSector >= (unsigned)numsectors)
+        return kKexImpactUnavailable;
+
+    // flameproj_sizzle inherits the dying Proj_Flame's scale and colour. The
+    // generated second sub-sequence is its 60-to-30 Hz visual cadence.
+    int const nAnim = BuildAnim(-1, kSeqKexFlame, 1, x, y, z, nSector,
+                                clamp(nRepeat, 1, 255),
+                                4 | (bTranslucent ? 0x80 : 0));
+    if (nAnim < 0)
+        return kKexImpactHandledNoAnim;
+    sprite[GetAnimSprite(nAnim)].shade = nShade;
+    return nAnim;
+}
+
+static bool KexBulletHandleDeathVisual(short nBullet, int nType,
+                                       int x, int y, int z, short nSector)
 {
     if (!KexBulletExactImpactAvailable(nType))
         return false;
@@ -401,6 +431,26 @@ static bool KexBulletHandleDeathVisual(int nType, int x, int y, int z,
         case 13:
         case 15:
             return true; // their authored death animations render nothing
+        case kKexFlameType:
+        {
+            int nRepeat = 1;
+            int nShade = -127;
+            bool bTranslucent = false;
+            if ((unsigned)nBullet < (unsigned)kMaxBullets)
+            {
+                short const nSprite = BulletList[nBullet].nSprite;
+                if ((unsigned)nSprite < (unsigned)kMaxSprites
+                        && sprite[nSprite].sectnum >= 0)
+                {
+                    nRepeat = sprite[nSprite].xrepeat;
+                    nShade = sprite[nSprite].shade;
+                    bTranslucent = (sprite[nSprite].cstat & 2) != 0;
+                }
+            }
+            return KexBulletSpawnFlameSizzle(x, y, z, nSector,
+                                              nRepeat, nShade, bTranslucent)
+                != kKexImpactUnavailable;
+        }
         default:
             return false;
     }
@@ -633,7 +683,11 @@ bulletInfo BulletInfo[] = {
     { 35,  -1,  1500, -1, kSeqBoulder, kSeqFirePoof, 4, 10, 40 },
     // 18, the Manacle's bolt: the arrow (whose SEQ the converter draws as the
     // remaster's beam bolt) with Proj_Beam's damage.
-    { 100, -1,  2000, -1, kSeqArrow, kSeqPoof, 0, 0, -1 }
+    { 100, -1,  2000, -1, kSeqArrow, kSeqPoof, 0, 0, -1 },
+    // 19, remaster-only Proj_Flame. The launch bridge supplies its 80-unit
+    // velocity; this record owns its fifteen native-tick (30 KEX-tick)
+    // fizzle lifetime and KEXFLAME.SEQ flight art.
+    { 5,   15,  2000, -1, kSeqKexFlame, 0, 4, 0, 0 }
 };
 
 
@@ -699,6 +753,17 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
     bool const suppressClassicPuff = KexBulletUsesRemasterDeath(pBullet->nType);
 
     short nStat = sprite[nHitSprite].statnum;
+
+    // Proj_Flame has the normal 5-point projectile hit, unlike the DOS
+    // flamethrower's type-3 ignition-only hit. canIgnite still retains the
+    // classic delayed burn bridge for actors that support it.
+    if (pBullet->nType == kKexFlameType && nStat <= 107
+            && nStat != kStatAnubisDrum)
+    {
+        sprite[nHitSprite].hitag++;
+        if (sprite[nHitSprite].hitag == 15)
+            IgniteSprite(nHitSprite);
+    }
 
     switch (pBullet->nType)
     {
@@ -783,7 +848,8 @@ void BulletHitsSprite(Bullet *pBullet, short nBulletSprite, short nHitSprite, in
     }
 
     int const previousDamageType = nKexDamageType;
-    if (g_kexMode && (pBullet->nType == 10 || pBullet->nType == 14))
+    if (g_kexMode && (pBullet->nType == 10 || pBullet->nType == 14
+                      || pBullet->nType == kKexFlameType))
         nKexDamageType = kKexDamageFire;
     runlist_DamageEnemy(nHitSprite, nBulletSprite, nDamage);
     nKexDamageType = previousDamageType;
@@ -1044,6 +1110,32 @@ static int KexMoveSpawnerProjectile(short nBullet)
     return nVal;
 }
 
+static int KexFlameRepeat(int nAge)
+{
+    // A_UpdateFlame runs at 60 Hz and raises m_fFizzleTime by .5. One native
+    // Exhumed tick represents two of those updates. Its scale begins at 1/64
+    // and accumulates (5000 - 128*fizzleTime) / 32768 every source update.
+    nAge = clamp(nAge, 0, 15);
+    int const updates = nAge * 2;
+    int const delta = updates * 5000 - 32 * updates * (updates + 1);
+    return clamp(((512 + delta) * 40 + 16384) / 32768, 1, 255);
+}
+
+static void KexFlameUpdateVisual(Bullet *pBullet)
+{
+    int const age = 15 - pBullet->field_E;
+    short const nSprite = pBullet->nSprite;
+    sprite[nSprite].xrepeat = KexFlameRepeat(age);
+    sprite[nSprite].yrepeat = KexFlameRepeat(age);
+    // A_UpdateFlame turns white flame toward red and reduces alpha during
+    // its fifteen-unit fizzle. The native palette has no per-sprite RGB, so
+    // use its fire palette, then introduce translucency for the fading half.
+    sprite[nSprite].pal = 4;
+    sprite[nSprite].shade = clamp(-127 + age * 15, -127, 100);
+    if (age >= 8)
+        sprite[nSprite].cstat |= 2;
+}
+
 int MoveBullet(short nBullet)
 {
     short hitsect = -1;
@@ -1192,6 +1284,7 @@ MOVEEND:
         }
 
         if (nVal == 0 && nType != 15 && nType != 3
+            && nType != kKexFlameType
             && !(g_kexMode && nType == kKexBoulderType))
         {
             AddFlash(sprite[nSprite].sectnum, sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].z, 0);
@@ -1283,7 +1376,7 @@ HITWALL:
             // before the radial callback and before the legacy wall-puff path
             // backs x/y away from the face.
             bool const kexExactImpact = KexBulletHandleDeathVisual(
-                nType, x2, y2, z2, hitsect);
+                nBullet, nType, x2, y2, z2, hitsect);
             bool const kexAuthoredBlast = KexBulletApplyImpactBlast(
                 nBullet, x2, y2, z2, hitsect, kexExactImpact);
 
@@ -1715,6 +1808,71 @@ int BuildKexAIFireProjectile(short nSprite, int nType, short nTarget,
     return BuildBulletInternal(nSprite, nType, 0, 0, 0,
                                sprite[nSprite].ang, nTarget + 10000, 1,
                                &launch);
+}
+
+static KexProjectileExpected KexPlayerFlameExpected(short nSprite,
+                                                     int nPitch)
+{
+    // kexPlayerPuppet uses radius 95.25, represented exactly as 1143
+    // half-Build units. Its native movement sprite has clipdist 58, so the
+    // generic actor launcher would put the flame visibly inside the player.
+    constexpr int kKexPlayerRadius2 = 1143;
+    int const fx = mulscale14(Cos(sprite[nSprite].ang), Cos(nPitch));
+    int const fy = mulscale14(Sin(sprite[nSprite].ang), Cos(nPitch));
+    int const fz = Sin(nPitch);
+    KexProjectileExpected expected;
+    expected.x = sprite[nSprite].x
+        + (int)(((int64_t)fx * kKexPlayerRadius2) / (2 * 16384));
+    expected.y = sprite[nSprite].y
+        + (int)(((int64_t)fy * kKexPlayerRadius2) / (2 * 16384));
+    expected.z = sprite[nSprite].z
+        - (int)(((int64_t)fz * kKexPlayerRadius2) / (2 * 16384))
+        + 48 * 16 * 6; // A_FireProjectile(..., -48, 80, 16)
+
+    constexpr int kKexFlameSpeed = 80 * 6;
+    expected.vx = fx * kKexFlameSpeed;
+    expected.vy = fy * kKexFlameSpeed;
+    expected.vz = -(int)(((int64_t)fz * kKexFlameSpeed * 16) / 16384);
+    return expected;
+}
+
+int BuildKexPlayerFlameProjectile(short nSprite, int nPitch)
+{
+    if (!g_kexMode || !seq_IsLoaded(kSeqKexFlame)
+            || (unsigned)nSprite >= (unsigned)kMaxSprites
+            || sprite[nSprite].sectnum < 0)
+        return -1;
+
+    // BuildBulletInternal's KEX launch branch performs the normal serialized
+    // bullet allocation without a legacy immediate hit-scan/move. A player
+    // has no target: replace the temporary actor-target launch with the
+    // player-puppet direction and authored muzzle below.
+    KexProjectileLaunch const launch = {
+        nSprite, 0, -48, 80, false, true
+    };
+    int const nBullet = BuildBulletInternal(nSprite, kKexFlameType,
+        0, 0, 0, sprite[nSprite].ang, nSprite + 10000, 1, &launch);
+    if (nBullet < 0)
+        return -1;
+
+    KexProjectileExpected const expected = KexPlayerFlameExpected(nSprite,
+                                                                    nPitch);
+    Bullet &bullet = BulletList[nBullet];
+    short const nProjectile = bullet.nSprite;
+    sprite[nProjectile].x = expected.x;
+    sprite[nProjectile].y = expected.y;
+    sprite[nProjectile].z = expected.z;
+    short nSector = sprite[nProjectile].sectnum;
+    updatesectorz(expected.x, expected.y, expected.z, &nSector);
+    if (nSector >= 0 && nSector != sprite[nProjectile].sectnum)
+        mychangespritesect(nProjectile, nSector);
+    bullet.x = expected.vx;
+    bullet.y = expected.vy;
+    bullet.z = expected.vz;
+    bullet.field_10 = 80 * 24;
+    bullet.nFrame = RandomSize(2) % SeqSize[SeqOffsets[kSeqKexFlame]];
+    nBulletEnemy[nBullet] = -1;
+    return nBullet;
 }
 
 int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
@@ -2169,8 +2327,8 @@ void KexBullet_TestTick()
         }
 
         deathFamilyExact = anubisExact && cobraExact
-            && KexBulletHandleDeathVisual(13, x, y, z, nSector)
-            && KexBulletHandleDeathVisual(15, x, y, z, nSector)
+            && KexBulletHandleDeathVisual(-1, 13, x, y, z, nSector)
+            && KexBulletHandleDeathVisual(-1, 15, x, y, z, nSector)
             && KexBulletSuppressClassicRadial(11)
             && KexBulletSuppressClassicRadial(12);
     }
@@ -2214,6 +2372,8 @@ void FuncBullet(int a, int UNUSED(b), int nRun)
             int const kexTile = KexBulletTile(BulletList[nBullet].nType);
             if (kexTile >= 0)
                 sprite[nSprite].picnum = kexTile;
+            if (BulletList[nBullet].nType == kKexFlameType)
+                KexFlameUpdateVisual(&BulletList[nBullet]);
 
             if (nFlag & 0x80)
             {

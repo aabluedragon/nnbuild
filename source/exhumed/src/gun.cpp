@@ -817,7 +817,8 @@ loc_flag:
                 obobangle = bobangle = 512;
             }
 
-            if (nWeapon == kWeaponFlamer && (!(nSectFlag & kSectUnderwater)))
+            if (!g_kexMode && nWeapon == kWeaponFlamer
+                    && (!(nSectFlag & kSectUnderwater)))
             {
                 nTemperature[nPlayer]++;
 
@@ -966,6 +967,18 @@ loc_flag:
                     }
                     else
                     {
+                        if (g_kexMode && seq_IsLoaded(kSeqKexFlame))
+                        {
+                            // flamethrower_fire invokes A_FireProjectile on
+                            // all four frames. Unlike the DOS type-3 flame,
+                            // each is a real Proj_Flame actor, launched from
+                            // the player puppet's 95.25-unit radius at z=-48.
+                            int const nPitch = (fix16_to_int(
+                                sPlayerInput[nPlayer].horizon) - 92) << 2;
+                            BuildKexPlayerFlameProjectile(nPlayerSprite,
+                                                          nPitch);
+                            break;
+                        }
                         if (var_38) {
                             nHeight += 768;
                         }
@@ -1053,7 +1066,14 @@ loc_flag:
             {
                 if (nWeapon != kWeaponGrenade)
                 {
-                    if (WeaponInfo[nWeapon].bUsesAmmo) {
+                    // The remaster flamethrower burst contains four firing
+                    // callbacks but A_ConsumeAmmo exists only on frame zero.
+                    // MoveWeapons has already advanced nWeaponFrame, so one
+                    // identifies that first frame in its four-frame sequence.
+                    bool const consumeAmmo = !g_kexMode
+                        || nWeapon != kWeaponFlamer
+                        || PlayerList[nPlayer].nWeaponFrame == 1;
+                    if (WeaponInfo[nWeapon].bUsesAmmo && consumeAmmo) {
                         AddAmmo(nPlayer, nAmmoType, -1);
                     }
 

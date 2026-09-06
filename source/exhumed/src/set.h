@@ -31,5 +31,6 @@ int BuildSet(short nSprite, int x, int y, int z, short nSector, short nAngle, in
 void FuncSoul(int, int, int);
 void FuncSet(int, int, int);
 void KexSet_TestTick();
+bool KexSet_RemoveSprite(int nSprite); // script-side actor.Remove(), not death
 
 #endif

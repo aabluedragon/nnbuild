@@ -89,6 +89,7 @@ short SetCount = 0;
 
 Set SetList[kMaxSets];
 short SetChan[kMaxSets];
+static short s_setRun[kMaxSets];
 
 static int s_setAudit = -1;
 static int s_setAuditSeen;
@@ -198,6 +199,8 @@ static bool KexSetThink(short nSet, short nSprite)
 void InitSets()
 {
     SetCount = kMaxSets;
+    for (int i = 0; i < kMaxSets; i++)
+        s_setRun[i] = -1;
     s_setAudit = -1;
     s_setAuditSeen = 0;
     s_setTest = -1;
@@ -263,13 +266,40 @@ int BuildSet(short nSprite, int x, int y, int z, short nSector, short nAngle, in
 
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSet, kRunSet);
 
-    // this isn't stored anywhere.
-    runlist_AddRunRec(NewRun, nSet, kRunSet);
+    s_setRun[nSet] = runlist_AddRunRec(NewRun, nSet, kRunSet);
 
     nCreaturesLeft++;
     KexSetAudit(nSet);
 
     return nSet;
+}
+
+bool KexSet_RemoveSprite(int nSprite)
+{
+    // SETARENA_script.txt uses kexSlaveActor::Remove() when the player
+    // returns holding the shawl.  Do not take the ordinary death path: it
+    // would play its timeline and incorrectly run the boss death callback.
+    for (int nSet = SetCount; nSet < kMaxSets; nSet++)
+    {
+        if (SetList[nSet].nSprite != nSprite)
+            continue;
+
+        runlist_DoSubRunRec(sprite[nSprite].owner);
+        runlist_FreeRun(sprite[nSprite].lotag - 1);
+        if (s_setRun[nSet] >= 0)
+            runlist_SubRunRec(s_setRun[nSet]);
+        s_setRun[nSet] = -1;
+        sprite[nSprite].cstat = 0x8000;
+        mydeletesprite(nSprite);
+        SetList[nSet].nSprite = -1;
+        SetList[nSet].nHealth = 0;
+        SetList[nSet].nTarget = -1;
+        SetList[nSet].nAction = 11;
+        if (nCreaturesLeft > 0)
+            nCreaturesLeft--;
+        return true;
+    }
+    return false;
 }
 
 static void KexSetTestFinish(short nSprite)
@@ -322,7 +352,12 @@ void KexSet_TestTick()
         sprite[nSprite].xvel = sprite[nSprite].yvel = 0;
         s_setTestPlayer = nLocalPlayer;
         s_setTestInvincibility = PlayerList[nLocalPlayer].invincibility;
-        PlayerList[nLocalPlayer].invincibility = 1;
+        // This env-only lifecycle probe intentionally puts the player in
+        // range for melee, projectiles and the leap. Keep the complete
+        // 54-tick contract insulated from fixture damage, then restore the
+        // original timer in KexSetTestFinish().
+        if (PlayerList[nLocalPlayer].invincibility < 900)
+            PlayerList[nLocalPlayer].invincibility = 900;
         s_setTestMeleeMask = 0;
         s_setTestFireFrame = -1;
         s_setTestLaunchFrame = -1;
@@ -1117,6 +1152,8 @@ void FuncSet(int a, int nDamage, int nRun)
 
                         // A_SetDeath only fires remote event tag 1010. The
                         // twenty rising souls belong to the DOS death path.
+                        if (g_kexMode && s_setTest < 0)
+                            KexScript_BossEvent(nSprite, "Set death event");
                         if (!g_kexMode)
                             for (int i = 0; i < 20; i++)
                                 BuildSoul(nSet);

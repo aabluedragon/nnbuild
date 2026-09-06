@@ -2605,7 +2605,7 @@ short of the menu art at 7000.
 
 Every unattended run takes `VB_HIDE_WINDOW=1 SDL_AUDIODRIVER=dummy` (the window is created hidden
 and never raised; rendering and screenshots go on offscreen),
-`-nosound -nomusic`, and `-usecwd -cfg /tmp/.../vbtest.cfg` with an absolute temporary
+`-nosound -nomusic`, and `-usecwd -nosetup -cfg /tmp/.../vbtest.cfg` with an absolute temporary
 config path. A capture-capable probe also sets
 `VB_SCREENSHOT_DIR=/tmp/.../screenshots`; game selection can change the working
 directory, and this post-cvar test-only override keeps `VB_CP_CAPTURE` and
@@ -2619,7 +2619,8 @@ interrupting dialogue; `VB_KEX_MUSIC_STOP_TEST=1` proves the live transition
 against TOMB's real level track. Hidden runs
 also log and dismiss native message boxes (answering
 No to questions), so an unattended error cannot leave an invisible modal
-dialog behind. The explicit config matters because the game writes it at
+dialog behind. `-nosetup` also prevents a fresh temporary config from opening
+the native first-run setup window. The explicit config matters because the game writes it at
 *startup* (`CONFIG_WriteSetup(1)`), not just on exit. `-cfg` is parsed ahead of
 `CONFIG_ReadSetup()`, and its cvars file follows it as `<name>_cvars.cfg`
 (`CONFIG_CvarsFilename()`), keeping the player's profile untouched. The
@@ -2791,16 +2792,18 @@ removes the boss (map actor 41 / 67, Selkis and Set themselves) and fires
 tag 1010, the exit; otherwise `$script 1` polls every two seconds and fires
 1010 once the boss actor is gone. Nothing was firing 1010 here, so neither
 level could be finished. `s_bossRule` in kexbreak.cpp keys the boss on its
-statnum (scorp.cpp 122, set.cpp 120): its death, seen by the generic hook
-`runlist_DamageEnemy` already has, fires the tag; at load with the
-artifact held the boss is killed the way `KillCreatures()` kills, by
-damage, and the no-artifact branch checks for its absence with the same
-two-second poll. The artifact-held load branch removes the boss and fires the
-exit immediately, as the remaster script does; this also fixes the returning-
-player case, which previously removed the boss but left the exit closed.
-`VB_KEXBOSS_TEST=1` kills the boss at tick 60 and waits for the poll, while
-`=2` grants the artifact and runs the immediate load rule; both log `Kex
-script: ... tag 1010 fired`.
+statnum (Selkis 122, Set 120, Queen 121). It preserves the two-second
+absence poll for an actor removed before a reload, but death itself uses the
+remaster's authored moment: Selkis fires 1010 when its 24th countdown
+explosion becomes the persistent corpse, Set fires it on the final death
+frame, and Queen fires it with the first snake-death explosion. The
+artifact-held load branch uses the script's `actor.Remove()` semantics -- no
+death timeline, drops, Selkis scorpions, corpse, or kill trigger -- then fires
+the exit immediately, as the remaster does. This also fixes the
+returning-player case, which previously removed the boss but left the exit
+closed. `VB_KEXBOSS_TEST=1`
+kills the boss at tick 60 and confirms the exit tag; `=2` grants an
+artifact and runs the immediate load rule on the two artifact boss maps.
 
 **The completability audit.** With those two found, every map was audited:
 each event that only acts when its tag is fired (trigger-only and message

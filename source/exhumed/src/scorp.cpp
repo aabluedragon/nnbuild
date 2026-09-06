@@ -287,7 +287,13 @@ static void KexSelkisCountDown(short nScorp, short nSprite)
         if (s_selkisTest >= 0 && nScorp == s_selkisTestScorp)
             s_selkisTestDeathTriggers++;
         else
+        {
+            // A_SelkisCountDown fires the arena exit when the final
+            // explosion becomes the persistent Selkis corpse.
+            if (g_kexMode)
+                KexScript_BossEvent(nSprite, "Selkis death event");
             runlist_ChangeChannel(ScorpChan[nScorp], 1);
+        }
         scorpion[nScorp].nAction = 9;
         scorpion[nScorp].nFrame = 0;
         return;
@@ -388,6 +394,32 @@ int BuildScorp(short nSprite, int x, int y, int z, short nSector, short nAngle, 
     return nScorp;
 }
 
+bool KexSelkis_RemoveSprite(int nSprite)
+{
+    // SELBUROW_script.txt uses kexSlaveActor::Remove() when the player
+    // returns holding the scepter.  This is not a kill: no countdown,
+    // scorpion spawns, corpse, drops, or generic death trigger may run.
+    for (int nScorp = ScorpCount; nScorp < kMaxScorpions; nScorp++)
+    {
+        if (scorpion[nScorp].nSprite != nSprite)
+            continue;
+
+        runlist_DoSubRunRec(sprite[nSprite].owner);
+        runlist_FreeRun(sprite[nSprite].lotag - 1);
+        runlist_SubRunRec(scorpion[nScorp].f);
+        sprite[nSprite].cstat = 0x8000;
+        mydeletesprite(nSprite);
+        scorpion[nScorp].nSprite = -1;
+        scorpion[nScorp].nHealth = 0;
+        scorpion[nScorp].nTarget = -1;
+        scorpion[nScorp].nAction = 9;
+        if (nCreaturesLeft > 0)
+            nCreaturesLeft--;
+        return true;
+    }
+    return false;
+}
+
 static void KexSelkisTestFinish(short nSprite)
 {
     if ((unsigned)s_selkisTestScorp < (unsigned)kMaxScorpions && nSprite >= 0)
@@ -440,7 +472,13 @@ void KexSelkis_TestTick()
         sprite[nSprite].xvel = sprite[nSprite].yvel = 0;
         s_selkisTestPlayer = nLocalPlayer;
         s_selkisTestInvincibility = PlayerList[nLocalPlayer].invincibility;
-        PlayerList[nLocalPlayer].invincibility = 1;
+        // The full scripted Selkis lifecycle is 183 native player ticks.
+        // It deliberately attacks the test player, so a one-tick grant lets
+        // a fixture restart the map before its death timeline can be checked.
+        // This is test-only and KexSelkisTestFinish() restores the prior
+        // value.
+        if (PlayerList[nLocalPlayer].invincibility < 900)
+            PlayerList[nLocalPlayer].invincibility = 900;
         s_selkisTestStatsOkay = scorpion[s_selkisTestScorp].nHealth == KexHealthUnits(4000)
             && sprite[nSprite].clipdist == 120
             && sprite[nSprite].xrepeat == 100 && sprite[nSprite].yrepeat == 100

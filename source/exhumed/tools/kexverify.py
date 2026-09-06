@@ -1264,7 +1264,17 @@ def verify_inventory_metadata(z, outdir):
         pickup = re.sub(r'\s+', '', open(os.path.join(srcdir, 'exhumed.cpp')).read())
         for needle in ('kopen4loadfrommod("kexinv.txt",0)', '"kexinv_%s.txt"',
                        'KexLanguage_Index()', 'chars_result[256]',
-                       "p[0]=='\\\\'&&p[1]=='n'"):
+                       "p[0]=='\\\\'&&p[1]=='n'",
+                       'staticboolKexInv_TestCountdownElapsed(int&ticks)',
+                       'returnticks>0&&--ticks==0;',
+                       'KexInv_TestCountdownElapsed(s_selftest)',
+                       'KexInv_TestCountdownElapsed(s_pickupSelftest)',
+                       'KexInv_TestCountdownElapsed(s_difficultySelftest)',
+                       'KexInv_TestCountdownElapsed(s_shrineSelftest)',
+                       'KexInv_TestCountdownElapsed(s_checkpointSelftest)',
+                       'KexInv_TestCountdownElapsed(s_deathSelftest)',
+                       'KexInv_TestCountdownElapsed(s_travelSelftest)',
+                       'KexInv_TestCountdownElapsed(s_menuLoadSelftest)'):
             if needle not in inventory:
                 out.append('native inventory-text bridge changed: %s' % needle)
         for needle in ('kopen4loadfrommod("kexpickup.txt",0)', '"kexpickup_%s.txt"',
@@ -2802,6 +2812,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'glass==10||glass==11', 's_legacyBreakTable?legacy:normal',
         'KexVasePuff_Spawn(', 's_vasePuffsSpawned',
         'Kexbreakpufftest:', 'Kexbreaksoundplaybacktest:',
+        's_selftest>0&&--s_selftest==0', 's_breakSelftestActive=1;',
         'BuildSpider(-1,x,y,z,nSector,RandomSize(11),1)',
         'VB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
         'KexBreak_DropItem(intnSprite,KexBreakTypeconst&t)',
@@ -2817,7 +2828,18 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'sprite[nSprite].picnum=KexBreak_MinePicnum(t,s_prop[nProp].nFuse);',
         'KexSound_Get("k_mine")',
         't.fuse<=0||s_prop[nProp].nFuse>=0',
-        'if(--s_prop[nProp].nFuse>0){')
+        'if(--s_prop[nProp].nFuse>0){',
+        'for(inthit=0;hit<10&&sprite[list[k]].statnum==s_boss->statnum;hit++)',
+        'staticintKexScript_BossRemove(void)',
+        'removed+=KexSelkis_RemoveSprite(list[k]);',
+        'removed+=KexSet_RemoveSprite(list[k]);',
+        'intconstremoved=KexScript_BossRemove();',
+        'if(s_bossTestActive&&!s_bossExitFired)KexScript_BossKill();',
+        's_bossTest<=0||--s_bossTest!=0',
+        'voidKexScript_BossEvent(intnSprite,charconst*why)',
+        'KexScript_BossFire(why);',
+        'Kexbosstest:PASS(bossrule%sfiredexittag%d)',
+        'Kexbosstest:FAIL(rule%s,liveactorstat%d)')
     for needle in native_needles:
         if needle not in native:
             out.append('native breakable controller no longer implements %s' % needle)
@@ -4908,6 +4930,7 @@ def verify_flyers(z, outdir):
             out.append('Wasp random death sound pair is missing')
     except OSError:
         out.append('kexsound.txt is missing')
+
     return out
 
 
@@ -6474,6 +6497,25 @@ def verify_set(z, outdir):
                 out.append('Set sound alias is missing: %s' % alias)
     except OSError:
         out.append('kexsound.txt is missing')
+
+    try:
+        native = re.sub(r'\s+', '', open(os.path.join(
+            os.path.dirname(__file__), '..', 'src', 'set.cpp')).read())
+    except OSError:
+        return out + ['cannot read native Set controller']
+    for needle in (
+            'VB_KEX_SET_TEST',
+            'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
+            'PlayerList[s_setTestPlayer].invincibility=s_setTestInvincibility;',
+            'staticshorts_setRun[kMaxSets];',
+            's_setRun[nSet]=runlist_AddRunRec(NewRun,nSet,kRunSet);',
+            'boolKexSet_RemoveSprite(intnSprite)',
+            'runlist_SubRunRec(s_setRun[nSet]);',
+            'SetList[nSet].nSprite=-1;',
+            'if(g_kexMode&&s_setTest<0)KexScript_BossEvent(nSprite,"Setdeathevent");'):
+        if needle not in native:
+            out.append('native Set lifecycle probe no longer protects/restores player state: %s'
+                       % needle)
     return out
 
 
@@ -6803,6 +6845,9 @@ def verify_queen(z, outdir):
         'save7+3/migrate%d',
         'KexQueen_SaveTestPrepare(void)', 'KexQueen_SaveTestValidate(void)',
         's_queenTestSnakeExplosions==21', 'VB_KEX_QUEEN_TEST',
+        'if(g_kexMode&&s_queenTest<0)KexScript_BossEvent(nSprite,"Queensnakedeathevent");',
+        'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
+        'PlayerList[s_queenTestPlayer].invincibility=s_queenTestInvincibility;',
         'boolconstreuseAuthored=QueenCount==0',
         'reuseAuthored?"reused":"spawned"',
         'if(QueenCount<=0)return-1;',
@@ -7055,7 +7100,13 @@ def verify_selkis(z, outdir):
         'scorpion[nScorp].g&1',
         'BuildSpider(-1,x,y,z,sprite[nSprite].sectnum,sprite[nSprite].ang,1)',
         'KexExplosion01_Spawn(x,y,z,sprite[nSprite].sectnum,192,0)',
-        'VB_KEX_SELKIS_TEST')
+        'if(g_kexMode)KexScript_BossEvent(nSprite,"Selkisdeathevent");',
+        'boolKexSelkis_RemoveSprite(intnSprite)',
+        'runlist_SubRunRec(scorpion[nScorp].f);',
+        'scorpion[nScorp].nSprite=-1;',
+        'VB_KEX_SELKIS_TEST',
+        'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
+        'PlayerList[s_selkisTestPlayer].invincibility=s_selkisTestInvincibility;')
     for needle in native_needles:
         if needle not in native:
             out.append('native Selkis controller no longer implements %s' % needle)

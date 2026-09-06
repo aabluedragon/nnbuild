@@ -60,6 +60,10 @@ int BuildBullet(short nSprite, int nType, int ebx, int ecx, int val1, int nAngle
 int BuildKexAIFireProjectile(short nSprite, int nType, short nTarget,
                              int nCallbackDistance, int nHeight,
                              int nSpeed, int bHomingThrust);
+// The remaster's player flamethrower calls A_FireProjectile("Proj_Flame",
+// 0, 0, -48, 80, 16). Its player puppet has a different authored radius
+// from the legacy movement sprite, so it has a separate launch bridge.
+int BuildKexPlayerFlameProjectile(short nSprite, int nPitch);
 int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
                                     int nCallbackDistance, int nHeight,
                                     int nSpeed, int bHomingThrust);
