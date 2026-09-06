@@ -27,6 +27,9 @@ int  KexDecor_ViewTile(int nSprite); // render-time frame, including per-instanc
 #define kKexSelkisCobraTile 7847
 #define kKexAmunBombTile 7848
 #define kKexBoulderShardTile 7849
+// The converter emits this runtime effect tile in kexdrop.txt. It is distinct
+// from the visible red-cobra head at 7847.
+int  KexProjectile_RedCobraJointTile(void);
 void KexFlash_Hit(int nSprite);     // the remaster's white blink on a hit creature
 void KexFlash_RadialHit(int nSprite); // same mark, identifiable by the focused audit
 int  KexFlash_Active(int nSprite);

@@ -1368,13 +1368,18 @@ The Cobra Staff now fires the remaster's `Proj_Cobra_Green` instead of
 entering the DOS eight-segment snake controller. Its `cstafffire` callback's
 `A_FireProjectile(..., -32, 80, 8)` muzzle is resolved against the player
 puppet's exact radius and current yaw/pitch; it has no legacy quake or recoil.
-The green cobra retains its fixed launch vector under `noHomingThrust`, while
-its rendered direction can turn toward the acquired target by the authored
-0.0765625-radian (25 Build-angle) maximum. It has no expiry timer and dies on
-the authored wall/floor/ceiling route, which already invokes the four-puff
-`A_CStaffExplode` and `A_RadialBlast(512, 100)` sequence. The weapon probe
-also validates the live muzzle, motion, appearance, source ownership, and
-joint profile.
+`noHomingThrust` prevents generic homing thrust from overwriting velocity, but
+the source loop still calls `A_CobraSlither` every 60 Hz: it applies the
+default 17.5-unit forward speed and four-unit cosine side wave from the
+current yaw/pitch after the authored 0.0765625-radian (25 Build-angle) turn.
+Five non-solid joints trail the head, tapering from 1.0 to 0.5 scale and
+lerping halfway toward their parent on each source update. Vase cobras retain
+their random source direction and use the player only as a collision owner,
+never as a target. Green cobras have no expiry timer and die on the authored
+wall/floor/ceiling route, which already invokes the four-puff
+`A_CStaffExplode` and `A_RadialBlast(512, 100)` sequence. The weapon and
+save probes validate the live muzzle, slither state, joint profile, source
+ownership, and serialized pitch.
 
 The KEX Ring of Ra is likewise a physical `Proj_Ra_Fire`, not the DOS
 target-following `Ra[]` eye. Every firing frame launches the fullbright,
@@ -1385,8 +1390,10 @@ perfect bounce, 120-tick expiry and `rafire_explode` impact effect. The
 classic controller remains the fallback for non-KEX data. Active Ra actors
 serialize with their source owner and motion state, and the projectile probe
 checks all eight launch phases without changing classic Exhumed behavior.
-`VB_KEXSAVE_TEST=1 VB_KEX_RA_SAVE_TEST=1` additionally saves and restores a
-live player orb, checking its position, owner, velocity and lifetime.
+`VB_KEXSAVE_TEST=1 VB_KEX_RA_SAVE_TEST=1 VB_KEX_COBRA_SAVE_TEST=1
+VB_KEX_RED_COBRA_SAVE_TEST=1` additionally saves and restores live Ra,
+green-Cobra and red-Cobra projectiles, checking their positions, owners,
+velocities, lifetimes, green/red joint chains and independent actor pitch.
 
 Projectile death callbacks are independent of direct actor damage and run on
 wall, actor, floor and ceiling impacts. Both red Cobra types therefore retain
@@ -1712,7 +1719,13 @@ adjusts along floors and ceilings; it still collides with actors and vertical
 walls, then explodes. Its actor collision intentionally deals the authored
 zero direct damage, followed by the authored 224/50 radial death blast.
 `homing` plus `noHomingThrust` turns its orientation toward the
-target without curving its launch velocity.
+target without generic homing thrust; `A_CobraSlither` then updates its
+velocity twice per native tick. Selkis uses the authored 16-unit speed and
+1.0-radian pitch cap, while Mummy uses 14 and 0.43; both retain the shared
+four-unit cosine side wave. Both create the authored five tapered red-joint
+actors (1.0 through 0.5 scale), each lerping halfway toward its parent every
+source tick; their independent pitch and joint identifiers serialize with the
+active projectile.
 Selkis now uses a generated 51-slot, 469-frame/chunk `SCORP.SEQ` on 167
 precomposited authored tiles (20200-20366), with explicit eight-view art and
 no chunk mirroring. Its exact idle/chase/shoot/melee/pain/wounded/malfunction
@@ -1762,8 +1775,9 @@ uses its scripted continuous random 8–16 range.
 Set’s KEX homing souls now inflict the authored 40 damage rather than the
 classic type-11 record’s 30 damage. Their velocity curves with the authored
 0.0218-radian turn cap. Selkis’ red cobra uses its 0.028-radian orientation
-cap and the Mummy cobra uses 0.03, while `noHomingThrust` leaves both cobra
-flight vectors unchanged. Classic homing remains unchanged.
+cap and the Mummy cobra uses 0.03; `noHomingThrust` only excludes generic
+homing thrust, not the `A_CobraSlither` loop that owns cobra velocity.
+Classic homing remains unchanged.
 
 The detached Queen snake uses the authored random grounded hop and turn caps,
 including its half-height impulse within 512 authored units. Its ten tail

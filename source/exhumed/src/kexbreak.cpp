@@ -27,6 +27,7 @@
 //
 //-------------------------------------------------------------------------
 #include "build.h"
+#include "bullet.h"
 #include "palette.h"
 #include "polymost.h"
 #include "compat.h"
@@ -117,7 +118,7 @@ static uint8_t      s_orbTestEffect[kMaxSprites]; // 1 ammo, 2 health
 // so its generated actor tile is carried in a tiny side table rather than in
 // every converted MAP.
 static int s_kexMapTile = -1, s_kexPowerTile = -1, s_kexRaTile = -1, s_kexCobraTile = -1;
-static int s_kexCobraJointTile = -1;
+static int s_kexCobraJointTile = -1, s_kexRedCobraJointTile = -1;
 static int s_kexAmmoTile = -1, s_kexHealthTile = -1;
 static int s_kexPowerTimer;
 
@@ -126,20 +127,36 @@ static int s_kexPowerTimer;
 struct KexVaseShot
 {
     int16_t nSprite, nRunHead, nRunFree, nSource;
-    int16_t nJoint[4];
-    int32_t trailx[4], traily[4], trailz[4];
+    int16_t nJoint[5];
     int32_t vx, vy, vz;
-    int16_t ticks;
-    uint8_t cobra;
+    int16_t ticks, pitch;
+    uint8_t cobra, trackTarget;
 };
 static KexVaseShot s_vaseShot[KEX_MAX_VASE_SHOTS];
 
 static bool KexDrop_ParseLine(char *line, int nRec)
 {
     (void)nRec;
-    return Bsscanf(line, "%d %d %d %d %d %d %d", &s_kexMapTile, &s_kexPowerTile,
-                   &s_kexRaTile, &s_kexCobraTile, &s_kexCobraJointTile,
-                   &s_kexAmmoTile, &s_kexHealthTile) >= 4;
+    int map, power, ra, cobra, greenJoint, redJoint, ammo, health;
+    int const count = Bsscanf(line, "%d %d %d %d %d %d %d %d", &map, &power,
+        &ra, &cobra, &greenJoint, &redJoint, &ammo, &health);
+    if (count < 4)
+        return false;
+    s_kexMapTile = map; s_kexPowerTile = power; s_kexRaTile = ra;
+    s_kexCobraTile = cobra;
+    if (count >= 8)
+    {
+        s_kexCobraJointTile = greenJoint;
+        s_kexRedCobraJointTile = redJoint;
+        s_kexAmmoTile = ammo; s_kexHealthTile = health;
+    }
+    else if (count >= 7) // pre-red-joint kexdrop.txt layout
+    {
+        s_kexCobraJointTile = greenJoint;
+        s_kexRedCobraJointTile = -1;
+        s_kexAmmoTile = redJoint; s_kexHealthTile = ammo;
+    }
+    return true;
 }
 
 static void KexDrop_LoadTable(void)
@@ -149,9 +166,15 @@ static void KexDrop_LoadTable(void)
     s_kexRaTile = -1;
     s_kexCobraTile = -1;
     s_kexCobraJointTile = -1;
+    s_kexRedCobraJointTile = -1;
     s_kexAmmoTile = -1;
     s_kexHealthTile = -1;
     KexTable_Load("kexdrop.txt", 1, KexDrop_ParseLine);
+}
+
+int KexProjectile_RedCobraJointTile(void)
+{
+    return g_kexMode ? s_kexRedCobraJointTile : -1;
 }
 
 static bool KexBreak_ParseLine(char *line, int nRec)
@@ -1349,7 +1372,8 @@ static int KexVaseCobra_Move(int nSprite, KexVaseShot const &s)
 {
     // A_SetSourceOwner prevents a player-fired cobra from immediately
     // colliding with the puppet from which its negative callback distance
-    // launches it. Vase cobras have no source and retain their normal path.
+    // launches it. Vase cobras share that collision owner, but do not acquire
+    // its target: the source action uses it only to exclude the player.
     int sourceCstat = 0;
     if ((unsigned)s.nSource < (unsigned)kMaxSprites && s.nSource != nSprite
         && sprite[s.nSource].statnum == 100)
@@ -1377,10 +1401,10 @@ static void KexVaseRa_ReflectFromActor(KexVaseShot &s, int nSprite, int nHit)
 
 static int KexCobraTarget(KexVaseShot const &s)
 {
-    // Vase cobras seek the local player. A staff-fired cobra keeps the KEX
-    // player puppet's current acquired target, if any; noHomingThrust means
-    // this affects its orientation only, never its launch vector.
-    if (s.nSource >= 0 && s.nSource < kMaxSprites
+    // A staff-fired cobra keeps the KEX player puppet's current acquired
+    // target. A vase cobra is created with the player as source owner solely
+    // so it will *not* acquire that player, and has no authored target.
+    if (s.trackTarget && s.nSource >= 0 && s.nSource < kMaxSprites
             && sprite[s.nSource].sectnum >= 0
             && sprite[s.nSource].statnum == 100)
     {
@@ -1395,27 +1419,127 @@ static int KexCobraTarget(KexVaseShot const &s)
         }
         return -1;
     }
-
-    int const nPlayer = PlayerList[nLocalPlayer].nSprite;
-    return nPlayer >= 0 && sprite[nPlayer].sectnum >= 0 ? nPlayer : -1;
+    return -1;
 }
 
-static void KexCobraFaceTarget(int nSprite, int nTarget)
+static void KexCobraFaceTarget(KexVaseShot &s, int nSprite, int nTarget)
 {
     if (nTarget < 0)
         return;
 
     // Proj_Cobra_Green's .0765625-radian homingTurnAngles is 25 on Build's
-    // 2048-angle circle. Its noHomingThrust flag deliberately leaves motion
-    // untouched; only the displayed cobra direction follows the target.
+    // 2048-angle circle. noHomingThrust stops the *homing system* from
+    // changing velocity; A_CobraSlither applies its own velocity from this
+    // orientation immediately afterwards.
     constexpr int kKexCobraTurnStep = 25;
     int const wanted = GetMyAngle(sprite[nTarget].x - sprite[nSprite].x,
                                   sprite[nTarget].y - sprite[nSprite].y);
-    int delta = (wanted - sprite[nSprite].ang + 1024) & kAngleMask;
-    if (delta >= 1024)
-        delta -= 2048;
+    int const delta = AngleDelta(sprite[nSprite].ang, wanted, 1024);
     sprite[nSprite].ang = (sprite[nSprite].ang
         + clamp(delta, -kKexCobraTurnStep, kKexCobraTurnStep)) & kAngleMask;
+
+    // The same actor property permits homing pitch through +/-1.57 radians.
+    // Actor rotation is separate from the rendered Build sprite, so retain it
+    // in the serialized KEX shot record and turn it at the authored cap too.
+    constexpr int kKexCobraMaxPitch = 512;
+    int const dx = sprite[nTarget].x - sprite[nSprite].x;
+    int const dy = sprite[nTarget].y - sprite[nSprite].y;
+    int const extent = max(1, max(klabs(dx), klabs(dy)) / 16000 + 1);
+    int const planar = max(1, ksqrt((dx / extent) * (dx / extent)
+                                   + (dy / extent) * (dy / extent)) * extent);
+    int const targetZ = sprite[nTarget].z - KexDrop_ActorHeight(nTarget) * 16 * 6 / 2;
+    int wantedPitch = GetMyAngle(planar,
+                                 (sprite[nSprite].z - targetZ) / 16);
+    if (wantedPitch >= 1024)
+        wantedPitch -= 2048;
+    wantedPitch = clamp(wantedPitch, -kKexCobraMaxPitch, kKexCobraMaxPitch);
+    int const pitchDelta = AngleDelta(s.pitch & kAngleMask,
+                                      wantedPitch & kAngleMask, 1024);
+    s.pitch = (s.pitch + clamp(pitchDelta, -kKexCobraTurnStep,
+                               kKexCobraTurnStep)) & kAngleMask;
+}
+
+static void KexCobraSlither(KexVaseShot &s, int nSprite, int nKexTick)
+{
+    // cobra_{green,red}_loop invokes A_CobraSlither every KEX 60-Hz tick.
+    // Its default 17.5-unit forward motion and four-unit cosine side wave
+    // use the actor's *current* homing orientation. The player and vase
+    // green cobras use the default branch; the Mummy/Selkis 14/16 branches
+    // belong to the red-cobra BulletList bridge.
+    constexpr int kKexCobraForward = 35 * 6 / 2;
+    constexpr int kKexCobraSide = 4 * 6;
+    constexpr int kKexCobraPhaseQ16 = 5340354; // .25 rad in Build angles
+    int const yaw = sprite[nSprite].ang;
+    int const phase = (int)(((int64_t)nKexTick * kKexCobraPhaseQ16 + 32768)
+                            >> 16) & kAngleMask;
+    int const side = Cos(phase);
+    int const cosPitch = Cos(s.pitch);
+    int const fx = mulscale14(Cos(yaw), cosPitch);
+    int const fy = mulscale14(Sin(yaw), cosPitch);
+
+    s.vx = fx * kKexCobraForward
+         - (int)(((int64_t)Sin(yaw) * side * kKexCobraSide) / 16384);
+    s.vy = fy * kKexCobraForward
+         + (int)(((int64_t)Cos(yaw) * side * kKexCobraSide) / 16384);
+    s.vz = -(int)(((int64_t)Sin(s.pitch) * kKexCobraForward * 16) / 16384);
+}
+
+static int KexCobraJointRepeat(int nJoint)
+{
+    static int const repeat[] = { 32, 28, 24, 20, 16 };
+    return (unsigned)nJoint < ARRAY_SIZE(repeat) ? repeat[nJoint] : 16;
+}
+
+static void KexCobraUpdateJoints(KexVaseShot const &s, int nSprite)
+{
+    int nTarget = nSprite;
+    for (int i = 0; i < (int)ARRAY_SIZE(s.nJoint); i++)
+    {
+        int const nJoint = s.nJoint[i];
+        if (nJoint < 0)
+            continue;
+        // A_UpdateCobraJoints calls Origin.Lerp(target, .5) then LinkSector.
+        sprite[nJoint].x += (sprite[nTarget].x - sprite[nJoint].x) / 2;
+        sprite[nJoint].y += (sprite[nTarget].y - sprite[nJoint].y) / 2;
+        sprite[nJoint].z += (sprite[nTarget].z - sprite[nJoint].z) / 2;
+        if (sprite[nJoint].sectnum != sprite[nTarget].sectnum)
+            mychangespritesect(nJoint, sprite[nTarget].sectnum);
+        nTarget = nJoint;
+    }
+}
+
+static int KexVaseCobra_Tick(int nShot)
+{
+    KexVaseShot &s = s_vaseShot[nShot];
+    int const nSprite = s.nSprite;
+    // The KEX actor loop is 60 Hz while MoveThings is 30 Hz. Run both source
+    // updates: homing turns, slither velocity, motion and the joint chain.
+    for (int sub = 0; sub < 2; sub++)
+    {
+        KexCobraFaceTarget(s, nSprite, KexCobraTarget(s));
+        KexCobraSlither(s, nSprite, totalmoves * 2 + sub);
+        int const nVal = KexVaseCobra_Move(nSprite, s);
+        if (nVal)
+        {
+            int const kind = nVal & 0x3C000;
+            if (nVal & 0x20000)
+            {
+                KexVaseShot_Remove(nShot);
+                return 0;
+            }
+            // Proj_Cobra_Green is impactWallsOnly: an actor contact has no
+            // damage or death callback, while a wall/floor/ceiling runs its
+            // authored green-cobra death animation.
+            if (kind == 0x10000 || kind == 0x8000)
+            {
+                KexVaseCobra_Explode(nSprite);
+                KexVaseShot_Remove(nShot);
+                return 0;
+            }
+        }
+        KexCobraUpdateJoints(s, nSprite);
+    }
+    return 1;
 }
 
 static void KexVaseShot_Tick(int nShot)
@@ -1427,22 +1551,11 @@ static void KexVaseShot_Tick(int nShot)
 
     if (s.cobra)
     {
-        for (int i = (int)ARRAY_SIZE(s.nJoint) - 1; i > 0; i--)
-        {
-            s.trailx[i] = s.trailx[i - 1];
-            s.traily[i] = s.traily[i - 1];
-            s.trailz[i] = s.trailz[i - 1];
-        }
-        s.trailx[0] = sprite[nSprite].x;
-        s.traily[0] = sprite[nSprite].y;
-        s.trailz[0] = sprite[nSprite].z;
+        KexVaseCobra_Tick(nShot);
+        return;
     }
 
-    if (s.cobra)
-        KexCobraFaceTarget(nSprite, KexCobraTarget(s));
-    int const nVal = s.cobra
-        ? KexVaseCobra_Move(nSprite, s)
-        : KexVaseRa_Move(nSprite, s);
+    int const nVal = KexVaseRa_Move(nSprite, s);
     if (nVal)
     {
         int const kind = nVal & 0x3C000;
@@ -1453,23 +1566,7 @@ static void KexVaseShot_Tick(int nShot)
                     || (sprite[nHit].statnum > 99 && sprite[nHit].statnum < 200)))
                 runlist_DamageEnemy(nHit, nSprite, 20);
         }
-        if (s.cobra && (nVal & 0x20000))
-        {
-            KexVaseShot_Remove(nShot);
-            return;
-        }
-        if (s.cobra)
-        {
-            // Proj_Cobra_Green is impactWallsOnly: an actor contact does not
-            // damage or bounce it, while a wall contact runs its death anim.
-            if (kind == 0x10000 || kind == 0x8000)
-            {
-                KexVaseCobra_Explode(nSprite);
-                KexVaseShot_Remove(nShot);
-                return;
-            }
-        }
-        else if (kind == 0x10000)
+        if (kind == 0x10000)
         {
             KexVaseRa_Reflect(s, 0, 0, 16384);
         }
@@ -1493,34 +1590,16 @@ static void KexVaseShot_Tick(int nShot)
                 KexVaseRa_ReflectFromActor(s, nSprite, nHit);
         }
     }
-    if (s.cobra)
-    {
-        for (int i = 0; i < (int)ARRAY_SIZE(s.nJoint); i++)
-        {
-            int const nJoint = s.nJoint[i];
-            if (nJoint < 0)
-                continue;
-            sprite[nJoint].x = s.trailx[i];
-            sprite[nJoint].y = s.traily[i];
-            sprite[nJoint].z = s.trailz[i];
-            int16_t nSector = sprite[nJoint].sectnum;
-            updatesector(sprite[nJoint].x, sprite[nJoint].y, &nSector);
-            if (nSector >= 0 && nSector != sprite[nJoint].sectnum)
-                mychangespritesect(nJoint, nSector);
-        }
-    }
-    if (!s.cobra)
-        s.vz += 72; // Proj_Ra_Fire's default KEX gravity is 0.75
+    s.vz += 72; // Proj_Ra_Fire's default KEX gravity is 0.75
     if (s.ticks > 0 && --s.ticks <= 0)
     {
-        if (!s.cobra)
-            KexVaseRa_Explode(nSprite);
+        KexVaseRa_Explode(nSprite);
         KexVaseShot_Remove(nShot);
     }
 }
 
 static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
-                              int cobra, int nSource)
+                              int cobra, int nSource, int trackTarget)
 {
     int nShot = -1;
     for (int i = 0; i < KEX_MAX_VASE_SHOTS; i++)
@@ -1540,6 +1619,7 @@ static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
     s.nRunHead = -1;
     s.nRunFree = -1;
     s.nSource = nSource;
+    s.pitch = 0;
     for (auto &nJoint : s.nJoint)
         nJoint = -1;
     sprite[nSprite].x = x;
@@ -1571,14 +1651,13 @@ static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
             if (nJoint < 0)
                 break;
             s.nJoint[i] = nJoint;
-            s.trailx[i] = x; s.traily[i] = y; s.trailz[i] = sprite[nSprite].z;
             sprite[nJoint].x = x;
             sprite[nJoint].y = y;
             sprite[nJoint].z = sprite[nSprite].z;
             sprite[nJoint].cstat = 0;
             sprite[nJoint].shade = -64;
             sprite[nJoint].pal = 0;
-            sprite[nJoint].xrepeat = sprite[nJoint].yrepeat = 32;
+            sprite[nJoint].xrepeat = sprite[nJoint].yrepeat = KexCobraJointRepeat(i);
             sprite[nJoint].clipdist = 1;
             sprite[nJoint].picnum = s_kexCobraJointTile;
             sprite[nJoint].owner = -1;
@@ -1587,15 +1666,17 @@ static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
     }
 
     s.cobra = cobra;
-    s.ticks = cobra ? 180 : 120;
+    s.trackTarget = trackTarget != 0;
+    s.ticks = cobra ? -1 : 120;
     return nShot;
 }
 
 static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
 {
     int const tile = cobra ? s_kexCobraTile : s_kexRaTile;
+    int const nSource = cobra ? PlayerList[nLocalPlayer].nSprite : -1;
     int const nShot = KexVaseShot_Create(nSector, tile, x, y,
-        z - (cobra ? 20 : 64) * 16 * 6, cobra, -1);
+        z - (cobra ? 20 : 64) * 16 * 6, cobra, nSource, 0);
     if (nShot < 0)
         return;
     KexVaseShot &s = s_vaseShot[nShot];
@@ -1606,6 +1687,7 @@ static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
         s.vx = Cos(dir) * 96;
         s.vy = Sin(dir) * 96;
         s.vz = 0;
+        sprite[s.nSprite].ang = dir;
     }
     else
     {
@@ -1625,7 +1707,7 @@ int KexRaFire_PlayerFire(short nSprite, int nPitch)
 
     KexRaLaunch const launch = KexRaPlayerExpected(nSprite, nPitch, totalmoves);
     int const nShot = KexVaseShot_Create(sprite[nSprite].sectnum, s_kexRaTile,
-        launch.x, launch.y, launch.z, 0, nSprite);
+        launch.x, launch.y, launch.z, 0, nSprite, 0);
     if (nShot < 0)
         return -1;
 
@@ -1726,7 +1808,7 @@ int KexCobraStaff_PlayerFire(short nSprite, int nPitch)
 
     KexCobraLaunch const launch = KexCobraStaffExpected(nSprite, nPitch);
     int const nShot = KexVaseShot_Create(sprite[nSprite].sectnum,
-        s_kexCobraTile, launch.x, launch.y, launch.z, 1, nSprite);
+        s_kexCobraTile, launch.x, launch.y, launch.z, 1, nSprite, 1);
     if (nShot < 0)
         return -1;
 
@@ -1734,6 +1816,7 @@ int KexCobraStaff_PlayerFire(short nSprite, int nPitch)
     s.vx = launch.vx;
     s.vy = launch.vy;
     s.vz = launch.vz;
+    s.pitch = nPitch & kAngleMask;
     // Proj_Cobra_Green has no expires field. Its authored lifetime ends only
     // when impactWallsOnly lets it reach a wall/floor/ceiling death action.
     s.ticks = -1;
@@ -1756,15 +1839,26 @@ int KexCobraStaff_PlayerTest(short nSprite, int nPitch)
     KexVaseShot const &s = s_vaseShot[nShot];
     spritetype const &p = sprite[nProjectile];
     int joints = 0;
-    for (int const nJoint : s.nJoint)
-        joints += nJoint >= 0;
-    int const expectedJoints = s_kexCobraJointTile > 0 ? 4 : 0;
-    int const exact = s.cobra && s.nSource == nSprite && s.ticks == -1
+    bool jointProfile = true;
+    for (int i = 0; i < (int)ARRAY_SIZE(s.nJoint); i++)
+        if (s.nJoint[i] >= 0)
+        {
+            joints++;
+            spritetype const &joint = sprite[s.nJoint[i]];
+            jointProfile &= joint.picnum == s_kexCobraJointTile
+                && joint.xrepeat == KexCobraJointRepeat(i)
+                && joint.yrepeat == KexCobraJointRepeat(i)
+                && joint.shade == -64 && joint.pal == 0 && joint.extra == -1;
+        }
+    int const expectedJoints = s_kexCobraJointTile > 0 ? 5 : 0;
+    int const exact = s.cobra && s.trackTarget && s.nSource == nSprite && s.ticks == -1
         && p.x == wanted.x && p.y == wanted.y && p.z == wanted.z
         && s.vx == wanted.vx && s.vy == wanted.vy && s.vz == wanted.vz
+        && s.pitch == (nPitch & kAngleMask)
         && p.ang == wanted.angle && p.owner == nSprite && p.clipdist == 16
         && p.xrepeat == 32 && p.yrepeat == 32 && p.shade == -64
-        && p.pal == 0 && p.extra == -1 && joints == expectedJoints;
+        && p.pal == 0 && p.extra == -1 && joints == expectedJoints
+        && jointProfile;
     KexVaseShot_Remove(nShot);
     return exact;
 }
@@ -3978,18 +4072,30 @@ static void KexToggle_SaveTestMutate(void);  // defined with the Toggle state be
 // VB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
 // compare the player's place and health -- the per-sector tables the save
 // carries are kMaxSectors wide, and the levels past 1024 sectors are where
-// that has to hold. VB_KEX_RA_SAVE_TEST adds a live player Proj_Ra_Fire to
-// the snapshot, checking the native Kex-break motion/source record as well.
+// that has to hold. The projectile flags add live Ra, green-Cobra and
+// red-Cobra actors, checking both native Kex-break and BulletList records.
 static void Kex_SaveTest(void)
 {
     static int s_ticks = -1, sx, sy, sect, hp, queenPrepared;
     static int raTest, raShot, raSprite, raX, raY, raZ, raVx, raVy, raVz;
     static int raTicks, raSource;
+    static int cobraTest, cobraShot, cobraSprite, cobraX, cobraY, cobraZ;
+    static int cobraVx, cobraVy, cobraVz, cobraTicks, cobraSource;
+    static int cobraPitch, cobraTrackTarget, cobraJoint[5];
+    static int redTest, redBullet, redSprite, redPitch, redJoint[5];
     if (s_ticks < 0)
     {
         s_ticks = getenv("VB_KEXSAVE_TEST") ? 0 : 1000000;
         raTest = Bgetenv("VB_KEX_RA_SAVE_TEST") != NULL;
+        cobraTest = Bgetenv("VB_KEX_COBRA_SAVE_TEST") != NULL;
+        redTest = Bgetenv("VB_KEX_RED_COBRA_SAVE_TEST") != NULL;
         raShot = raSprite = -1;
+        cobraShot = cobraSprite = -1;
+        redBullet = redSprite = -1;
+        for (auto &joint : cobraJoint)
+            joint = -1;
+        for (auto &joint : redJoint)
+            joint = -1;
     }
     if (s_ticks >= 1000000)
         return;
@@ -4010,6 +4116,34 @@ static void Kex_SaveTest(void)
                 raZ = sprite[raSprite].z;
                 raVx = ra.vx; raVy = ra.vy; raVz = ra.vz;
                 raTicks = ra.ticks; raSource = ra.nSource;
+            }
+        }
+        if (cobraTest)
+        {
+            cobraSprite = KexCobraStaff_PlayerFire(nSprite, 0);
+            cobraShot = KexVaseShot_Find(cobraSprite);
+            if (cobraShot >= 0)
+            {
+                KexVaseShot const &cobra = s_vaseShot[cobraShot];
+                cobraX = sprite[cobraSprite].x; cobraY = sprite[cobraSprite].y;
+                cobraZ = sprite[cobraSprite].z;
+                cobraVx = cobra.vx; cobraVy = cobra.vy; cobraVz = cobra.vz;
+                cobraTicks = cobra.ticks; cobraSource = cobra.nSource;
+                cobraPitch = cobra.pitch; cobraTrackTarget = cobra.trackTarget;
+                for (int i = 0; i < (int)ARRAY_SIZE(cobraJoint); i++)
+                    cobraJoint[i] = cobra.nJoint[i];
+            }
+        }
+        if (redTest)
+        {
+            redBullet = BuildKexAIFireProjectile(nSprite, 16, nSprite,
+                                                  2, 144, 64, 0);
+            if (redBullet >= 0)
+            {
+                redSprite = GetBulletSprite(redBullet);
+                KexBullet_GetRedCobraPitch(redBullet, &redPitch);
+                for (int i = 0; i < (int)ARRAY_SIZE(redJoint); i++)
+                    redJoint[i] = KexBullet_GetRedCobraJoint(redBullet, i);
             }
         }
         void testsave(); testsave();
@@ -4033,10 +4167,39 @@ static void Kex_SaveTest(void)
             && s_vaseShot[raShot].vz == raVz
             && sprite[raSprite].x == raX && sprite[raSprite].y == raY
             && sprite[raSprite].z == raZ && sprite[raSprite].owner == raSource);
-        OSD_Printf("Kex save test: loaded at (%d,%d) sector %d health %d, %d sectors%s -> %s\n",
+        bool cobraOkay = !cobraTest || cobraShot >= 0;
+        if (cobraOkay && cobraTest)
+        {
+            KexVaseShot const &cobra = s_vaseShot[cobraShot];
+            cobraOkay = cobra.nSprite == cobraSprite && cobra.cobra
+                && cobra.nSource == cobraSource && cobra.ticks == cobraTicks
+                && cobra.pitch == cobraPitch && cobra.trackTarget == cobraTrackTarget
+                && cobra.vx == cobraVx && cobra.vy == cobraVy && cobra.vz == cobraVz
+                && sprite[cobraSprite].x == cobraX && sprite[cobraSprite].y == cobraY
+                && sprite[cobraSprite].z == cobraZ && sprite[cobraSprite].owner == cobraSource;
+            for (int i = 0; i < (int)ARRAY_SIZE(cobraJoint); i++)
+                cobraOkay &= cobra.nJoint[i] == cobraJoint[i];
+        }
+        int loadedRedPitch = 0;
+        bool const redOkay = !redTest || (redBullet >= 0 && redSprite >= 0
+            && GetBulletSprite(redBullet) == redSprite
+            && KexBullet_GetRedCobraPitch(redBullet, &loadedRedPitch)
+            && loadedRedPitch == redPitch
+            && KexBullet_CheckAIFireProjectile(redBullet, nSprite, nSprite,
+                                                2, 144, 64, 0));
+        bool redJointsOkay = !redTest || redOkay;
+        if (redJointsOkay && redTest)
+            for (int i = 0; i < (int)ARRAY_SIZE(redJoint); i++)
+                redJointsOkay &= KexBullet_GetRedCobraJoint(redBullet, i)
+                    == redJoint[i];
+        OSD_Printf("Kex save test: loaded at (%d,%d) sector %d health %d, %d sectors%s%s%s -> %s\n",
                    sprite[n2].x, sprite[n2].y, sprite[n2].sectnum, PlayerList[nLocalPlayer].nHealth, numsectors,
                    raTest ? " + Ra projectile" : "",
-                   playerOkay && queenOkay && raOkay ? "OK" : "MISMATCH");
+                   cobraTest ? " + green Cobra projectile" : "",
+                   redTest ? " + red Cobra projectile" : "",
+                   playerOkay && queenOkay && raOkay && cobraOkay && redOkay
+                       && redJointsOkay
+                       ? "OK" : "MISMATCH");
     }
 }
 

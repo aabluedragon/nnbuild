@@ -6860,6 +6860,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
         cobra_joint_type = next((t for t, d in kexactors.items() if d['name'] == 'Fx_GreenCobraJoint'), None)
         if cobra_joint_type is not None:
             used_types.add(cobra_joint_type)
+        red_cobra_joint_type = next((t for t, d in kexactors.items() if d['name'] == 'Fx_RedCobraJoint'), None)
+        if red_cobra_joint_type is not None:
+            used_types.add(red_cobra_joint_type)
         choppa_type = next((t for t, d in kexactors.items() if d['name'] == 'Obj_Choppa'), None)
         if choppa_type is not None:
             # Obj_Choppa uses the level-finish lotag, but its sprite is the
@@ -7357,6 +7360,9 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
     cobra_joint_tile = 0
     if cobra_joint_type is not None and cobra_joint_type in decor:
         cobra_joint_tile = decor[cobra_joint_type][0]
+    red_cobra_joint_tile = 0
+    if red_cobra_joint_type is not None and red_cobra_joint_type in decor:
+        red_cobra_joint_tile = decor[red_cobra_joint_type][0]
     ammo_tile = 0
     if ammo_type is not None and ammo_type in decor:
         ammo_tile = decor[ammo_type][0]
@@ -7364,9 +7370,11 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
     if health_type is not None and health_type in decor:
         health_tile = decor[health_type][0]
     _write_table(outdir, "kexdrop.txt",
-                 "maptile powertile ratile cobratile cobrajointtile ammotile healthtile",
-                 [(map_tile, power_tile, ra_tile, cobra_tile, cobra_joint_tile, ammo_tile, health_tile)]
+                 "maptile powertile ratile cobratile cobrajointtile redcobrajointtile ammotile healthtile",
+                 [(map_tile, power_tile, ra_tile, cobra_tile, cobra_joint_tile,
+                   red_cobra_joint_tile, ammo_tile, health_tile)]
                  if all((map_tile, power_tile, ra_tile, cobra_tile, cobra_joint_tile,
+                         red_cobra_joint_tile,
                          ammo_tile, health_tile)) else [],
                  "rare drop art", verbose)
 

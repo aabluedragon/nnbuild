@@ -67,6 +67,10 @@ int BuildKexPlayerFlameProjectile(short nSprite, int nPitch);
 int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
                                     int nCallbackDistance, int nHeight,
                                     int nSpeed, int bHomingThrust);
+// Reads the separate actor-rotation pitch used by a live KEX red cobra.
+// Its storage is part of BulletLoadSave, so this also supports save probes.
+int KexBullet_GetRedCobraPitch(int nBullet, int *pPitch);
+int KexBullet_GetRedCobraJoint(int nBullet, int nJoint);
 // Mantis's rare PSX callback uses FireActor at z+192, then adds independent
 // signed yaw/pitch spread and a floating 8..16-unit speed.
 int BuildKexMantisFireProjectile(short nSprite, short nTarget);

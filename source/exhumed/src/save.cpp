@@ -32,12 +32,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "kexbreak.h"
 
 const char kSaveSig[] = "EXSV";
-const uint16_t kSaveVersion = 10005;   // VibeBuild32: active KEX Ra projectiles are serialized
+const uint16_t kSaveVersion = 10008;   // VibeBuild32: all pitched, jointed KEX Cobra records are serialized
 static char const kNetworkSnapshotSig[] = "EXSN";
-// EXSN v3 retains every reusable body/chunk/gun allocator entry and active
-// KEX Ra projectile records. A staging level's unwritten pool tail could
+// EXSN v6 retains every reusable body/chunk/gun allocator entry and all
+// revised KEX projectile records. A staging level's unwritten pool tail could
 // otherwise leak into a rejoin respawn.
-static uint16_t const kNetworkSnapshotVersion = 3;
+static uint16_t const kNetworkSnapshotVersion = 6;
 static int s_networkSnapshot;
 
 static char const *Exhumed_SaveTestFilename(void)

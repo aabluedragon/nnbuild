@@ -206,11 +206,17 @@ static bool KexBulletGlidesOnPlanes(int nType)
     return g_kexMode && (nType == 9 || nType == 11 || nType == 15 || nType == 16);
 }
 
+static bool KexBulletRedCobra(int nType)
+{
+    return g_kexMode && (nType == 9 || nType == 16);
+}
+
 static bool KexBulletFacesTargetWithoutThrust(int nType)
 {
-    // Both red cobras are homing projectiles with noHomingThrust: their
-    // orientation keeps seeking, but their launch velocity never curves.
-    return g_kexMode && (nType == 9 || nType == 16);
+    // Both red cobras are homing projectiles with noHomingThrust. Generic
+    // homing only updates their orientation; A_CobraSlither then supplies
+    // their actual velocity from that orientation.
+    return KexBulletRedCobra(nType);
 }
 
 static int KexBulletTurnStep(int nType)
@@ -278,12 +284,16 @@ enum
 
 Bullet BulletList[kMaxBullets];
 short nBulletEnemy[kMaxBullets];
+short s_kexCobraPitch[kMaxBullets]; // KEX actor rotation pitch, not sprite art
+short s_kexCobraJoint[kMaxBullets][5];
 int nBulletsFree;
 int lasthitz, lasthitx, lasthity;
 short lasthitsect, lasthitsprite, lasthitwall;
 
 int nBulletCount = 0;
 short nRadialBullet = 0;
+
+static void KexRedCobraDestroyJoints(short nBullet);
 
 enum
 {
@@ -667,6 +677,24 @@ static void KexBulletAimDirection(int x, int y, int z, short nTarget,
     *fz = sinPitch;
 }
 
+static int KexRedCobraMaxPitch(int nType)
+{
+    // homingMaxPitch is .43 radians for Mummy and 1.0 for Selkis.
+    return nType == 9 ? 140 : 326;
+}
+
+static int KexRedCobraTargetPitch(int x, int y, int z, short nTarget,
+                                  int nType)
+{
+    int cosPitch, sinPitch;
+    KexBulletAimPitch(x, y, z, nTarget, &cosPitch, &sinPitch);
+    int pitch = GetMyAngle(cosPitch, sinPitch);
+    if (pitch >= 1024)
+        pitch -= 2048;
+    return clamp(pitch, -KexRedCobraMaxPitch(nType),
+                 KexRedCobraMaxPitch(nType));
+}
+
 static KexProjectileExpected KexBulletExpectedLaunch(short nSource,
     KexProjectileLaunch const &launch)
 {
@@ -743,6 +771,8 @@ void InitBullets()
     nBulletsFree = kMaxBullets;
 
     memset(nBulletEnemy, -1, sizeof(nBulletEnemy));
+    memset(s_kexCobraPitch, 0, sizeof(s_kexCobraPitch));
+    memset(s_kexCobraJoint, -1, sizeof(s_kexCobraJoint));
 }
 
 short GrabBullet()
@@ -755,6 +785,7 @@ void DestroyBullet(short nBullet)
 {
     short nSprite = BulletList[nBullet].nSprite;
 
+    KexRedCobraDestroyJoints(nBullet);
     runlist_DoSubRunRec(BulletList[nBullet].field_6);
     runlist_DoSubRunRec(sprite[nSprite].lotag - 1);
     runlist_SubRunRec(BulletList[nBullet].field_8);
@@ -974,8 +1005,149 @@ static void KexTurnProjectileWithoutThrust(short nBullet, short nTarget)
     int const turnStep = KexBulletTurnStep(pBullet->nType);
     turn = clamp(turn, -turnStep, turnStep);
     sprite[nSprite].ang = (sprite[nSprite].ang + turn) & kAngleMask;
-    // Deliberately leave pBullet->x/y/z untouched: this is the retail
-    // PF_NOHOMINGTHRUST contract.
+    // The Cobra action separately derives its velocity from this rotation.
+}
+
+static void KexTurnRedCobra(short nBullet, short nTarget)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    KexTurnProjectileWithoutThrust(nBullet, nTarget);
+
+    int const wanted = KexRedCobraTargetPitch(sprite[nSprite].x,
+        sprite[nSprite].y, sprite[nSprite].z, nTarget, pBullet->nType);
+    int const delta = AngleDelta(s_kexCobraPitch[nBullet] & kAngleMask,
+                                 wanted & kAngleMask, 1024);
+    int pitch = s_kexCobraPitch[nBullet]
+        + clamp(delta, -KexBulletTurnStep(pBullet->nType),
+                KexBulletTurnStep(pBullet->nType));
+    if (pitch >= 1024)
+        pitch -= 2048;
+    else if (pitch < -1024)
+        pitch += 2048;
+    s_kexCobraPitch[nBullet] = (short)pitch;
+}
+
+static int KexRedCobraJointRepeat(int nJoint)
+{
+    static int const repeat[] = { 40, 35, 30, 25, 20 };
+    return (unsigned)nJoint < ARRAY_SIZE(repeat) ? repeat[nJoint] : 20;
+}
+
+static void KexRedCobraDestroyJoints(short nBullet)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets)
+        return;
+    for (int i = 0; i < (int)ARRAY_SIZE(s_kexCobraJoint[nBullet]); i++)
+    {
+        int const nJoint = s_kexCobraJoint[nBullet][i];
+        if ((unsigned)nJoint < (unsigned)kMaxSprites
+            && sprite[nJoint].sectnum >= 0)
+            mydeletesprite(nJoint);
+        s_kexCobraJoint[nBullet][i] = -1;
+    }
+}
+
+static void KexRedCobraCreateJoints(short nBullet)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets)
+        return;
+    KexRedCobraDestroyJoints(nBullet);
+    int const tile = KexProjectile_RedCobraJointTile();
+    short const nSprite = BulletList[nBullet].nSprite;
+    if (tile <= 0 || (unsigned)nSprite >= (unsigned)kMaxSprites
+        || sprite[nSprite].sectnum < 0)
+        return;
+    for (int i = 0; i < (int)ARRAY_SIZE(s_kexCobraJoint[nBullet]); i++)
+    {
+        int const nJoint = insertsprite(sprite[nSprite].sectnum, 200);
+        if (nJoint < 0)
+            break;
+        s_kexCobraJoint[nBullet][i] = nJoint;
+        sprite[nJoint].x = sprite[nSprite].x;
+        sprite[nJoint].y = sprite[nSprite].y;
+        sprite[nJoint].z = sprite[nSprite].z;
+        sprite[nJoint].cstat = 0;
+        sprite[nJoint].shade = -64;
+        sprite[nJoint].pal = 0;
+        sprite[nJoint].xrepeat = sprite[nJoint].yrepeat
+            = KexRedCobraJointRepeat(i);
+        sprite[nJoint].clipdist = 1;
+        sprite[nJoint].picnum = tile;
+        sprite[nJoint].owner = -1;
+        sprite[nJoint].extra = -1;
+    }
+}
+
+static void KexRedCobraUpdateJoints(short nBullet)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets)
+        return;
+    int nTarget = BulletList[nBullet].nSprite;
+    if ((unsigned)nTarget >= (unsigned)kMaxSprites
+        || sprite[nTarget].sectnum < 0)
+        return;
+    for (int i = 0; i < (int)ARRAY_SIZE(s_kexCobraJoint[nBullet]); i++)
+    {
+        int const nJoint = s_kexCobraJoint[nBullet][i];
+        if ((unsigned)nJoint >= (unsigned)kMaxSprites
+            || sprite[nJoint].sectnum < 0)
+            continue;
+        // A_UpdateCobraJoints lerps halfway toward its previous joint/head,
+        // then links to that actor's current sector.
+        sprite[nJoint].x += (sprite[nTarget].x - sprite[nJoint].x) / 2;
+        sprite[nJoint].y += (sprite[nTarget].y - sprite[nJoint].y) / 2;
+        sprite[nJoint].z += (sprite[nTarget].z - sprite[nJoint].z) / 2;
+        if (sprite[nJoint].sectnum != sprite[nTarget].sectnum)
+            mychangespritesect(nJoint, sprite[nTarget].sectnum);
+        nTarget = nJoint;
+    }
+}
+
+static void KexRedCobraSlither(short nBullet, int nKexTick)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    constexpr int kCobraSide = 4 * 6;
+    constexpr int kCobraPhaseQ16 = 5340354; // .25 radians in Build angles
+    int const speed = pBullet->nType == 9 ? 14 * 6 : 16 * 6;
+    int const yaw = sprite[nSprite].ang;
+    int const phase = (int)(((int64_t)nKexTick * kCobraPhaseQ16 + 32768)
+                            >> 16) & kAngleMask;
+    int const side = Cos(phase);
+    int const pitch = s_kexCobraPitch[nBullet];
+    int const cosPitch = Cos(pitch);
+    int const fx = mulscale14(Cos(yaw), cosPitch);
+    int const fy = mulscale14(Sin(yaw), cosPitch);
+    pBullet->x = fx * speed
+        - (int)(((int64_t)Sin(yaw) * side * kCobraSide) / 16384);
+    pBullet->y = fy * speed
+        + (int)(((int64_t)Cos(yaw) * side * kCobraSide) / 16384);
+    pBullet->z = -(int)(((int64_t)Sin(pitch) * speed * 16) / 16384);
+}
+
+static int KexMoveRedCobra(short nBullet, short nTarget)
+{
+    Bullet *const pBullet = &BulletList[nBullet];
+    short const nSprite = pBullet->nSprite;
+    // The animation's cobra_red_loop executes A_CobraSlither at 60 Hz;
+    // MoveBullet runs at the native 30-Hz cadence, so integrate both source
+    // actions. Mummy and Selkis select 14 and 16 KEX units respectively.
+    for (int sub = 0; sub < 2; sub++)
+    {
+        if ((unsigned)nTarget < (unsigned)kMaxSprites
+            && (sprite[nTarget].cstat & 0x101))
+            KexTurnRedCobra(nBullet, nTarget);
+        KexRedCobraSlither(nBullet, totalmoves * 2 + sub);
+
+        int const nVal = movesprite(nSprite, pBullet->x, pBullet->y,
+                                    pBullet->z, sprite[nSprite].clipdist >> 1,
+                                    sprite[nSprite].clipdist >> 1, CLIPMASK1);
+        if (nVal)
+            return nVal;
+        KexRedCobraUpdateJoints(nBullet);
+    }
+    return 0;
 }
 
 // KEX velocity uses one metric for all three axes. Build's clipmove XY is
@@ -1208,7 +1380,10 @@ int MoveBullet(short nBullet)
                 nBulletEnemy[nBullet] = -1;
             else if (KexBulletFacesTargetWithoutThrust(nType))
             {
-                KexTurnProjectileWithoutThrust(nBullet, nEnemySprite);
+                // A_CobraSlither performs two orientation/velocity updates
+                // inside KexMoveRedCobra, matching the KEX 60-Hz loop.
+                if (!KexBulletRedCobra(nType))
+                    KexTurnProjectileWithoutThrust(nBullet, nEnemySprite);
             }
             else
             {
@@ -1253,6 +1428,8 @@ int MoveBullet(short nBullet)
         // only their floor/ceiling response differs below.
         if (g_kexMode && nType == kKexBoulderType)
             nVal = KexMoveBoulder(nBullet);
+        else if (KexBulletRedCobra(nType))
+            nVal = KexMoveRedCobra(nBullet, nBulletEnemy[nBullet]);
         else if (KexSpawnerProjectile(pBullet))
             nVal = KexMoveSpawnerProjectile(nBullet);
         else
@@ -1682,6 +1859,12 @@ static int BuildBulletInternal(short nSprite, int nType, int UNUSED(ebx),
         pBullet->x = expected.vx;
         pBullet->y = expected.vy;
         pBullet->z = expected.vz;
+        if (KexBulletRedCobra(nType))
+        {
+            s_kexCobraPitch[nBullet] = (short)KexRedCobraTargetPitch(
+                expected.x, expected.y, expected.z, kexLaunch->nTarget, nType);
+            KexRedCobraCreateJoints(nBullet);
+        }
         nBulletEnemy[nBullet] = kexLaunch->bHomingThrust
                 || KexBulletFacesTargetWithoutThrust(nType)
             ? kexLaunch->nTarget : -1;
@@ -1998,6 +2181,81 @@ int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
         && projectile.shade == -127;
 }
 
+int KexBullet_GetRedCobraPitch(int nBullet, int *pPitch)
+{
+    if (!pPitch || (unsigned)nBullet >= (unsigned)kMaxBullets
+        || !KexBulletRedCobra(BulletList[nBullet].nType)
+        || (unsigned)BulletList[nBullet].nSprite >= (unsigned)kMaxSprites
+        || sprite[BulletList[nBullet].nSprite].sectnum < 0)
+        return 0;
+    *pPitch = s_kexCobraPitch[nBullet];
+    return 1;
+}
+
+int KexBullet_GetRedCobraJoint(int nBullet, int nJoint)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets
+        || (unsigned)nJoint >= ARRAY_SIZE(s_kexCobraJoint[nBullet])
+        || !KexBulletRedCobra(BulletList[nBullet].nType))
+        return -1;
+    return s_kexCobraJoint[nBullet][nJoint];
+}
+
+static bool KexRedCobraJointProfile(int nBullet)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets)
+        return false;
+    int const tile = KexProjectile_RedCobraJointTile();
+    int joints = 0;
+    bool profile = true;
+    for (int i = 0; i < (int)ARRAY_SIZE(s_kexCobraJoint[nBullet]); i++)
+    {
+        int const nJoint = s_kexCobraJoint[nBullet][i];
+        if (nJoint < 0)
+            continue;
+        joints++;
+        if ((unsigned)nJoint >= (unsigned)kMaxSprites)
+        {
+            profile = false;
+            continue;
+        }
+        spritetype const &joint = sprite[nJoint];
+        profile &= joint.sectnum >= 0 && joint.picnum == tile
+            && joint.xrepeat == KexRedCobraJointRepeat(i)
+            && joint.yrepeat == KexRedCobraJointRepeat(i)
+            && joint.shade == -64 && joint.pal == 0 && joint.extra == -1;
+    }
+    return joints == (tile > 0 ? 5 : 0) && profile;
+}
+
+static bool KexBullet_CheckRedCobraSlither(int nBullet)
+{
+    if ((unsigned)nBullet >= (unsigned)kMaxBullets)
+        return false;
+    Bullet const &before = BulletList[nBullet];
+    if (!KexBulletRedCobra(before.nType)
+        || (unsigned)before.nSprite >= (unsigned)kMaxSprites)
+        return false;
+    short const nTarget = nBulletEnemy[nBullet];
+    for (int sub = 0; sub < 2; sub++)
+    {
+        if ((unsigned)nTarget < (unsigned)kMaxSprites
+            && (sprite[nTarget].cstat & 0x101))
+            KexTurnRedCobra(nBullet, nTarget);
+        KexRedCobraSlither(nBullet, totalmoves * 2 + sub);
+        KexRedCobraUpdateJoints(nBullet);
+    }
+    Bullet const &after = BulletList[nBullet];
+    int const speed = after.nType == 9 ? 14 * 6 : 16 * 6;
+    uint64_t const velocity = KexBulletVectorLength(after.x, after.y,
+        -(int64_t)after.z * 1024);
+    return velocity >= (uint64_t)speed * 16384
+        && velocity <= (uint64_t)(speed + 25) * 16384
+        && klabs(s_kexCobraPitch[nBullet])
+            <= KexRedCobraMaxPitch(after.nType)
+        && KexRedCobraJointProfile(nBullet);
+}
+
 static bool KexBulletImpactContractMatches()
 {
     KexImpactBlast const mummy = KexBulletImpactBlast(9);
@@ -2216,15 +2474,21 @@ void KexBullet_TestTick()
             == sprite[nTarget].z - (160 * 16 * 6) / 2;
 
     unsigned passed = 0;
+    bool redCobraSlitherExact = true;
     for (unsigned i = 0; i < ARRAY_SIZE(recipes); i++)
     {
         TestRecipe const &r = recipes[i];
         sprite[nSource].clipdist = r.nSourceClip;
         int const nBullet = BuildKexAIFireProjectile(nSource, r.nType,
             nTarget, r.nDistance, r.nHeight, r.nSpeed, r.bHomingThrust);
-        if (KexBullet_CheckAIFireProjectile(nBullet, nSource, nTarget,
-                r.nDistance, r.nHeight, r.nSpeed, r.bHomingThrust))
+        bool const launchExact = KexBullet_CheckAIFireProjectile(
+            nBullet, nSource, nTarget, r.nDistance, r.nHeight, r.nSpeed,
+            r.bHomingThrust);
+        if (launchExact)
             passed |= 1u << i;
+        if (r.nType == 9 || r.nType == 16)
+            redCobraSlitherExact &= launchExact
+                && KexBullet_CheckRedCobraSlither(nBullet);
         if (nBullet >= 0)
             DestroyBullet(nBullet);
     }
@@ -2501,9 +2765,11 @@ void KexBullet_TestTick()
         passed |= 1u << (ARRAY_SIZE(recipes) + 8);
     if (playerRaExact)
         passed |= 1u << (ARRAY_SIZE(recipes) + 9);
+    if (redCobraSlitherExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 10);
 
-    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 10)) - 1;
-    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre+player-flame+player-ra %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; player flame muzzle/lifetime/fizzle/sizzle; player Ra alternating muzzle, aim wave, owner and actor profile; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
+    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 11)) - 1;
+    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre+player-flame+player-ra+red-cobra-slither %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; player flame muzzle/lifetime/fizzle/sizzle; player Ra alternating muzzle, aim wave, owner and actor profile; Mummy/Selkis 60-Hz slither, pitch and speed; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
                passed == wanted ? "PASS" : "FAIL", passed, wanted);
     s_kexBulletTest = -2;
 }
@@ -2605,6 +2871,8 @@ void BulletLoadSave::Load()
     Read(BulletFree, sizeof(BulletFree));
     Read(BulletList, sizeof(BulletList));
     Read(nBulletEnemy, sizeof(nBulletEnemy));
+    Read(s_kexCobraPitch, sizeof(s_kexCobraPitch));
+    Read(s_kexCobraJoint, sizeof(s_kexCobraJoint));
 
     Read(&nBulletsFree, sizeof(nBulletsFree));
     Read(&lasthitz, sizeof(lasthitz));
@@ -2622,6 +2890,8 @@ void BulletLoadSave::Save()
     Write(BulletFree, sizeof(BulletFree));
     Write(BulletList, sizeof(BulletList));
     Write(nBulletEnemy, sizeof(nBulletEnemy));
+    Write(s_kexCobraPitch, sizeof(s_kexCobraPitch));
+    Write(s_kexCobraJoint, sizeof(s_kexCobraJoint));
 
     Write(&nBulletsFree, sizeof(nBulletsFree));
     Write(&lasthitz, sizeof(lasthitz));

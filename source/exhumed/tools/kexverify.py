@@ -830,7 +830,7 @@ def verify_network_snapshot_state():
     try:
         save = re.sub(r'\s+', '', open(os.path.join(source_dir, 'save.cpp')).read())
         for needle in ('staticcharconstkNetworkSnapshotSig[]="EXSN";',
-                       'staticuint16_tconstkNetworkSnapshotVersion=3;',
+                       'staticuint16_tconstkNetworkSnapshotVersion=6;',
                        'intLoadSave::IsNetworkSnapshot()',
                        'voidLoadSave::LoadNetworkSnapshot(constchar*pzFile)',
                        'voidLoadSave::SaveNetworkSnapshot(constchar*pzFile)',
@@ -4145,7 +4145,7 @@ def verify_forcefields(z, outdir):
             out.append('native contact force-field rule changed: %s' % needle)
     if 'KexWall_ForceOpen' in native:
         out.append('force fields are globally passable to a Scepter holder')
-    if 'kSaveVersion=10005' not in save:
+    if 'kSaveVersion=10008' not in save:
         out.append('force-field save-format revision is missing')
     if 'KexForce_StunMove(nSprite)' not in move:
         out.append('electrocution no longer blocks remaster player movement')
@@ -4258,7 +4258,7 @@ def verify_air_supply():
                    'x*=2', 'y*=2'):
         if needle not in player:
             out.append('Kex Dolphin swim rule changed: %s' % needle)
-    if 'kSaveVersion=10005' not in save:
+    if 'kSaveVersion=10008' not in save:
         out.append('Kex air-state save-format revision is missing')
     return out
 
@@ -6266,6 +6266,27 @@ def verify_common_enemies(z, outdir):
     try:
         converter = re.sub(r'\s+', '', open(os.path.join(
             os.path.dirname(__file__), 'kexmap.py')).read())
+        for needle in ('Fx_RedCobraJoint', 'red_cobra_joint_type',
+                       'red_cobra_joint_tile', 'redcobrajointtile'):
+            if needle not in converter:
+                out.append('converter no longer emits the red Cobra joint: %s'
+                           % needle)
+    except OSError:
+        out.append('cannot read KEX map converter for red Cobra joint assets')
+
+    try:
+        drop_rows = [line.split() for line in open(
+            os.path.join(outdir, 'kexdrop.txt'))
+            if line.strip() and not line.startswith('#')]
+        if len(drop_rows) != 1 or len(drop_rows[0]) != 8 \
+                or int(drop_rows[0][5]) <= 0:
+            out.append('kexdrop.txt lacks the generated red Cobra joint tile')
+    except (OSError, ValueError):
+        out.append('cannot read red Cobra joint tile from kexdrop.txt')
+
+    try:
+        converter = re.sub(r'\s+', '', open(os.path.join(
+            os.path.dirname(__file__), 'kexmap.py')).read())
         for needle in (
                 'KEX_EXACT_SPIDER_TILE_BASE=20700',
                 'KEX_EXACT_SCORP_TILE_BASE=20900',
@@ -7417,6 +7438,43 @@ def verify_projectiles(z, outdir):
         if numeric_wanted not in actual:
             out.append('%s lacks authored callback %s' % (rel, wanted))
 
+    # noHomingThrust suppresses the generic velocity replacement, but it does
+    # not suppress the cobra loop's own per-tick velocity action. Keep the
+    # source movement and five-joint chain explicit in the retail audit.
+    pspr_real = names.get('scripts/p_pspr.txt')
+    pspr_text = z.read(pspr_real).decode('latin-1').replace('\r', '') \
+        if pspr_real else ''
+
+    def pspr_body(name):
+        match = re.search(r'void\s+' + re.escape(name)
+                          + r'\s*\([^)]*\)\s*', pspr_text)
+        return K._brace_block(pspr_text, match.end())[0] if match else ''
+
+    cobra_script_checks = {
+        'A_CobraSlither': (
+            'floatspeed=17.5f;', 'caseAI_Selkis:speed=16.0f;',
+            'caseAI_Mummy:speed=14.0f;',
+            'actor.GetVelocity()=(kVec3(0,speed,0)*rotation);',
+            'actor.GetVelocity()-=(kVec3(4*Math::Cos(t*0.25f),0,0)*rotation);'),
+        'A_SetupCobraJoints': (
+            'actor.SetTaggedActor(j5);', 'j2.GetScale()=0.875f;',
+            'j3.GetScale()=0.75f;', 'j4.GetScale()=0.625f;',
+            'j5.GetScale()=0.5f;'),
+        'A_UpdateCobraJoints': (
+            'actor.GetOrigin().Lerp(actor.GetTarget().GetOrigin(),0.5f);',
+            'actor.LinkSector(actor.GetTarget().GetSector());'),
+    }
+    for function, needles in cobra_script_checks.items():
+        body = pspr_body(function)
+        compact = re.sub(r'\s+', '', body)
+        if not body:
+            out.append('retail cobra script is missing: %s' % function)
+            continue
+        for needle in needles:
+            if needle not in compact:
+                out.append('%s no longer contains authored logic: %s'
+                           % (function, needle))
+
     # The Mantis has two genuinely different retail fire paths. Audit the
     # shipped scripts and animation timing, rather than accepting the old
     # native single-volley approximation merely because it launches type 10.
@@ -7927,6 +7985,12 @@ def verify_projectiles(z, outdir):
             'kKexCobraSpeed=8*6', 's.ticks=-1;',
             'KexVaseCobra_Move', 'KexCobraFaceTarget',
             'kKexCobraTurnStep=25', 'if(s.ticks>0&&--s.ticks<=0)',
+            'int16_tnJoint[5];', 'uint8_tcobra,trackTarget;',
+            'staticvoidKexCobraSlither(', 'kKexCobraForward=35*6/2',
+            'kKexCobraSide=4*6', 'kKexCobraPhaseQ16=5340354',
+            'for(intsub=0;sub<2;sub++)', 'KexCobraUpdateJoints(s,nSprite);',
+            'staticintconstrepeat[]={32,28,24,20,16};',
+            's.trackTarget=trackTarget!=0;', 'sprite[s.nSprite].ang=dir;',
             'turns[8]={-81,81,-27,27,27,-27,81,-81};',
             'side=(nGameTicks&1)?-32:32;',
             'launch.z=sprite[nSprite].z-32*16*6;',
@@ -7935,6 +7999,11 @@ def verify_projectiles(z, outdir):
             'KexBreak_IsProp(nHit)',
             'KexBreakLoadSaveConstruct',
             'VB_KEX_RA_SAVE_TEST', 's_vaseShot[raShot].ticks==raTicks',
+            'VB_KEX_COBRA_SAVE_TEST', 'cobra.pitch==cobraPitch',
+            'VB_KEX_RED_COBRA_SAVE_TEST',
+            'KexBullet_GetRedCobraPitch(redBullet,&loadedRedPitch)',
+            'KexBullet_GetRedCobraJoint(redBullet,i)',
+            'KexProjectile_RedCobraJointTile',
             'z-offset*16*6',
             'KexProjectile_StartCobraBurst(',
             'KexProjectile_SpawnFireballImpact(',
@@ -8023,6 +8092,25 @@ def verify_projectiles(z, outdir):
             'unsignedconstclipMask=CLIPMASK1;',
             'BuildKexAIFireProjectile',
             'KexBullet_CheckAIFireProjectile',
+            'KexBullet_GetRedCobraPitch',
+            'KexBullet_GetRedCobraJoint',
+            'shorts_kexCobraPitch[kMaxBullets];',
+            'shorts_kexCobraJoint[kMaxBullets][5];',
+            'staticvoidKexTurnRedCobra(', 'staticintKexMoveRedCobra(',
+            'staticvoidKexRedCobraCreateJoints(',
+            'staticvoidKexRedCobraUpdateJoints(',
+            'staticintKexRedCobraJointRepeat(',
+            'staticintconstrepeat[]={40,35,30,25,20};',
+            'kCobraSide=4*6', 'kCobraPhaseQ16=5340354',
+            'for(intsub=0;sub<2;sub++)',
+            'returnnType==9?140:326;',
+            'speed=pBullet->nType==9?14*6:16*6;',
+            'Read(s_kexCobraPitch,sizeof(s_kexCobraPitch));',
+            'Write(s_kexCobraPitch,sizeof(s_kexCobraPitch));',
+            'Read(s_kexCobraJoint,sizeof(s_kexCobraJoint));',
+            'Write(s_kexCobraJoint,sizeof(s_kexCobraJoint));',
+            'KexBullet_CheckRedCobraSlither',
+            'player-flame+player-ra+red-cobra-slither',
             'kKexFlameType=19',
             'BuildKexPlayerFlameProjectile',
             'KexBullet_CheckPlayerFlame',
