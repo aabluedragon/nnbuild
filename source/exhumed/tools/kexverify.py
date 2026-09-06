@@ -2442,6 +2442,29 @@ def verify_decor(z, outdir):
     if expected == 0:
         out.append('retail actor census found no randomized animated light sources')
 
+    # The remaster chooses randomizeFrames once at actor construction.  It is
+    # saved state, not a hash made from where Build happened to place a sprite.
+    # Keep this native source audit beside the authored-table checks above so a
+    # future rendering cleanup cannot quietly turn it back into a lockstep or
+    # placement-hash animation.
+    try:
+        native = open(os.path.join(os.path.dirname(__file__), '..', 'src',
+                                   'kexbreak.cpp')).read()
+    except OSError:
+        out.append('native KEX decor implementation is missing')
+    else:
+        compact = re.sub(r'\s+', '', native)
+        needed = (
+            'kKexDecorPhaseMarker=-32768',
+            'sprite[i].xvel=kKexDecorPhaseMarker+KexRandomMax(a.count)',
+            'KexDecor_StoredPhase(i,a)',
+            'KexDecor_StoredPhase(nSprite,a)',
+            'KexDecor_FallbackPhase(nSprite,a)',
+        )
+        for text in needed:
+            if text not in compact:
+                out.append('native KEX decor phase persistence is incomplete: %s' % text)
+
     # Every generated decor row must retain all authored poses, including the
     # 12-frame pyramid, 16-frame ankhs/helicopter and the slower frame-delay
     # loops. The old non-light eight-frame/15-Hz fallback shortened all of
@@ -2844,10 +2867,25 @@ def verify_breakables(z, outdir, include_testmaps=False):
     vase_fn = re.sub(r'\s+', '', misc_text[start:end if end >= 0 else None]) \
         if start >= 0 else ''
     for token in ('switch(r)', 'case0:',
+                  'intr=kexSlaveRandomizer::Max(8)',
                   'actor.GetOrigin().z+actor.GetHeight()',
+                  'kexSlaveRandomizer::UInt8()&31',
+                  'kexSlaveRandomizer::UInt8()&7',
+                  'kexSlaveRandomizer::UInt8()<128',
                   'ObjectFactory().SpawnActor("AI_Scorp",x,y,z,0,actor.GetSector())'):
         if token not in vase_fn:
             out.append('retail A_RandomVaseItem case 0 changed: %s' % token)
+
+    start = misc_text.find('void A_SpawnBouncyBalls')
+    end = misc_text.find('\nvoid ', start + 1) if start >= 0 else -1
+    balls_fn = re.sub(r'\s+', '', misc_text[start:end if end >= 0 else None]) \
+        if start >= 0 else ''
+    for token in ('for(inti=0;i<20;++i)',
+                  'kexSlaveRandomizer::RFloat()*3.14f',
+                  'kexSlaveRandomizer::RFloat()*16.0f',
+                  'dir.z=kexSlaveRandomizer::FloatVal(24.0f)'):
+        if token not in balls_fn:
+            out.append('retail A_SpawnBouncyBalls contract changed: %s' % token)
 
     srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
@@ -2864,7 +2902,16 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'KexVasePuff_Spawn(', 's_vasePuffsSpawned',
         'Kexbreakpufftest:', 'Kexbreaksoundplaybacktest:',
         's_selftest>0&&--s_selftest==0', 's_breakSelftestActive=1;',
-        'BuildSpider(-1,x,y,z,nSector,RandomSize(11),1)',
+        'kKexVaseFactoryAngle=1536',
+        'BuildSpider(-1,x,y,z,nSector,kKexVaseFactoryAngle,1)',
+        'BuildWasp(-1,x,y,z,nSector,kKexVaseFactoryAngle,0)',
+        'intconstr=s_scorpTest?0:KexRandomMax(8);',
+        'intconstmapRoll=(uint8_t)RandomByte()&31;',
+        'KexVaseCobra_Trio(nSector,x,y,z,sprite[nSprite].ang);',
+        '(sourceAngle+(KexRandomWord()&kAngleMask))&kAngleMask',
+        'staticintKexRaSignedFloatVal(intmaximum)',
+        '((int64_t)KexRandomWord()*maximum*2)/65535',
+        's.vz=-(KexRaSignedFloatVal(24)*16*6)/30;',
         'VB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
         'KexBreak_DropItem(intnSprite,KexBreakTypeconst&t)',
         'sprite[nSprite].z-t.spawnheight*16*6',
@@ -2875,6 +2922,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'LoadSave::SaveGame(path);', 'LoadSave::LoadGame(path);',
         'Kextossoverflowsavetest:PASS(',
         's_vaseScorpsAtHeight',
+        's_vaseScorpsAtAngle',
         'Kexbreakscorpiontest:',
         'staticvoidKexBreak_ArmMine(intnProp)',
         'staticintKexBreak_MinePicnum(KexBreakTypeconst&t,intnFuse)',
@@ -3110,9 +3158,9 @@ def verify_drop_effects(z, outdir):
         'VB_KEXDROP_ORB_TEST',
         'Kexenemy-droporbtest:%s(%d/%dexact20+23-tickdelayedpickups)',
         'if(exact==-1)KexDrop_Spawn(',
-        'intconstr=RandomSize(3)', 'if(r>2)',
+        'intconstr=(uint8_t)RandomByte()&7;', 'if(r>2)',
         'PlayerList[nPlayer].nHealth<kMaxHealth/4',
-        '(RandomSize(8)&3)!=0', 'RandomSize(8)<128',
+        '((uint8_t)RandomByte()&3)!=0', '(uint8_t)RandomByte()<128',
         'sprite[nSprite].z-actorHeight*16*6')
     for needle in native_needles:
         if needle not in native:
@@ -5149,18 +5197,25 @@ def verify_kex_random_bounds():
     try:
         native = {}
         for filename in ('random.cpp', 'random.h', 'anims.cpp', 'mummy.cpp',
-                         'roach.cpp', 'kexbreak.cpp'):
+                         'roach.cpp', 'kexbreak.cpp', 'queen.cpp', 'scorp.cpp',
+                         'set.cpp', 'lion.cpp', 'lavadude.cpp'):
             native[filename] = re.sub(
                 r'\s+', '', open(os.path.join(src, filename)).read())
     except OSError as exc:
         return ['cannot read KEX bounded-random bridge: %s' % exc]
 
-    for needle in ('intKexRandomMax(intmax)',
+    for needle in ('uint16_tKexRandomWord()', 'uint32_tKexRandomLong()',
+                   'return(uint16_t)RandomSize(16);',
+                   'uint32_tconsthigh=KexRandomWord();',
+                   'return(high<<16)|KexRandomWord();',
+                   'intKexRandomMax(intmax)',
                    'if(max<=1)return0;',
-                   '((uint64_t)RandomWord()*(uint32_t)max)>>16'):
+                   '((uint64_t)KexRandomWord()*(uint32_t)max)>>16'):
         if needle not in native['random.cpp']:
             out.append('bounded KEX random helper changed: %s' % needle)
-    if 'intKexRandomMax(intmax);' not in native['random.h']:
+    if ('uint16_tKexRandomWord();' not in native['random.h']
+            or 'uint32_tKexRandomLong();' not in native['random.h']
+            or 'intKexRandomMax(intmax);' not in native['random.h']):
         out.append('bounded KEX random declaration changed')
 
     expected = {
@@ -5168,7 +5223,15 @@ def verify_kex_random_bounds():
                       'KexRandomMax(kKexBirdFeatherLifetime)'),
         'mummy.cpp': ('KexRandomMax(ARRAY_SIZE(deathSounds))',),
         'roach.cpp': ('KexRandomMax(ARRAY_SIZE(chatter))',),
-        'kexbreak.cpp': ('s_kexPowerTimer=10+KexRandomMax(10)',),
+        'kexbreak.cpp': ('s_kexPowerTimer=10+KexRandomMax(10)',
+                         'KexRandomWord()&kAngleMask'),
+        'queen.cpp': ('KexRandomLong()&(uint32_t)nMask', 'KexRandomWord()*nScale',
+                      'KexRandomWord()*16'),
+        'scorp.cpp': ('KexRandomLong()&30', 'KexRandomWord()*scale'),
+        'set.cpp': ('KexRandomLong()&30',),
+        'lion.cpp': ('KexRandomLong()&(uint32_t)nMask',),
+        'lavadude.cpp': ('KexRandomWord()&0x3ff',
+                         'KexRandomWord()&0x3FF'),
     }
     for filename, needles in expected.items():
         for needle in needles:
@@ -5180,7 +5243,18 @@ def verify_kex_random_bounds():
                       'RandomSize(4)%kKexBirdFeatherLifetime'),
         'mummy.cpp': ('RandomLong()%ARRAY_SIZE(deathSounds)',),
         'roach.cpp': ('RandomSize(2)%ARRAY_SIZE(chatter)',),
-        'kexbreak.cpp': ('RandomSize(8)%10',),
+        'kexbreak.cpp': ('RandomSize(8)%10',
+                         '(sourceAngle+(RandomWord()&kAngleMask))'),
+        'queen.cpp': ('return(RandomLong()&nMask)',
+                      '((int16_t)RandomWord()*nScale)',
+                      '((uint32_t)RandomWord()*16)'),
+        'scorp.cpp': ('if((RandomLong()&30)!=',
+                      '((int16_t)RandomWord()*scale)',
+                      '((uint32_t)RandomWord()*scale)'),
+        'set.cpp': ('if((RandomLong()&30)!=',),
+        'lion.cpp': ('return(RandomLong()&nMask)',),
+        'lavadude.cpp': ('((RandomWord()&0x3ff)',
+                         '((RandomWord()&0x3FF)'),
     }
     for filename, needles in stale.items():
         for needle in needles:
@@ -6179,7 +6253,7 @@ def verify_common_enemies(z, outdir):
             'staticboolKexBastetExactSequence()',
             'SeqSize[nBase+8]==41', 'SeqSize[nBase+9]==23',
             'SeqSize[nBase+10]==11', 'SeqSize[nBase+44]==17',
-            '(RandomLong()&nMask)==(totalmoves&nMask)',
+            '(int)(KexRandomLong()&(uint32_t)nMask)==(totalmoves&nMask)',
             'intconstnWorldSpeed=24*6;',
             'sprite[nSprite].cstat&=~0x101;',
             'nRenderedFrame==37', 'sprite[nSprite].cstat|=0x8000;',
@@ -7244,7 +7318,7 @@ def verify_selkis(z, outdir):
     native_needles = (
         'KexSelkisSequenceExact()', 'KexSelkisActionSeq',
         'SeqSize[base+27]==9', 'SeqSize[base+48]==3',
-        '(RandomLong()&30)!=(totalmoves&30)',
+        '(KexRandomLong()&30)!=(totalmoves&30)',
         'KexHealthPoints(scorpion[nScorp].nHealth)',
         'health<1000', 'health<2000', 'health<3000',
         'sprite[nTarget].statnum==100', 'KexDifficulty_PainRoll(16)',

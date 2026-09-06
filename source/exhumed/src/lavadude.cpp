@@ -479,7 +479,7 @@ static bool KexMantisThink(short nLava, short nSprite, short nTarget)
 static void KexMantisTurnAway(short nSprite)
 {
     sprite[nSprite].ang = (sprite[nSprite].ang
-        + ((RandomWord() & 0x3ff) + 1024)) & kAngleMask;
+        + ((KexRandomWord() & 0x3ff) + 1024)) & kAngleMask;
     KexMantisSetVelocity(nSprite);
 }
 
@@ -1530,7 +1530,7 @@ void FuncLava(int a, int nDamage, int nRun)
                         sprite[nSprite].y = y;
                         sprite[nSprite].z = z;
 
-                        sprite[nSprite].ang = (sprite[nSprite].ang + ((RandomWord() & 0x3FF) + 1024)) & kAngleMask;
+                        sprite[nSprite].ang = (sprite[nSprite].ang + ((KexRandomWord() & 0x3FF) + 1024)) & kAngleMask;
                         KexMantisSetVelocity(nSprite);
                         break;
                     }
@@ -1541,7 +1541,7 @@ void FuncLava(int a, int nDamage, int nRun)
 
                     if ((nVal & 0xC000) == 0x8000)
                     {
-                        sprite[nSprite].ang = (sprite[nSprite].ang + ((RandomWord() & 0x3FF) + 1024)) & kAngleMask;
+                        sprite[nSprite].ang = (sprite[nSprite].ang + ((KexRandomWord() & 0x3FF) + 1024)) & kAngleMask;
                         KexMantisSetVelocity(nSprite);
                         break;
                     }

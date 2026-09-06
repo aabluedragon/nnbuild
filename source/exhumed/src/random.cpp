@@ -83,6 +83,21 @@ int RandomSize(int nSize)
     return randSize;
 }
 
+uint16_t KexRandomWord()
+{
+    // RandomSize builds the first bit into bit 15 and never promotes its
+    // signed char return value.  The classic RandomWord() is intentionally
+    // left alone for compatibility, while KEX's UInt16() gets all 65536
+    // source values on platforms where char is signed.
+    return (uint16_t)RandomSize(16);
+}
+
+uint32_t KexRandomLong()
+{
+    uint32_t const high = KexRandomWord();
+    return (high << 16) | KexRandomWord();
+}
+
 int KexRandomMax(int max)
 {
     if (max <= 1)
@@ -91,7 +106,7 @@ int KexRandomMax(int max)
     // KEX's Max(n) consumes a full random value for an integer in [0,n).
     // Scaling a 16-bit word avoids the severe skew from reducing a shorter
     // bit range modulo an arbitrary bound (notably 3, 10, 15 and 20000).
-    return (int)(((uint64_t)RandomWord() * (uint32_t)max) >> 16);
+    return (int)(((uint64_t)KexRandomWord() * (uint32_t)max) >> 16);
 }
 
 class RandomLoadSave : public LoadSave

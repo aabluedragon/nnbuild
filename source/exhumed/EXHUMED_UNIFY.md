@@ -1043,7 +1043,10 @@ pool. The Scepter-gated vase branch now fires twenty short-lived, bouncing
 Ra-fire orbs using the remaster's generated projectile art; their 20 damage
 and wall/floor collision are handled by a Kex-specific runlist path, and
 their expiry now emits the remaster's fireball puff and `pbexplode.wav`. The
-Shawl branch fires three homing green cobras; their wall/floor impact runs
+swarm keeps `A_SpawnBouncyBalls`' independent positive `RFloat` yaw/strength
+rolls and its separate signed `FloatVal(24)` vertical roll, so the fireballs
+fan both above and below their source rather than all receiving an upward
+launch. The Shawl branch fires three homing green cobras; their wall/floor impact runs
 the remaster's `A_CStaffExplode` plus `A_RadialBlast(512, 100)` recipe through
 the same path. The Pharaoh-only difficulty branch remains outside the classic
 difficulty model, and the dust puff plus each prop's authored break callback
@@ -1149,11 +1152,13 @@ The flame itself is an authored loop as well. Fire pots carry 12 frames and
 wall torches 16; their `randomizeFrames` flag chooses a starting phase, it does
 not freeze the actor. The converter used to mistake that flag for a hold-frame
 instruction and discard every frame after frame zero. It now preserves the
-complete light-source loop in `kexdecor.txt`, and `KexDecor_ViewTile()` chooses
-the view tile from `totalclock` with a deterministic per-instance phase so a
-row of torches does not pulse in lockstep. The separate `noAdvanceFrames` flag
-remains the only instruction that holds an actor on one frame. `kexverify.py`
-checks every randomized animated light against the authored KPF frame count,
+complete light-source loop in `kexdecor.txt`, and `KexDecor_Init()` consumes
+the remaster-compatible bounded random selection once per randomized actor.
+The selected phase is retained in the static sprite's normal saved state, so a
+row of torches does not pulse in lockstep and save/reload does not select a new
+frame. The separate `noAdvanceFrames` flag remains the only instruction that
+holds an actor on one frame. `kexverify.py` checks every randomized animated
+light against the authored KPF frame count,
 checks that each loop contains visibly distinct PNGs, and rejects accidental
 global `animtilerange` animation; offscreen captures of CAVERN's opening fire
 also show its flame silhouette changing between frames.
@@ -1281,6 +1286,12 @@ Enemy death supplies now retain the whole `A_RandomItem` actor path rather
 than creating a pickup immediately on the sector floor. The death controller
 captures the host origin plus its authored actor height before a callback can
 delete the host, then rolls the retail ammo/health/low-health mercy branches.
+Those branches consume the remaster script's `UInt8()` selections directly
+(rather than short bit draws), so both the 0--7 result and the following
+random action match the authored call sequence. The same bridge distinguishes
+the vase script's `Max(8)`, `Bit()` and `UInt8()` calls; its factory-spawned
+Scorp and Wasp preserve the script's zero KEX facing, and vase cobras add their
+random `UInt16()` turn to the broken vase's actual facing.
 An accepted roll creates `Fx_AmmoSpawn` or `Fx_HealthSpawn`: a translucent,
 fullbright blue or red orb assembly at scale 1 or 2. Its generated SEQ holds
 the source's initial blank for 20 Exhumed ticks, displays the eight authored

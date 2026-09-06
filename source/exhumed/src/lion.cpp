@@ -104,7 +104,7 @@ static bool KexBastetRandomDecision(int nMask)
 {
     // scripts/p_enemy.txt: !RandomDecision(actor, mask) means the random
     // masked phase equals this simulation tick's masked phase.
-    return (RandomLong() & nMask) == (totalmoves & nMask);
+    return (int)(KexRandomLong() & (uint32_t)nMask) == (totalmoves & nMask);
 }
 
 static void KexBastetPlaySound(short nSprite, char const *name)

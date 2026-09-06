@@ -167,7 +167,7 @@ static bool KexSetThink(short nSet, short nSprite)
 
     // scripts/p_enemy.txt RandomDecision(ai, 30): only one of the sixteen
     // masked RNG phases matching this game tick evaluates the decisions.
-    if ((RandomLong() & 30) != (totalmoves & 30))
+    if ((KexRandomLong() & 30) != (totalmoves & 30))
         return false;
 
     if ((uint8_t)RandomByte() <= 16)

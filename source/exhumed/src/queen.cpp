@@ -273,12 +273,12 @@ static short KexQueenFindPlayer(short nSprite)
 
 static bool KexQueenRandomDecision(int nMask)
 {
-    return (RandomLong() & nMask) == (totalmoves & nMask);
+    return (int)(KexRandomLong() & (uint32_t)nMask) == (totalmoves & nMask);
 }
 
 static int KexQueenSignedRandom(int nScale)
 {
-    return ((int16_t)RandomWord() * nScale) / 32768;
+    return ((int16_t)KexRandomWord() * nScale) / 32768;
 }
 
 static void KexQueenTurnToward(short nSprite, short nTarget, int nMaxTurn)
@@ -1469,7 +1469,7 @@ static void KexQueenSnakeHop(short nSprite, short nTarget)
     if (((uint8_t)RandomByte() & 31) != 0)
         return;
 
-    int hop = 16 + ((uint32_t)RandomWord() * 16) / 65535;
+    int hop = 16 + ((uint32_t)KexRandomWord() * 16) / 65535;
     int64_t const halfDistance = (int64_t)512 * 6;
     if (KexQueenDistanceSq(nSprite, nTarget)
         <= halfDistance * halfDistance)

@@ -170,7 +170,7 @@ static bool KexSelkisThink(short nScorp, short nSprite)
 
     // scripts/p_enemy.txt RandomDecision(ai, 30): only the matching one of
     // sixteen masked phases proceeds to the two independent byte rolls.
-    if ((RandomLong() & 30) != (totalmoves & 30))
+    if ((KexRandomLong() & 30) != (totalmoves & 30))
         return false;
 
     if (((uint8_t)RandomByte() & 7) == 4)
@@ -224,12 +224,12 @@ static bool KexSelkisFacesOnFrame(int nAction, int nFrame)
 
 static int KexSelkisSignedRandom(int scale)
 {
-    return ((int16_t)RandomWord() * scale) / 32768;
+    return ((int16_t)KexRandomWord() * scale) / 32768;
 }
 
 static int KexSelkisUnsignedRandom(int scale)
 {
-    return ((uint32_t)RandomWord() * scale) / 65535;
+    return ((uint32_t)KexRandomWord() * scale) / 65535;
 }
 
 static void KexSelkisSpawnScorpion(short nScorp, short nSprite)

@@ -31,6 +31,11 @@ char RandomByte();
 uint16_t RandomWord();
 int RandomLong();
 int RandomSize(int nSize);
+// KEX reads words/longs as unsigned byte streams.  Keep this separate from
+// the historical classic helpers, whose char-promotion behavior is part of
+// their established compatibility surface.
+uint16_t KexRandomWord();
+uint32_t KexRandomLong();
 // kexSlaveRandomizer::Max(n): an unbiased full-word selection in [0,n).
 // This is for remaster behavior only; classic code keeps its historical RNG.
 int KexRandomMax(int max);

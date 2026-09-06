@@ -105,6 +105,7 @@ static int          s_vasePuffsSpawned;
 static int          s_scorpTest;  // VB_KEXBREAK_SCORPTEST: force every vase's case-0 AI_Scorp
 static int          s_vaseScorpsSpawned;
 static int          s_vaseScorpsAtHeight;
+static int          s_vaseScorpsAtAngle;
 static int          s_mineTest;    // VB_KEX_MINE_TEST: exact authored countdown poses
 static int          s_mineTestProp;
 static int          s_mineTestSteps;
@@ -258,6 +259,31 @@ struct KexDecorAnim { int16_t tile, count, ticks, randomphase; };
 static KexDecorAnim s_decorAnim[kMaxKexDecorAnims];
 static int s_decorAnims = -1;
 
+// KEX randomizeFrames chooses an initial actor frame once, rather than using
+// an instance's position as a pseudo-random input every time it is drawn.
+// Static scenery has no use for xvel, and the full sprite is already part of
+// the normal save stream, so reserve this otherwise-unused negative range for
+// that source frame.  The old deterministic hash below remains a safe read
+// fallback for saves made before this marker existed.
+static constexpr int16_t kKexDecorPhaseMarker = -32768;
+
+static int KexDecor_StoredPhase(int nSprite, KexDecorAnim const &a)
+{
+    int const phase = (int)sprite[nSprite].xvel - (int)kKexDecorPhaseMarker;
+    return (unsigned)phase < (unsigned)a.count ? phase : -1;
+}
+
+static int KexDecor_FallbackPhase(int nSprite, KexDecorAnim const &a)
+{
+    // Compatibility for an older save whose static scenery does not carry a
+    // source-selected phase in xvel yet.
+    uint32_t seed = (uint32_t)(nSprite + 1) * 0x9e3779b9u;
+    seed ^= (uint32_t)sprite[nSprite].x * 0x85ebca6bu;
+    seed ^= (uint32_t)sprite[nSprite].y * 0xc2b2ae35u;
+    seed ^= seed >> 16;
+    return seed % (uint32_t)a.count;
+}
+
 static bool KexDecor_ParseLine(char *line, int nRec)
 {
     int tile, count, ticks, randomphase;
@@ -277,14 +303,34 @@ void KexDecor_Init(void)
     if (!g_kexMode || s_decorAnims <= 0)
         return;
 
-    int instances = 0;
+    int instances = 0, randomized = 0, invalid = 0;
+    bool const phaseTest = Bgetenv("VB_KEXDECOR_PHASE_TEST") != NULL;
     for (int i = 0; i < kMaxSprites; i++)
-        if (sprite[i].statnum < kMaxStatus && sprite[i].sectnum >= 0
-            && KexTable_FindTile(s_decorAnim, s_decorAnims, sprite[i].picnum) >= 0)
-            instances++;
+    {
+        if (sprite[i].statnum >= kMaxStatus || sprite[i].sectnum < 0)
+            continue;
+        int const nAnim = KexTable_FindTile(s_decorAnim, s_decorAnims,
+                                            sprite[i].picnum);
+        if (nAnim < 0)
+            continue;
+        instances++;
+        KexDecorAnim const &a = s_decorAnim[nAnim];
+        if (!a.randomphase)
+            continue;
+
+        randomized++;
+        if (KexDecor_StoredPhase(i, a) < 0)
+            sprite[i].xvel = kKexDecorPhaseMarker + KexRandomMax(a.count);
+        if (KexDecor_StoredPhase(i, a) < 0)
+            invalid++;
+    }
     if (instances)
         OSD_Printf("Kex animated scenery: %d instances from %d ranges\n",
                    instances, s_decorAnims);
+    if (phaseTest)
+        OSD_Printf("Kex decor phase test: %s (%d randomized instances, %d invalid)\n",
+                   randomized > 0 && invalid == 0 ? "PASS" : "FAIL",
+                   randomized, invalid);
 }
 
 int KexDecor_ViewTile(int nSprite)
@@ -303,18 +349,14 @@ int KexDecor_ViewTile(int nSprite)
         return -1;
     KexDecorAnim const &a = s_decorAnim[nAnim];
 
-    uint32_t phase = 0;
+    int phase = 0;
     if (a.randomphase)
     {
-        // Position and source sprite identity make this deterministic across
-        // save/load while decor placed beside itself still gets another phase.
-        uint32_t seed = (uint32_t)(nSprite + 1) * 0x9e3779b9u;
-        seed ^= (uint32_t)sprite[nSprite].x * 0x85ebca6bu;
-        seed ^= (uint32_t)sprite[nSprite].y * 0xc2b2ae35u;
-        seed ^= seed >> 16;
-        phase = seed % (uint32_t)a.count;
+        phase = KexDecor_StoredPhase(nSprite, a);
+        if (phase < 0)
+            phase = KexDecor_FallbackPhase(nSprite, a);
     }
-    return a.tile + (((uint32_t)totalclock / (uint32_t)a.ticks + phase)
+    return a.tile + (((uint32_t)totalclock / (uint32_t)a.ticks + (uint32_t)phase)
                      % (uint32_t)a.count);
 }
 
@@ -1003,6 +1045,7 @@ void KexBreak_Init(void)
     s_scorpTest = s_selftest && Bgetenv("VB_KEXBREAK_SCORPTEST") != NULL;
     s_vaseScorpsSpawned = 0;
     s_vaseScorpsAtHeight = 0;
+    s_vaseScorpsAtAngle = 0;
     s_mineTest = Bgetenv("VB_KEX_MINE_TEST") != NULL;
     s_mineTestProp = -1;
     s_mineTestSteps = 0;
@@ -1714,7 +1757,16 @@ static int KexVaseShot_Create(int nSector, int tile, int x, int y, int z,
     return nShot;
 }
 
-static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
+static int KexRaSignedFloatVal(int maximum)
+{
+    // FloatVal(n) is the signed sibling of the source's positive RFloat()
+    // rolls. Consume its own full KEX word so the twenty-ball spread has the
+    // authored -n..+n vertical range instead of biasing every fireball up.
+    return (int)(((int64_t)KexRandomWord() * maximum * 2) / 65535) - maximum;
+}
+
+static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra,
+                              int sourceAngle)
 {
     int const tile = cobra ? s_kexCobraTile : s_kexRaTile;
     int const nSource = cobra ? PlayerList[nLocalPlayer].nSprite : -1;
@@ -1726,7 +1778,10 @@ static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
 
     if (cobra)
     {
-        int const dir = RandomWord() & kAngleMask;
+        // A_SpawnCobraFromVase adds UInt16() & 0xfff to the vase's authored
+        // facing.  The source actor owns that facing even though Player is
+        // recorded as the projectile's source owner.
+        int const dir = (sourceAngle + (KexRandomWord() & kAngleMask)) & kAngleMask;
         s.vx = Cos(dir) * 96;
         s.vy = Sin(dir) * 96;
         s.vz = 0;
@@ -1738,7 +1793,7 @@ static void KexVaseShot_Spawn(int nSector, int x, int y, int z, int cobra)
         int const amount = RandomSize(15) * 16 / 32768;
         s.vx = Sin(angle) * amount * 6;
         s.vy = Cos(angle) * amount * 6;
-        s.vz = -(24 + RandomSize(8) * 24 / 255) * 16 * 6 / 30;
+        s.vz = -(KexRaSignedFloatVal(24) * 16 * 6) / 30;
     }
 }
 
@@ -1909,7 +1964,7 @@ int KexCobraStaff_PlayerTest(short nSprite, int nPitch)
 static void KexVaseShot_Swarm(int nSector, int x, int y, int z)
 {
     for (int i = 0; i < 20; i++)
-        KexVaseShot_Spawn(nSector, x, y, z, 0);
+        KexVaseShot_Spawn(nSector, x, y, z, 0, 0);
 }
 
 void KexBouncyBalls_Spawn(int nSector, int x, int y, int z, int offset)
@@ -1918,15 +1973,15 @@ void KexBouncyBalls_Spawn(int nSector, int x, int y, int z, int offset)
     // projectile implementation used by the Scepter vase branch so Mantis'
     // death burst gets the remaster's bounce, expiry, damage and art.
     for (int i = 0; i < 20; i++)
-        KexVaseShot_Spawn(nSector, x, y, z - offset * 16 * 6, 0);
+        KexVaseShot_Spawn(nSector, x, y, z - offset * 16 * 6, 0, 0);
     if (s_breakSelftestActive)
         OSD_Printf("Kex Mantis: twenty Ra-fire death orbs spawned\n");
 }
 
-static void KexVaseCobra_Trio(int nSector, int x, int y, int z)
+static void KexVaseCobra_Trio(int nSector, int x, int y, int z, int sourceAngle)
 {
     for (int i = 0; i < 3; i++)
-        KexVaseShot_Spawn(nSector, x, y, z, 1);
+        KexVaseShot_Spawn(nSector, x, y, z, 1, sourceAngle);
 }
 
 // Exact kexSlaveActor::GetHeight values for every native controller which can
@@ -2002,13 +2057,14 @@ void KexDrop_RandomItemAt(int nSector, int x, int y, int z, int nKiller)
     if (!g_kexMode || (unsigned)nSector >= (unsigned)numsectors)
         return;
 
-    int const r = RandomSize(3);
+    int const r = (uint8_t)RandomByte() & 7;
     if (r > 2)
     {
         if (nKiller >= 0 && sprite[nKiller].statnum == 100)
         {
             int const nPlayer = GetPlayerFromSprite(nKiller);
-            if (PlayerList[nPlayer].nHealth < kMaxHealth / 4 && (RandomSize(8) & 3) != 0)
+            if (PlayerList[nPlayer].nHealth < kMaxHealth / 4
+                && ((uint8_t)RandomByte() & 3) != 0)
                 KexDrop_CreateOrb(nSector, x, y, z, kKexLotagHealth, 20,
                                   s_kexHealthTile > 0 ? s_kexHealthTile : 718);
         }
@@ -2017,13 +2073,13 @@ void KexDrop_RandomItemAt(int nSector, int x, int y, int z, int nKiller)
 
     if ((r & 1) == 0)
     {
-        int const big = RandomSize(8) < 128;
+        int const big = (uint8_t)RandomByte() < 128;
         KexDrop_CreateOrb(nSector, x, y, z, kKexLotagAmmo, big ? 2 : 1,
                           s_kexAmmoTile > 0 ? s_kexAmmoTile : 877);
     }
     else
     {
-        int const big = RandomSize(8) < 128;
+        int const big = (uint8_t)RandomByte() < 128;
         KexDrop_CreateOrb(nSector, x, y, z, kKexLotagHealth, big ? 50 : 20,
                           s_kexHealthTile > 0 ? s_kexHealthTile : 718);
     }
@@ -2055,6 +2111,9 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     int const mapTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_MAPTEST");
     int const scepterTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTERTEST");
     int const shawlTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SHAWLTEST");
+    // ObjectFactory receives angle 0 for the case-0 Scorp and case-1 Wasp.
+    // KEX yaw 0 is north (+Y before the map's Y flip), which is Build 1536.
+    constexpr int kKexVaseFactoryAngle = 1536;
 
     // Pharaoh destroys half of all vases without reaching the drop table.
     // This draw precedes Max(8) in the shipped script, which matters to the
@@ -2062,7 +2121,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     if (!s_scorpTest && pharaoh && RandomBit() == 1)
         return;
 
-    int const r = s_scorpTest ? 0 : RandomSize(3); // kexSlaveRandomizer::Max(8)
+    int const r = s_scorpTest ? 0 : KexRandomMax(8);
 
     // A_RandomVaseItem only considers its rare drops on one half of the vase
     // rolls. The map then has its own 1-in-32 gate; omitting that second gate
@@ -2071,7 +2130,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     // inventory bit; it is cleared by KexInv_LevelStart().
     if (!s_scorpTest && RandomBit() == 0)
     {
-        int const mapRoll = RandomSize(5);       // kexSlaveRandomizer::UInt8() & 31
+        int const mapRoll = (uint8_t)RandomByte() & 31;
         if (!powerTest && (mapTest || mapRoll == 0)
             && !KexInvList[nLocalPlayer].map)
         {
@@ -2086,7 +2145,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         {
             // Pharaoh has no shared cooldown and deliberately does not return:
             // this rare power orb can accompany the ordinary switch drop.
-            if (powerTest || RandomSize(5) == 0)
+            if (powerTest || (((uint8_t)RandomByte() & 31) == 0))
             {
                 if (s_kexPowerTile > 0)
                     KexDrop_Spawn(nSector, x, y, z, 10, KEX_POWER_DROP_HITAG, s_kexPowerTile);
@@ -2098,7 +2157,8 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         {
             // Normal and Hard share the script-global cooldown: after the
             // initial five eligible rolls, a 1/32 roll starts 10..19 more.
-            if (powerTest || (s_kexPowerTimer <= 0 && RandomSize(5) == 0))
+            if (powerTest || (s_kexPowerTimer <= 0
+                              && (((uint8_t)RandomByte() & 31) == 0)))
             {
                 if (s_kexPowerTile > 0)
                     KexDrop_Spawn(nSector, x, y, z, 10, KEX_POWER_DROP_HITAG, s_kexPowerTile);
@@ -2116,7 +2176,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     // Scepter holder gets the Ra-fire swarm for both r==1 and r==2.
     if (r == 1 && KexInv_HasArtifact(nLocalPlayer, kKexArtiSandals))
     {
-        BuildWasp(-1, x, y, z, nSector, RandomSize(11), 0);
+        BuildWasp(-1, x, y, z, nSector, kKexVaseFactoryAngle, 0);
         return;
     }
 
@@ -2133,7 +2193,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     if ((r == 6 || shawlTest) && (KexInv_HasArtifact(nLocalPlayer, kKexArtiShawl) || shawlTest)
         && s_kexCobraTile > 0)
     {
-        KexVaseCobra_Trio(nSector, x, y, z);
+        KexVaseCobra_Trio(nSector, x, y, z, sprite[nSprite].ang);
         if (s_breakSelftestActive)
             OSD_Printf("Kex vase: Shawl cobra trio spawned in sector %d\n", nSector);
         return;
@@ -2149,7 +2209,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
                 && (KexInv_HasArtifact(nLocalPlayer, kKexArtiScepter)
                     || (s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTER_SUBTEST")));
             if (scepterHeld
-                && (RandomSize(8) & 7) >= 3)
+                && (((uint8_t)RandomByte() & 7) >= 3))
             {
                 lotag = kKexLotagAmmo; hitag = 1;
                 picnum = s_kexAmmoTile > 0 ? s_kexAmmoTile : 877;
@@ -2160,7 +2220,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
             // AI_Scorp shares the Spider controller but carries the exact
             // generated SCORPION.SEQ identity. BuildScorp is Selkis, the boss.
             int const nScorp = BuildSpider(-1, x, y, z, nSector,
-                                           RandomSize(11), 1);
+                                           kKexVaseFactoryAngle, 1);
             if (s_scorpTest && nScorp >= 0
                 && sprite[GetSpiderSprite(nScorp)].extra == 1)
             {
@@ -2169,6 +2229,8 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
                     && sprite[GetSpiderSprite(nScorp)].z == z
                     && z < sprite[nSprite].z)
                     s_vaseScorpsAtHeight++;
+                if (sprite[GetSpiderSprite(nScorp)].ang == kKexVaseFactoryAngle)
+                    s_vaseScorpsAtAngle++;
             }
             if (s_breakSelftestActive && scepterHeld)
                 OSD_Printf("Kex vase: Scepter scorpion sub-roll\n");
@@ -2199,7 +2261,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
 
     // The post-spawn scale roll changes pickup strength as well as appearance:
     // ammo is maxAmmo*scale/9, while a large health orb uses 20*2.5 = 50.
-    if (RandomSize(8) < 128)
+    if ((uint8_t)RandomByte() < 128)
         hitag = lotag == kKexLotagAmmo ? 2 : 50;
     KexDrop_Spawn(nSector, x, y, z, lotag, hitag, picnum);
 }
@@ -2361,8 +2423,9 @@ void FuncKexBreak(int a, int b, int nRun)
                 {
                     bool const okay = s_vaseScorpsSpawned == s_vasePuffsExpected
                         && s_vaseScorpsAtHeight == s_vasePuffsExpected
+                        && s_vaseScorpsAtAngle == s_vasePuffsExpected
                         && KexSpiderIdentityTest();
-                    OSD_Printf("Kex break scorpion test: %s (%d/%d exact AI_Scorp identities at authored height)\n",
+                    OSD_Printf("Kex break scorpion test: %s (%d/%d exact AI_Scorp identities at authored height/facing)\n",
                                okay ? "PASS" : "FAIL",
                                s_vaseScorpsAtHeight, s_vasePuffsExpected);
                 }
