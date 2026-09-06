@@ -1975,10 +1975,11 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
 def write_lit(path, m, sects, walls, ranges):
     """Write the KEX baked-light field with emitted-surface provenance.
 
-    KEXLIT2 keeps every source face separate. The older position-only table
-    averaged colours where a floor, wall, or portal band shared a vertex, so
-    Polymost could blend unrelated surfaces. Each generated Build surface now
-    points at the source face it renders; the MAP geometry remains untouched.
+    KEXLIT3 keeps every source face and its RGB vertex colour separate. The
+    older position-only table averaged colours where a floor, wall, or portal
+    band shared a vertex, so Polymost could blend unrelated surfaces. Each
+    generated Build surface now points at the source face it renders; the MAP
+    geometry remains untouched.
     """
     keep, remap = sector_remap(sects, ranges)
     wremap = {}
@@ -2012,19 +2013,19 @@ def write_lit(path, m, sects, walls, ranges):
             x, y, z, (r, g, b, _a) = m.verts[vi]
             key = (int(round(x * WORLD)), int(round(-y * WORLD)),
                    int(round(-z * SCALE * WORLD)))
-            lum = (r * 30 + g * 59 + b * 11) / 100.0
             total = acc.get(key)
             if total is None:
-                acc[key] = [lum, 1]
+                acc[key] = [r, g, b, 1]
             else:
-                total[0] += lum; total[1] += 1
-        samples.extend((face, x, y, z, int(round(total / count)))
-                       for (x, y, z), (total, count) in sorted(acc.items()))
+                total[0] += r; total[1] += g; total[2] += b; total[3] += 1
+        samples.extend((face, x, y, z, int(round(r / count)),
+                        int(round(g / count)), int(round(b / count)))
+                       for (x, y, z), (r, g, b, count) in sorted(acc.items()))
 
     with open(path, 'w') as f:
-        f.write("KEXLIT2 %d %d\n" % (len(samples), len(surfaces)))
-        for face, x, y, z, lum in samples:
-            f.write("%d %d %d %d %d\n" % (face, x, y, z, lum))
+        f.write("KEXLIT3 %d %d\n" % (len(samples), len(surfaces)))
+        for face, x, y, z, r, g, b in samples:
+            f.write("%d %d %d %d %d %d %d\n" % (face, x, y, z, r, g, b))
         for kind, ident, face in sorted(surfaces):
             f.write("%d %d %d\n" % (kind, ident, face))
     return len(samples)
@@ -4744,8 +4745,9 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         # The remaster groups its fires, torches and lamps as "Light Sources" --
         # 19 actor types. They declare no lightRadius of their own (only four
         # projectiles do), because in Kex their glow is baked into the vertex
-        # colours. Build cannot shade part of a wall, so the glow is put back as
-        # a real light instead; these are the tiles that should cast one.
+        # colours. Polymost's KEXLIT3 path draws that field directly; the
+        # fallback renderer puts the glow back as a real light instead. These
+        # are the tiles that should cast that fallback light.
         if is_light:
             lights.append(first)
         if len(allrects) > 1 and not a.get('still') and not breakable:

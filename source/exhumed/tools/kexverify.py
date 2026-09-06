@@ -2432,10 +2432,11 @@ def verify_breakables(z, outdir, include_testmaps=False):
     expected = {}
     puff_types = []
 
-    # The current retail definitions contain twelve ordinary vases plus
-    # Obj_Vase11 and the barrel. Keep the authored and generated censuses
-    # separate so a missing actor tile or metadata row is reported at the
-    # correct layer.
+    # The retail definitions contain the twelve numbered vases and the barrel.
+    # Obj_Vase11 has a complete authored recipe but is intentionally absent
+    # from the 25 campaign maps; the optional test maps place it.  Keep the
+    # authored and generated censuses separate so a missing actor tile or
+    # metadata row is reported at the correct layer.
     authored_puff_types = []
     for actor in actors.values():
         ordinary = bool(actor.get('still') and actor.get('shootable')
@@ -2503,7 +2504,11 @@ def verify_breakables(z, outdir, include_testmaps=False):
                             for i in range(K.KEX_BREAK_SOUND_FLESH + 1))
     actual_counts = tuple(sum(row[11] == i for row in rows)
                           for i in range(K.KEX_BREAK_SOUND_FLESH + 1))
-    wanted_counts = (3, 11, 1, 1)
+    # Eleven ordinary vase types are placed in the campaign: ten glass plus
+    # Vase09's flesh recipe.  The barrel is wood; the two exploding vases and
+    # Magic 8 Ball have no local break sound.  Test maps add Vase11, the
+    # eleventh glass type.
+    wanted_counts = (3, 11 if include_testmaps else 10, 1, 1)
     if expected_counts != wanted_counts:
         out.append('retail break-sound census changed: expected %s, found %s'
                    % (wanted_counts, expected_counts))
@@ -2514,8 +2519,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
         out.append('authored Fx_VaseExplodePuff type census changed from 13 to %d'
                    % len(authored_puff_types))
     unplaced_puff_types = set(authored_puff_types) - set(puff_types)
-    wanted_puff_count = 13
-    wanted_unplaced = set()
+    wanted_puff_count = 13 if include_testmaps else 12
+    wanted_unplaced = set() if include_testmaps else {'Obj_Vase11'}
     if len(puff_types) != wanted_puff_count or unplaced_puff_types != wanted_unplaced:
         out.append('placed Fx_VaseExplodePuff census changed: %d placed, unplaced %s'
                    % (len(puff_types), sorted(unplaced_puff_types)))
@@ -4332,8 +4337,8 @@ def verify_player_travel():
     return out
 
 
-def verify_light_fields(z, outdir):
-    """Every converted KEX map must retain face-local retail light samples."""
+def verify_light_fields(z, outdir, include_testmaps=False):
+    """Every converted KEX map must retain face-local source light samples."""
     out = []
     try:
         files = os.listdir(outdir)
@@ -4345,15 +4350,26 @@ def verify_light_fields(z, outdir):
     if not maps:
         return ['converted KEX directory has no maps']
 
-    source_names = {name.lower(): name for name in z.namelist()}
+    # Use the same source-map roster as convert_install().  Campaign maps live
+    # directly under maps/, while --testmaps adds maps/testmaps/*.map; matching
+    # by basename also preserves the deliberately mixed retail casing.
+    source_by_stem = {}
+    for source in z.namelist():
+        low = source.lower()
+        if (not low.startswith('maps/') or not low.endswith('.map')
+                or '/old/' in low
+                or (not include_testmaps and '/testmaps/' in low)):
+            continue
+        source_by_stem.setdefault(os.path.splitext(os.path.basename(source))[0].lower(),
+                                  source)
     for name in maps:
         stem = os.path.splitext(name)[0]
         path = os.path.join(outdir, stem + '.LIT')
         try:
             lines = open(path, encoding='ascii').read().splitlines()
             header = lines[0].split()
-            if len(header) != 3 or header[0] != 'KEXLIT2':
-                raise ValueError('not a KEXLIT2 sidecar')
+            if len(header) != 3 or header[0] != 'KEXLIT3':
+                raise ValueError('not a KEXLIT3 sidecar')
             declared, mapped = int(header[1]), int(header[2])
         except (OSError, ValueError, IndexError) as exc:
             out.append('%s is missing or malformed: %s' % (os.path.basename(path), exc))
@@ -4369,7 +4385,7 @@ def verify_light_fields(z, outdir):
             except ValueError:
                 malformed = True
                 break
-            if len(fields) != 5:
+            if len(fields) != 7:
                 malformed = True
                 break
             samples.append(fields)
@@ -4384,19 +4400,21 @@ def verify_light_fields(z, outdir):
                 break
             surfaces.append(fields)
         if (malformed or declared != len(samples) or mapped != len(surfaces)
-                or any(lum < 0 or lum > 255 for _face, _x, _y, _z, lum in samples)
+                or any(channel < 0 or channel > 255
+                       for _face, _x, _y, _z, r, g, b in samples
+                       for channel in (r, g, b))
                 or samples != sorted(samples)
                 or len({sample[:4] for sample in samples}) != len(samples)
                 or surfaces != sorted(surfaces)
                 or len(set(surfaces)) != len(surfaces)):
-            out.append('%s has an invalid KEXLIT2 table (%d samples, %d surfaces)'
+            out.append('%s has an invalid KEXLIT3 table (%d samples, %d surfaces)'
                        % (os.path.basename(path), declared, mapped))
             continue
 
-        source = source_names.get(('maps/' + stem[4:] + '.map').lower()) \
+        source = source_by_stem.get(stem[4:].lower()) \
             if stem.upper().startswith('KEX_') else None
         if source is None:
-            out.append('%s has no retail source map for its light field' % stem)
+            out.append('%s has no source map for its light field' % stem)
             continue
         try:
             m = K.locate(z.read(source))
@@ -4424,14 +4442,14 @@ def verify_light_fields(z, outdir):
                 x, y, z_, (r, g, b, _a) = m.verts[vi]
                 key = (int(round(x * K.WORLD)), int(round(-y * K.WORLD)),
                        int(round(-z_ * K.SCALE * K.WORLD)))
-                lum = (r * 30 + g * 59 + b * 11) / 100.0
                 total = acc.get(key)
                 if total is None:
-                    acc[key] = [lum, 1]
+                    acc[key] = [r, g, b, 1]
                 else:
-                    total[0] += lum; total[1] += 1
-            expected_samples.update((face, x, y, z_, int(round(total / count)))
-                                    for (x, y, z_), (total, count) in acc.items())
+                    total[0] += r; total[1] += g; total[2] += b; total[3] += 1
+            expected_samples.update((face, x, y, z_, int(round(r / count)),
+                                     int(round(g / count)), int(round(b / count)))
+                                    for (x, y, z_), (r, g, b, count) in acc.items())
         if set(samples) != expected_samples:
             out.append('%s face-local samples differ from retail vertex lighting' % stem)
 
@@ -4444,11 +4462,13 @@ def verify_light_fields(z, outdir):
         return out + ['cannot read native KEX light-field bridge: %s' % exc]
     for needle, source in (
             ('Bstrncat(path,".LIT",sizeof(path)-Bstrlen(path)-1)', vlight),
-            ('KEXLIT2', vlight), ('KexVL_CurrentFace', vlight),
-            ('KexVL_FaceLum', vlight), ('s.wallnum', vlight),
+            ('KEXLIT3', vlight), ('KexVL_CurrentFace', vlight),
+            ('KexVL_FaceColor', vlight), ('KexVL_ColorAt', vlight),
+            ('s.wallnum', vlight),
             ('polymost_kexShadeAt=KexVL_ShadeAt', bridge),
+            ('polymost_kexColorAt=KexVL_ColorAt', bridge),
             ('polymost_kexVertexLight=KexVL_Ready()&&!Bgetenv("VB_KEX_FLATLIGHT")', bridge),
-            ('sectnum,wallnum,0', polymost)):
+            ('polymost_kexVertexColor', polymost), ('sectnum,wallnum,0', polymost)):
         if needle not in source:
             out.append('native KEX light-field bridge changed: %s' % needle)
     return out
@@ -8478,7 +8498,7 @@ def main():
             ("PLAYERDMG", verify_player_damage),
             ("PLAYERUSE", verify_player_use),
             ("TRAVEL", verify_player_travel),
-            ("LIGHTFIELD", lambda: verify_light_fields(z, outdir)),
+            ("LIGHTFIELD", lambda: verify_light_fields(z, outdir, include_testmaps)),
             ("INTERPOLATION", verify_sprite_interpolation),
             ("LEVELTEX", lambda: verify_level_textures(z, include_testmaps)),
             ("SOUNDS", lambda: verify_sound_aliases(z, outdir)),

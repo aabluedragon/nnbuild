@@ -36,6 +36,7 @@ void    KexVL_Load(char const *mapfile);   // the level's baked light field (KEX
 void    KexVL_Free(void);
 int     KexVL_Ready(void);
 int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback);   // Build shade at a world point
+int     KexVL_ColorAt(float x, float y, float z, float color[3]);     // authored RGB at a world point
 
 // The remaster wav that is this Build sound, or NULL; *pLoop tells whether it
 // loops (the flag stands in for the VOC loop block a WAV does not have).

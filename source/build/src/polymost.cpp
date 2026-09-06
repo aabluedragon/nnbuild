@@ -128,6 +128,7 @@ static float* drawpolyVerts = defaultDrawpolyVertsArray;
 // polymost1Vert.glsl already reads as v_color = gl_Color.
 int32_t polymost_kexVertexLight = 0;
 int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback) = NULL;
+int32_t (*polymost_kexColorAt)(float x, float y, float z, float color[3]) = NULL;
 polymost_kexsurf_t polymost_kexsurf = { 0, {0.f,0.f}, {0.f,0.f}, 0.f, 0.f, 0.f, 0.f, -1, -1, 0 };
 static float  kexColors[30000 * 4];
 static float  kexCurColor[4] = { 1.f, 1.f, 1.f, 1.f };
@@ -3465,9 +3466,16 @@ static int polymost_kexTessellate(vec2f_t const *dpxy, int32_t n, int32_t method
 static int32_t polymost_kexVertexShade(float sx, float sy)
 {
     float wx, wy, wz;
-    if (!polymost_kexUnproject(sx, sy, &wx, &wy, &wz))
+    if (!polymost_kexShadeAt || !polymost_kexUnproject(sx, sy, &wx, &wy, &wz))
         return globalshade;
     return polymost_kexShadeAt(wx, wy, wz, globalshade);
+}
+
+static int polymost_kexVertexColor(float sx, float sy, float color[3])
+{
+    float wx, wy, wz;
+    return polymost_kexColorAt && polymost_kexUnproject(sx, sy, &wx, &wy, &wz)
+        && polymost_kexColorAt(wx, wy, wz, color);
 }
 
 static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_t method)
@@ -3796,7 +3804,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
     // VibeBuild32: per-vertex shade from the light field, on walls and flats
     // of a level that has one; skies, sprites, models and 8-bit tiles keep
     // the polygon colour.
-    int const kexvl = polymost_kexVertexLight && polymost_kexShadeAt && polymost_kexsurf.kind && !persistentStreamBuffer
+    int const kexvl = polymost_kexVertexLight && (polymost_kexShadeAt || polymost_kexColorAt) && polymost_kexsurf.kind && !persistentStreamBuffer
                       && !(pth->flags & PTH_INDEXED) && videoGetRenderMode() == REND_POLYMOST
                       && getpskyidx(globalpicnum) == 0;
     float kextint[3] = { 0.f, 0.f, 0.f };
@@ -3809,10 +3817,12 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
     auto kexvertex = [&](float sx, float sy)
     {
         if (!kexvl) return;
-        float const sf = getshadefactor(polymost_kexVertexShade(sx, sy));
-        kexCurColor[0] = (1.f - kextint[0]) * sf + kextint[0];
-        kexCurColor[1] = (1.f - kextint[1]) * sf + kextint[1];
-        kexCurColor[2] = (1.f - kextint[2]) * sf + kextint[2];
+        float color[3];
+        if (!polymost_kexVertexColor(sx, sy, color))
+            color[0] = color[1] = color[2] = getshadefactor(polymost_kexVertexShade(sx, sy));
+        kexCurColor[0] = (1.f - kextint[0]) * color[0] + kextint[0];
+        kexCurColor[1] = (1.f - kextint[1]) * color[1] + kextint[1];
+        kexCurColor[2] = (1.f - kextint[2]) * color[2] + kextint[2];
         kexCurColor[3] = pc[3];
     };
 

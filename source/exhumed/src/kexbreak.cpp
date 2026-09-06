@@ -309,10 +309,13 @@ void KexLight_Init(void)
     // it the sources' glow is already in the field, so the per-sector glow
     // below stays off.
     polymost_kexVertexLight = 0;
+    polymost_kexShadeAt = NULL;
+    polymost_kexColorAt = NULL;
     if (g_kexMode && gUserMapFilename[0])
     {
         KexVL_Load(gUserMapFilename);
         polymost_kexShadeAt = KexVL_ShadeAt;
+        polymost_kexColorAt = KexVL_ColorAt;
         polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("VB_KEX_FLATLIGHT");
     }
     if (!g_kexMode || !s_lightTypes)

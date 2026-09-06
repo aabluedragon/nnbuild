@@ -6,21 +6,21 @@
 // behind it, the floor darkens toward the corners. Build has one shade per
 // wall and one per floor, which the converter carries by cutting surfaces
 // into pieces, and the result is a flat shade per piece with a seam between
-// them. kexmap.py writes the samples beside each map as KEX_<NAME>.LIT, "x y
-// z lum" in Build units, and polymost asks here for the shade at every
-// polygon vertex it draws in Kex mode (polymost_kexShadeAt).
+// them. kexmap.py writes the samples beside each map as KEX_<NAME>.LIT, with
+// their authored RGB values in Build units, and polymost asks here for the
+// colour at every polygon vertex it draws in Kex mode.
 //
-// KEXLIT2 additionally records which source face each emitted Build surface
+// KEXLIT3 additionally records which source face each emitted Build surface
 // represents. The query then blends only that face's samples, rather than
 // averaging a floor, wall and portal band that happen to share a coordinate.
-// Older position-only sidecars retain their spatial-grid lookup.
+// KEXLIT2 and older position-only sidecars retain their monochrome lookups.
 #include "compat.h"
 #include "build.h"
 #include "polymost.h"
 #include "exhumed.h"
 #include "kexbreak.h"
 
-struct KexVLSample { int32_t x, y, z, lum, face; };
+struct KexVLSample { int32_t x, y, z, r, g, b, face; };
 struct KexVLFace { int32_t face, first, count; };
 struct KexVLSurface { int32_t kind, ident, face; };
 
@@ -69,11 +69,14 @@ void KexVL_Load(char const *mapfile)
     kread(h, buf, len); buf[len] = 0; kclose(h);
 
     char *p = buf;
+    int const v3 = !Bstrncmp(p, "KEXLIT3", 7)
+        && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
     int const v2 = !Bstrncmp(p, "KEXLIT2", 7)
         && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
+    int const faceaware = v2 || v3;
     int nSurface = 0;
     int n;
-    if (v2)
+    if (faceaware)
     {
         p += 7;
         n = (int)strtol(p, &p, 10);
@@ -83,7 +86,7 @@ void KexVL_Load(char const *mapfile)
     {
         n = (int)strtol(p, &p, 10);
     }
-    if (n <= 0 || (v2 && nSurface < 0)) { Xfree(buf); return; }
+    if (n <= 0 || (faceaware && nSurface < 0)) { Xfree(buf); return; }
     s_samples = (KexVLSample *)Xmalloc(n * sizeof(KexVLSample));
     int cnt = 0;
     int32_t minx = INT32_MAX, miny = INT32_MAX, maxx = INT32_MIN, maxy = INT32_MIN;
@@ -91,22 +94,29 @@ void KexVL_Load(char const *mapfile)
     {
         char *q;
         long face = -1;
-        if (v2)
+        if (faceaware)
         {
             face = strtol(p, &q, 10); if (q == p) break; p = q;
         }
         long x = strtol(p, &q, 10); if (q == p) break; p = q;
         long y = strtol(p, &q, 10); if (q == p) break; p = q;
         long z = strtol(p, &q, 10); if (q == p) break; p = q;
-        long l = strtol(p, &q, 10); if (q == p) break; p = q;
+        long r = strtol(p, &q, 10); if (q == p) break; p = q;
+        long g = r, b = r;
+        if (v3)
+        {
+            g = strtol(p, &q, 10); if (q == p) break; p = q;
+            b = strtol(p, &q, 10); if (q == p) break; p = q;
+        }
         KexVLSample &s = s_samples[cnt++];
         s.x = (int32_t)x; s.y = (int32_t)y; s.z = (int32_t)z;
-        s.lum = (int32_t)l; s.face = (int32_t)face;
+        s.r = (int32_t)r; s.g = (int32_t)g; s.b = (int32_t)b;
+        s.face = (int32_t)face;
         minx = min(minx, s.x); maxx = max(maxx, s.x); miny = min(miny, s.y); maxy = max(maxy, s.y);
     }
     if (!cnt) { Xfree(buf); KexVL_Free(); return; }
     s_n = cnt;
-    if (v2)
+    if (faceaware)
     {
         // write_lit() orders samples by source face and surface rows by their
         // (kind, identity) lookup key. Preserve that compact representation:
@@ -175,7 +185,7 @@ void KexVL_Load(char const *mapfile)
 // a power for comparison: 1 is Kex's own, 0.5 the converter's look.
 static float s_gamma = -1.f;
 
-static inline int32_t KexVL_ShadeOfLum(float lum)
+static inline float KexVL_Factor(float value)
 {
     if (s_gamma < 0.f)
     {
@@ -183,8 +193,14 @@ static inline int32_t KexVL_ShadeOfLum(float lum)
         s_gamma = env ? (float)Batof(env) : 1.f;
         if (s_gamma <= 0.f) s_gamma = 1.f;
     }
-    float f = clamp(lum, 0.f, 255.f) / 255.f;
+    float f = clamp(value, 0.f, 255.f) / 255.f;
     if (s_gamma != 1.f) f = powf(f, s_gamma);
+    return f;
+}
+
+static inline int32_t KexVL_ShadeOfLum(float lum)
+{
+    float const f = KexVL_Factor(lum);
     int const ns = numshades > 0 ? numshades : 64;
     return clamp((int32_t)Blrintf(ns * (1.f - f)), -128, ns - 2);
 }
@@ -215,13 +231,14 @@ static int KexVL_FindSurface(int kind, int ident)
         && s_surfaces[lo].ident == ident ? lo : -1;
 }
 
-static int KexVL_FaceLum(int face, float x, float y, float z, float *lum)
+static int KexVL_FaceColor(int face, float x, float y, float z, float color[3])
 {
     int const entry = KexVL_FindFace(face);
     if (entry < 0)
         return 0;
     KexVLFace const &f = s_faces[entry];
-    float wsum = 0.f, lsum = 0.f, nearest2 = 1e30f; int nearest = -1;
+    float wsum = 0.f, rsum = 0.f, gsum = 0.f, bsum = 0.f;
+    float nearest2 = 1e30f; int nearest = -1;
     float const r2max = KEXVL_RADIUS * KEXVL_RADIUS;
     for (int i = f.first; i < f.first + f.count; i++)
     {
@@ -231,12 +248,28 @@ static int KexVL_FaceLum(int face, float x, float y, float z, float *lum)
         if (d2 > r2max) continue;
         if (d2 < nearest2) { nearest2 = d2; nearest = i; }
         float const w = 1.f / ((d2 + KEXVL_SOFT) * (d2 + KEXVL_SOFT));
-        wsum += w; lsum += w * s.lum;
+        wsum += w; rsum += w * s.r; gsum += w * s.g; bsum += w * s.b;
     }
     if (wsum <= 0.f)
         return 0;
-    *lum = nearest >= 0 && nearest2 < KEXVL_SNAP * KEXVL_SNAP
-        ? (float)s_samples[nearest].lum : lsum / wsum;
+    if (nearest >= 0 && nearest2 < KEXVL_SNAP * KEXVL_SNAP)
+    {
+        KexVLSample const &s = s_samples[nearest];
+        color[0] = (float)s.r; color[1] = (float)s.g; color[2] = (float)s.b;
+    }
+    else
+    {
+        color[0] = rsum / wsum; color[1] = gsum / wsum; color[2] = bsum / wsum;
+    }
+    return 1;
+}
+
+static int KexVL_FaceLum(int face, float x, float y, float z, float *lum)
+{
+    float color[3];
+    if (!KexVL_FaceColor(face, x, y, z, color))
+        return 0;
+    *lum = color[0] * .30f + color[1] * .59f + color[2] * .11f;
     return 1;
 }
 
@@ -260,6 +293,20 @@ static int KexVL_CurrentFace(void)
         return -1;
     int const entry = KexVL_FindSurface(kind, ident);
     return entry >= 0 ? s_surfaces[entry].face : -1;
+}
+
+int KexVL_ColorAt(float x, float y, float z, float color[3])
+{
+    if (!s_v2)
+        return 0;
+    float raw[3];
+    int const face = KexVL_CurrentFace();
+    if (face < 0 || !KexVL_FaceColor(face, x, y, z, raw))
+        return 0;
+    color[0] = KexVL_Factor(raw[0]);
+    color[1] = KexVL_Factor(raw[1]);
+    color[2] = KexVL_Factor(raw[2]);
+    return 1;
 }
 
 int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
@@ -292,7 +339,7 @@ int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
                 if (d2 > r2max) continue;
                 if (d2 < nearest2) { nearest2 = d2; nearest = s_order[k]; }
                 float const w = 1.f / ((d2 + KEXVL_SOFT) * (d2 + KEXVL_SOFT));   // steep: the nearest corners rule
-                wsum += w; lsum += w * s.lum;
+                wsum += w; lsum += w * s.r;
             }
         }
     }
@@ -304,6 +351,6 @@ int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback)
     // wall behind TOMB's pot fell to 0.43 of its lit value six cells out
     // where the remaster falls to 0.35).
     if (nearest >= 0 && nearest2 < KEXVL_SNAP * KEXVL_SNAP)
-        return KexVL_ShadeOfLum((float)s_samples[nearest].lum);
+        return KexVL_ShadeOfLum((float)s_samples[nearest].r);
     return KexVL_ShadeOfLum(lsum / wsum);
 }

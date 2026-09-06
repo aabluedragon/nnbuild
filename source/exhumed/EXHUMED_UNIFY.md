@@ -868,6 +868,16 @@ geometry:
   `KEX_LIGHT_WALL_PIECES` (3) pieces, and every wall -- split or not --
   takes its shade at its own midpoint rather than the face average.
 
+**Vertex colours.** The Polymost KEX path now reads `KEXLIT3` sidecars: every
+emitted floor, ceiling, wall and masked wall is mapped back to its source Kex
+face, then tessellated along the 128-unit source grid and drawn with that
+face's interpolated RGB vertex colour. That avoids blending a wall, floor and
+portal band merely because they share a coordinate. The campaign's 536,539
+lit vertices are grayscale, but `TEST_COLOREDLIGHTS` has 800 chromatic samples
+(up to 218 channel difference), all retained by the converter and renderer.
+`KEXLIT2` and pre-provenance sidecars still load as monochrome compatibility
+data; the geometry splits remain the hardware-independent fallback.
+
 KARNAK goes from 494 sectors and 2311 walls to 669 and 3793; TOMB from 285
 / 1361 to 451 / 2515. Two things this turned up in the older passes: a
 contour cut's crossing point can land a hair (0.0004 units, KARNAK sector
@@ -1123,9 +1133,9 @@ wall torches, candles and the water lamp. None of them declares a `lightRadius`
 or `lightIntensity` (only four projectiles in the whole game do), because in Kex
 their glow is baked into the vertex colours: on the wall behind TOMB's first
 fire pot the baked luminance runs 39 at the top of one face to 255 at the
-bottom. Build carries a single shade per wall and cannot hold a gradient across
-one, so the glow goes back in as a real light instead of coming across as part
-of the geometry.
+bottom. `KEXLIT3` renders that gradient as the face's own per-vertex colour in
+Polymost. The older per-sector real-light path remains only for a missing
+sidecar or a non-Polymost compatibility renderer.
 
 The flame itself is an authored loop as well. Fire pots carry 12 frames and
 wall torches 16; their `randomizeFrames` flag chooses a starting phase, it does
@@ -1957,7 +1967,8 @@ no longer silently truncated before their WAV or tactile lookup.
 ### Distance shading
 
 The remaster does no distance shading at all -- everything it paints is baked
-into the vertex colours, which the converter turns into per-surface shades.
+into vertex colours, which Polymost reproduces per vertex (and the converter
+retains as per-surface shades for compatibility paths).
 Exhumed sets `g_visibility` to 2048, four times Build's own default of 512, so
 in Kex mode the engine was applying that falloff a second time on top of the
 baked lighting. Anything far away went to pure black: measured at rgb(0,0,0)

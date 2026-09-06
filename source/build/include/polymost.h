@@ -161,6 +161,7 @@ typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t
 extern polymost_kexsurf_t polymost_kexsurf;
 extern int32_t polymost_kexVertexLight;
 extern int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback);
+extern int32_t (*polymost_kexColorAt)(float x, float y, float z, float color[3]);
 
 static inline float getshadefactor(int32_t const shade)
 {
