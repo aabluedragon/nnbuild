@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "compat.h"
 #include "baselayer.h"
 #include "renderlayer.h"
+#include "screenshot.h"
 #include "typedefs.h"
 #include "common.h"
 #include "keyboard.h"
@@ -1489,7 +1490,10 @@ void FinishLevel()
             Bsprintf(endPath, "movies/%s-%s.ogv",
                      KexInv_TransCount(0) >= KEX_TRANS_PIECES ? "goodend" : "badend",
                      movieLang[KexLanguage_VoiceIndex()]);
-            Kex_PlayTheora(endPath);
+            // Keep unattended KEX test runs out of both the title and ending
+            // movie decoders. Normal gameplay always presents this ending.
+            if (!Bgetenv("VB_KEX_SKIPMOVIES"))
+                Kex_PlayTheora(endPath);
             // Kex maps all run as user maps, so the generic levelnew++ below
             // would reload TOMBEND after the ending movie. mapDestination -2
             // on Obj_Choppa is terminal: leave the campaign after playback.
@@ -2578,6 +2582,14 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     system_getcvars();
 
+    // Game selection can change the process working directory, so -usecwd is
+    // not enough to contain an unattended capture.  Keep this test-only
+    // override after cvars load: it neither changes a player's saved setting
+    // nor affects ordinary screenshots.
+    char const *const screenshotDir = Bgetenv("VB_SCREENSHOT_DIR");
+    if (screenshotDir && screenshotDir[0])
+        Bstrncpyz(screenshot_dir, screenshotDir, sizeof(screenshot_dir));
+
     // Like the sibling games, command-line muting wins over every setup/cvar
     // source.  It must happen after OSD_Exec(), otherwise mus_enabled from a
     // profile turns the track loader back on.
@@ -3537,7 +3549,8 @@ void DoTitle()
         char intro[40];
         Bsprintf(intro, "movies/intro-%s.ogv",
                  movieLang[KexLanguage_VoiceIndex()]);
-        // VB_KEX_SKIPMOVIES: straight to the title hold, for checking it.
+        // VB_KEX_SKIPMOVIES: bypass all KEX movies (including endings) for
+        // unattended checks and go straight to the title hold here.
         if (Bgetenv("VB_KEX_SKIPMOVIES") || Kex_PlayTheora("movies/NightDive.ogv"))
         {
             if (!Bgetenv("VB_KEX_SKIPMOVIES"))

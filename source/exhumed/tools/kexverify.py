@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check a converted level against its Kex source.
 
-    kexverify.py <kex install dir> <outdir> [LEVEL ...]
+    kexverify.py <kex install dir> <converted outdir> [LEVEL ...]
 
 For each level: how far the Build floors and ceilings sit from the Kex
 planes at sample points inside every sector (p50 / p90 / p99 / max in Build
@@ -10,8 +10,9 @@ ways, and whether any sloped sector's first wall rounds to zero length --
 the engine draws such a sector flat -- and the event audits: every guarded
 event with its effect, key doors with key bits, no tag listened on that
 nothing fires, no mover sector cut into pieces, every switch on a wall, no
-sprite inside a solid sector. Written for the light-gradient cuts, useful
-for any change to kexmap.py; each audit caught a real fault once."""
+sprite inside a solid sector. ``outdir`` must already have been produced by
+kexmap.py. Written for the light-gradient cuts, useful for any change to
+kexmap.py; each audit caught a real fault once."""
 import sys, os, struct, math, zipfile, re, io, wave, hashlib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kexmap as K
@@ -608,6 +609,23 @@ def verify_music_options():
             out.append('KEX movie audio gate changed')
     except OSError as exc:
         out.append('cannot read native music-option bridge: %s' % exc)
+    return out
+
+
+def verify_test_isolation():
+    """Keep unattended KEX probes from writing captures into game data."""
+    out = []
+    source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+    try:
+        game = re.sub(r'\s+', '', open(os.path.join(source_dir, 'exhumed.cpp')).read())
+        for needle in ('#include"screenshot.h"', 'Bgetenv("VB_SCREENSHOT_DIR")',
+                       'if(screenshotDir&&screenshotDir[0])',
+                       'Bstrncpyz(screenshot_dir,screenshotDir,sizeof(screenshot_dir));',
+                       'if(!Bgetenv("VB_KEX_SKIPMOVIES"))Kex_PlayTheora(endPath);'):
+            if needle not in game:
+                out.append('unattended capture isolation changed: %s' % needle)
+    except OSError as exc:
+        out.append('cannot read unattended capture bridge: %s' % exc)
     return out
 
 
@@ -1615,7 +1633,7 @@ def audit(m, path, base, z, outdir):
         out.append("%d %s event(s) left without their effect" % (v, k))
     unknown_events = collections.Counter(
         et for et, es, _tag, _par in m.events
-        if et not in K.KEX_EVENTS and not (et == 0 and es == 65535))
+        if et not in K.KEX_EVENTS)
     if unknown_events:
         out.append("used Kex event type(s) have no conversion: %s" % sorted(unknown_events.items()))
 
@@ -8535,6 +8553,24 @@ def main():
     findings = 0
     audited = 0
 
+    # All feature audits below read generated sidecars and art before they
+    # reach the per-map check.  An empty target used to turn one invocation
+    # mistake into dozens of misleading "missing" findings.  Fail before
+    # those checks with the command the user actually needs instead.
+    prefix = getattr(K, 'KEX_MAP_PREFIX', 'KEX_').upper()
+    try:
+        converted = [name for name in os.listdir(outdir)
+                     if name.upper().startswith(prefix)
+                     and name.upper().endswith('.MAP')]
+    except OSError:
+        converted = []
+    if not converted:
+        print("OUTPUT         ! no converted %s*.MAP files in %s; run kexmap.py first"
+              % (prefix, outdir))
+        print("audited maps: 0")
+        print("findings: 1")
+        return 1
+
     def report(label, lines):
         """Print audit findings and make them affect the process result.
 
@@ -8579,6 +8615,7 @@ def main():
             ("INPUTCOMPAT", lambda: verify_input_compat(z)),
             ("GAMESETTINGS", verify_game_settings),
             ("MUSICOPTIONS", verify_music_options),
+            ("TESTISOLATION", verify_test_isolation),
             ("DISPLAYSETTINGS", verify_display_settings),
             ("HUDSETTINGS", verify_hud_settings),
             ("CHECKPOINTSAVE", verify_checkpoint_saves),

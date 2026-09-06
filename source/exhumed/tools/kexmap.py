@@ -2360,6 +2360,10 @@ def _resolve_events(m, sects, walls, ranges, src, switch_pairs=None, tilebase=0)
 def _resolve_one(m, sects, walls, ranges, src, switch_pairs, tilebase, si, s_, ev):
         etype, _esect, etag, eparam = ev
         name = KEX_EVENTS.get(etype)
+        if name is None:
+            raise ValueError('unsupported Kex event type %d in sector %d' % (etype, si))
+        if name == 'NONE':
+            return
         if etype == 63:
             s_['kexevent63'] = True     # the Ramses pads; see convert()
         chan = _chan(m, KEX_TAG0 if (etag == 0 and name in KEX_SHARED0) else etag)
@@ -4351,6 +4355,7 @@ KEX_INV_ACTORS['Item_Weapon_Manacle'] = (31, 0)   # the eighth weapon (kWeaponMa
 # trigger and the most common event in the game (436 records), which Build 50
 # read as a floor elevator and sank on the spot.
 KEX_EVENTS = {
+    0: 'NONE',                     # sectorless no-op sentinels in SETPALAC
     1: 'DOOR_NORMAL',              2: 'DOOR_TRIGGER_ONLY',
     3: 'DOOR_KEY1',                4: 'DOOR_KEY2',
     5: 'DOOR_KEY3',                6: 'DOOR_KEY4',

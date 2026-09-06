@@ -317,9 +317,12 @@ and pedestal items whose origins are well above the floor.
 ```
 source/exhumed/tools/kexmap.py "/path/to/PowerSlave Exhumed" ~/games/powerslave \
     [/path/to/powerslave_demo]   # with STUFF.DAT: rewrites ARROW.SEQ and SET.SEQ too
+source/exhumed/tools/kexverify.py "/path/to/PowerSlave Exhumed" ~/games/powerslave
 
 # Optional: include the converter's focused regression maps as KEX_TEST_*.MAP.
 source/exhumed/tools/kexmap.py --testmaps "/path/to/PowerSlave Exhumed" ~/games/powerslave
+# The verifier must use the same scope as the conversion.
+source/exhumed/tools/kexverify.py "/path/to/PowerSlave Exhumed" ~/games/powerslave --testmaps
 
 ./vibebuild32 -gm exhumed -j ~/games/powerslave \
     -kex "/path/to/PowerSlave Exhumed" -map THOTH.MAP
@@ -2149,6 +2152,11 @@ one. A switch becomes a *wall* tag: Build switches are wall lotag 7 flipping
 switchInfo texture and the tile assigner pins every switch's ON texture to the
 tile after its OFF, the way animation frames follow their base.
 
+Type 0 is also explicit as `NONE`: SETPALAC contains two sectorless
+`(type 0, sector -1, tag -1)` no-op sentinels. They are not converted into
+world state, while any future non-enumerated event stops conversion instead of
+silently becoming an inert sector.
+
 The invisible switch marker also retains the source event class and the exact
 final Build-wall midpoint. That makes the native press path match
 `UseWallSwitch()`: events 200/201 play `switch.wav`, 202/203 play
@@ -2532,7 +2540,8 @@ What they do, in Kex mode only:
   with all eight pieces and `badend-*.ogv` otherwise. In the KEX path, the
   incomplete branch now starts that bad ending as soon as Ramses finishes,
   matching `EndRamsesEvent()`'s `GetQuestItems() != 0xFF` test in the TOMBEND
-  script.
+  script. `VB_KEX_SKIPMOVIES=1` is an unattended-test override that skips the
+  title, intro, and either ending; ordinary KEX gameplay always plays them.
 - Ankhs: each raises the health ceiling by a fifth of the base, so all five
   double it -- `KexInv_MaxHealth()` is what the respawn, the healing caps,
   the venom bowl and the HUD bar consult in Kex mode -- and fills the player
@@ -2589,7 +2598,11 @@ short of the menu art at 7000.
 Every unattended run takes `VB_HIDE_WINDOW=1 SDL_AUDIODRIVER=dummy` (the window is created hidden
 and never raised; rendering and screenshots go on offscreen),
 `-nosound -nomusic`, and `-usecwd -cfg /tmp/.../vbtest.cfg` with an absolute temporary
-config path. `-nomusic` now uses the same dashed option parsing as the other
+config path. A capture-capable probe also sets
+`VB_SCREENSHOT_DIR=/tmp/.../screenshots`; game selection can change the working
+directory, and this post-cvar test-only override keeps `VB_CP_CAPTURE` and
+unattended KEX menu screenshots out of the installed game-data directory.
+`-nomusic` now uses the same dashed option parsing as the other
 standard launch flags, keeps effects enabled when `-nosound` is absent, and
 prevents both level tracks and Theora movie audio from loading. Ramses dialogue
 remains a sound-effect path and is not suppressed by `-nomusic`. The live
@@ -2734,8 +2747,9 @@ destination and unlock changes are therefore saved as well.
 `VB_KEXCAMPAIGNSAVE_TEST=1` with an isolated `VB_KEXINV_SAVE_FILE` exercises
 V1--V4 migration, relocated V5 map/unlock/play-time state, health staging and
 terminal round trips. `VB_KEXOVERWORLD_TEST=1` validates the fresh lock state and exact
-opening-node adjacency. `VB_KEXTRAVEL_TEST=1|24|63` plus
-`VB_KEXTRAVEL_TEST_SLOT` drives the actual pyramid/Ramses/chopper actor, while
+opening-node adjacency. `VB_KEXTRAVEL_TEST=1` on PEAK, `=22` on KILARENA, and
+`=63` on TOMBEND, plus `VB_KEXTRAVEL_TEST_SLOT`, drive the actual
+pyramid/Ramses-body/chopper actor respectively, while
 `VB_KEXMENU_LOAD_TEST=<slot>` checks the two-file menu decode; tests can also
 isolate the classic backing path with `VB_EXHUMED_SAVE_FILE`.
 
