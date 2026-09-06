@@ -220,6 +220,75 @@ static void KexAirSupply_Update(int nPlayer, short nSprite, int bUnderwater)
         SetAirFrame();
 }
 
+// VB_KEX_AIR_TEST=1 probes the native KEX update rate without moving the
+// player into test geometry. Restore every touched value so it is safe to
+// run beside an ordinary hidden map load.
+static void KexAirSupply_RunSelftest(int nPlayer, short nSprite)
+{
+    static int ran = 0;
+    if (ran || !Bgetenv("VB_KEX_AIR_TEST") || nPlayer != nLocalPlayer
+        || nSprite < 0 || nSprite >= kMaxSprites)
+        return;
+    ran = 1;
+
+    Player &p = PlayerList[nPlayer];
+    short const oldAir = p.nAir;
+    short const oldBreath = nBreathTimer[nPlayer];
+    uint8_t const oldNeedGasp = s_kexNeedGasp[nPlayer];
+    short const oldAirPages = airpages;
+    KexInv const oldInv = KexInvList[nPlayer];
+
+    // Keep all four probes independent of campaign progress: Dolphin mode
+    // intentionally requests a surface breach every underwater source tick.
+    KexInvList[nPlayer] = {};
+
+    // At 60 Hz, one native update covers two source ticks. Starting at timer
+    // four crosses the unmasked five-tick period exactly once.
+    p.nAir = 64;
+    nBreathTimer[nPlayer] = 4;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const drain = p.nAir == 62 && nBreathTimer[nPlayer] == 1
+                    && !s_kexNeedGasp[nPlayer];
+
+    p.nAir = 48;
+    nBreathTimer[nPlayer] = 4;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const warning = p.nAir == 46 && nBreathTimer[nPlayer] == 1
+                      && s_kexNeedGasp[nPlayer];
+
+    // Sobek's Mask is permanent, but it extends the five-tick depletion
+    // cadence to 100 source ticks rather than granting infinite air. Start at
+    // 63 so its one 2-point drain does not deliberately emit jon_scub.
+    KexInvList[nPlayer].artifacts = (uint8_t)(1 << kKexArtiMask);
+    p.nAir = 63;
+    nBreathTimer[nPlayer] = 99;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const masked = p.nAir == 61 && nBreathTimer[nPlayer] == 1
+                     && !s_kexNeedGasp[nPlayer];
+
+    // No pending gasp here, so the surface path tests the refill without
+    // intentionally playing an effect during an unattended run.
+    p.nAir = 48;
+    nBreathTimer[nPlayer] = 17;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 0);
+    bool const surface = p.nAir == 64 && nBreathTimer[nPlayer] == 0
+                      && !s_kexNeedGasp[nPlayer] && !airpages;
+
+    p.nAir = oldAir;
+    nBreathTimer[nPlayer] = oldBreath;
+    s_kexNeedGasp[nPlayer] = oldNeedGasp;
+    airpages = oldAirPages;
+    KexInvList[nPlayer] = oldInv;
+    SetAirFrame();
+
+    OSD_Printf("Kex air test: %s (64->62/5 ticks, warning 48->46, 63->61/100 ticks, surface 48->64)\n",
+               drain && warning && masked && surface ? "PASS" : "FAIL");
+}
+
 // kexPuppet::OnDamage uses an independent presentation RNG for its pain
 // variants. Derive our choice from the current game tick instead of touching
 // PCExhumed's synchronized RandomBit stream, which would alter gameplay and
@@ -2888,6 +2957,7 @@ loc_1AB8E:
                 if (g_kexMode)
                 {
                     KexAirSupply_Update(nPlayer, nPlayerSprite, var_5C);
+                    KexAirSupply_RunSelftest(nPlayer, nPlayerSprite);
                 }
                 else if (!PlayerList[nPlayer].invincibility)
                 {

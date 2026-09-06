@@ -93,6 +93,7 @@ static short s_kexMantisTestLava = -1;
 static short s_kexMantisTestPlayer = -1;
 static short s_kexMantisTestInvincibility;
 static int s_kexMantisTestOkay;
+static unsigned s_kexMantisTestFailures;
 static int s_kexMantisTestSpeed;
 static int s_kexMantisTestSaturnShots;
 static int s_kexMantisTestSaturnFrames;
@@ -1034,10 +1035,25 @@ void KexMantis_TestTick()
             return;
 
         short const nSector = sprite[nPlayer].sectnum;
-        int const nFloor = getflorzofslope(nSector, sprite[nPlayer].x,
-                                            sprite[nPlayer].y);
-        s_kexMantisTestLava = (short)BuildLava(-1, sprite[nPlayer].x,
-            sprite[nPlayer].y, nFloor, nSector, sprite[nPlayer].ang, 0);
+        // Keep the source and player apart horizontally. A Mantis projectile
+        // starts 192 KEX units above the actor origin; spawning both at one
+        // XY point makes its 3-D aim nearly vertical and turns a rounding
+        // probe into a degenerate collision probe instead.
+        int testX = sprite[nPlayer].x
+            - mulscale14(Cos(sprite[nPlayer].ang), 600);
+        int testY = sprite[nPlayer].y
+            - mulscale14(Sin(sprite[nPlayer].ang), 600);
+        short testSector = nSector;
+        updatesector(testX, testY, &testSector);
+        if (testSector < 0)
+        {
+            testX = sprite[nPlayer].x;
+            testY = sprite[nPlayer].y;
+            testSector = nSector;
+        }
+        int const nFloor = getflorzofslope(testSector, testX, testY);
+        s_kexMantisTestLava = (short)BuildLava(-1, testX, testY, nFloor,
+            testSector, sprite[nPlayer].ang, 0);
         if (s_kexMantisTestLava < 0)
         {
             OSD_Printf("Kex Mantis test: FAIL (no free controller)\n");
@@ -1058,8 +1074,13 @@ void KexMantis_TestTick()
         s_kexMantisTestPlayer = nLocalPlayer;
         s_kexMantisTestInvincibility =
             PlayerList[nLocalPlayer].invincibility;
-        if (PlayerList[nLocalPlayer].invincibility < 100)
-            PlayerList[nLocalPlayer].invincibility = 100;
+        // The full wake/attack/submerge/death contract spans 258 native
+        // player ticks.  A short 100-tick grant expires while the disposable
+        // Mantis is still attacking the player and restarts the fixture.
+        // Match the ordinary Scarab duration, then restore the prior value in
+        // KexMantisTestFinish() once this env-only probe completes.
+        if (PlayerList[nLocalPlayer].invincibility < 900)
+            PlayerList[nLocalPlayer].invincibility = 900;
         s_kexMantisTestOkay = 1;
         s_kexMantisTestSaturnShots = 0;
         s_kexMantisTestSaturnFrames = 0;
@@ -1074,6 +1095,7 @@ void KexMantis_TestTick()
         s_kexMantisTestDeathBursts = 0;
         s_kexMantisTestDeathTrigger = 0;
         s_kexMantisTestDeathDestroyed = 0;
+        s_kexMantisTestFailures = 0;
 
         lava.nAction = 0;
         KexMantisSetPackedState(s_kexMantisTestLava, 0, 0, 0, 0);
@@ -1101,12 +1123,13 @@ void KexMantis_TestTick()
             && s_kexMantisTestDeathTrigger == 1
             && s_kexMantisTestDeathBursts == 3
             && lava.nAction == 5 && lava.nFrame == 52;
+        s_kexMantisTestFailures |= death ? 0 : 1u << 6;
         bool const okay = s_kexMantisTestOkay && death;
-        OSD_Printf("Kex Mantis test: %s (peak 62, rise 60, prefix 3, Saturn %d/26 projectile %d, PSX %d/9 projectile %d, sink 24+21, death 3 bursts/53 frames/1 trigger)\n",
+        OSD_Printf("Kex Mantis test: %s (peak 62, rise 60, prefix 3, Saturn %d/26 projectile %d, PSX %d/9 projectile %d, sink 24+21, death 3 bursts/53 frames/1 trigger, phase failures %02x)\n",
                    okay ? "PASS" : "FAIL", s_kexMantisTestSaturnShots,
                    s_kexMantisTestSaturnProjectiles,
                    s_kexMantisTestPSXShots,
-                   s_kexMantisTestPSXProjectiles);
+                   s_kexMantisTestPSXProjectiles, s_kexMantisTestFailures);
         if ((unsigned)s_kexMantisTestPlayer < (unsigned)nTotalPlayers)
             PlayerList[s_kexMantisTestPlayer].invincibility =
                 s_kexMantisTestInvincibility;
@@ -1134,12 +1157,14 @@ void KexMantis_TestTick()
         uint64_t const peakCallbacks = (UINT64_C(1) << 0)
             | (UINT64_C(1) << 2) | (UINT64_C(1) << 24)
             | (UINT64_C(1) << 37) | (UINT64_C(1) << 61);
-        s_kexMantisTestOkay &= lava.nAction == 0
+        bool const peak = lava.nAction == 0
             && KexMantisAttackFrame(s_kexMantisTestLava) == 0
             && KexMantisScratch0(s_kexMantisTestLava) == 1
             && KexMantisScratch1(s_kexMantisTestLava) == 0
             && (sprite[nSprite].cstat & 0x8101) == 0x8000
             && s_kexMantisTestPeakCallbacks == peakCallbacks;
+        s_kexMantisTestOkay &= peak;
+        s_kexMantisTestFailures |= peak ? 0 : 1u << 0;
 
         short const nPlayer = PlayerList[nLocalPlayer].nSprite;
         lava.nTarget = nPlayer;
@@ -1155,7 +1180,7 @@ void KexMantis_TestTick()
         uint64_t const riseCallbacks = (UINT64_C(1) << 0)
             | (UINT64_C(1) << 4) | (UINT64_C(1) << 12)
             | (UINT64_C(1) << 14) | (UINT64_C(1) << 31);
-        s_kexMantisTestOkay &= lava.nAction == 3
+        bool const rise = lava.nAction == 3
             && KexMantisAttackMode(s_kexMantisTestLava)
                 == kKexMantisAttackPrefix
             && KexMantisAttackFrame(s_kexMantisTestLava) == 0
@@ -1163,6 +1188,18 @@ void KexMantis_TestTick()
             && KexMantisScratch1(s_kexMantisTestLava) == 1
             && (sprite[nSprite].cstat & 0x8101) == 0x101
             && s_kexMantisTestRiseCallbacks == riseCallbacks;
+        s_kexMantisTestOkay &= rise;
+        s_kexMantisTestFailures |= rise ? 0 : 1u << 1;
+        if (!rise)
+            OSD_Printf("Kex Mantis test: rise state action %d mode %d frame %d scratch %d/%d cstat %x callbacks %llx target %d player %d/%x\n",
+                       lava.nAction, KexMantisAttackMode(s_kexMantisTestLava),
+                       KexMantisAttackFrame(s_kexMantisTestLava),
+                       KexMantisScratch0(s_kexMantisTestLava),
+                       KexMantisScratch1(s_kexMantisTestLava),
+                       (unsigned) sprite[nSprite].cstat,
+                       (unsigned long long)s_kexMantisTestRiseCallbacks, lava.nTarget,
+                       PlayerList[nLocalPlayer].nSprite,
+                       (unsigned) sprite[PlayerList[nLocalPlayer].nSprite].cstat);
         s_kexMantisTestPhase = 3;
         s_kexMantisTestTicks = 0;
         return;
@@ -1170,10 +1207,16 @@ void KexMantis_TestTick()
 
     if (s_kexMantisTestPhase == 3 && s_kexMantisTestTicks == 3)
     {
-        s_kexMantisTestOkay &= lava.nAction == 3
+        bool const prefix = lava.nAction == 3
             && KexMantisAttackMode(s_kexMantisTestLava)
                 != kKexMantisAttackPrefix
             && KexMantisAttackFrame(s_kexMantisTestLava) == 0;
+        s_kexMantisTestOkay &= prefix;
+        s_kexMantisTestFailures |= prefix ? 0 : 1u << 2;
+        if (!prefix)
+            OSD_Printf("Kex Mantis test: prefix state action %d mode %d frame %d\n",
+                       lava.nAction, KexMantisAttackMode(s_kexMantisTestLava),
+                       KexMantisAttackFrame(s_kexMantisTestLava));
 
         // A real Saturn choice starts at 1..8, so count 1 proves the minimum
         // two-volley path and the A_MantisCheckAttack decrement ordering.
@@ -1188,11 +1231,13 @@ void KexMantis_TestTick()
 
     if (s_kexMantisTestPhase == 4 && s_kexMantisTestTicks == 26)
     {
-        s_kexMantisTestOkay &= lava.nAction == 7
+        bool const saturn = lava.nAction == 7
             && KexMantisAttackFrame(s_kexMantisTestLava) == 0
             && s_kexMantisTestSaturnShots == 2
             && s_kexMantisTestSaturnFrames == (1 << 1)
             && s_kexMantisTestSaturnProjectiles == 2;
+        s_kexMantisTestOkay &= saturn;
+        s_kexMantisTestFailures |= saturn ? 0 : 1u << 3;
 
         lava.nAction = 3;
         lava.nTarget = PlayerList[nLocalPlayer].nSprite;
@@ -1205,11 +1250,13 @@ void KexMantis_TestTick()
 
     if (s_kexMantisTestPhase == 5 && s_kexMantisTestTicks == 9)
     {
-        s_kexMantisTestOkay &= lava.nAction == 7
+        bool const psx = lava.nAction == 7
             && KexMantisAttackFrame(s_kexMantisTestLava) == 0
             && s_kexMantisTestPSXShots == 5
             && s_kexMantisTestPSXFrames == 0x1f
             && s_kexMantisTestPSXProjectiles == 5;
+        s_kexMantisTestOkay &= psx;
+        s_kexMantisTestFailures |= psx ? 0 : 1u << 4;
         lava.nTarget = -1;
         s_kexMantisTestPhase = 6;
         s_kexMantisTestTicks = 0;
@@ -1241,6 +1288,16 @@ void KexMantis_TestTick()
             && s_kexMantisTestSplashCallbacks == ((UINT64_C(1) << 4)
                 | (UINT64_C(1) << 10) | (UINT64_C(1) << 20));
         s_kexMantisTestOkay &= stats && cadence;
+        s_kexMantisTestFailures |= stats && cadence ? 0 : 1u << 5;
+        if (!stats || !cadence)
+            OSD_Printf("Kex Mantis test: sink state stats %d cadence %d action %d frame %d cstat %x speed %d hp %d clip/repeat %d/%d/%d callbacks %llx/%llx\n",
+                       stats, cadence, lava.nAction,
+                       KexMantisAttackFrame(s_kexMantisTestLava),
+                       (unsigned) sprite[nSprite].cstat, s_kexMantisTestSpeed,
+                       lava.nHealth, (int) sprite[nSprite].clipdist,
+                       (int) sprite[nSprite].xrepeat, (int) sprite[nSprite].yrepeat,
+                       (unsigned long long)s_kexMantisTestSubmergeCallbacks,
+                       (unsigned long long)s_kexMantisTestSplashCallbacks);
         lava.nHealth = 0;
         KexMantisBeginDeath(s_kexMantisTestLava, nSprite);
         nCreaturesLeft--;
@@ -1297,6 +1354,14 @@ void FuncLava(int a, int nDamage, int nRun)
             if (!nDamage) {
                 return;
             }
+
+            // The deterministic Mantis probe spawns a disposable actor in a
+            // real trigger fixture. Its scripted death phase is entered
+            // explicitly below, so fixture projectiles must not put it into
+            // pain/submerge before the cadence checks complete.
+            if (g_kexMode && s_kexMantisTest >= 0
+                && nLava == s_kexMantisTestLava)
+                return;
 
             LavaList[nLava].nHealth -= nDamage;
 

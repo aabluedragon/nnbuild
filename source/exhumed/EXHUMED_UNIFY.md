@@ -1608,7 +1608,9 @@ dummy-audio, `-nosound -nomusic` probes validated
 MARSH's 31 Bastets/57 Spiders, KARNAK's 9 Fish/63
 Spider-or-Scorpions, TOMB's 10 Anubis, and SLAVCAMP's 21 Anubis, 4 Mummies, 27
 Bastets and 57 Spider-or-Scorpions. Classic dimensions, timings and damage
-remain unchanged.
+remain unchanged. On a focused fixture with no ordinary enemy actors, the
+dimensions line reports `SKIP` rather than a false failure; its sequence and
+range checks still run.
 
 The KEX Queen now uses a generated 104-slot, 1002-frame/chunk `QUEEN.SEQ`
 and exact two-action `QUEENEGG.SEQ`. Its 280 layered authored composites
@@ -2224,6 +2226,11 @@ across the retail maps were previously read as solid floor -- nowhere in the
 game could you dive. Floors flagged lava (0x20) or slime (0x80) get Build's
 lotag 96 damage sprite.
 
+`VB_KEX_AIR_TEST=1` runs the native 60 Hz air updater through one exact
+unmasked drain period, the low-air gasp threshold, and surface recovery while
+restoring the live player state afterward. `KEX_TEST_WATER.MAP` is its focused
+hidden-run fixture.
+
 The FLOATER variants are paired vertical movers, not Build's ordinary floor
 bob. Retail `SetupFloatingPlatforms()` swaps the event fields and links two
 surfaces: the original event sector's **ceiling** and the parameter sector's
@@ -2530,8 +2537,9 @@ What they do, in Kex mode only:
 
 - Sandals of Ikumptet: the jump is a quarter higher (-4480 against -3584).
 - Sobek Mask: `Arti_Mask` was already Build's mask pickup (lotag 23), and
-  stays that; the artifact bit is set beside it and the underwater breathing
-  check treats it as a mask that never runs out.
+  stays that; the artifact bit is set beside it. It is permanent but does not
+  grant infinite air: it extends the remaster's underwater depletion cadence
+  from every 5 source ticks to every 100, enough for the long water routes.
 - Shawl of Isis / Feather of Horus: jump held while falling clamps the fall to
   a float (1024) or a hover (128).
 - Protective Anklets: lava and slime damage halved, where move.cpp applies it.

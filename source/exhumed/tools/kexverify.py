@@ -4207,6 +4207,14 @@ def verify_air_supply():
                    'sprite[nSprite].zvel-=3584',
                    'KexSound_Get(((int32_t)totalclock&1)?"k_dolph1":"k_dolph2")',
                    'KexSound_Get("jon_gasp")',
+                   'staticvoidKexAirSupply_RunSelftest(intnPlayer,shortnSprite)',
+                   'Bgetenv("VB_KEX_AIR_TEST")',
+                   'KexInvconstoldInv=KexInvList[nPlayer]',
+                   'KexInvList[nPlayer]={}',
+                   'KexInvList[nPlayer].artifacts=(uint8_t)(1<<kKexArtiMask)',
+                   'KexInvList[nPlayer]=oldInv',
+                   'KexAirSupply_Update(nPlayer,nSprite,1)',
+                   'KexAirSupply_Update(nPlayer,nSprite,0)',
                    'Read(&s_kexNeedGasp[nLocalPlayer],sizeof(s_kexNeedGasp[nLocalPlayer]))',
                    'Write(&s_kexNeedGasp[nLocalPlayer],sizeof(s_kexNeedGasp[nLocalPlayer]))',
                    '(nBreathTimer[nPlayer]&0x7f)==0',
@@ -4214,7 +4222,7 @@ def verify_air_supply():
                    'PlayerList[nPlayer].nAir=g_kexMode?64:100',
                    'nBreathTimer[nPlayer]=g_kexMode?0:90',
                    'KexInv_GiveArtifact(nPlayer,kKexArtiMask);PlayerCheckItemRespawnOrDelete(nPickupSprite,nItem);break;',
-                   'if(g_kexMode){KexAirSupply_Update(nPlayer,nPlayerSprite,var_5C);}'):
+                   'if(g_kexMode){KexAirSupply_Update(nPlayer,nPlayerSprite,var_5C);KexAirSupply_RunSelftest(nPlayer,nPlayerSprite);}'):
         if needle not in player:
             out.append('native Kex air-supply rule changed: %s' % needle)
     for needle in ('clamp((int)pl.nAir,0,64)', 'bw*air/64'):

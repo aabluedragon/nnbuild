@@ -18,7 +18,7 @@
 enum
 {
     kKexArtiSandals = 0,    // higher jump
-    kKexArtiMask,           // breathe under water (Build's mask, made permanent)
+    kKexArtiMask,           // breathe under water much longer (the artifact is permanent)
     kKexArtiShawl,          // hold jump while falling to float
     kKexArtiAnklets,        // half damage from lava and slime
     kKexArtiScepter,        // walks through force fields (masked walls listed in kexforce.txt) and laser beams

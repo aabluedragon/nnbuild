@@ -1392,11 +1392,14 @@ void LoadObjects()
             total += count[kind];
             totalBad += bad[kind];
         }
-        bool const okay = total > 0 && totalBad == 0;
+        // A focused geometry/water fixture intentionally has no monsters.
+        // That cannot say anything about enemy dimensions, so distinguish it
+        // from an actual converted actor with a wrong collision envelope.
+        char const *const result = total == 0 ? "SKIP" : totalBad == 0 ? "PASS" : "FAIL";
         OSD_Printf("Kex common enemy dimensions test: %s "
                    "(Anubis %d/%d, Mummy %d/%d, Bastet %d/%d, Fish %d/%d, "
                    "Spider/Scorpion %d/%d)\n",
-                   okay ? "PASS" : "FAIL", count[0] - bad[0], count[0],
+                   result, count[0] - bad[0], count[0],
                    count[1] - bad[1], count[1], count[2] - bad[2], count[2],
                    count[3] - bad[3], count[3], count[4] - bad[4], count[4]);
 
