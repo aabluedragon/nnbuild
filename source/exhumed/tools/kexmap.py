@@ -3475,8 +3475,9 @@ KEX_WATER_SPLASH_TILE_BASE = 22014
 KEX_WATER_SPLASH_LIFETIME = 23             # Fx_WaterSplash destroys on source frame 22
 KEX_FLAME_TILE_BASE = 22037
 KEX_FLAME_FLIGHT_FRAMES = 3
-KEX_FLAME_SIZZLE_FRAMES = 8                # source frames 0,2,...14 at 30 Hz
-KEX_FLAME_LIFETIME = 15                    # 30 KEX updates at .5 fizzle each
+KEX_FLAME_SIZZLE_VISIBLE_FRAMES = 15       # source sizzle frames 0..14
+KEX_FLAME_SIZZLE_LIFETIME = 16             # then one blank tick before destroy
+KEX_FLAME_FIZZLE_LIFETIME = 15             # 30 .5-speed animation edges
 KEX_BIRD_FEATHER_LIFETIME = 15             # randomized, looped Obj_Bird_Feathers
 KEX_EXACT_SPIDER_TILE_SPAN = 200
 KEX_EXACT_MUMMY_TILE_SPAN = 200
@@ -5868,10 +5869,10 @@ def build_kex_water_splash_sequence(Z, outdir, verbose=True):
 def build_kex_flame_sequence(Z, outdir, verbose=True):
     """Write Proj_Flame's flight loop and impact sizzle at native cadence.
 
-    flameproj_loop advances every KEX tick, while PCExhumed updates its
-    projectile records at 30 Hz. The three-frame loop therefore remains a
-    three-frame loop, and the sixteen visible sizzle frames are sampled on
-    source frames 0, 2, ... 14 before frame 16 destroys the actor.
+    Both animations inherit the actor class's default .5 speed: at KEX's
+    60 Hz that is one source frame per PCExhumed tick. The flight loop thus
+    remains three frames, while the sizzle draws source frames 0..14, has one
+    blank frame, then destroys itself on source frame 16.
     """
     import kexseqtool
 
@@ -5882,12 +5883,14 @@ def build_kex_flame_sequence(Z, outdir, verbose=True):
             or any(f.get('delay') != 1 or not f.get('sprites')
                    for f in flight)
             or len(sizzle) != 17
-            or any(f.get('delay') != 1 or not f.get('sprites')
-                   for f in sizzle[:-1])
+            or any(f.get('delay') != 1 for f in sizzle)
+            or any(not f.get('sprites')
+                   for f in sizzle[:KEX_FLAME_SIZZLE_VISIBLE_FRAMES])
+            or sizzle[KEX_FLAME_SIZZLE_VISIBLE_FRAMES].get('sprites')
             or not sizzle[-1].get('destroy')):
         raise ValueError('Proj_Flame animation contract changed')
 
-    sizzle = sizzle[:KEX_FLAME_SIZZLE_FRAMES * 2:2]
+    sizzle = sizzle[:KEX_FLAME_SIZZLE_VISIBLE_FRAMES]
     flight_rows = _build_effect_frame_tiles(
         Z, names, outdir, flight, 'kexart/flameflight', 'flame',
         KEX_FLAME_TILE_BASE, (255, 255, 255), 'projectiles/flameproj_loop')
@@ -5896,21 +5899,25 @@ def build_kex_flame_sequence(Z, outdir, verbose=True):
         KEX_FLAME_TILE_BASE + KEX_FLAME_FLIGHT_FRAMES, (255, 255, 255),
         'projectiles/flameproj_sizzle')
 
-    count = KEX_FLAME_FLIGHT_FRAMES + KEX_FLAME_SIZZLE_FRAMES
+    tile_count = KEX_FLAME_FLIGHT_FRAMES + KEX_FLAME_SIZZLE_VISIBLE_FRAMES
+    frame_count = KEX_FLAME_FLIGHT_FRAMES + KEX_FLAME_SIZZLE_LIFETIME
+    frame_sizes = [1] * tile_count + [0]
+    frame_bases = list(range(tile_count)) + [tile_count]
     seq = dict(tag=b'IH', centerx=0, centery=0,
                seq_base=[0, KEX_FLAME_FLIGHT_FRAMES],
-               seq_size=[KEX_FLAME_FLIGHT_FRAMES, KEX_FLAME_SIZZLE_FRAMES],
-               seq_flag=[-1, -1], fr_base=list(range(count)),
-               fr_size=[1] * count, fr_flag=[4] * count,
-               ck_x=[0] * count, ck_y=[0] * count,
-               ck_pict=[KEX_FLAME_TILE_BASE + i for i in range(count)],
-               ck_flag=[0] * count, snd_names=[], snd_events=[], trailing=b'')
+               seq_size=[KEX_FLAME_FLIGHT_FRAMES,
+                         KEX_FLAME_SIZZLE_LIFETIME],
+               seq_flag=[-1, -1], fr_base=frame_bases,
+               fr_size=frame_sizes, fr_flag=[4] * frame_count,
+               ck_x=[0] * tile_count, ck_y=[0] * tile_count,
+               ck_pict=[KEX_FLAME_TILE_BASE + i for i in range(tile_count)],
+               ck_flag=[0] * tile_count, snd_names=[], snd_events=[], trailing=b'')
     with open(os.path.join(outdir, 'KEXFLAME.SEQ'), 'wb') as f:
         f.write(kexseqtool.write_seq_bytes(seq))
     if verbose:
         print('  flamethrower: exact 3-frame Proj_Flame loop plus '
-              '8-frame impact sizzle on tiles %d-%d' %
-              (KEX_FLAME_TILE_BASE, KEX_FLAME_TILE_BASE + count - 1))
+              '15-art/1-blank impact sizzle on tiles %d-%d' %
+              (KEX_FLAME_TILE_BASE, KEX_FLAME_TILE_BASE + tile_count - 1))
     return flight_rows + sizzle_rows
 
 

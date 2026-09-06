@@ -1332,6 +1332,16 @@ distance/height/speed. Queen's origin-launched seed and both Saturn/PSX Mantis
 fire paths use the same bridge. A deterministic `VB_KEX_PROJECTILE_TEST`
 checks all eight launch paths without requiring a live boss encounter.
 
+The remaster flamethrower is also a real world-projectile weapon rather than
+the DOS ignition-only bullet. Its four firing frames each create a
+5-damage, radius-36 `Proj_Flame`; only the first consumes fuel. The player
+bridge preserves the puppet's 95.25-unit radius and the authored
+`A_FireProjectile(..., -48, 80, 16)` distance/height/speed callback, then
+uses the actor's 1/64 starting scale, 15-unit (30-tick) fizzle growth/fade and its
+three-frame flight plus fifteen-art/one-blank-frame sizzle. `KEXFLAME.SEQ` and the same
+projectile probe keep its generated data and native launch/impact path in
+lockstep without changing classic Exhumed behavior.
+
 Projectile death callbacks are independent of direct actor damage and run on
 wall, actor, floor and ceiling impacts. Both red Cobra types therefore retain
 zero direct damage but execute the authored radius-224, 50-damage blast; their

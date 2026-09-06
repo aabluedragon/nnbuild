@@ -972,7 +972,8 @@ loc_flag:
                             // flamethrower_fire invokes A_FireProjectile on
                             // all four frames. Unlike the DOS type-3 flame,
                             // each is a real Proj_Flame actor, launched from
-                            // the player puppet's 95.25-unit radius at z=-48.
+                            // the player puppet's 95.25-unit radius with its
+                            // authored -48 radius offset and 80-unit height.
                             int const nPitch = (fix16_to_int(
                                 sPlayerInput[nPlayer].horizon) - 92) << 2;
                             BuildKexPlayerFlameProjectile(nPlayerSprite,

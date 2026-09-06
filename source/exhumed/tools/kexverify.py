@@ -3081,7 +3081,7 @@ def verify_drop_effects(z, outdir):
                    'KexDrop_OrbSpawnPickup(nSprite)'):
         if needle not in anims:
             out.append('animation callback bridge changed: %s' % needle)
-    for needle in ('#definekMaxSEQFiles97', '"kexammospawn"',
+    for needle in ('#definekMaxSEQFiles98', '"kexammospawn"',
                    '"kexhealthspawn"', '"kexgibdeath"',
                    '"kexbirdfeather"'):
         if needle not in seqcpp:
@@ -3253,7 +3253,7 @@ def verify_gib_death_effect(z, outdir):
             out.append('cannot read native gib-death bridge %s: %s'
                        % (filename, exc))
 
-    for needle in ('#definekMaxSEQFiles97', '"kexgibdeath"'):
+    for needle in ('#definekMaxSEQFiles98', '"kexgibdeath"'):
         if needle not in native.get('sequence.cpp', ''):
             out.append('optional gib-death sequence table changed: %s' % needle)
     if 'kSeqKexGibDeath' not in native.get('sequence.h', ''):
@@ -4912,7 +4912,7 @@ def verify_flyers(z, outdir):
             'KexBirdfeathertest:%s'):
         if token not in anim_native:
             out.append('native Obj_Bird_Feathers bridge no longer implements %s' % token)
-    if '#definekMaxSEQFiles97' not in seq_native or '"kexbirdfeather"' not in seq_native:
+    if '#definekMaxSEQFiles98' not in seq_native or '"kexbirdfeather"' not in seq_native:
         out.append('native Obj_Bird_Feathers optional sequence table changed')
     if 'kSeqKexBirdFeather' not in header_native:
         out.append('native Obj_Bird_Feathers optional sequence enum changed')
@@ -7231,6 +7231,9 @@ def verify_projectiles(z, outdir):
     expected_projectiles = {
         'Proj_Anubis': {'radius': 36, 'height': 32, 'scale': 1,
                         'damage': 20, 'fullbright': 1},
+        'Proj_Flame': {'radius': 36, 'height': 36, 'stepHeight': 36,
+                       'scale': .015625, 'damage': 5, 'fullbright': 1,
+                       'moveable': 1, 'gravity': 0},
         'Proj_Blaster': {'radius': 36, 'height': 32, 'scale': 1,
                          'damage': 30, 'fullbright': 1},
         'Proj_Cobra_Red': {'radius': 16, 'height': 64, 'scale': 1,
@@ -7286,8 +7289,35 @@ def verify_projectiles(z, outdir):
                 out.append('%s %s changed from authored %s to %s'
                            % (actor, field, wanted, actual))
 
+    flame_match = re.search(r'Actor\s+Proj_Flame\s*\{(.*?)\n\}',
+                            projectile_text, re.S)
+    flame_compact = re.sub(r'\s+', '', flame_match.group(1)) \
+        if flame_match else ''
+    for token in ('classname"kexSlaveProjectile"',
+                  'spawnAnim"projectiles/flameproj_loop"',
+                  'deathAnim"projectiles/flameproj_sizzle"',
+                  'fullbright1', 'moveable1', 'randomizeFrames1',
+                  'gravity0', 'canIgnite1'):
+        if token not in flame_compact:
+            out.append('Proj_Flame actor contract changed: %s' % token)
+    if 'animSpeed' in flame_compact:
+        out.append('Proj_Flame no longer uses the default .5 animation speed')
+    flame_loop = K.parse_anim_full(z, names, 'projectiles/flameproj_loop')
+    flame_sizzle = K.parse_anim_full(z, names, 'projectiles/flameproj_sizzle')
+    if (len(flame_loop) != K.KEX_FLAME_FLIGHT_FRAMES
+            or any(f.get('delay') != 1 or not f.get('sprites')
+                   for f in flame_loop)
+            or len(flame_sizzle) != 17
+            or any(f.get('delay') != 1 for f in flame_sizzle)
+            or any(not f.get('sprites') for f in flame_sizzle[
+                   :K.KEX_FLAME_SIZZLE_VISIBLE_FRAMES])
+            or flame_sizzle[K.KEX_FLAME_SIZZLE_VISIBLE_FRAMES].get('sprites')
+            or not flame_sizzle[-1].get('destroy')):
+        out.append('retail Proj_Flame loop/sizzle cadence changed')
+
     death_anims = {
         'Proj_Anubis': 'projectiles/anubis_fireball_explode',
+        'Proj_Flame': 'projectiles/flameproj_sizzle',
         'Proj_Blaster': 'monsters/sentry_projectile_destroy',
         'Proj_Cobra_Green': 'projectiles/cobra_green_death',
         'Proj_Ra_Fire': 'projectiles/rafire_explode',
@@ -7354,6 +7384,8 @@ def verify_projectiles(z, outdir):
         out.append('retail Mantis actor definition is missing')
 
     callback_specs = (
+        ('sprites/weapons/flamethrower_anim.txt',
+         ('Proj_Flame', 0, 0, -48, 80, 16)),
         ('sprites/monsters/anubis_anim.txt',
          ('Proj_Anubis', 0, 0, 4, 96, 16)),
         ('sprites/monsters/sentry_anim.txt',
@@ -7823,7 +7855,9 @@ def verify_projectiles(z, outdir):
             'VB_KEX_BOMB_TEST', 'nofuse/bounce'),
         'gun.cpp': (
             'if(!g_kexMode)AddAmmo(nPlayer,kWeaponGrenade,-1);',
-            'KexGrenade_Charge(nPlayer);'),
+            'KexGrenade_Charge(nPlayer);',
+            'BuildKexPlayerFlameProjectile(nPlayerSprite,nPitch);',
+            'nWeapon!=kWeaponFlamer||PlayerList[nPlayer].nWeaponFrame==1'),
         'snake.cpp': (
             'g_kexMode?100:BulletInfo[kWeaponStaff].nDamage',
             'g_kexMode?512*6/256:BulletInfo[kWeaponStaff].nRadius'),
@@ -7854,7 +7888,7 @@ def verify_projectiles(z, outdir):
         'move.cpp': ('KexImpactLight_Tick();',),
         'sequence.cpp': ('"amunbomb"', '"kexmuzzle"', '"keximpact"',
                          '"kexcobrared"', '"kexcobragreen"',
-                         '"kexcobractl"', '"kexanuimpact"'),
+                         '"kexcobractl"', '"kexanuimpact"', '"kexflame"'),
     }
     for filename, needles in source_specs.items():
         try:
@@ -7875,6 +7909,18 @@ def verify_projectiles(z, outdir):
             'unsignedconstclipMask=CLIPMASK1;',
             'BuildKexAIFireProjectile',
             'KexBullet_CheckAIFireProjectile',
+            'kKexFlameType=19',
+            'BuildKexPlayerFlameProjectile',
+            'KexBullet_CheckPlayerFlame',
+            'kKexPlayerRadius2=1143',
+            'kKexCallbackDistance=-48',
+            'kKexFlameHeight=80',
+            'kKexFlameSpeed=16*6',
+            'bullet.field_E==30&&bullet.field_10==16*24',
+            'KexFlameRepeat(30)==147',
+            'KexBulletSpawnFlameSizzle',
+            'SeqSize[AnimList[nSizzle].nSeq]==16',
+            'player-flame',
             'KexBulletTargetCenterZ',
             'sprite[nTarget].z-KexActorHeightBuild(nTarget)/2',
             'logicalTargetCenterExact',
@@ -7888,7 +7934,8 @@ def verify_projectiles(z, outdir):
             'KexBulletApplyImpactBlast',
             'KexBulletBuildBlastRadius',
             'KexTossBouncyCreatureChunk(nSprite,kKexBoulderShardTile,kKexTossBounceSoundGlass)',
-            'returnnType==17?80:40;',
+            'if(nType==17)return80;',
+            'returnnType==19?1:40;',
             'kKexBoulderGravity=72',
             'kKexBoulderFloorContacts=8',
             'kKexBoulderHeight=32*16*6',
@@ -8067,6 +8114,42 @@ def verify_projectiles(z, outdir):
     except (OSError, ValueError, AssertionError, struct.error) as exc:
         out.append('KEXANUIMPACT.SEQ is missing or invalid: %s' % exc)
 
+    if (K.KEX_FLAME_FLIGHT_FRAMES != 3
+            or K.KEX_FLAME_SIZZLE_VISIBLE_FRAMES != 15
+            or K.KEX_FLAME_SIZZLE_LIFETIME != 16
+            or K.KEX_FLAME_FIZZLE_LIFETIME != 15):
+        out.append('converter Proj_Flame cadence contract changed')
+
+    try:
+        flame = S.read_seq(open(os.path.join(outdir, 'KEXFLAME.SEQ'),
+                                'rb').read())
+        flight = K.KEX_FLAME_FLIGHT_FRAMES
+        sizzle_visible = K.KEX_FLAME_SIZZLE_VISIBLE_FRAMES
+        sizzle_lifetime = K.KEX_FLAME_SIZZLE_LIFETIME
+        tile_count = flight + sizzle_visible
+        frame_count = flight + sizzle_lifetime
+        frame_sizes = [1] * tile_count + [0]
+        frame_bases = list(range(tile_count)) + [tile_count]
+        if (flame['tag'] != b'IH'
+                or flame['centerx'] != 0 or flame['centery'] != 0
+                or flame['seq_base'] != [0, flight]
+                or flame['seq_size'] != [flight, sizzle_lifetime]
+                or flame['seq_flag'] != [-1, -1]
+                or flame['fr_base'] != frame_bases
+                or flame['fr_size'] != frame_sizes
+                or flame['fr_flag'] != [4] * frame_count
+                or flame['ck_x'] != [0] * tile_count
+                or flame['ck_y'] != [0] * tile_count
+                or flame['ck_pict'] != [K.KEX_FLAME_TILE_BASE + i
+                                        for i in range(tile_count)]
+                or flame['ck_flag'] != [0] * tile_count
+                or flame['snd_names'] or flame['snd_events']
+                or flame['trailing']):
+            out.append('KEXFLAME.SEQ is not the exact 3-frame flight and '
+                       '15-art/1-blank sizzle contract')
+    except (OSError, ValueError, AssertionError, struct.error) as exc:
+        out.append('KEXFLAME.SEQ is missing or invalid: %s' % exc)
+
     try:
         amun = S.read_seq(open(os.path.join(outdir, 'AMUNBOMB.SEQ'), 'rb').read())
         if amun['seq_base'] != [0] or amun['seq_size'] != [1] \
@@ -8210,6 +8293,20 @@ def verify_projectiles(z, outdir):
         if len(anu_hashes) != 4:
             out.append('Anubis-impact authored hold groups changed from four: %d'
                        % len(anu_hashes))
+        for frame in range(K.KEX_FLAME_FLIGHT_FRAMES
+                           + K.KEX_FLAME_SIZZLE_VISIBLE_FRAMES):
+            tile = K.KEX_FLAME_TILE_BASE + frame
+            if frame < K.KEX_FLAME_FLIGHT_FRAMES:
+                rel = 'kexart/flameflight/flame_%d.png' % frame
+            else:
+                rel = 'kexart/flamesizzle/flame_%d.png' % (
+                    frame - K.KEX_FLAME_FLIGHT_FRAMES)
+            if not re.search(r'tilefromtexture\s+%d\s*\{\s*file\s+"%s"'
+                             % (tile, re.escape(rel)), deftext):
+                out.append('player-flame tile %d is absent from exhumed.def'
+                           % tile)
+            if not os.path.isfile(os.path.join(outdir, rel)):
+                out.append('player-flame tile %d PNG is missing' % tile)
         for tile in (7848, 7849):
             rel = 'kexart/seq/t%04d.png' % tile
             if not re.search(r'tilefromtexture\s+%d\s*\{\s*file\s+"%s"'
@@ -8565,7 +8662,7 @@ def verify_water_splash_effect(z, outdir):
         except OSError as exc:
             out.append('cannot read native water-splash bridge %s: %s'
                        % (filename, exc))
-    for needle in ('#definekMaxSEQFiles97', '"kexwatersplash"',
+    for needle in ('#definekMaxSEQFiles98', '"kexwatersplash"',
                    '!Bstrcasecmp(seqName,"kexwatersplash")'):
         if needle not in native.get('sequence.cpp', ''):
             out.append('optional water-splash sequence table changed: %s'

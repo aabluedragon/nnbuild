@@ -684,10 +684,12 @@ bulletInfo BulletInfo[] = {
     // 18, the Manacle's bolt: the arrow (whose SEQ the converter draws as the
     // remaster's beam bolt) with Proj_Beam's damage.
     { 100, -1,  2000, -1, kSeqArrow, kSeqPoof, 0, 0, -1 },
-    // 19, remaster-only Proj_Flame. The launch bridge supplies its 80-unit
+    // 19, remaster-only Proj_Flame. The launch bridge supplies its 16-unit
     // velocity; this record owns its fifteen native-tick (30 KEX-tick)
-    // fizzle lifetime and KEXFLAME.SEQ flight art.
-    { 5,   15,  2000, -1, kSeqKexFlame, 0, 4, 0, 0 }
+    // fizzle lifetime and KEXFLAME.SEQ flight art. Its .5-speed source
+    // animation executes A_UpdateFlame once per native tick, so the
+    // 15-unit fizzle (increments of .5) lasts thirty native ticks.
+    { 5,   30,  2000, -1, kSeqKexFlame, 0, 4, 0, 0 }
 };
 
 
@@ -1112,18 +1114,18 @@ static int KexMoveSpawnerProjectile(short nBullet)
 
 static int KexFlameRepeat(int nAge)
 {
-    // A_UpdateFlame runs at 60 Hz and raises m_fFizzleTime by .5. One native
-    // Exhumed tick represents two of those updates. Its scale begins at 1/64
-    // and accumulates (5000 - 128*fizzleTime) / 32768 every source update.
-    nAge = clamp(nAge, 0, 15);
-    int const updates = nAge * 2;
-    int const delta = updates * 5000 - 32 * updates * (updates + 1);
+    // Proj_Flame has the default .5 KEX animation speed, so its loop action
+    // runs once per two 60-Hz actor steps -- exactly once per native Exhumed
+    // tick. A_UpdateFlame first raises fizzle by .5, then accumulates
+    // (5000 - 128*fizzle) / 32768 from the 1/64 starting scale.
+    nAge = clamp(nAge, 0, 30);
+    int const delta = nAge * 5000 - 32 * nAge * (nAge + 1);
     return clamp(((512 + delta) * 40 + 16384) / 32768, 1, 255);
 }
 
 static void KexFlameUpdateVisual(Bullet *pBullet)
 {
-    int const age = 15 - pBullet->field_E;
+    int const age = 30 - pBullet->field_E;
     short const nSprite = pBullet->nSprite;
     sprite[nSprite].xrepeat = KexFlameRepeat(age);
     sprite[nSprite].yrepeat = KexFlameRepeat(age);
@@ -1131,8 +1133,8 @@ static void KexFlameUpdateVisual(Bullet *pBullet)
     // its fifteen-unit fizzle. The native palette has no per-sprite RGB, so
     // use its fire palette, then introduce translucency for the fading half.
     sprite[nSprite].pal = 4;
-    sprite[nSprite].shade = clamp(-127 + age * 15, -127, 100);
-    if (age >= 8)
+    sprite[nSprite].shade = clamp(-127 + age * 227 / 30, -127, 100);
+    if (age >= 15)
         sprite[nSprite].cstat |= 2;
 }
 
@@ -1817,19 +1819,25 @@ static KexProjectileExpected KexPlayerFlameExpected(short nSprite,
     // half-Build units. Its native movement sprite has clipdist 58, so the
     // generic actor launcher would put the flame visibly inside the player.
     constexpr int kKexPlayerRadius2 = 1143;
+    // The final three A_FireProjectile arguments are distance/height/speed:
+    // -48 pulls the flame's muzzle inside the player puppet radius, +80
+    // raises it to the puppet centre, and 16 is its world speed.
+    constexpr int kKexCallbackDistance = -48;
+    constexpr int kKexFlameHeight = 80;
+    constexpr int kKexFlameSpeed = 16 * 6;
     int const fx = mulscale14(Cos(sprite[nSprite].ang), Cos(nPitch));
     int const fy = mulscale14(Sin(sprite[nSprite].ang), Cos(nPitch));
     int const fz = Sin(nPitch);
+    int const distance2 = kKexPlayerRadius2 + 2 * kKexCallbackDistance * 6;
     KexProjectileExpected expected;
     expected.x = sprite[nSprite].x
-        + (int)(((int64_t)fx * kKexPlayerRadius2) / (2 * 16384));
+        + (int)(((int64_t)fx * distance2) / (2 * 16384));
     expected.y = sprite[nSprite].y
-        + (int)(((int64_t)fy * kKexPlayerRadius2) / (2 * 16384));
+        + (int)(((int64_t)fy * distance2) / (2 * 16384));
     expected.z = sprite[nSprite].z
-        - (int)(((int64_t)fz * kKexPlayerRadius2) / (2 * 16384))
-        + 48 * 16 * 6; // A_FireProjectile(..., -48, 80, 16)
+        - (int)(((int64_t)fz * distance2) / (2 * 16384))
+        - kKexFlameHeight * 16 * 6;
 
-    constexpr int kKexFlameSpeed = 80 * 6;
     expected.vx = fx * kKexFlameSpeed;
     expected.vy = fy * kKexFlameSpeed;
     expected.vz = -(int)(((int64_t)fz * kKexFlameSpeed * 16) / 16384);
@@ -1848,7 +1856,7 @@ int BuildKexPlayerFlameProjectile(short nSprite, int nPitch)
     // has no target: replace the temporary actor-target launch with the
     // player-puppet direction and authored muzzle below.
     KexProjectileLaunch const launch = {
-        nSprite, 0, -48, 80, false, true
+        nSprite, -48, 80, 16, false, true
     };
     int const nBullet = BuildBulletInternal(nSprite, kKexFlameType,
         0, 0, 0, sprite[nSprite].ang, nSprite + 10000, 1, &launch);
@@ -1869,10 +1877,42 @@ int BuildKexPlayerFlameProjectile(short nSprite, int nPitch)
     bullet.x = expected.vx;
     bullet.y = expected.vy;
     bullet.z = expected.vz;
-    bullet.field_10 = 80 * 24;
-    bullet.nFrame = RandomSize(2) % SeqSize[SeqOffsets[kSeqKexFlame]];
+    bullet.field_10 = 16 * 24;
+    int const nFrames = SeqSize[SeqOffsets[kSeqKexFlame]];
+    bullet.nFrame = (int)(((uint32_t)RandomSize(16) * nFrames) >> 16);
+    sprite[nProjectile].picnum = seq_GetSeqPicnum(kSeqKexFlame,
+                                                   bullet.nFrame, 0);
     nBulletEnemy[nBullet] = -1;
     return nBullet;
+}
+
+static bool KexBullet_CheckPlayerFlame(int nBullet, short nSource,
+                                       int nPitch)
+{
+    if (!g_kexMode || (unsigned)nBullet >= (unsigned)kMaxBullets
+        || (unsigned)nSource >= (unsigned)kMaxSprites)
+        return false;
+    Bullet const &bullet = BulletList[nBullet];
+    if (bullet.nType != kKexFlameType
+        || (unsigned)bullet.nSprite >= (unsigned)kMaxSprites
+        || sprite[bullet.nSprite].sectnum < 0)
+        return false;
+    KexProjectileExpected const expected = KexPlayerFlameExpected(nSource,
+                                                                    nPitch);
+    spritetype const &projectile = sprite[bullet.nSprite];
+    int const nFrames = SeqSize[SeqOffsets[kSeqKexFlame]];
+    return projectile.x == expected.x && projectile.y == expected.y
+        && projectile.z == expected.z && bullet.x == expected.vx
+        && bullet.y == expected.vy && bullet.z == expected.vz
+        && bullet.field_E == 30 && bullet.field_10 == 16 * 24
+        && bullet.nSeq == kSeqKexFlame && bullet.field_12 == 1
+        && nBulletEnemy[nBullet] == -1
+        && projectile.clipdist == (36 * 6 + 2) / 4
+        && projectile.xrepeat == 1 && projectile.yrepeat == 1
+        && projectile.pal == 4 && projectile.shade == -127
+        && (unsigned)bullet.nFrame < (unsigned)nFrames
+        && projectile.picnum == seq_GetSeqPicnum(kSeqKexFlame,
+                                                  bullet.nFrame, 0);
 }
 
 int KexBullet_CheckAIFireProjectile(int nBullet, short nSource, short nTarget,
@@ -2332,6 +2372,56 @@ void KexBullet_TestTick()
             && KexBulletSuppressClassicRadial(11)
             && KexBulletSuppressClassicRadial(12);
     }
+
+    // Player flames use a different authored radius than creatures and do
+    // not target an actor, so cover their muzzle math, visual growth and
+    // inherited impact sizzle independently of the AI callback recipes.
+    bool playerFlameExact = false;
+    if (KexBulletExactImpactAvailable(kKexFlameType))
+    {
+        int const nFlame = BuildKexPlayerFlameProjectile(nTarget, 0);
+        if (KexBullet_CheckPlayerFlame(nFlame, nTarget, 0))
+        {
+            Bullet &flame = BulletList[nFlame];
+            short const nFlameSprite = flame.nSprite;
+            flame.field_E = 12; // age eighteen: late-fizzle translucency
+            KexFlameUpdateVisual(&flame);
+            bool const visualExact = KexFlameRepeat(18) == 97
+                && KexFlameRepeat(30) == 147
+                && sprite[nFlameSprite].xrepeat == KexFlameRepeat(18)
+                && sprite[nFlameSprite].yrepeat == KexFlameRepeat(18)
+                && sprite[nFlameSprite].pal == 4
+                && sprite[nFlameSprite].shade == 9
+                && (sprite[nFlameSprite].cstat & 2);
+
+            int const nSizzle = KexBulletSpawnFlameSizzle(
+                sprite[nFlameSprite].x, sprite[nFlameSprite].y,
+                sprite[nFlameSprite].z, sprite[nFlameSprite].sectnum,
+                sprite[nFlameSprite].xrepeat, sprite[nFlameSprite].shade,
+                (sprite[nFlameSprite].cstat & 2) != 0);
+            bool sizzleExact = false;
+            if (nSizzle >= 0)
+            {
+                short const nSizzleSprite = GetAnimSprite(nSizzle);
+                sizzleExact = AnimList[nSizzle].nSeq
+                        == SeqOffsets[kSeqKexFlame] + 1
+                    && SeqSize[AnimList[nSizzle].nSeq] == 16
+                    && sprite[nSizzleSprite].xrepeat
+                        == sprite[nFlameSprite].xrepeat
+                    && sprite[nSizzleSprite].yrepeat
+                        == sprite[nFlameSprite].yrepeat
+                    && sprite[nSizzleSprite].pal == 4
+                    && sprite[nSizzleSprite].shade == sprite[nFlameSprite].shade
+                    && (AnimFlags[nSizzle] & 4)
+                    && (sprite[nSizzleSprite].cstat & 2);
+                DestroyAnim(nSizzle);
+                mydeletesprite(nSizzleSprite);
+            }
+            playerFlameExact = visualExact && sizzleExact;
+        }
+        if (nFlame >= 0)
+            DestroyBullet(nFlame);
+    }
     mydeletesprite(nSource);
 
     if (KexBulletImpactContractMatches())
@@ -2344,9 +2434,11 @@ void KexBullet_TestTick()
         passed |= 1u << (ARRAY_SIZE(recipes) + 6);
     if (logicalTargetCenterExact)
         passed |= 1u << (ARRAY_SIZE(recipes) + 7);
+    if (playerFlameExact)
+        passed |= 1u << (ARRAY_SIZE(recipes) + 8);
 
-    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 8)) - 1;
-    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
+    unsigned const wanted = (1u << (ARRAY_SIZE(recipes) + 9)) - 1;
+    OSD_Printf("Kex projectile test: %s (recipes+spawners+impact+physics+effect+logical-target-centre+player-flame %x/%x; Anubis/Sentry/Set/Selkis/Mummy/Queen/Mantis-Saturn/Mantis-PSX; exact 3-D fireball/laser/boulder launch; logical 160-unit player target centre; authored death blasts; exact orange/cobra/Anubis impact art, cadence and light; player flame muzzle/lifetime/fizzle/sizzle; no false Soul/Seedling radial or Blaster/Beam puff; boulder gravity/reflection/expiry)\n",
                passed == wanted ? "PASS" : "FAIL", passed, wanted);
     s_kexBulletTest = -2;
 }
