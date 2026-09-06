@@ -568,6 +568,49 @@ def verify_game_settings():
     return out
 
 
+def verify_music_options():
+    """Keep the standard muted launch options effective in KEX mode."""
+    out = []
+    source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
+    try:
+        game = re.sub(r'\s+', '', open(os.path.join(source_dir, 'exhumed.cpp')).read())
+        for needle in ('Bstrcasecmp(pOpt,"nosound")==0',
+                       'Bstrcasecmp(pOpt,"nomusic")==0', 'noMusic=1;',
+                       'if(noMusic)MusicToggle=0;',
+                       '"-nomusic\\tNomusic(soundeffectsremainenabled)\\n"',
+                       'if(cdSuccess&&!CDplaying()&&!nFreeze&&!nNetPlayerCount&&!bNoSound&&MusicToggle)',
+                       'if(!bNoSound&&MusicToggle)playMusicFile(kexTrack,true);'):
+            if needle not in game:
+                out.append('muted launch option changed: %s' % needle)
+        if game.find('system_getcvars();') > game.find('if(noMusic)MusicToggle=0;'):
+            out.append('command-line music override precedes cvar loading')
+        cd = re.sub(r'\s+', '', open(os.path.join(source_dir, 'cd.cpp')).read())
+        if 'if(bNoSound||(honorMusicToggle&&!MusicToggle))returnfalse;' not in cd:
+            out.append('music file/CD gate changed')
+        if 'if(bNoSound||!MusicToggle)returnfalse;' not in cd:
+            out.append('CD music gate changed')
+        for needle in ('staticbools_trackIsMusic=false;',
+                       's_trackIsMusic=honorMusicToggle;', 's_trackIsMusic=true;',
+                       'voidStopCDMusic()'):
+            if needle not in cd:
+                out.append('live music-stop bridge changed: %s' % needle)
+        if 'if(!MusicToggle)StopCDMusic();' not in game:
+            out.append('live music setting no longer stops soundtrack')
+        for needle in ('VB_KEX_MUSIC_STOP_TEST', 'MusicToggle=0;StopCDMusic();',
+                       'Kexmusic-toggletest:%s'):
+            if needle not in game:
+                out.append('music-toggle runtime probe changed: %s' % needle)
+        ramses = re.sub(r'\s+', '', open(os.path.join(source_dir, 'ramses.cpp')).read())
+        if 'playMusicFile(path,false,false);' not in ramses:
+            out.append('Ramses dialogue became subject to the music toggle')
+        movie = re.sub(r'\s+', '', open(os.path.join(source_dir, 'kexmovie.cpp')).read())
+        if 'if(!bNoSound&&MusicToggle&&haveA&&alen>0)' not in movie:
+            out.append('KEX movie audio gate changed')
+    except OSError as exc:
+        out.append('cannot read native music-option bridge: %s' % exc)
+    return out
+
+
 def verify_display_settings():
     """Keep the KEX display-preference menu honest about renderer support."""
     out = []
@@ -8535,6 +8578,7 @@ def main():
             ("ACTORPOOLS", verify_actor_pool_guards),
             ("INPUTCOMPAT", lambda: verify_input_compat(z)),
             ("GAMESETTINGS", verify_game_settings),
+            ("MUSICOPTIONS", verify_music_options),
             ("DISPLAYSETTINGS", verify_display_settings),
             ("HUDSETTINGS", verify_hud_settings),
             ("CHECKPOINTSAVE", verify_checkpoint_saves),

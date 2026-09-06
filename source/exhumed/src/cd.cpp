@@ -34,6 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 static char *pTrack = NULL;
 static int trackhandle = -1;
+static bool s_trackIsMusic = false;
 int nLastVolumeSet = 0;
 
 /* TODO
@@ -54,11 +55,11 @@ void setCDaudiovolume(int val)
 // converted levels need to ask for one by name. Everything below the file open
 // is what playCDtrack() already does.
 
-bool playMusicFile(const char *name, bool bLoop)
+bool playMusicFile(const char *name, bool bLoop, bool honorMusicToggle)
 {
     if (!name || !name[0])
         return false;
-    if (bNoSound)           // -nosound silences the music too
+    if (bNoSound || (honorMusicToggle && !MusicToggle))
         return false;
 
     StopCD();
@@ -89,13 +90,14 @@ bool playMusicFile(const char *name, bool bLoop)
         Xaligned_free(pTrack); pTrack = NULL;
         return false;
     }
+    s_trackIsMusic = honorMusicToggle;
     return true;
 }
 
 bool playCDtrack(int nTrack, bool bLoop)
 {
-//  if (!MusicToggle)
-//      return true;
+    if (bNoSound || !MusicToggle)
+        return false;
 
     static const char *tracknameformats[] = { "Track%02d", "exhumed%02d", "track%02d" };
 
@@ -155,6 +157,7 @@ bool playCDtrack(int nTrack, bool bLoop)
         return false;
     }
 
+    s_trackIsMusic = true;
     return true;
 }
 
@@ -212,6 +215,13 @@ void StopCD()
         Xaligned_free(pTrack);
         pTrack = NULL;
     }
+    s_trackIsMusic = false;
+}
+
+void StopCDMusic()
+{
+    if (s_trackIsMusic)
+        StopCD();
 }
 
 int fadecdaudio()

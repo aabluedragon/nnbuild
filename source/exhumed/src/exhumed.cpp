@@ -2033,6 +2033,7 @@ static int32_t nonsharedtimer;
 int Exhumed_app_main(int argc, char const* const* argv)
 {
     char buffer[BMAX_PATH];
+    int noMusic = 0;
 #ifdef _WIN32
 #ifndef DEBUGGINGAIDS
     if (!G_CheckCmdSwitch(argc, argv, "-noinstancechecking") && !windowsCheckAlreadyRunning())
@@ -2176,11 +2177,14 @@ int Exhumed_app_main(int argc, char const* const* argv)
                 i += nc - 1;        // the for-loop does the other ++
             }
             // ------------------------------------------------------------------
-            else if (Bstrcasecmp(pChar, "nocreatures") == 0) {
+            else if (Bstrcasecmp(pOpt, "nocreatures") == 0) {
                 bNoCreatures = kTrue;
             }
-            else if (Bstrcasecmp(pChar, "nosound") == 0) {
+            else if (Bstrcasecmp(pOpt, "nosound") == 0) {
                 bNoSound = kTrue;
+            }
+            else if (Bstrcasecmp(pOpt, "nomusic") == 0) {
+                noMusic = 1;
             }
             else if (Bstrcasecmp(pChar, "record") == 0)
             {
@@ -2574,6 +2578,12 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     system_getcvars();
 
+    // Like the sibling games, command-line muting wins over every setup/cvar
+    // source.  It must happen after OSD_Exec(), otherwise mus_enabled from a
+    // profile turns the track loader back on.
+    if (noMusic)
+        MusicToggle = 0;
+
     if (nNetPlayerCount == -1)
     {
         nNetPlayerCount = nCfgNetPlayers - 1;
@@ -2964,8 +2974,15 @@ LATEJOIN_READY:
         HandleAsync();
         OSD_DispatchQueued();
 
+        // mus_enabled is live in the remaster's Audio Settings.  Future
+        // tracks already honour it; stop an existing soundtrack too, without
+        // cutting the Ramses dialogue stream that shares this mixer.
+        if (!MusicToggle)
+            StopCDMusic();
+
         // Section B
-        if (cdSuccess && !CDplaying() && !nFreeze && !nNetPlayerCount)
+        if (cdSuccess && !CDplaying() && !nFreeze && !nNetPlayerCount
+            && !bNoSound && MusicToggle)
         {
             // VibeBuild32: in Kex mode every level names its own track in the
             // remaster's mapInfo.txt; the converter writes those out beside the
@@ -2984,10 +3001,10 @@ LATEJOIN_READY:
                 // playCDtrack() never showed it only because the track files it
                 // asks for do not exist, so it fails at the open and costs
                 // nothing.
-                // bNoSound, not MusicToggle: this port does not implement
-                // -nomusic at all, so MusicToggle is always 1 and guarding on it
-                // guards nothing. With sound off the FX system is never brought
-                // up, and handing it a 14 MB buffer is what corrupts the frame.
+                // With sound off the FX system is never brought up, and handing
+                // it a 14 MB buffer is what corrupts the frame.  -nomusic and
+                // mus_enabled follow the same single-attempt path without
+                // loading the track at all.
                 static char lastTried[BMAX_PATH];
                 if (Bstrcmp(lastTried, kexTrack))
                 {
@@ -3005,6 +3022,32 @@ LATEJOIN_READY:
                 }
 
                 cdSuccess = playCDtrack((nTrack % 8) + 11, true);
+            }
+        }
+
+        // VB_KEX_MUSIC_STOP_TEST=1: wait for the real level track, then
+        // exercise the same live mus_enabled transition as Audio Settings.
+        // TOMB starts its soundtrack before the Ramses dialogue, so a passing
+        // test also proves the dialogue-safe StopCDMusic() classification.
+        static int musicStopTest = -1, musicStopStart = -1;
+        if (musicStopTest == -1)
+            musicStopTest = g_kexMode && Bgetenv("VB_KEX_MUSIC_STOP_TEST") ? 0 : -2;
+        if (musicStopTest == 0)
+        {
+            if (musicStopStart < 0)
+                musicStopStart = (int)totalclock;
+            if (MusicToggle && CDplaying())
+            {
+                MusicToggle = 0;
+                StopCDMusic();
+                OSD_Printf("Kex music-toggle test: %s\n",
+                           CDplaying() ? "FAIL (track still active)" : "PASS (track stopped)");
+                musicStopTest = -2;
+            }
+            else if ((int)totalclock - musicStopStart > 10 * 120)
+            {
+                OSD_Printf("Kex music-toggle test: FAIL (track did not start)\n");
+                musicStopTest = -2;
             }
         }
 
@@ -3905,6 +3948,7 @@ void PrintHelp()
         //"-nodemo\t\tNo Demos\n"
         "-nocreatures\tNo enemy creatures\n"
         "-nosound\tNo sound\n"
+        "-nomusic\tNo music (sound effects remain enabled)\n"
         "-record\t\tRecord demo to file data.vcr\n"
         "-playback\tPlay back a demo from file data.vcr\n"
         "-quick\t\tSkip intro splash screens and movie\n"

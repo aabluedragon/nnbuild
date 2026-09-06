@@ -2589,7 +2589,14 @@ short of the menu art at 7000.
 Every unattended run takes `VB_HIDE_WINDOW=1 SDL_AUDIODRIVER=dummy` (the window is created hidden
 and never raised; rendering and screenshots go on offscreen),
 `-nosound -nomusic`, and `-usecwd -cfg /tmp/.../vbtest.cfg` with an absolute temporary
-config path. Hidden runs also log and dismiss native message boxes (answering
+config path. `-nomusic` now uses the same dashed option parsing as the other
+standard launch flags, keeps effects enabled when `-nosound` is absent, and
+prevents both level tracks and Theora movie audio from loading. Ramses dialogue
+remains a sound-effect path and is not suppressed by `-nomusic`. The live
+`mus_enabled` setting also stops a current soundtrack immediately without
+interrupting dialogue; `VB_KEX_MUSIC_STOP_TEST=1` proves the live transition
+against TOMB's real level track. Hidden runs
+also log and dismiss native message boxes (answering
 No to questions), so an unattended error cannot leave an invisible modal
 dialog behind. The explicit config matters because the game writes it at
 *startup* (`CONFIG_WriteSetup(1)`), not just on exit. `-cfg` is parsed ahead of

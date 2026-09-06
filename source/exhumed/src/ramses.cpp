@@ -387,7 +387,7 @@ static int Kex_RamsesStart(void)
         return 0;
 
     Bsprintf(path, "ramses/SP_%s%02d.wav", lang, nSpeech);
-    playMusicFile(path, false);
+    playMusicFile(path, false, false);
 
     pPupData = sKexPup;
     nPupData = (short)(n * 2);

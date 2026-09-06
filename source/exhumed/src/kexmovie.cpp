@@ -284,7 +284,7 @@ int Kex_PlayTheora(char const *fileName)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glClearColor(0.f, 0.f, 0.f, 1.f);
 
-        if (haveA && alen > 0)
+        if (!bNoSound && MusicToggle && haveA && alen > 0)
             hFx = FX_Play((char *)abuf, alen, -1, 0, 0, MusicVolume,
                           MusicVolume, MusicVolume, FX_MUSIC_PRIORITY,
                           fix16_one, MUSIC_ID + 1);

@@ -26,11 +26,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 void setCDaudiovolume(int val);
 bool playCDtrack(int nTrack, bool bLoop);
-bool playMusicFile(const char *name, bool bLoop);
+// Ramses dialogue shares the streamed-track mixer but is a sound effect, not
+// soundtrack music.  Its call opts out of the music preference explicitly.
+bool playMusicFile(const char *name, bool bLoop, bool honorMusicToggle = true);
 void StartfadeCDaudio();
 int StepFadeCDaudio();
 bool CDplaying();
 void StopCD();
+void StopCDMusic();
 int fadecdaudio();
 
 #endif
