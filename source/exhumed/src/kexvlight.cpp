@@ -11,9 +11,10 @@
 // colour at every polygon vertex it draws in Kex mode.
 //
 // KEXLIT3 additionally records which source face each emitted Build surface
-// represents. The query then blends only that face's samples, rather than
-// averaging a floor, wall and portal band that happen to share a coordinate.
-// KEXLIT2 and older position-only sidecars retain their monochrome lookups.
+// represents. KEXLIT4 retains the source tile triangles too, so the query can
+// use the remaster's barycentric RGB interpolation rather than estimating it
+// from nearby samples. KEXLIT2 and older position-only sidecars retain their
+// monochrome lookups.
 #include "compat.h"
 #include "build.h"
 #include "polymost.h"
@@ -21,15 +22,17 @@
 #include "kexbreak.h"
 
 struct KexVLSample { int32_t x, y, z, r, g, b, face; };
-struct KexVLFace { int32_t face, first, count; };
+struct KexVLFace { int32_t face, first, count, triFirst, triCount; };
 struct KexVLSurface { int32_t kind, ident, face; };
+struct KexVLTriangle { int32_t face, a, b, c; };
 
 static KexVLSample *s_samples;
 static KexVLFace   *s_faces;
 static KexVLSurface *s_surfaces;
+static KexVLTriangle *s_triangles;
 static int32_t     *s_order;       // sample indices sorted by cell
 static int32_t     *s_cellStart;   // cell -> first index in s_order, ncells+1 entries
-static int          s_n, s_nfaces, s_nsurfaces, s_v2;
+static int          s_n, s_nfaces, s_nsurfaces, s_ntriangles, s_v2;
 static int32_t      s_minx, s_miny, s_cw, s_ch;
 static char         s_loaded[BMAX_PATH];
 
@@ -43,12 +46,14 @@ void KexVL_Free(void)
     Xfree(s_samples); s_samples = NULL;
     Xfree(s_faces); s_faces = NULL;
     Xfree(s_surfaces); s_surfaces = NULL;
+    Xfree(s_triangles); s_triangles = NULL;
     Xfree(s_order); s_order = NULL;
     Xfree(s_cellStart); s_cellStart = NULL;
-    s_n = s_nfaces = s_nsurfaces = s_v2 = 0; s_loaded[0] = 0;
+    s_n = s_nfaces = s_nsurfaces = s_ntriangles = s_v2 = 0; s_loaded[0] = 0;
 }
 
 int KexVL_Ready(void) { return s_n > 0; }
+static int KexVL_FindFace(int face);
 
 void KexVL_Load(char const *mapfile)
 {
@@ -69,24 +74,28 @@ void KexVL_Load(char const *mapfile)
     kread(h, buf, len); buf[len] = 0; kclose(h);
 
     char *p = buf;
+    int const v4 = !Bstrncmp(p, "KEXLIT4", 7)
+        && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
     int const v3 = !Bstrncmp(p, "KEXLIT3", 7)
         && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
     int const v2 = !Bstrncmp(p, "KEXLIT2", 7)
         && (p[7] == ' ' || p[7] == '\t' || p[7] == '\r' || p[7] == '\n');
-    int const faceaware = v2 || v3;
-    int nSurface = 0;
+    int const faceaware = v2 || v3 || v4;
+    int nSurface = 0, nTriangle = 0;
     int n;
     if (faceaware)
     {
         p += 7;
         n = (int)strtol(p, &p, 10);
         nSurface = (int)strtol(p, &p, 10);
+        if (v4)
+            nTriangle = (int)strtol(p, &p, 10);
     }
     else
     {
         n = (int)strtol(p, &p, 10);
     }
-    if (n <= 0 || (faceaware && nSurface < 0)) { Xfree(buf); return; }
+    if (n <= 0 || (faceaware && (nSurface < 0 || nTriangle < 0))) { Xfree(buf); return; }
     s_samples = (KexVLSample *)Xmalloc(n * sizeof(KexVLSample));
     int cnt = 0;
     int32_t minx = INT32_MAX, miny = INT32_MAX, maxx = INT32_MIN, maxy = INT32_MIN;
@@ -103,7 +112,7 @@ void KexVL_Load(char const *mapfile)
         long z = strtol(p, &q, 10); if (q == p) break; p = q;
         long r = strtol(p, &q, 10); if (q == p) break; p = q;
         long g = r, b = r;
-        if (v3)
+        if (v3 || v4)
         {
             g = strtol(p, &q, 10); if (q == p) break; p = q;
             b = strtol(p, &q, 10); if (q == p) break; p = q;
@@ -127,7 +136,7 @@ void KexVL_Load(char const *mapfile)
             int const first = i, face = s_samples[i].face;
             while (i < cnt && s_samples[i].face == face)
                 i++;
-            s_faces[s_nfaces++] = { face, first, i - first };
+            s_faces[s_nfaces++] = { face, first, i - first, 0, 0 };
         }
         s_surfaces = (KexVLSurface *)Xmalloc(nSurface * sizeof(KexVLSurface));
         while (s_nsurfaces < nSurface)
@@ -138,7 +147,36 @@ void KexVL_Load(char const *mapfile)
             long face = strtol(p, &q, 10); if (q == p) break; p = q;
             s_surfaces[s_nsurfaces++] = { (int32_t)kind, (int32_t)ident, (int32_t)face };
         }
-        s_v2 = s_nsurfaces == nSurface;
+        if (v4)
+        {
+            if (nTriangle)
+                s_triangles = (KexVLTriangle *)Xmalloc(nTriangle * sizeof(KexVLTriangle));
+            while (s_ntriangles < nTriangle)
+            {
+                char *q;
+                long face = strtol(p, &q, 10); if (q == p) break; p = q;
+                long a = strtol(p, &q, 10); if (q == p) break; p = q;
+                long b = strtol(p, &q, 10); if (q == p) break; p = q;
+                long c = strtol(p, &q, 10); if (q == p) break; p = q;
+                if (a < 0 || a >= s_n || b < 0 || b >= s_n || c < 0 || c >= s_n
+                    || s_samples[a].face != face || s_samples[b].face != face
+                    || s_samples[c].face != face)
+                    break;
+                s_triangles[s_ntriangles++] = { (int32_t)face, (int32_t)a, (int32_t)b, (int32_t)c };
+            }
+            for (int i = 0; i < s_ntriangles; )
+            {
+                int const first = i, face = s_triangles[i].face;
+                while (i < s_ntriangles && s_triangles[i].face == face)
+                    i++;
+                int const entry = KexVL_FindFace(face);
+                if (entry < 0)
+                    break;
+                s_faces[entry].triFirst = first;
+                s_faces[entry].triCount = i - first;
+            }
+        }
+        s_v2 = s_nsurfaces == nSurface && (!v4 || s_ntriangles == nTriangle);
         if (!s_v2)
         {
             KexVL_Free();
@@ -147,8 +185,12 @@ void KexVL_Load(char const *mapfile)
         }
         Xfree(buf);
         Bstrncpyz(s_loaded, path, sizeof(s_loaded));
-        OSD_Printf("Kex light field: %d face samples, %d surfaces from %s\n",
-                   s_n, s_nsurfaces, path);
+        if (v4)
+            OSD_Printf("Kex light field: %d face samples, %d surfaces, %d tile triangles from %s\n",
+                       s_n, s_nsurfaces, s_ntriangles, path);
+        else
+            OSD_Printf("Kex light field: %d face samples, %d surfaces from %s\n",
+                       s_n, s_nsurfaces, path);
         return;
     }
     Xfree(buf);
@@ -231,11 +273,66 @@ static int KexVL_FindSurface(int kind, int ident)
         && s_surfaces[lo].ident == ident ? lo : -1;
 }
 
+static int KexVL_TriangleColor(int face, float x, float y, float z, float color[3])
+{
+    int const entry = KexVL_FindFace(face);
+    if (entry < 0 || s_faces[entry].triCount <= 0)
+        return 0;
+
+    KexVLFace const &f = s_faces[entry];
+    for (int i = f.triFirst; i < f.triFirst + f.triCount; i++)
+    {
+        KexVLTriangle const &t = s_triangles[i];
+        KexVLSample const &a = s_samples[t.a];
+        KexVLSample const &b = s_samples[t.b];
+        KexVLSample const &c = s_samples[t.c];
+
+        float const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+        float const acx = c.x - a.x, acy = c.y - a.y, acz = c.z - a.z;
+        float const nx = aby * acz - abz * acy;
+        float const ny = abz * acx - abx * acz;
+        float const nz = abx * acy - aby * acx;
+        float const anx = fabsf(nx), any = fabsf(ny), anz = fabsf(nz);
+
+        // Project onto the triangle's largest plane.  This works equally for
+        // floors, vertical walls and the source's sloped cells, without
+        // assuming the Build approximation lies exactly on that source plane.
+        float ax, ay, bx, by, cx, cy, px, py;
+        if (anx >= any && anx >= anz)
+        {
+            ax = a.y; ay = a.z; bx = b.y; by = b.z; cx = c.y; cy = c.z; px = y; py = z;
+        }
+        else if (any >= anz)
+        {
+            ax = a.x; ay = a.z; bx = b.x; by = b.z; cx = c.x; cy = c.z; px = x; py = z;
+        }
+        else
+        {
+            ax = a.x; ay = a.y; bx = b.x; by = b.y; cx = c.x; cy = c.y; px = x; py = y;
+        }
+        float const det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+        if (fabsf(det) < 1e-6f)
+            continue;
+        float const u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
+        float const v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
+        float const w = 1.f - u - v;
+        if (u < -.01f || v < -.01f || w < -.01f)
+            continue;
+        color[0] = u * a.r + v * b.r + w * c.r;
+        color[1] = u * a.g + v * b.g + w * c.g;
+        color[2] = u * a.b + v * b.b + w * c.b;
+        return 1;
+    }
+    return 0;
+}
+
 static int KexVL_FaceColor(int face, float x, float y, float z, float color[3])
 {
     int const entry = KexVL_FindFace(face);
     if (entry < 0)
         return 0;
+    if (KexVL_TriangleColor(face, x, y, z, color))
+        return 1;
     KexVLFace const &f = s_faces[entry];
     float wsum = 0.f, rsum = 0.f, gsum = 0.f, bsum = 0.f;
     float nearest2 = 1e30f; int nearest = -1;

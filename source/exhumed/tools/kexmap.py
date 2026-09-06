@@ -1975,11 +1975,13 @@ def _wall_bands(m, sects, walls, ranges, tilebase):
 def write_lit(path, m, sects, walls, ranges):
     """Write the KEX baked-light field with emitted-surface provenance.
 
-    KEXLIT3 keeps every source face and its RGB vertex colour separate. The
+    KEXLIT4 keeps every source face's RGB vertices and tile triangles.  The
     older position-only table averaged colours where a floor, wall, or portal
-    band shared a vertex, so Polymost could blend unrelated surfaces. Each
-    generated Build surface now points at the source face it renders; the MAP
-    geometry remains untouched.
+    band shared a vertex, so Polymost could blend unrelated surfaces.  KEXLIT3
+    fixed that provenance but still estimated the colour between vertices by
+    distance.  The remaster rasterizes each authored tile as two triangles, so
+    preserve that exact connectivity too.  Each generated Build surface points
+    at the source face it renders; the MAP geometry remains untouched.
     """
     keep, remap = sector_remap(sects, ranges)
     wremap = {}
@@ -2006,28 +2008,42 @@ def write_lit(path, m, sects, walls, ranges):
     face_ids = sorted({face for _kind, _id, face in surfaces
                        if 0 <= face < m.nface and _lit(m.faces[face])})
     samples = []
+    triangles = []
     for face in face_ids:
         f = m.faces[face]
-        acc = {}
+        sample_first = len(samples)
         for vi in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
             x, y, z, (r, g, b, _a) = m.verts[vi]
-            key = (int(round(x * WORLD)), int(round(-y * WORLD)),
-                   int(round(-z * SCALE * WORLD)))
-            total = acc.get(key)
-            if total is None:
-                acc[key] = [r, g, b, 1]
-            else:
-                total[0] += r; total[1] += g; total[2] += b; total[3] += 1
-        samples.extend((face, x, y, z, int(round(r / count)),
-                        int(round(g / count)), int(round(b / count)))
-                       for (x, y, z), (r, g, b, count) in sorted(acc.items()))
+            # Keep duplicate positions separate.  Kex's mesh can deliberately
+            # split a position into distinct vertices with distinct lighting;
+            # averaging those was harmless for the campaign's grayscale data,
+            # but cannot reproduce the renderer's per-triangle interpolation.
+            samples.append((face, vi, int(round(x * WORLD)), int(round(-y * WORLD)),
+                            int(round(-z * SCALE * WORLD)), r, g, b))
+
+        if f.tileStart < 0:
+            continue
+        for ti in range(f.tileStart, f.tileEnd + 1):
+            corners = [c for c in m.tileCorners[ti] if c != 255]
+            if len(corners) not in (3, 4):
+                continue
+            if any(f.tileVertStart + c < f.tileVertStart
+                   or f.tileVertStart + c >= min(f.tileVertEnd + 1, len(m.verts))
+                   for c in corners):
+                continue
+            ids = [sample_first + c for c in corners]
+            triangles.append((face, ids[0], ids[1], ids[2]))
+            if len(ids) == 4:
+                triangles.append((face, ids[0], ids[2], ids[3]))
 
     with open(path, 'w') as f:
-        f.write("KEXLIT3 %d %d\n" % (len(samples), len(surfaces)))
-        for face, x, y, z, r, g, b in samples:
+        f.write("KEXLIT4 %d %d %d\n" % (len(samples), len(surfaces), len(triangles)))
+        for face, _vi, x, y, z, r, g, b in samples:
             f.write("%d %d %d %d %d %d %d\n" % (face, x, y, z, r, g, b))
         for kind, ident, face in sorted(surfaces):
             f.write("%d %d %d\n" % (kind, ident, face))
+        for face, a, b, c in triangles:
+            f.write("%d %d %d %d\n" % (face, a, b, c))
     return len(samples)
 
 
@@ -4745,7 +4761,7 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         # The remaster groups its fires, torches and lamps as "Light Sources" --
         # 19 actor types. They declare no lightRadius of their own (only four
         # projectiles do), because in Kex their glow is baked into the vertex
-        # colours. Polymost's KEXLIT3 path draws that field directly; the
+        # colours. Polymost's KEXLIT4 path draws that field directly; the
         # fallback renderer puts the glow back as a real light instead. These
         # are the tiles that should cast that fallback light.
         if is_light:

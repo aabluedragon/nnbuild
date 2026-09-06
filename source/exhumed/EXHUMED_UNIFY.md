@@ -868,15 +868,19 @@ geometry:
   `KEX_LIGHT_WALL_PIECES` (3) pieces, and every wall -- split or not --
   takes its shade at its own midpoint rather than the face average.
 
-**Vertex colours.** The Polymost KEX path now reads `KEXLIT3` sidecars: every
+**Vertex colours.** The Polymost KEX path now reads `KEXLIT4` sidecars. Every
 emitted floor, ceiling, wall and masked wall is mapped back to its source Kex
-face, then tessellated along the 128-unit source grid and drawn with that
-face's interpolated RGB vertex colour. That avoids blending a wall, floor and
-portal band merely because they share a coordinate. The campaign's 536,539
-lit vertices are grayscale, but `TEST_COLOREDLIGHTS` has 800 chromatic samples
-(up to 218 channel difference), all retained by the converter and renderer.
-`KEXLIT2` and pre-provenance sidecars still load as monochrome compatibility
-data; the geometry splits remain the hardware-independent fallback.
+face, and the sidecar retains each face-local RGB vertex (including coincident
+positions) plus the source tile triangles. At every Build polygon vertex the
+renderer queries that triangle mesh with barycentric RGB interpolation,
+avoiding the old blend of a wall, floor and portal band merely because they
+share a coordinate. The campaign's 536,539 lit vertices are grayscale, but
+`TEST_COLOREDLIGHTS` has 800 chromatic samples (up to 218 channel difference),
+all retained by the converter and renderer. When Build's converted geometry
+places a query outside an authored tile, the face-local lookup remains as a
+safe fallback. `KEXLIT2` and pre-provenance sidecars still load as monochrome
+compatibility data; the geometry splits remain the hardware-independent
+fallback.
 
 KARNAK goes from 494 sectors and 2311 walls to 669 and 3793; TOMB from 285
 / 1361 to 451 / 2515. Two things this turned up in the older passes: a
@@ -1133,9 +1137,10 @@ wall torches, candles and the water lamp. None of them declares a `lightRadius`
 or `lightIntensity` (only four projectiles in the whole game do), because in Kex
 their glow is baked into the vertex colours: on the wall behind TOMB's first
 fire pot the baked luminance runs 39 at the top of one face to 255 at the
-bottom. `KEXLIT3` renders that gradient as the face's own per-vertex colour in
-Polymost. The older per-sector real-light path remains only for a missing
-sidecar or a non-Polymost compatibility renderer.
+bottom. `KEXLIT4` preserves the authored tile triangles and renders that
+gradient with their RGB interpolation in Polymost. The older per-sector
+real-light path remains only for a missing sidecar or a non-Polymost
+compatibility renderer.
 
 The flame itself is an authored loop as well. Fire pots carry 12 frames and
 wall torches 16; their `randomizeFrames` flag chooses a starting phase, it does

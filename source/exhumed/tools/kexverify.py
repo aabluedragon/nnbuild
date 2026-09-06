@@ -4338,7 +4338,7 @@ def verify_player_travel():
 
 
 def verify_light_fields(z, outdir, include_testmaps=False):
-    """Every converted KEX map must retain face-local source light samples."""
+    """Every converted KEX map must retain its face-local RGB triangle mesh."""
     out = []
     try:
         files = os.listdir(outdir)
@@ -4368,16 +4368,17 @@ def verify_light_fields(z, outdir, include_testmaps=False):
         try:
             lines = open(path, encoding='ascii').read().splitlines()
             header = lines[0].split()
-            if len(header) != 3 or header[0] != 'KEXLIT3':
-                raise ValueError('not a KEXLIT3 sidecar')
-            declared, mapped = int(header[1]), int(header[2])
+            if len(header) != 4 or header[0] != 'KEXLIT4':
+                raise ValueError('not a KEXLIT4 sidecar')
+            declared, mapped, triangle_count = (int(header[1]), int(header[2]),
+                                                int(header[3]))
         except (OSError, ValueError, IndexError) as exc:
             out.append('%s is missing or malformed: %s' % (os.path.basename(path), exc))
             continue
 
-        samples, surfaces = [], []
+        samples, surfaces, triangles = [], [], []
         malformed = False
-        if len(lines) != 1 + declared + mapped or declared <= 0:
+        if len(lines) != 1 + declared + mapped + triangle_count or declared <= 0:
             malformed = True
         for line in lines[1:1 + declared]:
             try:
@@ -4389,7 +4390,7 @@ def verify_light_fields(z, outdir, include_testmaps=False):
                 malformed = True
                 break
             samples.append(fields)
-        for line in lines[1 + declared:]:
+        for line in lines[1 + declared:1 + declared + mapped]:
             try:
                 fields = tuple(int(value) for value in line.split())
             except ValueError:
@@ -4399,16 +4400,32 @@ def verify_light_fields(z, outdir, include_testmaps=False):
                 malformed = True
                 break
             surfaces.append(fields)
+        for line in lines[1 + declared + mapped:]:
+            try:
+                fields = tuple(int(value) for value in line.split())
+            except ValueError:
+                malformed = True
+                break
+            if len(fields) != 4:
+                malformed = True
+                break
+            triangles.append(fields)
         if (malformed or declared != len(samples) or mapped != len(surfaces)
+                or triangle_count != len(triangles)
                 or any(channel < 0 or channel > 255
                        for _face, _x, _y, _z, r, g, b in samples
                        for channel in (r, g, b))
-                or samples != sorted(samples)
-                or len({sample[:4] for sample in samples}) != len(samples)
                 or surfaces != sorted(surfaces)
-                or len(set(surfaces)) != len(surfaces)):
-            out.append('%s has an invalid KEXLIT3 table (%d samples, %d surfaces)'
-                       % (os.path.basename(path), declared, mapped))
+                or len(set(surfaces)) != len(surfaces)
+                or any(triangles[i][0] > triangles[i + 1][0]
+                       for i in range(len(triangles) - 1))
+                or any(face < 0 or a < 0 or b < 0 or c < 0
+                       or a >= declared or b >= declared or c >= declared
+                       or samples[a][0] != face or samples[b][0] != face
+                       or samples[c][0] != face
+                       for face, a, b, c in triangles)):
+            out.append('%s has an invalid KEXLIT4 table (%d samples, %d surfaces, %d triangles)'
+                       % (os.path.basename(path), declared, mapped, triangle_count))
             continue
 
         source = source_by_stem.get(stem[4:].lower()) \
@@ -4434,24 +4451,34 @@ def verify_light_fields(z, outdir, include_testmaps=False):
 
         wanted_faces = {face for face in actual_surface.values()
                         if 0 <= face < m.nface and K._lit(m.faces[face])}
-        expected_samples = set()
-        for face in wanted_faces:
+        expected_samples = []
+        expected_triangles = []
+        for face in sorted(wanted_faces):
             f = m.faces[face]
-            acc = {}
+            sample_first = len(expected_samples)
             for vi in range(f.tileVertStart, min(f.tileVertEnd + 1, len(m.verts))):
                 x, y, z_, (r, g, b, _a) = m.verts[vi]
-                key = (int(round(x * K.WORLD)), int(round(-y * K.WORLD)),
-                       int(round(-z_ * K.SCALE * K.WORLD)))
-                total = acc.get(key)
-                if total is None:
-                    acc[key] = [r, g, b, 1]
-                else:
-                    total[0] += r; total[1] += g; total[2] += b; total[3] += 1
-            expected_samples.update((face, x, y, z_, int(round(r / count)),
-                                     int(round(g / count)), int(round(b / count)))
-                                    for (x, y, z_), (r, g, b, count) in acc.items())
-        if set(samples) != expected_samples:
-            out.append('%s face-local samples differ from retail vertex lighting' % stem)
+                expected_samples.append((face, int(round(x * K.WORLD)),
+                                         int(round(-y * K.WORLD)),
+                                         int(round(-z_ * K.SCALE * K.WORLD)), r, g, b))
+            if f.tileStart < 0:
+                continue
+            vertex_end = min(f.tileVertEnd + 1, len(m.verts))
+            for ti in range(f.tileStart, f.tileEnd + 1):
+                corners = [corner for corner in m.tileCorners[ti] if corner != 255]
+                if (len(corners) not in (3, 4)
+                        or any(f.tileVertStart + corner < f.tileVertStart
+                               or f.tileVertStart + corner >= vertex_end
+                               for corner in corners)):
+                    continue
+                ids = [sample_first + corner for corner in corners]
+                expected_triangles.append((face, ids[0], ids[1], ids[2]))
+                if len(ids) == 4:
+                    expected_triangles.append((face, ids[0], ids[2], ids[3]))
+        if samples != expected_samples:
+            out.append('%s light vertices differ from retail source data' % stem)
+        if triangles != expected_triangles:
+            out.append('%s light triangles differ from retail tile topology' % stem)
 
     srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
@@ -4462,8 +4489,8 @@ def verify_light_fields(z, outdir, include_testmaps=False):
         return out + ['cannot read native KEX light-field bridge: %s' % exc]
     for needle, source in (
             ('Bstrncat(path,".LIT",sizeof(path)-Bstrlen(path)-1)', vlight),
-            ('KEXLIT3', vlight), ('KexVL_CurrentFace', vlight),
-            ('KexVL_FaceColor', vlight), ('KexVL_ColorAt', vlight),
+            ('KEXLIT4', vlight), ('KexVL_CurrentFace', vlight),
+            ('KexVL_TriangleColor', vlight), ('KexVL_FaceColor', vlight), ('KexVL_ColorAt', vlight),
             ('s.wallnum', vlight),
             ('polymost_kexShadeAt=KexVL_ShadeAt', bridge),
             ('polymost_kexColorAt=KexVL_ColorAt', bridge),
