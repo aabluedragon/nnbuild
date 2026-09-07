@@ -273,6 +273,57 @@ static int KexVL_FindSurface(int kind, int ident)
         && s_surfaces[lo].ident == ident ? lo : -1;
 }
 
+static int KexVL_TriangleColorOne(KexVLTriangle const &t, float x, float y, float z, float color[3], int checkInside)
+{
+    KexVLSample const &a = s_samples[t.a];
+    KexVLSample const &b = s_samples[t.b];
+    KexVLSample const &c = s_samples[t.c];
+
+    float const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+    float const acx = c.x - a.x, acy = c.y - a.y, acz = c.z - a.z;
+    float const nx = aby * acz - abz * acy;
+    float const ny = abz * acx - abx * acz;
+    float const nz = abx * acy - aby * acx;
+    float const anx = fabsf(nx), any = fabsf(ny), anz = fabsf(nz);
+
+    // A Build floor (including a Build slope) is a height field over X/Y.
+    // Its converted slope can be a few Z units away from the KEX source
+    // plane, so selecting a projection plane from that source triangle can
+    // make an otherwise identical X/Y point fall into a neighbouring tile
+    // or the distance-sample fallback.  The KEX floor mesh itself is tiled
+    // in X/Y, therefore use that immutable footprint for floors.  Walls keep
+    // the largest-plane projection, which also handles their vertical tiles.
+    float ax, ay, bx, by, cx, cy, px, py;
+    if (polymost_kexsurf.kind == 2 || anz >= anx && anz >= any)
+    {
+        ax = a.x; ay = a.y; bx = b.x; by = b.y; cx = c.x; cy = c.y; px = x; py = y;
+    }
+    else if (anx >= any && anx >= anz)
+    {
+        ax = a.y; ay = a.z; bx = b.y; by = b.z; cx = c.y; cy = c.z; px = y; py = z;
+    }
+    else if (any >= anz)
+    {
+        ax = a.x; ay = a.z; bx = b.x; by = b.z; cx = c.x; cy = c.z; px = x; py = z;
+    }
+    else
+    {
+        ax = a.x; ay = a.z; bx = b.x; by = b.z; cx = c.x; cy = c.z; px = x; py = z;
+    }
+    float const det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
+    if (fabsf(det) < 1e-6f)
+        return 0;
+    float const u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
+    float const v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
+    float const w = 1.f - u - v;
+    if (checkInside && (u < -.01f || v < -.01f || w < -.01f))
+        return 0;
+    color[0] = u * a.r + v * b.r + w * c.r;
+    color[1] = u * a.g + v * b.g + w * c.g;
+    color[2] = u * a.b + v * b.b + w * c.b;
+    return 1;
+}
+
 static int KexVL_TriangleColor(int face, float x, float y, float z, float color[3])
 {
     int const entry = KexVL_FindFace(face);
@@ -281,48 +332,8 @@ static int KexVL_TriangleColor(int face, float x, float y, float z, float color[
 
     KexVLFace const &f = s_faces[entry];
     for (int i = f.triFirst; i < f.triFirst + f.triCount; i++)
-    {
-        KexVLTriangle const &t = s_triangles[i];
-        KexVLSample const &a = s_samples[t.a];
-        KexVLSample const &b = s_samples[t.b];
-        KexVLSample const &c = s_samples[t.c];
-
-        float const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
-        float const acx = c.x - a.x, acy = c.y - a.y, acz = c.z - a.z;
-        float const nx = aby * acz - abz * acy;
-        float const ny = abz * acx - abx * acz;
-        float const nz = abx * acy - aby * acx;
-        float const anx = fabsf(nx), any = fabsf(ny), anz = fabsf(nz);
-
-        // Project onto the triangle's largest plane.  This works equally for
-        // floors, vertical walls and the source's sloped cells, without
-        // assuming the Build approximation lies exactly on that source plane.
-        float ax, ay, bx, by, cx, cy, px, py;
-        if (anx >= any && anx >= anz)
-        {
-            ax = a.y; ay = a.z; bx = b.y; by = b.z; cx = c.y; cy = c.z; px = y; py = z;
-        }
-        else if (any >= anz)
-        {
-            ax = a.x; ay = a.z; bx = b.x; by = b.z; cx = c.x; cy = c.z; px = x; py = z;
-        }
-        else
-        {
-            ax = a.x; ay = a.y; bx = b.x; by = b.y; cx = c.x; cy = c.y; px = x; py = y;
-        }
-        float const det = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy);
-        if (fabsf(det) < 1e-6f)
-            continue;
-        float const u = ((by - cy) * (px - cx) + (cx - bx) * (py - cy)) / det;
-        float const v = ((cy - ay) * (px - cx) + (ax - cx) * (py - cy)) / det;
-        float const w = 1.f - u - v;
-        if (u < -.01f || v < -.01f || w < -.01f)
-            continue;
-        color[0] = u * a.r + v * b.r + w * c.r;
-        color[1] = u * a.g + v * b.g + w * c.g;
-        color[2] = u * a.b + v * b.b + w * c.b;
-        return 1;
-    }
+        if (KexVL_TriangleColorOne(s_triangles[i], x, y, z, color, 1))
+            return 1;
     return 0;
 }
 
@@ -331,6 +342,11 @@ static int KexVL_FaceColor(int face, float x, float y, float z, float color[3])
     int const entry = KexVL_FindFace(face);
     if (entry < 0)
         return 0;
+    // The source rasterizes these exact tile triangles.  This is a pure
+    // world-space query: no camera state or screen-space clipping may affect
+    // the resulting colour.  Converted slopes and portal slivers can land
+    // just outside their source tile, in which case the face-local fallback
+    // below keeps the edge continuous rather than dropping to a sector shade.
     if (KexVL_TriangleColor(face, x, y, z, color))
         return 1;
     KexVLFace const &f = s_faces[entry];
@@ -392,13 +408,60 @@ static int KexVL_CurrentFace(void)
     return entry >= 0 ? s_surfaces[entry].face : -1;
 }
 
+int KexVL_Triangles(polymost_kextriangle_t *out, int max)
+{
+    if (!s_v2 || !out || max <= 0)
+        return 0;
+
+    int const face = KexVL_CurrentFace();
+    int const entry = KexVL_FindFace(face);
+    if (entry < 0)
+        return 0;
+
+    KexVLFace const &f = s_faces[entry];
+    // Returning no mesh asks polymost to use its bounded, world-anchored
+    // tessellation instead.  A single enormous terrain face must not turn
+    // into thousands of immediate-mode polygons just because it is visible.
+    if (f.triCount <= 0 || f.triCount > max)
+        return 0;
+
+    for (int i = 0; i < f.triCount; i++)
+    {
+        KexVLTriangle const &t = s_triangles[f.triFirst + i];
+        KexVLSample const *const v[3] = { &s_samples[t.a], &s_samples[t.b], &s_samples[t.c] };
+        for (int j = 0; j < 3; j++)
+            out[i].p[j] = { (float)v[j]->x, (float)v[j]->y, (float)v[j]->z };
+    }
+    return f.triCount;
+}
+
 int KexVL_ColorAt(float x, float y, float z, float color[3])
 {
     if (!s_v2)
         return 0;
     float raw[3];
     int const face = KexVL_CurrentFace();
-    if (face < 0 || !KexVL_FaceColor(face, x, y, z, raw))
+    int found = 0;
+    if (face >= 0 && polymost_kexLightTriangle >= 0)
+    {
+        int const entry = KexVL_FindFace(face);
+        if (entry >= 0)
+        {
+            KexVLFace const &f = s_faces[entry];
+            int const tri = f.triFirst + polymost_kexLightTriangle;
+            if (polymost_kexLightTriangle < f.triCount)
+                // A source triangle is clipped against the live Build face
+                // before polymost draws it.  At a converted portal or slope
+                // edge the two planes can differ by a few units, so the
+                // clipped screen vertex may map just outside that triangle's
+                // authored footprint.  Do not extrapolate its colour there:
+                // a bright extrapolated sliver is much more conspicuous than
+                // letting the normal face-local lookup choose the adjoining
+                // tile (or its edge fallback).
+                found = KexVL_TriangleColorOne(s_triangles[tri], x, y, z, raw, 1);
+        }
+    }
+    if (!found && (face < 0 || !KexVL_FaceColor(face, x, y, z, raw)))
         return 0;
     color[0] = KexVL_Factor(raw[0]);
     color[1] = KexVL_Factor(raw[1]);

@@ -392,11 +392,13 @@ void KexLight_Init(void)
         KexVL_Load(gUserMapFilename);
         polymost_kexShadeAt = KexVL_ShadeAt;
         polymost_kexColorAt = KexVL_ColorAt;
+    polymost_kexTriangles = NULL;
         polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("VB_KEX_FLATLIGHT");
     }
     if (!g_kexMode || !s_lightTypes)
         return;
 
+        polymost_kexTriangles = KexVL_Triangles;
     for (int i = 0; i < kMaxSprites && s_lights < kMaxKexLights; i++)
     {
         if (sprite[i].statnum >= kMaxStatus || sprite[i].sectnum < 0)
