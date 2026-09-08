@@ -148,10 +148,21 @@ int KexExplosion01_Spawn(int x, int y, int z, short nSector,
     // KEX positive Z is upward; Build Z grows downward and is 16*WORLD per
     // source unit. Fx_Explosion01 is scale 4, while the water actor is 2.
     int const effectZ = z - nKexZOffset * 16 * 6;
+    // The generated KEX explosion art is already RGBA orange/yellow.  Flag 4
+    // here selects PCExhumed's legacy palette 4, which remaps that truecolour
+    // art into the black cloud seen on explosive barrels.  Fullbright remains
+    // on the effect's sequence frames (their FrameFlag is 4), so initialize
+    // only the sprite palette normally.
     int const nAnim = BuildAnim(-1, nSeq, 0, x, y, effectZ, nSector,
-                                bWater ? 48 : 96, 4);
+                                bWater ? 48 : 96, 0);
     if (nAnim < 0)
         return -2;
+
+    if (Bgetenv("VB_KEXEXPLOSION_PALETTE_TEST"))
+        OSD_Printf("Kex explosion palette test: %s (%s sprite palette %d)\n",
+                   sprite[GetAnimSprite(nAnim)].pal == 0 ? "PASS" : "FAIL",
+                   bWater ? "water" : "land",
+                   (int)sprite[GetAnimSprite(nAnim)].pal);
 
     // These are frame-zero callbacks on the spawned effect, before the
     // caller's radial blast callback. Play them only if actor allocation
@@ -169,8 +180,14 @@ int KexVasePuff_Spawn(int x, int y, int z, short nSector,
             || (unsigned)nSector >= (unsigned)numsectors)
         return -1;
 
+    // Fx_VaseExplodePuff already carries its authored olive colour in the
+    // generated RGBA art. BuildAnim's flag 4 installs the classic bright
+    // palette; applying that second palette transform turns the remaster
+    // effect into a near-black cloud. KEXVASEPUFF.SEQ still carries its
+    // fullbright frame flag, so only the incompatible palette transform is
+    // removed here.
     int const nAnim = BuildAnim(-1, kSeqKexVasePuff, 0, x, y,
-        z - nKexZOffset * 16 * 6, nSector, 48, 4);
+        z - nKexZOffset * 16 * 6, nSector, 48, 0);
     return nAnim >= 0 ? nAnim : -2;
 }
 

@@ -2435,32 +2435,37 @@ enum
     kKexTileHudWingsR  = 7074,
 };
 
-// The remaster's bar is a 416-unit-wide assembly stretched to the screen:
-//   head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
-// At 320 units wide that is 30 / 25 / 105 / 105 / 25 / 30, which puts the jewel
-// where the two frames meet on the exact horizontal centre -- as it is in the
-// remaster. The band is 16 tall and the heads stand 32, overhanging it.
-// The remaster draws the bar on a 240-unit canvas: 24 tall, the heads 48.
-// The 416-unit assembly fitted to 320 is a scale of 0.77: 18.5 and 37 --
-// not the 16 and 32 this used to draw, a sixth too small.
-#define KEX_HUD_BAND_H  18
-#define KEX_HUD_HEAD_H  37
-#define KEX_HUD_HEAD_W  30
-#define KEX_HUD_SCAR_W  25
-#define KEX_HUD_MAIN_W  105
-#define KEX_HUD_WING_W  74
-
-// The bar slot is cut out of the frame art: alpha 0 at x 31..117 of 136, rows
-// 6..9 of 24. Scaled into the drawn 105x16 frame that is x+24 wide 66, four
-// rows down, three tall.
-#define KEX_HUD_SLOT_W  66
-#define KEX_HUD_SLOT_H  3
-#define KEX_HUD_SLOT_Y  (200 - KEX_HUD_BAND_H + 4)
+// kexSlaveHudLocal draws these exact rectangles in its 320x240 source canvas:
+//
+//   head_left (0,192,40,48)       head_right (280,192,40,48)
+//   main_left (24,216,136,24)     main_right (160,216,136,24)
+//   blue gauge (54,222,86,8)      red gauge (196,222,86,8)
+//
+// The original Build HUD coordinate system is 320x200, whose pixels are 6/5
+// taller.  Preserve every source x coordinate and compress only y by 5/6;
+// kexmenu.py pre-compresses the art by the same amount so rotatesprite does
+// not letterbox it.  The previous code incorrectly treated the individual
+// source files as a 416-unit strip, shrinking the two main frames and moving
+// both gauges inward.
+#define KEX_HUD_Y(y)      (((y) * 5 + 3) / 6)
+#define KEX_HUD_MAIN_L_X  24
+#define KEX_HUD_MAIN_R_X  160
+#define KEX_HUD_MAIN_Y    KEX_HUD_Y(216)
+#define KEX_HUD_MAIN_W    136
+#define KEX_HUD_MAIN_H    KEX_HUD_Y(24)
+#define KEX_HUD_HEAD_Y    KEX_HUD_Y(192)
+#define KEX_HUD_HEAD_W    40
+#define KEX_HUD_HEAD_H    KEX_HUD_Y(48)
+#define KEX_HUD_SLOT_W    86
+#define KEX_HUD_SLOT_H    KEX_HUD_Y(8)
+#define KEX_HUD_SLOT_Y    KEX_HUD_Y(222)
+#define KEX_HUD_BLUE_X    54
+#define KEX_HUD_RED_X     196
 
 // Flat fills have to be tiled rather than stretched: KexDrawTile reconciles the
-// two axes by taking the smaller scale, so a square swatch asked for a 66x3
-// rectangle would come out 3 wide. Square cells the height of the slot give the
-// run its real length, and the overlap of the pulled-back last cell is
+// two axes by taking the smaller scale, so a square swatch asked for an 86x7
+// rectangle would come out seven wide. Square cells the height of the slot give
+// the run its real length, and the overlap of the pulled-back last cell is
 // invisible in a flat colour.
 static void KexHud_Bar(int x, int tile, int pct)
 {
@@ -2515,7 +2520,7 @@ static void KexHud_DrawSpark(void)
     int const sector = ((yaw + 128) >> 8) & 7;          // 0 north, clockwise
     static int8_t const dx[8] = { 0, 6, 8, 6, 0, -6, -8, -6 };
     static int8_t const dy[8] = { -7, -5, 0, 5, 7, 5, 0, -5 };
-    int const cx = 160, cy = 200 - KEX_HUD_BAND_H + 7;
+    int const cx = 160, cy = KEX_HUD_MAIN_Y + KEX_HUD_MAIN_H / 2;
     int const w = tilesiz[kKexTileHudSpark].x, h = tilesiz[kKexTileHudSpark].y;
     KexDrawTile(kKexTileHudSpark, cx + dx[sector] - w / 2, cy + dy[sector] - h / 2, w, h, 0, 0, 0);
 }
@@ -2547,23 +2552,13 @@ void KexHud_Draw(void)
     if (!KexHud_Available())
         return;
 
-    int const bandY = 200 - KEX_HUD_BAND_H;
-    int const headY = 200 - KEX_HUD_HEAD_H;
-    // The Kex canvas is 240 units tall.  In our 200-line virtual space a
-    // 544-unit HUD therefore needs 453 units of width before its wings fit.
-    // Keep the ordinary 320-unit layout at 16:9 and 16:10, but use the
-    // remaster's wider assembly on ultrawide displays.
+    // Keep the source's 320-wide HUD canvas centred when the game has room
+    // beyond the 4:3-safe area.  All of the measurements below remain the
+    // remaster's native ones rather than being fitted to that wider viewport.
     int const canvasW = max(320, (xdim * 200) / max(1, ydim));
-    int const wide = canvasW >= 454 && tilesiz[kKexTileHudWings].x > 0;
-    int const ornamentW = wide ? KEX_HUD_WING_W : KEX_HUD_SCAR_W;
-    int const assemblyW = 2 * KEX_HUD_HEAD_W + 2 * ornamentW + 2 * KEX_HUD_MAIN_W;
-    int const assemblyX = (canvasW - assemblyW) / 2;
-    int const lhead = assemblyX;
-    int const lornament = lhead + KEX_HUD_HEAD_W;
-    int const lmain = lornament + ornamentW;
-    int const rmain = lmain + KEX_HUD_MAIN_W;            // 160, the centre
-    int const rornament = rmain + KEX_HUD_MAIN_W;
-    int const rhead = rornament + ornamentW;
+    int const canvasX = (canvasW - 320) / 2;
+    int const lmain = canvasX + KEX_HUD_MAIN_L_X;
+    int const rmain = canvasX + KEX_HUD_MAIN_R_X;
 
     int const air   = clamp((int)airframe * 100 / 16, 0, 100);
     int const hp    = PlayerList[nLocalPlayer].nHealth;
@@ -2572,27 +2567,19 @@ void KexHud_Draw(void)
     // Fills first: the slot is a hole in the frame, so the frame laid over them
     // clips each bar to the slot's slanted end for free. Air on the left,
     // health on the right, the way the remaster reads them.
-    KexHud_Bar(lmain + 24, kKexTileHudBlue, air);
-    KexHud_Bar(rmain + 28, kKexTileHudRed,  hpPct);
+    KexHud_Bar(canvasX + KEX_HUD_BLUE_X, kKexTileHudBlue, air);
+    KexHud_Bar(canvasX + KEX_HUD_RED_X,  kKexTileHudRed,  hpPct);
 
-    KexDrawTile(kKexTileHudMainL, lmain, bandY, KEX_HUD_MAIN_W, KEX_HUD_BAND_H, 0, 0, 0);
-    KexDrawTile(kKexTileHudMainR, rmain, bandY, KEX_HUD_MAIN_W, KEX_HUD_BAND_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudMainL, lmain, KEX_HUD_MAIN_Y,
+                KEX_HUD_MAIN_W, KEX_HUD_MAIN_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudMainR, rmain, KEX_HUD_MAIN_Y,
+                KEX_HUD_MAIN_W, KEX_HUD_MAIN_H, 0, 0, 0);
 
-    if (wide)
-    {
-        KexDrawTile(kKexTileHudWings, lornament, bandY, KEX_HUD_WING_W, KEX_HUD_BAND_H, 0, 0, 0);
-        KexDrawTile(kKexTileHudWingsR, rornament, bandY, KEX_HUD_WING_W, KEX_HUD_BAND_H, 0, 0, 0);
-    }
-    else
-    {
-        KexDrawTile(kKexTileHudScarab, lornament, bandY, KEX_HUD_SCAR_W, KEX_HUD_BAND_H, 0, 0, 0);
-        KexDrawTile(kKexTileHudScarab, rornament, bandY, KEX_HUD_SCAR_W, KEX_HUD_BAND_H, 0, 0, 0);
-    }
-
-    // Heads last: they overhang the band, and their surround is transparent so
-    // the view shows through beside them, as it does in the remaster.
-    KexDrawTile(kKexTileHudHeadL, lhead, headY, KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
-    KexDrawTile(kKexTileHudHeadR, rhead, headY,
+    // Heads last: as in kexSlaveHudLocal, they overlap the outer 16 pixels of
+    // the main frames and overhang them by 20 Build lines.
+    KexDrawTile(kKexTileHudHeadL, canvasX, KEX_HUD_HEAD_Y,
+                KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
+    KexDrawTile(kKexTileHudHeadR, canvasX + 280, KEX_HUD_HEAD_Y,
                 KEX_HUD_HEAD_W, KEX_HUD_HEAD_H, 0, 0, 0);
 
     extern char message_text[80];
@@ -2606,7 +2593,7 @@ void KexHud_Draw(void)
     {
         char ammoBuf[16];
         Bsprintf(ammoBuf, "%d", PlayerList[nLocalPlayer].nAmmo[nWeapon]);
-        KexMenu_Text(rmain + 24, bandY + 6, ammoBuf, 7, 0, 0, 1);
+        KexMenu_Text(rmain + 24, KEX_HUD_SLOT_Y + 1, ammoBuf, 7, 0, 0, 1);
     }
     KexHud_DrawSpark();
     KexHud_DrawAir();
@@ -2634,7 +2621,7 @@ void KexHud_Draw(void)
         char playTime[32];
         Bsnprintf(playTime, sizeof(playTime), "%02llu:%02u:%02u",
                   (unsigned long long)hours, minutes, secs);
-        KexMenu_Text(8, bandY - 11, playTime, 6, 10, 0, 0);
+        KexMenu_Text(8, KEX_HUD_MAIN_Y - 11, playTime, 6, 10, 0, 0);
     }
 }
 

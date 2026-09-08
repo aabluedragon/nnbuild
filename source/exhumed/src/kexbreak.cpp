@@ -14,9 +14,9 @@
 //
 // and the actor def gives `health 30`, `shootable 1`, `solid 1`. The shard art
 // is already in the prop's own idle anim. Ordinary props have one intact frame
-// followed by shards; the two explosive vases have sixteen random idle frames
-// followed by five shards. The table preserves that boundary so the random
-// selection cannot turn a vase into debris before it is broken.
+// followed by shards; the two explosive vases have sixteen animated idle frames
+// followed by five shards. The table preserves that boundary and cadence so
+// their flame cannot turn into debris before the vase is broken.
 // kexmap.py writes that out as kexbreak.txt, including the exact authored
 // local-sound recipe: none, glass, wood or flesh. Exploding vases and the mine
 // deliberately use none because their explosion/countdown owns the audio.
@@ -82,12 +82,14 @@ struct KexBreakType
     int16_t breaksound;                 // KexBreakSound, extracted from the authored death animation
     int16_t spawnheight;                // actor height, KEX units: A_RandomVaseItem origin + height
     int16_t variantcount;               // intact randomizeFrames range before shard0
+    int16_t idleticks;                  // source idle-pose cadence, zero for a static prop
 };
 
 struct KexBreakProp
 {
     int16_t nSprite, nHealth, nType, nRunFree;
     int16_t nFuse;                      // -1 idle, else ticks to the blast
+    int16_t nIdlePhase;                 // source-selected randomizeFrames start pose
 };
 
 static KexBreakType s_type[kMaxKexBreakTypes];
@@ -95,6 +97,7 @@ static int          s_types = -1;          // -1 = not read yet
 static int          s_legacyBreakTable;    // pre-breaksound 11-column conversion
 static KexBreakProp s_prop[kMaxKexBreaks];
 static int          s_props;
+static int16_t      s_propBySprite[kMaxSprites];
 static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after N ticks
 static int          s_breakSelftestActive;
 static int          s_soundTest;  // VB_KEXBREAK_SOUND_TEST: exact table/playback census
@@ -102,6 +105,7 @@ static int          s_soundExpected[kKexBreakSoundCount];
 static int          s_soundPlayed[kKexBreakSoundCount];
 static int          s_vasePuffsExpected;
 static int          s_vasePuffsSpawned;
+static int          s_vasePuffsNormalPal;
 static int          s_scorpTest;  // VB_KEXBREAK_SCORPTEST: force every vase's case-0 AI_Scorp
 static int          s_vaseScorpsSpawned;
 static int          s_vaseScorpsAtHeight;
@@ -189,11 +193,11 @@ static bool KexBreak_ParseLine(char *line, int nRec)
 {
     int tile, health, shard0, nshards, clipdist = 32, br = 0, bd = 0;
     int sight = 0, fuse = 0, wood = 0, blasttoggle = 0, breaksound = -1;
-    int spawnheight = 0, variants = 1;
-    int const fields = Bsscanf(line, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d",
+    int spawnheight = 0, variants = 1, idleticks = 0;
+    int const fields = Bsscanf(line, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
                                &tile, &health, &shard0, &nshards, &clipdist, &br,
                                &bd, &sight, &fuse, &wood, &blasttoggle, &breaksound,
-                               &spawnheight, &variants);
+                               &spawnheight, &variants, &idleticks);
     if (fields < 4)
         return false;
 
@@ -219,6 +223,7 @@ static bool KexBreak_ParseLine(char *line, int nRec)
     t.breaksound = breaksound;
     t.spawnheight = clamp(spawnheight, 0, 4095);
     t.variantcount = clamp(variants, 1, 255);
+    t.idleticks = clamp(idleticks, 0, 4095);
     return true;
 }
 
@@ -387,18 +392,18 @@ void KexLight_Init(void)
     polymost_kexVertexLight = 0;
     polymost_kexShadeAt = NULL;
     polymost_kexColorAt = NULL;
+    polymost_kexTriangles = NULL;
     if (g_kexMode && gUserMapFilename[0])
     {
         KexVL_Load(gUserMapFilename);
         polymost_kexShadeAt = KexVL_ShadeAt;
         polymost_kexColorAt = KexVL_ColorAt;
-    polymost_kexTriangles = NULL;
+        polymost_kexTriangles = KexVL_Triangles;
         polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("VB_KEX_FLATLIGHT");
     }
     if (!g_kexMode || !s_lightTypes)
         return;
 
-        polymost_kexTriangles = KexVL_Triangles;
     for (int i = 0; i < kMaxSprites && s_lights < kMaxKexLights; i++)
     {
         if (sprite[i].statnum >= kMaxStatus || sprite[i].sectnum < 0)
@@ -546,10 +551,11 @@ static void KexFlash_FatalProp(int nSprite)
 
 int KexBreak_IsProp(int nSprite)
 {
-    for (int i = 0; i < s_props; i++)
-        if (s_prop[i].nSprite == nSprite)
-            return 1;
-    return 0;
+    if ((unsigned)nSprite >= (unsigned)kMaxSprites)
+        return 0;
+    int const nProp = s_propBySprite[nSprite];
+    return (unsigned)nProp < (unsigned)s_props
+        && s_prop[nProp].nSprite == nSprite;
 }
 
 void KexLight_Tick(void)
@@ -863,10 +869,12 @@ static void KexBreak_Arm(int nSprite, int nType)
 
     int const nProp = s_props++;
 
-    // randomizeFrames picks a stable authored idle pose when KEX constructs
-    // an explosive vase. It is not an animation and it must happen before
-    // this Build sprite becomes a blocking, damageable prop.
-    if (s_type[nType].variantcount > 1)
+    KexBreakType const &t = s_type[nType];
+
+    // Old converted installs carried the sixteen vase poses but not their
+    // cadence. Preserve their former static selection; fresh conversion keeps
+    // the base tile for collision and animates it only in the renderer.
+    if (t.variantcount > 1 && t.idleticks <= 0)
         sprite[nSprite].picnum = s_type[nType].tile
             + KexRandomMax(s_type[nType].variantcount);
     sprite[nSprite].cstat |= 0x101;      // blocking + hitscan
@@ -880,9 +888,36 @@ static void KexBreak_Arm(int nSprite, int nType)
 
     s_prop[nProp].nSprite  = nSprite;
     s_prop[nProp].nType    = nType;
-    s_prop[nProp].nHealth  = s_type[nType].health;
+    s_prop[nProp].nHealth  = t.health;
     s_prop[nProp].nFuse    = -1;
+    s_prop[nProp].nIdlePhase = 0;
+    if (t.variantcount > 1 && t.idleticks > 0)
+        s_prop[nProp].nIdlePhase = KexRandomMax(t.variantcount);
     s_prop[nProp].nRunFree = runlist_AddRunRec(NewRun, nProp, kRunKexBreak);
+    s_propBySprite[nSprite] = nProp;
+}
+
+static int KexBreak_IdleTile(KexBreakProp const &p, KexBreakType const &t,
+                             uint32_t clock)
+{
+    if (t.variantcount <= 1 || t.idleticks <= 0)
+        return -1;
+    return t.tile + ((clock / (uint32_t)t.idleticks + (uint32_t)p.nIdlePhase)
+                     % (uint32_t)t.variantcount);
+}
+
+// The animated vase must retain its base picnum: that tile identifies the
+// breakable type for collision and its shards. Apply the source animation to
+// the transient draw sprite, just as KexDecor_ViewTile does for scenery.
+int KexBreak_ViewTile(int nSprite)
+{
+    if (!g_kexMode || (unsigned)nSprite >= (unsigned)kMaxSprites)
+        return -1;
+    int const nProp = s_propBySprite[nSprite];
+    if ((unsigned)nProp >= (unsigned)s_props || s_prop[nProp].nSprite != nSprite)
+        return -1;
+    return KexBreak_IdleTile(s_prop[nProp], s_type[s_prop[nProp].nType],
+                             (uint32_t)totalclock);
 }
 
 static void KexBreak_Shatter(int nProp);
@@ -1037,6 +1072,7 @@ void KexBreak_Init(void)
     for (auto &s : s_vaseShot)
         s.nSprite = -1;
     s_props = 0;
+    Bmemset(s_propBySprite, -1, sizeof(s_propBySprite));
     { char const *e = getenv("VB_KEXBREAK_TEST"); s_selftest = e ? Batoi(e) : 0; }
     s_breakSelftestActive = 0;
     s_soundTest = Bgetenv("VB_KEXBREAK_SOUND_TEST") != NULL;
@@ -1044,6 +1080,7 @@ void KexBreak_Init(void)
     Bmemset(s_soundPlayed, 0, sizeof(s_soundPlayed));
     s_vasePuffsExpected = 0;
     s_vasePuffsSpawned = 0;
+    s_vasePuffsNormalPal = 0;
     s_scorpTest = s_selftest && Bgetenv("VB_KEXBREAK_SCORPTEST") != NULL;
     s_vaseScorpsSpawned = 0;
     s_vaseScorpsAtHeight = 0;
@@ -1092,7 +1129,7 @@ void KexBreak_Init(void)
             if (t.variantcount <= 1)
                 continue;
             types++;
-            validTypes += t.variantcount == 16 && t.nshards == 5
+            validTypes += t.variantcount == 16 && t.idleticks == 4 && t.nshards == 5
                 && t.shard0 == t.tile + t.variantcount;
         }
         for (int i = 0; i < s_props; i++)
@@ -1101,11 +1138,18 @@ void KexBreak_Init(void)
             if (t.variantcount <= 1)
                 continue;
             props++;
-            int const tile = sprite[s_prop[i].nSprite].picnum;
-            validProps += tile >= t.tile && tile < t.tile + t.variantcount;
+            KexBreakProp const &p = s_prop[i];
+            int const tile = sprite[p.nSprite].picnum;
+            int const shown = KexBreak_IdleTile(p, t, (uint32_t)totalclock);
+            int const next = KexBreak_IdleTile(p, t,
+                                               (uint32_t)totalclock + t.idleticks);
+            validProps += tile == t.tile && p.nIdlePhase >= 0
+                && p.nIdlePhase < t.variantcount
+                && shown >= t.tile && shown < t.tile + t.variantcount
+                && next == t.tile + ((p.nIdlePhase + 1) % t.variantcount);
         }
         bool const okay = types == 2 && validTypes == types && validProps == props;
-        OSD_Printf("Kex exploding-vase variant test: %s (%d/%d source types, %d/%d live props)\n",
+        OSD_Printf("Kex exploding-vase animation test: %s (%d/%d source types, %d/%d live props)\n",
                    okay ? "PASS" : "FAIL", validTypes, types, validProps, props);
     }
     if (s_mineTest)
@@ -2322,9 +2366,14 @@ static void KexBreak_Shatter(int nProp)
     {
         // Every ordinary vase/barrel death calls Fx_VaseExplodePuff at +32
         // after its local sound and before A_RandomVaseItem/toss callbacks.
-        if (KexVasePuff_Spawn(sprite[nSprite].x, sprite[nSprite].y,
-                sprite[nSprite].z, sprite[nSprite].sectnum, 32) >= 0)
+        int const nPuff = KexVasePuff_Spawn(sprite[nSprite].x, sprite[nSprite].y,
+                                             sprite[nSprite].z,
+                                             sprite[nSprite].sectnum, 32);
+        if (nPuff >= 0)
+        {
             s_vasePuffsSpawned++;
+            s_vasePuffsNormalPal += sprite[GetAnimSprite(nPuff)].pal == kPalNormal;
+        }
         KexBreak_DropItem(nSprite, t);
     }
 
@@ -2347,6 +2396,7 @@ static void KexBreak_Shatter(int nProp)
     runlist_SubRunRec(sprite[nSprite].owner);
     runlist_SubRunRec(s_prop[nProp].nRunFree);
     s_prop[nProp].nSprite = -1;
+    s_propBySprite[nSprite] = -1;
     s_flash[nSprite] = 0;       // do not whiten a later sprite that reuses this slot
     mydeletesprite(nSprite);
 }
@@ -2408,8 +2458,9 @@ void FuncKexBreak(int a, int b, int nRun)
                     { s_prop[i].nHealth = 0; KexBreak_Shatter(i); }
 
                 bool const puffOkay = seq_IsLoaded(kSeqKexVasePuff)
-                    && s_vasePuffsSpawned == s_vasePuffsExpected;
-                OSD_Printf("Kex break puff test: %s (%d/%d exact +32 puffs)\n",
+                    && s_vasePuffsSpawned == s_vasePuffsExpected
+                    && s_vasePuffsNormalPal == s_vasePuffsExpected;
+                OSD_Printf("Kex break puff test: %s (%d/%d exact +32 normal-palette puffs)\n",
                            puffOkay ? "PASS" : "FAIL",
                            s_vasePuffsSpawned, s_vasePuffsExpected);
 

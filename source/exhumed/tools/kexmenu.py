@@ -366,27 +366,17 @@ def extract(kexdir, outdir, verbose=True):
         # main_right (136x24) -- bar_left / bar_right, which this used to draw,
         # are the *menu* plates and have neither the gauge boxes nor the jewel.
         #
-        # The bar is one 416-unit-wide assembly stretched to the screen width:
-        #   head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
-        # Measured off a capture of the remaster (1970px wide): the blue slot
-        # starts at x=501 and the red at x=1151, which puts 141 native units
-        # between them and pins the horizontal scale at 4.63 px/unit. That
-        # scale then predicts the gauge boxes at native x 13.2..26.7 and
-        # 17.7..31.6; they are actually at 13..26 and 18..31, and the jewel
-        # where the two frames meet lands on the exact horizontal centre.
-        #
-        # Each piece is authored at exactly the aspect kexmenu.cpp draws it at,
-        # because rotatesprite scales uniformly: a 176x24 bar asked for a
-        # 144x14 rectangle draws only 102 wide, which is what left black holes
-        # in the middle and at both ends of the previous bar.
-        # The remaster draws its HUD on a 240-unit-tall canvas (426 wide at
-        # 16:9): the band is 24 of 240, a tenth of the screen, the heads 48.
-        # Fitting the 416-unit assembly to 320 is a scale of 0.77, so the
-        # band is 18.5 tall here and the heads 37 -- not the 16 and 32 this
-        # used to draw, which came out a sixth too small beside the remaster.
-        HUD_MAIN = (210, 36)    # drawn at 105x18
-        HUD_HEAD = (60, 74)     # drawn at  30x37, standing above the band
-        HUD_SCAR = (50, 36)     # drawn at  25x18
+        # kexSlaveHudLocal renders the status bar in a 320x240 canvas, not as
+        # a 416-unit strip.  Its two main frames are placed at (24,216) and
+        # (160,216), the 40x48 heads at (0,192)/(280,192), and its gauge slots
+        # are 86x8 at (54,222)/(196,222).  Build's 320x200 status coordinate
+        # system represents the same 4:3 display with 6/5-taller pixels, so
+        # the source art keeps its width and is compressed only vertically.
+        # Store the converted dimensions directly: KexDrawTile can then draw
+        # them 1:1 without uniform-scale letterboxing or horizontal shrinkage.
+        HUD_MAIN = (136, 20)    # source 136x24
+        HUD_HEAD = (40, 40)     # source  40x48
+        HUD_SCAR = (32, 20)     # source  32x24
         for name, tile, size in (('gfx/head_left.png',  TILE_HUD_HEAD_L, HUD_HEAD),
                                  ('gfx/head_right.png', TILE_HUD_HEAD_R, HUD_HEAD),
                                  ('gfx/main_left.png',  TILE_HUD_MAIN_L, HUD_MAIN),
@@ -398,9 +388,7 @@ def extract(kexdir, outdir, verbose=True):
                                  ('gfx/airsupply_front.png', TILE_HUD_AIR_FRONT, (64, 53)),
                                  ('gfx/dolphin.png',         TILE_HUD_DOLPHIN,   (16, 27)),
                                  ('gfx/vulture.png',         TILE_HUD_VULTURE,   (28, 27)),
-                                 # The 96x24 wings are the remaster's wider
-                                 # replacement for each 32-unit scarab.
-                                 ('gfx/wings.png',            TILE_HUD_WINGS,    (74, 18))):
+                                 ('gfx/wings.png',            TILE_HUD_WINGS,    (96, 20))):
             blob = grab(name)
             if blob is None: continue
             fn = 'kexart/' + os.path.basename(name)
@@ -423,9 +411,9 @@ def extract(kexdir, outdir, verbose=True):
                 fnr = 'kexart/wings_r.png'
                 png.write(os.path.join(outdir, fnr), w_, h_, mirror)
                 lines.append((TILE_HUD_WINGS_R, fnr))
-        # Flat fills, sampled from the same capture. These go down *under* the
-        # frame: the slot is cut out of the frame art (alpha 0 at x 31..117,
-        # rows 6..9), so the hole clips the fill to the slot's slanted end.
+        # Flat fills. kexSlaveHudLocal draws each source 86x8 gauge twice: the
+        # bright body and then a one-pixel dark lower edge. These go down
+        # *under* the frame, whose alpha hole clips their slanted outer ends.
         # The centre jewel's spark: hud.png (the console bar as one atlas)
         # keeps three frames of the jewel in its right column, x 225..256,
         # rows 0-22 / 21-43 / 42-64, a blue spark at the top, the upper right
@@ -452,8 +440,20 @@ def extract(kexdir, outdir, verbose=True):
                     spark[((y-y0)*sw + (x-x0))*4:((y-y0)*sw + (x-x0))*4+4] = apix[(y*aw+x)*4:(y*aw+x)*4+4]
                 png.write(os.path.join(artdir, 'hud_spark.png'), sw, sh, spark)
                 lines.append((TILE_HUD_SPARK, 'kexart/hud_spark.png'))
-        png.write(os.path.join(artdir, 'hud_red.png'), 8, 8, png.solid(8, 8, 235, 77, 49))
-        png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8, png.solid(8, 8, 34, 48, 245))
+        def hud_fill(light, shadow):
+            pix = png.blank(8, 8)
+            for y in range(8):
+                rgb = light if y < 7 else shadow
+                for x in range(8):
+                    q = (y * 8 + x) * 4
+                    pix[q:q+4] = bytes(rgb + (255,))
+            return pix
+
+        # Exact RGBA values from the remaster's kexSlaveHudLocal draw calls.
+        png.write(os.path.join(artdir, 'hud_red.png'), 8, 8,
+                  hud_fill((255, 32, 32), (64, 8, 8)))
+        png.write(os.path.join(artdir, 'hud_blue.png'), 8, 8,
+                  hud_fill((32, 32, 255), (8, 8, 64)))
         png.write(os.path.join(artdir, 'hud_trough.png'), 8, 8, png.solid(8, 8, 96, 72, 48))
         lines.append((TILE_HUD_RED, 'kexart/hud_red.png'))
         lines.append((TILE_HUD_BLUE, 'kexart/hud_blue.png'))

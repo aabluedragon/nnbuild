@@ -902,43 +902,16 @@ guarded event with its effect, key doors with key bits, no tag listened on
 that nothing fires, no mover sector cut into pieces, every switch on a
 wall, no sprite inside a solid sector.
 
-**Per-vertex shading.** All of the above carries a smooth field as a flat
-shade per piece, and it showed: every piece a block of its own brightness
-with a seam to the next, the fire pot brightening its whole sector at once
-(`Kex_SpriteGlow`), where the remaster's fire pot throws a halo on the wall
-behind it and its floor darkens into the corners. The remaster draws each
-face as a Gouraud mosaic of its tile vertices, so the port does the same
-now. kexmap.py writes every tile vertex beside the map as `KEX_<NAME>.LIT`
-("x y z lum" in Build units; TOMB has 10,322 after merging shared corners),
-`kexvlight.cpp` loads it per level into a 768-unit grid, and
-`KexVL_ShadeAt()` blends the samples within ~190 Kex units of a point
-(weight 1/d^4, so the nearest cell corners rule) through the converter's own
-luminance-to-shade curve. polymost does the rest in Kex mode
-(`polymost_kexVertexLight`): `polymost_drawalls` and `polymost_drawmaskwall`
-describe the surface each polygon lies on -- a wall's two projected ends
-with their 1/depth, or a flat's sector and plane -- and `polymost_drawpoly`
-recovers each screen vertex's world position from it (1/depth is linear in
-screen x along a wall; a flat's plane gives z, z and screen y the depth,
-depth and screen x the camera point, the view rotation undone), asks for its
-shade, and colours the vertex with it. A vertex per corner is not enough --
-a wall or floor piece hundreds of units across shaded from its corners
-alone averages the fire pot's halo away -- so `polymost_kexTessellate()`
-first cuts each polygon along the world's 128-unit cell grid, the mesh the
-remaster itself draws: world grid lines project to straight screen lines, so
-the pieces are a convex polygon split by lines (at most eight cuts per axis,
-96 pieces), each drawn through the same path. The colours ride in a second VBO on
-the fixed-function colour attribute, which `polymost1Vert.glsl` already
-reads as `v_color = gl_Color`; the per-polygon `glColor4f` path is untouched
-for everything else. Skies (`getpskyidx`), sprites, the HUD and 8-bit tiles
-keep their polygon shade; the sector glow of `KexLight_Tick` stays off when
-the field is loaded, since the glow is in the field. `VB_KEX_FLATLIGHT=1`
-turns it off for comparison: on TOMB's temple doorway 68% of the frame's
-pixels change, 18% by more than 60 levels -- the halo on the panels behind
-the two fire pots, the corridor fading into its depth.
-
-A wall's vertical gradient rides along with this: 40% of walls are lit
-differently top and bottom by six steps or more, which no per-wall shade
-could say; the vertex shade can.
+**Per-vertex shading.** The converter keeps each source face's RGB light
+field beside the map as `KEX_<NAME>.LIT`, including its original tile
+topology. `kexvlight.cpp` loads that field and Polymost queries the authored
+tile triangles with barycentric RGB interpolation; a continuous face-local
+lookup is used only outside converted source tiles. The subdivision mesh is
+anchored to map coordinates (never to the visible screen region), so baked
+lighting stays fixed to the geometry while the player moves. This avoids
+Build's coarse, sector-wide animated light flashes. The path is Kex-mode-only:
+classic maps retain their unchanged renderer and lighting.
+`VB_KEX_FLATLIGHT=1` remains a diagnostic override.
 
 ### The hit flash
 
@@ -1063,10 +1036,12 @@ their previous floor-origin fallback.
 Types 49 and 50 are the EXPLODING pots -- `defs/defines.txt` names them
 `Obj_Vase_Explode01/02`, where the old console enum in scripts/actorTypes.txt
 had FLAMEPOT/SNAKEPOT, and trusting the old enum had turned all 232 of them
-into fuel-canister and cobra-ammo pickups. They hold a random still frame
-(`randomizeFrames`), keep their shard art in a separate `*_shards` anim, and
-their death anim carries `A_RadialBlast(512, 140)` -- so kexbreak.txt grew two
-blast columns. `KexBreak_Shatter()` now spawns the exact 21-tick, scale-4
+into fuel-canister and cobra-ammo pickups. `randomizeFrames` gives each pot a
+random initial phase, then advances its 16-frame flame loop at its authored
+cadence; its shard art remains in a separate `*_shards` anim. kexbreak.txt
+therefore carries both the idle-range boundary/cadence and the two blast
+columns from its `A_RadialBlast(512, 140)` death animation.
+`KexBreak_Shatter()` now spawns the exact 21-tick, scale-4
 `Fx_Explosion01` at z+32 before `runlist_RadialDamageEnemy`; the source names
 the land actor even when the pot is underwater. The helper carries the
 authored `explode03.wav`, fullbright frames and fading orange light, while an
@@ -2435,28 +2410,22 @@ an Anubis head at each end, the air meter on the left and health on the right.
 The pieces ship separately in the .kpf, so they are laid out at draw time
 rather than blitted as one strip. The in-game frames are `main_left` /
 `main_right` (136x24 each) -- **not** `bar_left` / `bar_right`, which are the
-*menu* plates and carry neither the gauge boxes nor the jewel. The whole thing
-is a 416-unit assembly stretched to the screen width:
+*menu* plates and carry neither the gauge boxes nor the jewel.
+`kexSlaveHudLocal` uses a **320x240** HUD canvas: the main frames are exactly
+`(24,216,136,24)` and `(160,216,136,24)`, the heads `(0,192,40,48)` and
+`(280,192,40,48)`, and the blue/red gauge slots `(54,222,86,8)` and
+`(196,222,86,8)`. It is not a 416-unit strip. Build's status canvas is
+320x200, the same 4:3 display with 6/5-taller pixels, so the bridge preserves
+those source x coordinates and compresses every y coordinate and image height
+by 5/6. The extracted frame art is written at 136x20 and the heads at 40x40,
+allowing `rotatesprite` to draw them at one-to-one dimensions with no
+horizontal fit or letterboxing.
 
-    head(40) scarab(32) main_left(136) main_right(136) scarab(32) head(40)
-
-which at 320 units is 30 / 25 / 105 / 105 / 25 / 30, and 18.5 tall with the
-heads at 37: the remaster draws its HUD on a 240-unit canvas (426 wide at
-16:9), where the band is 24 and the heads 48, and fitting the 416-unit
-assembly to 320 is a scale of 0.77. The bar was 16 tall with 32 heads before,
-a sixth too small beside the remaster. Measured off a 1970px-wide
-capture of the remaster: the blue slot starts at x=501 and the red at x=1151,
-so 141 native units span 477px and the horizontal scale is 4.63 px/unit. That
-scale then predicts the two gauge boxes at native x 13.2..26.7 and 17.7..31.6;
-they are actually at 13..26 and 18..31, and the jewel where the two frames meet
-lands on the exact horizontal centre. Three independent confirmations, so the
-layout is measured rather than guessed.
-
-Each bar slot is a **hole** in the frame -- alpha 0 at x 31..117, rows 6..9 of
-24 -- not a painted trough. The fill is therefore drawn *first* and the frame
-laid over it, and the hole clips the fill to the slot's slanted end for free. I
-had this backwards at first: a PNG viewer renders alpha 0 as white, and I read
-the slot as a painted white area and drew the fills on top.
+Each bar slot is a **hole** in the frame -- 86 source pixels wide -- not a
+painted trough. The fill is therefore drawn *first* and the frame laid over it,
+which clips the fill to the slot's slanted end for free. I had this backwards at
+first: a PNG viewer renders alpha 0 as white, and I read the slot as a painted
+white area and drew the fills on top.
 
 Every piece is authored by the tool at exactly the aspect it is drawn at, for
 the same reason the menu plates are: `rotatesprite` scales uniformly, so a
@@ -2507,10 +2476,10 @@ referenced from there, so the layout had to come from the disassembly):
   512). Here kexmenu.py cuts the spark itself out of the first frame
   (`hud_spark.png`) and `KexHud_DrawSpark` puts it at one of eight points
   around our jewel's centre.
-- **Widescreen wings**: on a canvas at least 2.27:1, `gfx/wings.png` replaces
-  each scarab ornament in the 544-unit HUD assembly. The converter emits the
-  resized art and a mirrored right-hand copy, and the HUD keeps the ordinary
-  416-unit assembly on narrower screens.
+- **Widescreen art**: `gfx/wings.png` remains extracted (with a pre-mirrored
+  right-hand copy) for the remaster art catalogue. The core status bar itself
+  retains the source's centred 320-wide layout rather than stretching the
+  heads, gauges or frames across an ultrawide viewport.
 
 ### The traps
 
@@ -3045,9 +3014,10 @@ heights every ten ticks; the tags are read back from the map file, since
   every door in the level together -- and the engine's channel row holds a
   32-bit tag for it. Standing on the first region (`VB_KEX_LOOKAT_TAG=100000
   VB_KEX_LOOKAT_STAND=1`, which traces the door on the same channel) opens
-  door 185. The tag-0 lifts (KILENTRY's and TOMBEND's `FLOOR_LOWER_WAIT_RAISE`,
-  the `FLOOR_RAISE_WAIT_LOWER`s already covered) get a step-on plate of
-  their own in Kex mode, so they are ridden.
+  door 185. The tag-0 lifts (including TOMB's first barrel-area platform,
+  KILENTRY's and TOMBEND's `FLOOR_LOWER_WAIT_RAISE`, and the
+  `FLOOR_RAISE_WAIT_LOWER`s already covered) get a Kex-only sector-contact
+  receiver, so they are ridden.
 - **Doors cut in two by the light bands opened in halves.** The light
   gradient cuts (see Lighting) split whatever sector had a strong gradient,
   movers included: 35 plain doors and 16 key doors on tag 0 became two

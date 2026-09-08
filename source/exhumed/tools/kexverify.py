@@ -2503,8 +2503,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
             if not line.strip() or line.startswith('#'):
                 continue
             row = tuple(map(int, line.split()))
-            if len(row) != 14:
-                out.append('breakable row has %d columns, expected 14: %s'
+            if len(row) != 15:
+                out.append('breakable row has %d columns, expected 15: %s'
                            % (len(row), row))
                 continue
             rows.append(row)
@@ -2570,8 +2570,21 @@ def verify_breakables(z, outdir, include_testmaps=False):
                   else K._death_sound(z, names, actor['death']))
         variants = len(idleframes) if exploding else 1
         shards = len(shardframes) if exploding else (0 if mine else len(idleframes) - 1)
+        idleticks = 0
+        if exploding:
+            idlefull = K.parse_anim_full(z, names, actor['anim'])
+            delays = {f['delay'] for f in idlefull}
+            if (len(idlefull) != variants or len(delays) != 1
+                    or next(iter(delays)) <= 0 or actor.get('animspeed', 0) <= 0):
+                out.append('%s idle animation cadence is malformed' % actor['name'])
+            else:
+                exact_ticks = 2.0 * next(iter(delays)) / actor['animspeed']
+                idleticks = int(round(exact_ticks))
+                if idleticks <= 0 or abs(exact_ticks - idleticks) > 1e-6:
+                    out.append('%s idle animation cadence is not integral' % actor['name'])
         expected[base] = (actor['name'], recipe,
-                          int(round(actor.get('height', 0))), variants, shards)
+                          int(round(actor.get('height', 0))), variants, shards,
+                          idleticks)
         if exploding:
             exploding_art[base] = (actor_type, actor['name'], variants, shards)
         if ordinary:
@@ -2591,7 +2604,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
             out.append('breakable tile %d legacy wood bit disagrees with recipe %d'
                        % (tile, recipe))
 
-    for tile, (name, recipe, spawnheight, variants, shards) in sorted(expected.items()):
+    for tile, (name, recipe, spawnheight, variants, shards, idleticks) in sorted(expected.items()):
         row = bytile.get(tile)
         if row is None:
             out.append('%s has no breakable metadata row' % name)
@@ -2604,6 +2617,9 @@ def verify_breakables(z, outdir, include_testmaps=False):
         elif row[13] != variants:
             out.append('%s intact variant count is %d, authored count is %d'
                        % (name, row[13], variants))
+        elif row[14] != idleticks:
+            out.append('%s idle pose cadence is %d, authored cadence is %d'
+                       % (name, row[14], idleticks))
         elif row[3] != shards:
             out.append('%s shard count is %d, authored count is %d'
                        % (name, row[3], shards))
@@ -2613,7 +2629,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
     for tile in sorted(set(bytile) - set(expected)):
         out.append('unexpected breakable metadata for tile %d' % tile)
 
-    expected_counts = tuple(sum(recipe == i for _name, recipe, _height, _variants, _shards
+    expected_counts = tuple(sum(recipe == i for _name, recipe, _height, _variants, _shards, _idleticks
                                 in expected.values())
                             for i in range(K.KEX_BREAK_SOUND_FLESH + 1))
     actual_counts = tuple(sum(row[11] == i for row in rows)
@@ -2699,7 +2715,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
     if len(mine_actor_types) != 1:
         out.append('Magic 8 Ball actor type census changed: %s' % mine_actor_types)
     mine_actor_type = mine_actor_types[0] if len(mine_actor_types) == 1 else 13
-    mine_tiles = [tile for tile, (name, _recipe, _height, _variants, _shards) in expected.items()
+    mine_tiles = [tile for tile, (name, _recipe, _height, _variants, _shards, _idleticks) in expected.items()
                   if name == 'AI_Magic8Ball']
     if len(mine_tiles) != 1:
         out.append('Magic 8 Ball actor tile census changed: %s' % mine_tiles)
@@ -2737,7 +2753,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
             out.append('Magic 8 Ball countdown PNG audit failed: %s' % exc)
 
     # Obj_Vase_Explode01/02 use randomizeFrames, not a generic one-frame
-    # prop: all sixteen selected idle poses must be present before their five
+    # prop: all sixteen animated idle poses must be present before their five
     # shard tiles, and all are composited into one stable actor canvas.
     if len(exploding_art) != 2:
         out.append('retail exploding-vase actor census changed: %s'
@@ -2890,8 +2906,9 @@ def verify_breakables(z, outdir, include_testmaps=False):
     srcdir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
         native = re.sub(r'\s+', '', open(os.path.join(srcdir, 'kexbreak.cpp')).read())
+        anims = re.sub(r'\s+', '', open(os.path.join(srcdir, 'anims.cpp')).read())
     except OSError:
-        return out + ['cannot read native breakable controller']
+        return out + ['cannot read native breakable controller or animation bridge']
     native_needles = (
         'kKexBreakSoundNone', 'kKexBreakSoundGlass', 'kKexBreakSoundWood',
         'kKexBreakSoundFlesh', 'if(fields<12)',
@@ -2900,6 +2917,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'VB_KEXBREAK_SOUND_TEST',
         'glass==10||glass==11', 's_legacyBreakTable?legacy:normal',
         'KexVasePuff_Spawn(', 's_vasePuffsSpawned',
+        's_vasePuffsNormalPal',
+        'sprite[GetAnimSprite(nPuff)].pal==kPalNormal',
         'Kexbreakpufftest:', 'Kexbreaksoundplaybacktest:',
         's_selftest>0&&--s_selftest==0', 's_breakSelftestActive=1;',
         'kKexVaseFactoryAngle=1536',
@@ -2915,9 +2934,12 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'VB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
         'KexBreak_DropItem(intnSprite,KexBreakTypeconst&t)',
         'sprite[nSprite].z-t.spawnheight*16*6',
-        'int16_tvariantcount', 't.variantcount=clamp(variants,1,255);',
+        'int16_tvariantcount', 'int16_tidleticks',
+        't.variantcount=clamp(variants,1,255);',
+        't.idleticks=clamp(idleticks,0,4095);',
         'KexRandomMax(s_type[nType].variantcount)',
-        'VB_KEXBREAK_VARIANT_TEST', 'Kexexploding-vasevarianttest:',
+        'KexBreak_IdleTile(', 'intKexBreak_ViewTile(intnSprite)',
+        'VB_KEXBREAK_VARIANT_TEST', 'Kexexploding-vaseanimationtest:',
         'VB_KEX_TOSS_OVERFLOW_SAVE_TEST', 'KexTossOverflowCount()',
         'LoadSave::SaveGame(path);', 'LoadSave::LoadGame(path);',
         'Kextossoverflowsavetest:PASS(',
@@ -2948,6 +2970,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
     for needle in native_needles:
         if needle not in native:
             out.append('native breakable controller no longer implements %s' % needle)
+    if 'BuildAnim(-1,kSeqKexVasePuff,0,x,y,z-nKexZOffset*16*6,nSector,48,0)' not in anims:
+        out.append('native vase-puff bridge no longer preserves the normal palette')
     if 't.wood' in native or 'kSoundPotPc1+(t.wood?' in native:
         out.append('native breakable controller reverted to the barrel-only sound guess')
     start = native.rfind('staticvoidKexBreak_Shatter(')
@@ -3721,6 +3745,7 @@ def verify_movers(z, outdir):
     for needle in ('intBuildKexSwStepOn(intnChannel,intnSector)',
                    'BuildSwStepOn(nChannel,BuildLink(2,1,1),nSector)',
                    'SwitchData[nSwitch].field_14=1',
+                   'runlist_AddRunRec(sector[nSector].lotag-1,nSwitch,kRunSwStepOn)',
                    'if(SwitchData[nSwitch].field_14)',
                    'runlist_ChangeChannel(nChannel,1);'):
         if needle not in switch:
@@ -3731,9 +3756,10 @@ def verify_movers(z, outdir):
         if needle not in switch:
             out.append('native Kex switch sound bridge changed: %s' % needle)
     for needle in ('staticvoidKexLift_TestTaggedStep(intnChannel,intnSector)',
-                   'runlist_SignalRun(sRunChannels[nChannel].a,0x50000)',
+                   'runlist_SignalRun(sector[nSector].lotag-1,0x50000)',
                    'sRunChannels[nChannel].c==1&&(sRunChannels[nChannel].d&2)',
-                   'VB_KEXLIFT_TEST'):
+                   'VB_KEXLIFT_TEST',
+                   'VB_KEXLIFT_FLOOR_TEST'):
         if needle not in runlist:
             out.append('native Kex tagged-lift regression probe changed: %s' % needle)
 
@@ -8901,7 +8927,9 @@ def verify_explosion_effects(z, outdir):
         'sequence.cpp': ('"kexexplode"', '"kexwaterexp"'),
         'anims.cpp': ('KexExplosion01_Spawn',
                       'bWater?48:96', '"bomb_wat":"bomb_exp"',
-                      'radius=768*4*6', 'fadeSteps=20'),
+                      'radius=768*4*6', 'fadeSteps=20',
+                      'BuildAnim(-1,nSeq,0,x,y,effectZ,nSector,bWater?48:96,0)',
+                      'VB_KEXEXPLOSION_PALETTE_TEST'),
         'grenade.cpp': ('KexExplosion01_Spawn',
                         'exact21-tickland/watereffectsat+32'),
         'queen.cpp': ('sprite[nSprite].sectnum,32,0',

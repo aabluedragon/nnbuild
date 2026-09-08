@@ -12632,7 +12632,11 @@ static int32_t SW_CrossplaySelfTestWarpPlayerZ(PLAYERp const pp, int32_t x, int3
     if (pp == NULL)
         return 0;
 
-    updatesector(x, y, &sectnum);
+    // Effector sprites can sit in overlapping sectors.  When the caller has a
+    // known semantic sector (trains, teleport pads, etc.), retain it if the
+    // point belongs to that sector; otherwise fall back to Build's lookup.
+    if ((unsigned)sectnum >= (unsigned)numsectors || inside(x, y, sectnum) != 1)
+        updatesector(x, y, &sectnum);
     if ((unsigned)sectnum >= (unsigned)numsectors)
         return 0;
 
@@ -14793,7 +14797,9 @@ static void SW_CrossplaySelfTestRunCameras(PLAYERp const pp)
     // hold the player where they were put: a monitor only runs a feed for a
     // player standing within Duke's active distance of it, and SW's own physics
     // walks them out of that in a few tics.
-    if (g_swCrossplaySelfTestPhaseTic < 40)
+    // A sweep can complete a cycle and return to its starting angle, so the
+    // final-angle comparison below must sample a short interval instead.
+    if (g_swCrossplaySelfTestPhaseTic < 8)
     {
         SW_CrossplaySelfTestWarpPlayerZ(pp, g_swCrossplaySelfTestCameraStandX, g_swCrossplaySelfTestCameraStandY,
                                         INT32_MIN, g_swCrossplaySelfTestCameraStandSect);

@@ -322,15 +322,12 @@ E3L6 / Rabid Transit smoke:
 timeout 12s ./vibebuild32 -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E3L6.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
-Previously recorded result: `SIGSEGV` around startup after bridge capture/palette
-remap logging.  This no longer reproduces; E3L6 starts and runs. The log before the crash showed capture of Duke rotators, train
-sectors with locators, teleporter sectors, water/stack warps,
+Current result: startup runs through the 15-second smoke-test timeout with no
+signal or fatal error. The log shows capture of Duke rotators, train sectors
+with locators, teleporter sectors, water/stack warps,
 activators/touchplates/masterswitches, floor/ceiling movers, auto-close
 sectors, explosives, lights, respawns, waves, sounds, Duke player dimensions,
 and Duke sprite behaviors.
-
-This crash is the first thing to debug before claiming Rabid Transit behavior is
-fixed.
 
 Suggested crash command:
 

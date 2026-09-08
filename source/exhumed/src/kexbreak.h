@@ -15,6 +15,7 @@
 int  KexBreak_Available(void);   // the table loaded and this is a Kex map
 void KexBreak_Init(void);        // per level: arm every breakable prop sprite
 void FuncKexBreak(int a, int b, int nRun);
+int  KexBreak_ViewTile(int nSprite); // render-time animated intact-prop frame
 
 void KexLight_Init(void);        // per level: collect the remaster's light sources
 void KexLight_Tick(void);        // per tick: cast their glow
@@ -40,6 +41,8 @@ void    KexVL_Free(void);
 int     KexVL_Ready(void);
 int32_t KexVL_ShadeAt(float x, float y, float z, int32_t fallback);   // Build shade at a world point
 int     KexVL_ColorAt(float x, float y, float z, float color[3]);     // authored RGB at a world point
+struct polymost_kextriangle_t;
+int     KexVL_Triangles(struct polymost_kextriangle_t *out, int max); // current surface's authored light mesh
 
 // The remaster wav that is this Build sound, or NULL; *pLoop tells whether it
 // loops (the flag stands in for the VOC loop block a WAV does not have).

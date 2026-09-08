@@ -250,9 +250,15 @@ static void analyzesprites()
         }
 
         pTSprite->pal = RemapPLU(pTSprite->pal);
-        int const decorTile = KexDecor_ViewTile(nSprite);
-        if (decorTile >= 0)
-            pTSprite->picnum = (int16_t)decorTile;
+        int const breakTile = KexBreak_ViewTile(nSprite);
+        if (breakTile >= 0)
+            pTSprite->picnum = (int16_t)breakTile;
+        else
+        {
+            int const decorTile = KexDecor_ViewTile(nSprite);
+            if (decorTile >= 0)
+                pTSprite->picnum = (int16_t)decorTile;
+        }
         int const ramsesTile = KexRamses_ViewTile(nSprite);
         if (ramsesTile >= 0)
         {

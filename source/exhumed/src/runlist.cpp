@@ -515,8 +515,10 @@ void runlist_ExecObjects()
 
 // TEST_LIFTS has a lowering lift on tag 1 and a raising lift on tag 2. Build
 // uses that numeric value as its initial channel state, while Kex treats it
-// only as an event tag. Exercise the real step-switch callback at load under
-// an opt-in test flag, before the normal tick consumes the queued change.
+// only as an event tag. Exercise the same sector-contact dispatch that
+// player.cpp uses for a grounded step, before the normal tick consumes the
+// queued change.  Calling the channel directly would bypass that important
+// receiver path.
 static int s_kexLiftTest = -1;
 static void KexLift_TestTaggedStep(int nChannel, int nSector)
 {
@@ -525,10 +527,29 @@ static void KexLift_TestTaggedStep(int nChannel, int nSector)
     if (!s_kexLiftTest || sRunChannels[nChannel].c == 0)
         return;
     int const before = sRunChannels[nChannel].c;
-    runlist_SignalRun(sRunChannels[nChannel].a, 0x50000);
+    runlist_SignalRun(sector[nSector].lotag - 1, 0x50000);
     bool const pass = sRunChannels[nChannel].c == 1 && (sRunChannels[nChannel].d & 2);
     OSD_Printf("Kex lift test: %s (sector %d, tagged state %d -> %d)\n",
                pass ? "PASS" : "FAIL", nSector, before, sRunChannels[nChannel].c);
+}
+
+// TOMB's first barrel-area platform is an untagged type-21 Kex lift.  Its
+// private channel begins at zero, so TEST_LIFTS cannot cover it.  This
+// opt-in probe follows the real player contact route through the sector run
+// and confirms that the step switch arms the mover's private channel.
+static int s_kexLiftFloorTest = -1;
+static void KexLift_TestUntaggedFloorStep(int nChannel, int nSector)
+{
+    if (s_kexLiftFloorTest < 0)
+        s_kexLiftFloorTest = g_kexMode && Bgetenv("VB_KEXLIFT_FLOOR_TEST") ? 1 : 0;
+    if (!s_kexLiftFloorTest || sRunChannels[nChannel].c != 0)
+        return;
+
+    runlist_SignalRun(sector[nSector].lotag - 1, 0x50000);
+    bool const pass = sRunChannels[nChannel].c == 1 && (sRunChannels[nChannel].d & 2);
+    OSD_Printf("Kex lift floor test: %s (sector %d, private state %d -> %d)\n",
+               pass ? "PASS" : "FAIL", nSector, 0, sRunChannels[nChannel].c);
+    s_kexLiftFloorTest = 0;
 }
 
 void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
@@ -727,6 +748,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 int nStep = BuildKexSwStepOn(nChannel, nSector);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
                 KexLift_TestTaggedStep(nChannel, nSector);
+                KexLift_TestUntaggedFloorStep(nChannel, nSector);
             }
             return;
         }
@@ -800,6 +822,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
                 int nStep = BuildKexSwStepOn(nChannel, nSector);
                 runlist_AddRunRec(sRunChannels[nChannel].a, nStep, kRunSwStepOn);
                 KexLift_TestTaggedStep(nChannel, nSector);
+                KexLift_TestUntaggedFloorStep(nChannel, nSector);
             }
             return;
         }

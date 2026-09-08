@@ -283,10 +283,22 @@ int BuildKexSwStepOn(int nChannel, int nSector)
 {
     int const nSwitch = BuildSwStepOn(nChannel, BuildLink(2, 1, 1), nSector);
     if (nSwitch >= 0)
+    {
         // field_14 is unused by sector step switches. Unlike Build's generic
         // link map, Kex's event tag is not a channel state: a player entry
         // always starts the lift in its active state (1).
         SwitchData[nSwitch].field_14 = 1;
+
+        // A normal Build step switch adds itself to the sector's contact run
+        // after its channel first changes.  The Kex branch above consumes
+        // that channel notification immediately, so it never reaches the
+        // normal attachment code.  Attach it now: player.cpp sends 0x50000
+        // to this exact sector run when a grounded player steps on the lift.
+        // Without this record, untagged Kex lifts such as TOMB sector 117
+        // have a valid mover but no receiver for their floor contact.
+        if (sector[nSector].lotag > 0)
+            runlist_AddRunRec(sector[nSector].lotag - 1, nSwitch, kRunSwStepOn);
+    }
     return nSwitch;
 }
 

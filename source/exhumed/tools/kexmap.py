@@ -4676,14 +4676,15 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
         if not frames: continue
         breakable = a.get('still') and a.get('shootable') and a.get('death')
         # Most breakables have one intact pose followed by their shards. The
-        # two explosive vases are different: randomizeFrames chooses one of
-        # their sixteen intact poses once, while the five shards live after
-        # that whole idle range. Keep the boundary in the metadata rather than
-        # treating pose one as debris.
+        # two explosive vases are different: randomizeFrames chooses an
+        # initial phase, then advances through sixteen idle poses before the
+        # five shards that follow them. Keep the boundary and cadence in the
+        # metadata rather than treating an idle pose as debris.
         variantcount = 1
-        # The exploding pots hold a random still frame (randomizeFrames) and
-        # keep their shard art in a separate *_shards anim; the blast radius
-        # and damage sit in the death anim's A_RadialBlast action.
+        idleticks = 0
+        # The exploding pots have a random-phased idle loop and keep their
+        # shard art in a separate *_shards anim; the blast radius and damage
+        # sit in the death anim's A_RadialBlast action.
         explode = (0, 0, False)
         if not breakable and a.get('shootable') and a.get('death') and a.get('randomize'):
             blast = _death_blast(Z, names, a['death'])
@@ -4697,6 +4698,17 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
                                          KEX_EXPLODING_VASE_IDLE_FRAMES)
                 if len(idleframes) != KEX_EXPLODING_VASE_IDLE_FRAMES:
                     raise ValueError('%s exploding-vase idle frame contract changed'
+                                     % a['name'])
+                idlefull = parse_anim_full(Z, names, art_anim)
+                delays = {f['delay'] for f in idlefull}
+                if (len(idlefull) != len(idleframes) or len(delays) != 1
+                        or next(iter(delays)) <= 0 or a['animspeed'] <= 0):
+                    raise ValueError('%s exploding-vase idle cadence changed'
+                                     % a['name'])
+                exact_ticks = 2.0 * next(iter(delays)) / a['animspeed']
+                idleticks = int(round(exact_ticks))
+                if idleticks <= 0 or abs(exact_ticks - idleticks) > 1e-6:
+                    raise ValueError('%s exploding-vase idle cadence is not integral'
                                      % a['name'])
                 shards = _all_frames(Z, names, a['death'].replace('_death', '_shards'))
                 frames = idleframes + shards
@@ -4819,7 +4831,7 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
             breakables.append((first, a['health'], first, 0, a.get('radius', 0),
                                blast_radius, blast_damage) + mine
                               + (wood, int(blast_toggle), break_sound,
-                                 a.get('height', 0), variantcount))
+                                 a.get('height', 0), variantcount, idleticks))
         elif breakable and len(allrects) > 1:
             # Ordinary objects have one intact pose. Exploding vases retain
             # their random intact range before the shard range their death
@@ -4828,7 +4840,7 @@ def build_actor_tiles(Z, outdir, wanted_types, kexactors, tilebase, verbose=True
                                len(allrects) - variantcount,
                                a.get('radius', 0), blast_radius, blast_damage,
                                0, 0, wood, int(blast_toggle), break_sound,
-                               a.get('height', 0), variantcount))
+                               a.get('height', 0), variantcount, idleticks))
     if verbose:
         print("  scenery: %d actor types, %d animated, %d breakable, from the remaster's own sprites"
               % (len(out), len(animdefs), len(breakables)))
@@ -7342,8 +7354,8 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
     # glassbreak.wav, spawns a dust puff, drops a random item and tosses
     # Obj_Vase01_Shard01..06. Ordinary props keep one intact idle frame before
     # their shard range. The two exploding vases instead retain all sixteen
-    # randomizeFrames idle variants before their five shards; kexbreak.txt
-    # records that boundary so native code can select one intact pose once.
+    # randomizeFrames idle poses before their five shards; kexbreak.txt records
+    # that boundary and frame cadence so native code can animate the flame.
     def _clipdist(radius):
         # Build clips a sprite at clipdist<<2 world units, and Kex authors the
         # radius in its own units, so the world factor applies and the result
@@ -7356,13 +7368,13 @@ def convert_install(kexdir, outdir, tilebase=8000, verbose=True, demo_dir=None,
     # ... and the mine's sight radius (Build units) and fuse (ticks), zero for
     # everything that is not a mine.
     _write_table(outdir, "kexbreak.txt",
-                 "tile health shardtile0 shardcount clipdist blastradius blastdamage sight fuse wood blasttoggle breaksound spawnheight variantcount",
+                 "tile health shardtile0 shardcount clipdist blastradius blastdamage sight fuse wood blasttoggle breaksound spawnheight variantcount idleticks",
                  [(tile, health, shard0, nshards, _clipdist(radius), bl_r, bl_d,
                    sight, fuse, wood, blasttoggle, breaksound,
-                   int(round(spawnheight)), variantcount)
+                   int(round(spawnheight)), variantcount, idleticks)
                   for tile, health, shard0, nshards, radius, bl_r, bl_d,
                       sight, fuse, wood, blasttoggle, breaksound, spawnheight,
-                      variantcount
+                      variantcount, idleticks
                       in sorted(breakables)],
                  "breakables", verbose)
 
