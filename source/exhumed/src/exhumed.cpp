@@ -2089,7 +2089,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     wm_setapptitle(APPNAME);
 
-    LOG_F(INFO, "Exhumed %s", s_buildRev);
+    LOG_F(INFO, APPNAME " %s", s_buildRev);
     PrintBuildInfo();
 
     int i;
@@ -2556,7 +2556,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
 
     LOG_F(INFO, "Initializing OSD...");
 
-    Bsprintf(buffer, "Exhumed %s", s_buildRev);
+    Bsprintf(buffer, APPNAME " %s", s_buildRev);
     OSD_SetVersion(buffer, 10,0);
     OSD_SetParameters(0, 0, 0, 0, 0, 0, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     registerosdcommands();

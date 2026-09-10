@@ -30,9 +30,13 @@ TILE_ARROW_DOWN = 7012
 TILE_ARROW_LEFT = 7013
 TILE_KEYCAP     = 7014      # key-cap plate on the hint bar
 TILE_BLACK      = 7015      # flat black, for banners and panel borders
-TILE_TITLE      = 7016      # the console title card, behind PRESS START
+TILE_KEYCAP_MID = 7016      # stretchable centre of a wide hint key-cap
 TILE_OVERWORLD_ORIGINAL = 7017  # alternate original-console overworld map
+TILE_KEY_ENTER  = 7018      # native keyboard Enter prompt, including its label
+TILE_KEY_ESCAPE = 7019      # native keyboard Escape prompt, including its label
 TILE_EYE_BASE   = 7020      # the spinning Eye of Ra, one tile per frame (31)
+TILE_KEY_LEFT   = 7058      # native keyboard Left prompt
+TILE_KEY_RIGHT  = 7059      # native keyboard Right prompt
 TILE_HUD_HEAD_L = 7060      # the remaster's status bar
 TILE_HUD_HEAD_R = 7061
 TILE_HUD_MAIN_L = 7062      # the in-game frames are main_left/main_right;
@@ -48,12 +52,26 @@ TILE_HUD_VULTURE = 7071
 TILE_HUD_SPARK  = 7072      # the jewel's heading spark, cut from hud.png
 TILE_HUD_WINGS  = 7073      # widescreen replacement for the scarab ornaments
 TILE_HUD_WINGS_R= 7074
+# Generic KEX controller prompts for menu footers.  The KPF has separate
+# platform-specific sets too; generic is the safe visual fallback when SDL
+# cannot identify the physical controller family.
+TILE_PAD_A      = 7075
+TILE_PAD_B      = 7076
+TILE_PAD_LEFT   = 7077
+TILE_PAD_RIGHT  = 7078
+TILE_DISPLAY_ROW = 7079      # compact KEX Display Settings value row
+TILE_DISPLAY_ROW_SEL = 7080  # selected compact KEX Display Settings row
+# KEX draws its slider stops as solid UI primitives rather than text glyphs.
+# Keep explicit tiles for the pale default and the gold live marker so they
+# remain crisp at the remaster's compact control scale.
+TILE_SLIDER_DEFAULT = 7081
+TILE_SLIDER_CURRENT = 7082
 TILE_ROW        = 7003      # menu row, unselected
-TILE_ROW_SEL    = 7004      # menu row, selected (red)
+TILE_ROW_SEL    = 7004      # menu row, selected (the KEX red down state)
 TILE_BTN        = 7005      # dialog button, unselected
 TILE_BTN_SEL    = 7006      # dialog button, selected
-TILE_FONT_BASE  = 7100      # gold body / dark outline: menu entries
-TILE_FONT_ALT   = 7300      # the atlas as shipped: blue body / gold outline
+TILE_FONT_BASE  = 7100      # compact gold smallfont: native menu entries
+TILE_FONT_ALT   = 7300      # bigfont as shipped: blue body / gold outline
 # ASCII occupies the historical contiguous ranges above.  The 26 accented and
 # punctuation glyphs used by the remaster's French/German/Spanish UI live in
 # the free tail before the creature art begins at 7600.
@@ -82,20 +100,32 @@ TILE_INV_SLOT   = 7447      # wheelslot: the plate behind each weapon
 
 # Build's rotatesprite scales a tile uniformly, so anything that is not square
 # has to be authored at the exact aspect it is drawn at or it letterboxes. These
-# are the sizes kexmenu.cpp draws in Build's 320x200 space; keep the two in step.
-ROW_W, ROW_H = 134, 17
+# are the measured KEX main-menu plate bounds in Build's 320x200 space; keep the
+# generated images and kexmenu.cpp in step.  The native panel is 140 units wide
+# (including its ten-unit stone inset), with 120x16 button plates.
+ROW_W, ROW_H = 120, 16
 BTN_W, BTN_H = 44, 13
+# Display Settings uses the very same KEX plate, but its renderer squashes it
+# into a short control. Build's rotatesprite deliberately preserves aspect, so
+# author that state at its final 120x10 size instead of letterboxing it.
+DISPLAY_ROW_W, DISPLAY_ROW_H = 120, 10
 
-# The backdrop is 1920x1080; a Build tile that size is 2 MB of paletted art for
-# something that is only ever drawn stretched to the screen, so box-downsample it.
-BACKDROP_W, BACKDROP_H = 1024, 576
+# The down texture is an authored brown plate whose native renderer applies a
+# warm selection colour.  Preserve the source artwork's shading while applying
+# that same modulation; using the unmodified PNG loses KEX's characteristic
+# deep-red active row.
+SELECT_TINT = (204, 64, 40)
+
+# KEX's title painting is 16:9 on screen.  The renderer stretches the
+# 320x200 virtual canvas non-uniformly across our 20:13 presentation, so the
+# generated source tile is pre-squashed to compensate: after that stretch it
+# is exactly 16:9 instead of the subtly too-tall 1024x576 result.
+BACKDROP_W, BACKDROP_H = 1024, 554
 
 ART = [
     ('gfx/title_backdrop.png',      TILE_BACKDROP,  (BACKDROP_W, BACKDROP_H)),
-    # 320x240 as shipped; Build's 320x200 field is the same 4:3 screen with
-    # taller pixels, so squashed to 320x200 it draws full-screen at 1:1.
-    ('gfx/title.png',               TILE_TITLE,     (320, 200)),
-    ('gfx/menu/menu_bg.png',        TILE_PANEL,     None),
+    # The remaster tiles this stone swatch on a 32x32 cell cadence.
+    ('gfx/menu/menu_bg.png',        TILE_PANEL,     (32, 32)),
     ('gfx/menu/cursor.png',         TILE_CURSOR,    None),
 ]
 
@@ -139,6 +169,20 @@ def parse_kfont(text):
             cp, x, y, w, h, yo = (int(v) for v in m.groups())
             out[cp] = (x, y, w, h, yo)
     return out, scale
+
+
+def crop_opaque(width, height, rgba):
+    """Trim transparent atlas padding while preserving the visible sprite."""
+    opaque = [i for i in range(width * height) if rgba[i * 4 + 3] != 0]
+    if not opaque:
+        return width, height, rgba
+    left = min(i % width for i in opaque)
+    right = max(i % width for i in opaque)
+    top = min(i // width for i in opaque)
+    bottom = max(i // width for i in opaque)
+    cropped_width, cropped_height = right - left + 1, bottom - top + 1
+    return (cropped_width, cropped_height,
+            png.crop(width, height, rgba, left, top, cropped_width, cropped_height))
 
 def extract(kexdir, outdir, verbose=True):
     # Imported here rather than at module scope: kexmap imports this module, so
@@ -209,29 +253,59 @@ def extract(kexdir, outdir, verbose=True):
             lines.append((tile, 'kexart/' + os.path.basename(name)))
             if verbose: print("  tile %d  %-30s %dx%d" % (tile, name, w, h))
 
-        # The row and button plates are the remaster's own button art, resized
-        # to the exact rectangle the game draws, and tinted for the selected
-        # state the way Kex tints it.
-        btn = grab('gfx/menu/menubutton_up.png')
-        if btn is not None:
-            tmp = os.path.join(artdir, 'menubutton_up.png')
-            open(tmp, 'wb').write(btn)
-            bw, bh, brgba = png.read(tmp)
-            for tile, name, size, rgb in (
-                    (TILE_ROW,     'row.png',     (ROW_W, ROW_H), None),
-                    (TILE_ROW_SEL, 'row_sel.png', (ROW_W, ROW_H), (255, 70, 70)),
-                    (TILE_BTN,     'btn.png',     (BTN_W, BTN_H), (48, 48, 150)),
-                    (TILE_BTN_SEL, 'btn_sel.png', (BTN_W, BTN_H), (110, 110, 245))):
-                pix = png.resize(bw, bh, brgba, *size)
-                if rgb:
-                    # The row highlight reads best as the stone stained red
-                    # (a multiply); the dialog buttons have to actually look
-                    # blue, which needs a blend -- see kexpng.blend().
-                    pix = (png.tint(size[0], size[1], pix, *rgb) if tile == TILE_ROW_SEL
-                           else png.blend(size[0], size[1], pix, *rgb))
-                png.write(os.path.join(artdir, name), size[0], size[1], pix)
-                lines.append((tile, 'kexart/' + name))
-                if verbose: print("  tile %d  %-30s %dx%d" % (tile, name, size[0], size[1]))
+        # KEX's ordinary plate and active selection are separate authored
+        # states. The latter is its red menubutton_down texture, not a
+        # synthetic darkening of the brown up state.
+        button_art = {}
+        for state in ('up', 'down'):
+            source_name = 'gfx/menu/menubutton_%s.png' % state
+            blob = grab(source_name)
+            if blob is None:
+                if verbose: print("  missing %s" % source_name)
+                continue
+            tmp = os.path.join(artdir, 'menubutton_%s.png' % state)
+            open(tmp, 'wb').write(blob)
+            button_art[state] = png.read(tmp)
+
+        for tile, name, size, selected in (
+                (TILE_ROW,     'row.png',     (ROW_W, ROW_H), False),
+                (TILE_ROW_SEL, 'row_sel.png', (ROW_W, ROW_H), True),
+                (TILE_DISPLAY_ROW, 'display_row.png',
+                 (DISPLAY_ROW_W, DISPLAY_ROW_H), False),
+                (TILE_DISPLAY_ROW_SEL, 'display_row_sel.png',
+                 (DISPLAY_ROW_W, DISPLAY_ROW_H), True),
+                (TILE_BTN,     'btn.png',     (BTN_W, BTN_H), False),
+                (TILE_BTN_SEL, 'btn_sel.png', (BTN_W, BTN_H), True)):
+            art = button_art.get('down' if selected else 'up')
+            if art is None:
+                continue
+            bw, bh, brgba = art
+            # The authored PNG reserves transparent texels on its right edge.
+            # KEX sizes the *visible* plate to its widget rectangle, whereas
+            # Build scales the complete tile.  Leaving that padding in makes
+            # every source-port row visibly narrower (and shifts the visual
+            # centre away from its centred label), so crop it before fitting
+            # the art to the measured KEX bounds.
+            bw, bh, brgba = crop_opaque(bw, bh, brgba)
+            pix = png.resize(bw, bh, brgba, *size)
+            if selected:
+                pix = png.tint(size[0], size[1], pix, *SELECT_TINT)
+            png.write(os.path.join(artdir, name), size[0], size[1], pix)
+            lines.append((tile, 'kexart/' + name))
+            if verbose: print("  tile %d  %-30s %dx%d" % (tile, name, size[0], size[1]))
+
+        # Sliders in the original KEX UI use narrow solid stops: the default
+        # position is pale and the adjusted value is warm gold.  They are
+        # procedural renderer primitives there, not a PNG in the KPF, so make
+        # equally direct pixel tiles here instead of abusing a font character.
+        for tile, name, colour in (
+                (TILE_SLIDER_DEFAULT, 'slider_default.png', (215, 207, 184, 255)),
+                (TILE_SLIDER_CURRENT, 'slider_current.png', (245, 190, 70, 255))):
+            width, height = 2, 6
+            pix = bytearray(colour * (width * height))
+            png.write(os.path.join(artdir, name), width, height, pix)
+            lines.append((tile, 'kexart/' + name))
+            if verbose: print("  tile %d  %-30s %dx%d" % (tile, name, width, height))
 
         # rotatesprite has no x-flip bit and the anchor moves under rotation, so
         # the right-hand cursor is authored pre-mirrored rather than flipped at
@@ -241,15 +315,9 @@ def extract(kexdir, outdir, verbose=True):
             tmp = os.path.join(artdir, 'cursor.png')
             open(tmp, 'wb').write(cur)
             cw, ch, crgba = png.read(tmp)
-            # The remaster backs the statue with an opaque black plate, which is
-            # what makes it readable against the busy artwork behind the panel.
-            for i in range(cw * ch):
-                q = i * 4
-                a = crgba[q+3]
-                for c in range(3):
-                    crgba[q+c] = crgba[q+c] * a // 255
-                crgba[q+3] = 255
-            png.write(tmp, cw, ch, crgba)
+            # cursor.png already carries the cut-out silhouette authored by
+            # the remaster.  Preserve that alpha; forcing transparent pixels
+            # opaque turns the cursor bounds into conspicuous black squares.
             m = bytearray(len(crgba))
             for y in range(ch):
                 for x in range(cw):
@@ -335,17 +403,70 @@ def extract(kexdir, outdir, verbose=True):
 
         # Flat plates the layout needs and the remaster does not ship as art:
         # a black square (tiled for banners and the panels' black surround) and
-        # the grey key-cap the hint bar puts around "Enter" and "Esc".
+        # the compact dark key-cap the hint bar puts around "Enter" and "Esc".
         png.write(os.path.join(artdir, 'black.png'), 8, 8, png.solid(8, 8, 0, 0, 0))
         lines.append((TILE_BLACK, 'kexart/black.png'))
-        kc = png.solid(26, 14, 96, 96, 96)
-        for yy in range(14):
-            for xx in range(26):
-                if xx == 0 or yy == 0 or xx == 25 or yy == 13:
-                    q = (yy * 26 + xx) * 4
-                    kc[q:q+3] = bytes((150, 150, 150))
-        png.write(os.path.join(artdir, 'keycap.png'), 26, 14, kc)
+        kc = png.solid(11, 11, 24, 24, 24)
+        km = png.solid(11, 11, 24, 24, 24)
+        for yy in range(11):
+            for xx in range(11):
+                q = (yy * 11 + xx) * 4
+                if xx == 0 or yy == 0 or xx == 10 or yy == 10:
+                    kc[q:q+3] = bytes((92, 92, 92))
+                elif xx == 1 or yy == 1:
+                    kc[q:q+3] = bytes((58, 58, 58))
+                # The centre tile keeps the cap's top/bottom bevel but omits
+                # the vertical outline, allowing LEFT/RIGHT and controller
+                # glyph names to span multiple cells without a stretched or
+                # visibly repeated border.
+                if yy == 0 or yy == 10:
+                    km[q:q+3] = bytes((92, 92, 92))
+                elif yy == 1:
+                    km[q:q+3] = bytes((58, 58, 58))
+        png.write(os.path.join(artdir, 'keycap.png'), 11, 11, kc)
         lines.append((TILE_KEYCAP, 'kexart/keycap.png'))
+        png.write(os.path.join(artdir, 'keycap_mid.png'), 11, 11, km)
+        lines.append((TILE_KEYCAP_MID, 'kexart/keycap_mid.png'))
+
+        # KEX ships the rendered keyboard prompts used by its footer.  They
+        # include the correct soft bevel and title-case labels, so use them
+        # rather than approximating an Enter/Escape or an arrow pair with the
+        # menu font and synthetic keycap geometry.
+        for source, tile, filename in (
+                ('gfx/controller/keyboard/13.png', TILE_KEY_ENTER, 'key_enter.png'),
+                ('gfx/controller/keyboard/27.png', TILE_KEY_ESCAPE, 'key_escape.png'),
+                # KEX's platform-agnostic input enum stores the cursor keys
+                # after the navigation keys: 278 is Right and 279 is Left.
+                ('gfx/controller/keyboard/279.png', TILE_KEY_LEFT, 'key_left.png'),
+                ('gfx/controller/keyboard/278.png', TILE_KEY_RIGHT, 'key_right.png')):
+            blob = grab(source)
+            if blob is None:
+                if verbose: print("  missing %s" % source)
+                continue
+            path = os.path.join(artdir, filename)
+            open(path, 'wb').write(blob)
+            w, h, _ = png.read(path)
+            lines.append((tile, 'kexart/' + filename))
+            if verbose: print("  tile %d  %-30s %dx%d" % (tile, source, w, h))
+
+        # Use the remaster's generic controller glyphs rather than placing
+        # A/B in a fabricated keyboard cap. f0002 and f0001 are its bottom
+        # (accept/A) and right (back/B) face buttons; f0014/f0012 carry the
+        # left/right D-pad highlights used by the adjust prompt.
+        for source, tile, filename in (
+                ('gfx/controller/generic/f0002.png', TILE_PAD_A, 'pad_a.png'),
+                ('gfx/controller/generic/f0001.png', TILE_PAD_B, 'pad_b.png'),
+                ('gfx/controller/generic/f0014.png', TILE_PAD_LEFT, 'pad_left.png'),
+                ('gfx/controller/generic/f0012.png', TILE_PAD_RIGHT, 'pad_right.png')):
+            blob = grab(source)
+            if blob is None:
+                if verbose: print("  missing %s" % source)
+                continue
+            path = os.path.join(artdir, filename)
+            open(path, 'wb').write(blob)
+            w, h, _ = png.read(path)
+            lines.append((tile, 'kexart/' + filename))
+            if verbose: print("  tile %d  %-30s %dx%d" % (tile, source, w, h))
 
         # A marker for where you are on the overworld. The remaster draws its
         # player sprite there; nothing in the .kpf is a clean stand-in, so this
@@ -537,27 +658,47 @@ def extract(kexdir, outdir, verbose=True):
     extra = {cp: i for i, cp in enumerate(sorted(codepoints - set(range(32, 127))))}
     metrics = []
     for cp in sorted(codepoints):
-        g = glyphs.get(cp)
-        src = (aw, ah, gold, argba, 1)
-        if g is None:
-            g = small.get(cp)
-            if g is None or srgba is None:
-                continue
-            src = (sw, sh, sgold, srgba, upscale)
-        x, y, w, h, yo = g
-        if w <= 0 or h <= 0:
-            metrics.append((cp, -1, -1, 0, 0, yo)); continue
-        atw, ath, agold, araw, mul = src
-        gpix = png.crop(atw, ath, agold, x, y, w, h)
-        apix = png.crop(atw, ath, araw,  x, y, w, h)
-        if mul > 1:
-            gpix = png.resize(w, h, gpix, w * mul, h * mul)
-            apix = png.resize(w, h, apix, w * mul, h * mul)
-            w, h = w * mul, h * mul
+        # KEX presents ordinary menu labels with smallfont, while title prompts
+        # use the larger blue-and-gold bigfont.  Keep each image at its authored
+        # metric size; kexmenu.cpp reads both metric sets from kexfont.txt.
+        sg = small.get(cp)
+        bg = glyphs.get(cp)
+
+        if sg is not None and sgold is not None:
+            sx, sy, menu_w, menu_h, menu_yoff = sg
+            if menu_w <= 0 or menu_h <= 0:
+                menu_pix = bytearray()
+            else:
+                menu_pix = png.crop(sw, sh, sgold, sx, sy, menu_w, menu_h)
+                if upscale > 1:
+                    menu_pix = png.resize(menu_w, menu_h, menu_pix,
+                                          menu_w * upscale, menu_h * upscale)
+                    menu_w *= upscale; menu_h *= upscale; menu_yoff *= upscale
+        elif bg is not None:
+            bx, by, menu_w, menu_h, menu_yoff = bg
+            menu_pix = png.crop(aw, ah, gold, bx, by, menu_w, menu_h)
+        else:
+            continue
+
+        if bg is not None:
+            bx, by, title_w, title_h, title_yoff = bg
+            title_pix = png.crop(aw, ah, argba, bx, by, title_w, title_h)
+        elif sg is not None and srgba is not None:
+            sx, sy, title_w, title_h, title_yoff = sg
+            title_pix = png.crop(sw, sh, srgba, sx, sy, title_w, title_h)
+            if upscale > 1:
+                title_pix = png.resize(title_w, title_h, title_pix,
+                                       title_w * upscale, title_h * upscale)
+                title_w *= upscale; title_h *= upscale; title_yoff *= upscale
+        else:
+            continue
+
+        if menu_w <= 0 or menu_h <= 0 or title_w <= 0 or title_h <= 0:
+            metrics.append((cp, -1, -1, 0, 0, 0, 0, 0)); continue
         fn  = 'kexart/font/g%03d.png' % cp
         fna = 'kexart/fontalt/g%03d.png' % cp
-        png.write(os.path.join(outdir, fn),  w, h, gpix)
-        png.write(os.path.join(outdir, fna), w, h, apix)
+        png.write(os.path.join(outdir, fn), menu_w, menu_h, menu_pix)
+        png.write(os.path.join(outdir, fna), title_w, title_h, title_pix)
         if cp < 127:
             tile = TILE_FONT_BASE + (cp - 32)
             alt_tile = TILE_FONT_ALT + (cp - 32)
@@ -566,7 +707,8 @@ def extract(kexdir, outdir, verbose=True):
             alt_tile = TILE_FONT_ALT_EXTRA_BASE + extra[cp]
         lines.append((tile, fn))
         lines.append((alt_tile, fna))
-        metrics.append((cp, tile, alt_tile, w, h, yo))
+        metrics.append((cp, tile, alt_tile, menu_w, menu_h, title_w, title_h,
+                        menu_yoff))
 
     from kexmap import write_def
     write_def(os.path.join(outdir, 'kexmenu.def'), lines,
@@ -630,19 +772,27 @@ def extract(kexdir, outdir, verbose=True):
             'm_reload_last_checkpoint', 'm_restart_level',
             'm_exit_title_screen', 'm_go_back', 'm_yes', 'm_no',
             'm_press_start', 'm_prompt_select', 'm_prompt_back', 'm_prompt_menu',
-            'm_overwrite_game_confirm', 'm_quit_game_confirm',
+            'm_overwrite_game_confirm', 'm_load_game_confirm', 'm_travel',
+            'm_quit_game_confirm',
             'm_reload_checkpoint_confirm', 'm_reload_level_confirm',
-            'm_exit_game_confirm', 'm_empty_slot', 'm_audio_settings',
+            'm_exit_game_confirm', 'm_reset_settings_confirm', 'm_empty_slot',
+            'm_input_settings', 'm_reset_settings', 'm_audio_settings',
+            'm_audio_output', 'm_music_volume', 'm_sound_volume', 'm_stereo',
+            'm_video_settings', 'm_videoResolution', 'm_displayresolution',
+            'm_windowmode', 'm_windowed', 'm_fullscreen', 'm_borderless',
+            'm_verticalSync', 'm_maxFrameRate', 'm_brightness', 'm_unlimited',
+            'm_applychanges', 'm_video_apply_confirm', 'm_advanced_display_settings',
             'm_display_settings', 'm_antialiasing', 'm_anisotrophy', 'm_fov',
             'm_hudSettings', 'm_showPlayTime', 'm_hudtext', 'm_crosshairsize',
             'm_game_settings', 'm_checkpoints', 'm_overworldScreen',
             'm_new', 'm_original',
             'm_viewBobSpeed', 'm_viewBobHeight', 'm_turnSway',
             'm_weaponJumpBobbing',
-            'm_mouse_settings', 'm_msens_x', 'm_msens_y',
+            'm_mouse_settings', 'm_msens_x', 'm_msens_y', 'm_msmooth',
             'm_gamepad_settings', 'm_vibration', 'm_vibration_volume',
             'm_joylookspeed_x', 'm_joylookspeed_y', 'm_joymovesens',
-            'm_joyinvertlook', 'm_deadzone', 'm_lstick', 'm_rstick',
+            'm_joysmoothing', 'm_joyinvertlook', 'm_swapjoysticks',
+            'm_deadzone', 'm_lstick', 'm_rstick',
             'm_bindings', 'm_bind_weaponwheel', 'm_bind_inventory',
             'm_bind_automap', 'm_bind_mapzoomin', 'm_bind_mapzoomout',
             'm_bind_screenshot',
@@ -735,10 +885,11 @@ def extract(kexdir, outdir, verbose=True):
             if verbose: print("  campaign starts at %s" % m.group(1).upper())
 
     with open(os.path.join(outdir, 'kexfont.txt'), 'w') as f:
-        f.write("# codepoint tile alttile width height yoffset   (font scale %g)\n" % scale)
+        f.write("# codepoint menu_tile title_tile menu_w menu_h title_w title_h yoffset\n")
         f.write("scale %g\n" % scale)
-        for cp, tile, alt_tile, w, h, yo in metrics:
-            f.write("%d %d %d %d %d %d\n" % (cp, tile, alt_tile, w, h, yo))
+        for cp, tile, alt_tile, w, h, title_w, title_h, yo in metrics:
+            f.write("%d %d %d %d %d %d %d %d\n" %
+                    (cp, tile, alt_tile, w, h, title_w, title_h, yo))
 
     if verbose:
         print("  %d glyphs sliced from bigfont (atlas %dx%d, scale %g)"

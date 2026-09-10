@@ -37,11 +37,14 @@ extern "C" {
     extern int g_useCwd;
 
     #ifndef APPNAME
-    #define APPNAME             "PCExhumed"
+    // Kexhumed is VibeBuild32's KEX-campaign runtime.  Keep the original
+    // PCExhumed-derived source layout, but expose a distinct product identity
+    // in the window title, user-data paths, and command-line help.
+    #define APPNAME             "Kexhumed"
     #endif
 
     #ifndef APPBASENAME
-    #define APPBASENAME         "pcexhumed"
+    #define APPBASENAME         "kexhumed"
     #endif
 
     extern struct grpfile_t const* g_selectedGrp;

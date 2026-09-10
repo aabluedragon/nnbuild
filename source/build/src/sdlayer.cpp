@@ -2050,6 +2050,12 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
     windowsHandleFocusChange(1);
 #endif
 
+    // Keep an interactive test launch out of the way without suppressing its
+    // window altogether.  Unlike VB_HIDE_WINDOW, this still gives the tester
+    // a normal taskbar window that can be restored when they are ready.
+    if (sdl_window && getenv("VB_MINIMIZE_WINDOW") && !getenv("VB_HIDE_WINDOW"))
+        SDL_MinimizeWindow(sdl_window);
+
     return 0;
 }
 #endif

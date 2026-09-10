@@ -1750,7 +1750,15 @@ static void KexInv_LoadText(void)
 
 char const *KexInv_Text(char const *key)
 {
-    static char s_result[256];
+    // A menu frame often asks for several translated strings before it draws
+    // any of them (for example, a label and its current value).  A single
+    // scratch string made every previously returned pointer alias the latest
+    // lookup, turning "WINDOW MODE: WINDOWED" into "WINDOW MODE: WINDOW
+    // MODE".  Keep a modest ring so all of the live strings in one draw pass
+    // retain their own text without allocating in the menu loop.
+    static char s_result[32][256];
+    static unsigned int s_resultIndex;
+    char * const result = s_result[s_resultIndex++ % ARRAY_SIZE(s_result)];
     KexInv_LoadText();
 
     int const klen = (int)Bstrlen(key);
@@ -1760,12 +1768,12 @@ char const *KexInv_Text(char const *key)
         int const linelen = eol ? (int)(eol - p) : (int)Bstrlen(p);
         if (linelen > klen && p[klen] == ' ' && !Bstrncmp(p, key, klen))
         {
-            int n = min(linelen - klen - 1, (int)sizeof(s_result) - 1);
-            Bmemcpy(s_result, p + klen + 1, n);
-            while (n > 0 && (s_result[n-1] == '\r' || s_result[n-1] == ' '))
+            int n = min(linelen - klen - 1, (int)sizeof(s_result[0]) - 1);
+            Bmemcpy(result, p + klen + 1, n);
+            while (n > 0 && (result[n-1] == '\r' || result[n-1] == ' '))
                 n--;
-            s_result[n] = 0;
-            return s_result;
+            result[n] = 0;
+            return result;
         }
         if (!eol) break;
         p = eol + 1;

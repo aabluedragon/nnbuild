@@ -137,7 +137,7 @@ static gs_gameSpec_t const gs_gameSpecs[GS_GAME_COUNT] =
     { GS_GAME_NAM,   "NAM",             "nam",    gs_namDataFiles   },
     { GS_GAME_NAPALM, "Napalm",         "napalm", gs_napalmDataFiles },
     { GS_GAME_WW2GI, "World War II GI",  "ww2gi",  gs_ww2giDataFiles },
-    { GS_GAME_EXHUMED, "Powerslave/Exhumed", "exhumed", gs_exhumedDataFiles },
+    { GS_GAME_EXHUMED, "Kexhumed", "exhumed", gs_exhumedDataFiles },
     { GS_GAME_IONFURY, "Ion Fury",       "ionfury", gs_ionFuryDataFiles },
 };
 
@@ -246,7 +246,7 @@ static int gs_gameFromName(char const *name)
         !Bstrcasecmp(name, "worldwariigi") || !Bstrcasecmp(name, "world-war-ii-gi") ||
         !Bstrcasecmp(name, "world war ii gi") || !Bstrcasecmp(name, "gi"))
         return GS_GAME_WW2GI;
-    if (!Bstrcasecmp(name, "exhumed") || !Bstrcasecmp(name, "powerslave") ||
+    if (!Bstrcasecmp(name, "kexhumed") || !Bstrcasecmp(name, "exhumed") || !Bstrcasecmp(name, "powerslave") ||
         !Bstrcasecmp(name, "power-slave") || !Bstrcasecmp(name, "power slave") ||
         !Bstrcasecmp(name, "pcexhumed"))
         return GS_GAME_EXHUMED;

@@ -20,7 +20,7 @@ const char *KexMenu_ChosenMap(void);       // level picked on the overworld, or 
 const char *KexMenu_ChooseNextMap(const char *current); // return to the overworld from a level exit
 void KexMenu_Backdrop(void);
 void KexMenu_Text(int x, int y, const char *str, int height, int shade, int pal, int centred, int altFont = 0);
-int  KexMenu_TextWidth(const char *str, int height);
+int  KexMenu_TextWidth(const char *str, int height, int altFont = 0);
 
 // The remaster can use the original console overworld painting and cursor.
 // This setting is read only by the KEX menu path.

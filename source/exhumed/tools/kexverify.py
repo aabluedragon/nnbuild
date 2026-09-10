@@ -375,18 +375,36 @@ def verify_controller_defaults():
                 out.append('fresh controller defaults changed: %s' % needle)
     except OSError as exc:
         out.append('cannot read native controller defaults: %s' % exc)
+    control_source = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'mact', 'src', 'control.cpp'))
+    try:
+        control = re.sub(r'\s+', '', open(control_source).read())
+        for needle in ('boolCONTROL_MouseSmoothing=false;',
+                       'boolCONTROL_JoyLookSmoothing=false;',
+                       'boolCONTROL_GamepadSticksSwapped=false;',
+                       '"cl_mousesmooth"', '"cl_joysmoothing"',
+                       '"cl_swapjoysticks"', 'staticintcontrolSourceAxis(intindex)',
+                       'if(CONTROL_MouseSmoothing)',
+                       'if(CONTROL_JoyLookSmoothing'):
+            if needle not in control:
+                out.append('remaster input preference changed: %s' % needle)
+    except OSError as exc:
+        out.append('cannot read remaster input preferences: %s' % exc)
     menu_source = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src', 'kexmenu.cpp'))
     try:
         menu = open(menu_source).read()
         for needle in ('static void KexMenu_Mouse(void)', 'KexMenu_SetMouseSensitivity',
-                       'm_mouse_settings', 'm_msens_x', 'm_msens_y',
+                       'm_mouse_settings', 'm_msens_x', 'm_msens_y', 'm_msmooth',
+                       'CONTROL_MouseSmoothing', 'mouseflip',
                        'CONTROL_MouseAxesSensitivity',
                        'static void KexMenu_Gamepad(void)',
                        'static void KexMenu_GamepadDeadzones(void)',
                        'KexMenu_SetControllerScale', 'KexMenu_SetControllerDeadzone',
                        'm_gamepad_settings', 'm_vibration_volume',
                        'm_joylookspeed_x', 'm_joylookspeed_y', 'm_joymovesens',
-                       'm_joyinvertlook', 'm_deadzone', 'm_lstick', 'm_rstick',
+                       'm_joysmoothing', 'm_joyinvertlook', 'm_swapjoysticks',
+                       'CONTROL_JoyLookSmoothing', 'CONTROL_GamepadSticksSwapped',
+                       'm_deadzone', 'm_lstick', 'm_rstick',
                        'CONTROLLER_AXIS_RIGHTX', 'CONTROLLER_AXIS_RIGHTY',
                        'CONTROLLER_AXIS_LEFTX', 'CONTROLLER_AXIS_LEFTY',
                        'kex_vibration_volume'):
@@ -497,7 +515,10 @@ def verify_input_compat(z):
                        'KexMenu_CopyCommandsExcept', 'binding.command',
                        'VB_KEX_BINDINGS_TEST', 'KexBindingstest:',
                        'CONFIG_MapKey(binding.gamefunc',
-                       'kKexBindings', 'KexMenu_Bindings();',
+                       'KexMenu_Bindings();',
+                       'staticvoidKexMenu_Input(void)', 'm_input_settings',
+                       'kKexInputBindings', 'kKexInputMouse', 'kKexInputGamepad',
+                       'KexMenu_Input();',
                        'voidKexMenu_Status(boolweaponWheel)',
                        'SetNewWeapon(nLocalPlayer,weapon);'):
             if needle not in menu:
@@ -537,6 +558,7 @@ def verify_game_settings():
         for needle in ('intkex_original_overworld=0;', 'staticvoidKexMenu_Game(void)',
                        'm_checkpoints', 'm_overworldScreen', 'm_viewBobSpeed',
                        'm_viewBobHeight', 'm_turnSway', 'm_weaponJumpBobbing',
+                       'kKexGameHud', 'KexMenu_Hud();',
                        'kKexTileOverworldOriginal=7017',
                        'kKexTileEyeOriginalBase=7550',
                        'original?L.originalX:L.x',
@@ -636,11 +658,13 @@ def verify_display_settings():
     try:
         menu = re.sub(r'\s+', '', open(os.path.join(source_dir, 'kexmenu.cpp')).read())
         for needle in ('staticvoidKexMenu_Display(void)', 'm_display_settings',
-                       'm_fov', 'm_antialiasing', 'm_anisotrophy',
+                       'm_fov', 'm_antialiasing', 'm_displayresolution',
+                       'm_anisotrophy', 'm_brightness', 'g_videoGamma',
+                       'videoSetGamma()', 'KexMenu_ApplyVideo(config)',
                        'KexRender_SetFov(KexRender_Fov()+direction);',
                        'KexRender_SetAntialiasing(KexRender_Antialiasing()+direction);',
                        'KexRender_SetAnisotropy(KexRender_Anisotropy()+direction);',
-                       'SMAA(COMPAT)'):
+                       'SMAA'):
             if needle not in menu:
                 out.append('native Display Settings menu changed: %s' % needle)
     except OSError as exc:
@@ -1164,18 +1188,26 @@ def verify_inventory_metadata(z, outdir):
         'm_game_paused', 'm_resume', 'm_reload_last_checkpoint',
         'm_restart_level', 'm_exit_title_screen', 'm_go_back', 'm_yes',
         'm_no', 'm_press_start', 'm_prompt_select', 'm_prompt_back',
-        'm_prompt_menu', 'm_overwrite_game_confirm', 'm_quit_game_confirm',
+        'm_prompt_menu', 'm_overwrite_game_confirm', 'm_load_game_confirm',
+        'm_travel', 'm_quit_game_confirm',
         'm_reload_checkpoint_confirm', 'm_reload_level_confirm',
-        'm_exit_game_confirm', 'm_empty_slot', 'm_audio_settings',
+        'm_exit_game_confirm', 'm_reset_settings_confirm', 'm_empty_slot',
+        'm_input_settings', 'm_reset_settings', 'm_audio_settings',
+        'm_audio_output', 'm_music_volume', 'm_sound_volume', 'm_stereo',
+        'm_video_settings', 'm_videoResolution', 'm_displayresolution',
+        'm_windowmode', 'm_windowed', 'm_fullscreen', 'm_borderless',
+        'm_verticalSync', 'm_maxFrameRate', 'm_brightness', 'm_unlimited',
+        'm_applychanges', 'm_video_apply_confirm', 'm_advanced_display_settings',
         'm_display_settings', 'm_antialiasing', 'm_anisotrophy', 'm_fov',
         'm_hudSettings', 'm_showPlayTime', 'm_hudtext', 'm_crosshairsize',
         'm_game_settings', 'm_checkpoints', 'm_overworldScreen',
         'm_new', 'm_original', 'm_viewBobSpeed', 'm_viewBobHeight',
         'm_turnSway', 'm_weaponJumpBobbing',
-        'm_mouse_settings', 'm_msens_x', 'm_msens_y',
+        'm_mouse_settings', 'm_msens_x', 'm_msens_y', 'm_msmooth',
         'm_gamepad_settings', 'm_vibration', 'm_vibration_volume',
         'm_joylookspeed_x', 'm_joylookspeed_y', 'm_joymovesens',
-        'm_joyinvertlook', 'm_deadzone', 'm_lstick', 'm_rstick',
+        'm_joysmoothing', 'm_joyinvertlook', 'm_swapjoysticks',
+        'm_deadzone', 'm_lstick', 'm_rstick',
         'm_bindings', 'm_bind_weaponwheel', 'm_bind_inventory',
         'm_bind_automap', 'm_bind_mapzoomin', 'm_bind_mapzoomout',
         'm_bind_screenshot',
@@ -1311,18 +1343,30 @@ def verify_menu_assets(z, outdir):
         return out + ['kexmenu.def contains no tile definitions']
 
     # Fixed-size items are passed to rotatesprite at their authored aspect.
-    # A wrong extraction size visibly letterboxes a row, title card, or map.
+    # A wrong extraction size visibly letterboxes a row, title backdrop, or map.
     dimensions = {
         Menu.TILE_OVERWORLD: (Menu.OVERWORLD_W, Menu.OVERWORLD_H),
         Menu.TILE_OVERWORLD_ORIGINAL: (Menu.OVERWORLD_ORIGINAL_W,
                                        Menu.OVERWORLD_ORIGINAL_H),
         Menu.TILE_BACKDROP: (Menu.BACKDROP_W, Menu.BACKDROP_H),
-        Menu.TILE_TITLE: (320, 200),
         Menu.TILE_ROW: (Menu.ROW_W, Menu.ROW_H),
         Menu.TILE_ROW_SEL: (Menu.ROW_W, Menu.ROW_H),
+        Menu.TILE_DISPLAY_ROW: (Menu.DISPLAY_ROW_W, Menu.DISPLAY_ROW_H),
+        Menu.TILE_DISPLAY_ROW_SEL: (Menu.DISPLAY_ROW_W, Menu.DISPLAY_ROW_H),
+        Menu.TILE_SLIDER_DEFAULT: (2, 6),
+        Menu.TILE_SLIDER_CURRENT: (2, 6),
         Menu.TILE_BTN: (Menu.BTN_W, Menu.BTN_H),
         Menu.TILE_BTN_SEL: (Menu.BTN_W, Menu.BTN_H),
-        Menu.TILE_BLACK: (8, 8), Menu.TILE_KEYCAP: (26, 14),
+        Menu.TILE_BLACK: (8, 8), Menu.TILE_KEYCAP: (11, 11),
+        Menu.TILE_KEYCAP_MID: (11, 11),
+        Menu.TILE_KEY_ENTER: (100, 100),
+        Menu.TILE_KEY_ESCAPE: (100, 100),
+        Menu.TILE_KEY_LEFT: (100, 100),
+        Menu.TILE_KEY_RIGHT: (100, 100),
+        Menu.TILE_PAD_A: (512, 512),
+        Menu.TILE_PAD_B: (512, 512),
+        Menu.TILE_PAD_LEFT: (512, 512),
+        Menu.TILE_PAD_RIGHT: (512, 512),
         Menu.TILE_MARKER: (9, 9),
     }
     for _source, tile, size in Menu.ART:
@@ -1339,6 +1383,41 @@ def verify_menu_assets(z, outdir):
                 out.append('menu tile %d is %s, expected %s' % (tile, actual, wanted))
         except OSError:
             pass  # reported in the general census above
+
+    # title_backdrop is the complete KEX title screen, including the logo.
+    # The old console title card was a separate 320x200 overlay which hid that
+    # artwork, so it must neither be emitted nor be reintroduced by a later
+    # menu conversion pass.
+    if any(source == 'gfx/title.png' for source, _tile, _size in Menu.ART):
+        out.append('legacy gfx/title.png must not be part of the KEX title package')
+    if 7016 not in tiles:
+        out.append('stretchable key-cap tile 7016 is absent')
+
+    # Keyboard and generic-controller controls must keep KEX's own pixel
+    # art—not reconstructed caps whose lettering, bevel, or transparent edge
+    # differs from the native footer. The source engine's key enum stores
+    # right at 278 and left at 279; their output tile IDs are checked below.
+    for source, tile, output_name in (
+            ('gfx/controller/keyboard/13.png', Menu.TILE_KEY_ENTER, 'key_enter.png'),
+            ('gfx/controller/keyboard/27.png', Menu.TILE_KEY_ESCAPE, 'key_escape.png'),
+            ('gfx/controller/keyboard/279.png', Menu.TILE_KEY_LEFT, 'key_left.png'),
+            ('gfx/controller/keyboard/278.png', Menu.TILE_KEY_RIGHT, 'key_right.png'),
+            ('gfx/controller/generic/f0002.png', Menu.TILE_PAD_A, 'pad_a.png'),
+            ('gfx/controller/generic/f0001.png', Menu.TILE_PAD_B, 'pad_b.png'),
+            ('gfx/controller/generic/f0014.png', Menu.TILE_PAD_LEFT, 'pad_left.png'),
+            ('gfx/controller/generic/f0012.png', Menu.TILE_PAD_RIGHT, 'pad_right.png')):
+        rel = tiles.get(tile)
+        if rel != 'kexart/' + output_name:
+            out.append('KEX input prompt tile %d does not use %s' % (tile, output_name))
+            continue
+        try:
+            if open(os.path.join(outdir, rel), 'rb').read() != z.read(source):
+                out.append('KEX input prompt tile %d differs from KEX source %s' %
+                           (tile, source))
+        except KeyError:
+            out.append('KEX input source is missing: %s' % source)
+        except OSError:
+            pass  # reported by the generic tile census above
 
     # Each remaster overworld setting has a source-ordered cursor animation;
     # their consecutive tile ranges are how kexmenu.cpp discovers the counts.
@@ -1389,10 +1468,32 @@ def verify_menu_assets(z, outdir):
         # used only by remaster screens Build does not implement.  Audit the
         # strings that the generated Build UI can actually display instead.
         font_chars = set(range(32, 127))
+        required_menu_keys = (
+            'm_input_settings', 'm_reset_settings', 'm_reset_settings_confirm',
+            'm_load_game_confirm', 'm_travel',
+            'm_audio_output', 'm_music_volume', 'm_sound_volume',
+            'm_video_settings', 'm_videoResolution', 'm_displayresolution',
+            'm_windowmode', 'm_windowed', 'm_fullscreen', 'm_borderless',
+            'm_verticalSync', 'm_maxFrameRate', 'm_brightness', 'm_unlimited',
+            'm_applychanges', 'm_video_apply_confirm', 'm_advanced_display_settings',
+            'm_msmooth', 'm_joysmoothing', 'm_swapjoysticks',
+        )
         for code, _language in Menu.UI_LANGUAGES:
             inv_filename = 'kexinv.txt' if code == 'en' else 'kexinv_%s.txt' % code
             pickup_filename = 'kexpickup.txt' if code == 'en' else 'kexpickup_%s.txt' % code
             world_filename = 'kexworld.txt' if code == 'en' else 'kexworld_%s.txt' % code
+            try:
+                inventory_keys = {
+                    raw.partition(' ')[0] for raw in open(os.path.join(outdir, inv_filename),
+                                                           encoding='utf-8')
+                    if raw.strip() and not raw.startswith('#')
+                }
+                for key in required_menu_keys:
+                    if key not in inventory_keys:
+                        out.append('%s omits displayed menu localization key %s' %
+                                   (inv_filename, key))
+            except OSError:
+                out.append('%s is missing' % inv_filename)
             for filename, columns in ((inv_filename, 1), (pickup_filename, 1),
                                       (world_filename, 10)):
                 for raw in open(os.path.join(outdir, filename), encoding='utf-8'):
@@ -1409,10 +1510,14 @@ def verify_menu_assets(z, outdir):
             cols = raw.split()
             if not cols or cols[0] == '#' or cols[0] == 'scale':
                 continue
-            if len(cols) != 6:
+            # Newer packages retain independent metrics for smallfont menu
+            # labels and bigfont title prompts.  Keep the old six-field
+            # format valid so an otherwise usable legacy package is still
+            # auditable.
+            if len(cols) not in (6, 8):
                 out.append('malformed kexfont.txt row: %r' % raw.rstrip())
                 continue
-            cp, tile, alt_tile, _w, _h, _yoff = (int(value) for value in cols)
+            cp, tile, alt_tile = (int(value) for value in cols[:3])
             if cp in glyphs:
                 out.append('duplicate kexfont codepoint %d' % cp)
             glyphs[cp] = (tile, alt_tile)
@@ -1445,34 +1550,194 @@ def verify_menu_assets(z, outdir):
     except (OSError, UnicodeDecodeError, ValueError):
         out.append('kexfont.txt is missing or malformed')
 
+    # KEX sizes the visible part of each plate to its widget bounds. Trim the
+    # transparent atlas padding before comparing. Its brown up and red down
+    # plates are both authored states.  KEX then applies its warm selection
+    # modulation to the down texture, so selection must use both operations.
+    try:
+        source_states = {}
+        for state in ('up', 'down'):
+            sw, sh, source_pixels = Menu.png.read(os.path.join(
+                outdir, 'kexart', 'menubutton_%s.png' % state))
+            source_states[state] = Menu.crop_opaque(sw, sh, source_pixels)
+        for tile, output_name, width, height, selected in (
+                (Menu.TILE_ROW, 'row.png', Menu.ROW_W, Menu.ROW_H, False),
+                (Menu.TILE_ROW_SEL, 'row_sel.png', Menu.ROW_W, Menu.ROW_H, True),
+                (Menu.TILE_DISPLAY_ROW, 'display_row.png',
+                 Menu.DISPLAY_ROW_W, Menu.DISPLAY_ROW_H, False),
+                (Menu.TILE_DISPLAY_ROW_SEL, 'display_row_sel.png',
+                 Menu.DISPLAY_ROW_W, Menu.DISPLAY_ROW_H, True),
+                (Menu.TILE_BTN, 'btn.png', Menu.BTN_W, Menu.BTN_H, False),
+                (Menu.TILE_BTN_SEL, 'btn_sel.png', Menu.BTN_W, Menu.BTN_H, True)):
+            rel = tiles.get(tile)
+            if rel != 'kexart/' + output_name:
+                out.append('menu tile %d does not use %s' % (tile, output_name))
+                continue
+            aw, ah, actual_pixels = Menu.png.read(os.path.join(outdir, rel))
+            sw, sh, source_pixels = source_states['down' if selected else 'up']
+            expected_pixels = Menu.png.resize(sw, sh, source_pixels, width, height)
+            if selected:
+                expected_pixels = Menu.png.tint(width, height, expected_pixels,
+                                                *Menu.SELECT_TINT)
+            if (aw, ah) != (width, height) or actual_pixels != expected_pixels:
+                out.append('menu tile %d does not match the expected selected state' % tile)
+    except (OSError, AssertionError, ValueError):
+        out.append('authored menu button states are missing or malformed')
+
     try:
         main_def = open(os.path.join(outdir, 'exhumed.def')).read()
         if not re.search(r'^include\s+"kexmenu\.def"\s*$', main_def, re.M):
             out.append('exhumed.def does not include kexmenu.def')
         native_source = open(os.path.join(
             os.path.dirname(__file__), '..', 'src', 'kexmenu.cpp')).read()
+        inventory_source = open(os.path.join(
+            os.path.dirname(__file__), '..', 'src', 'kexinv.cpp')).read()
         native = re.sub(r'\s+', '', native_source)
+        if 'KexDrawTile(kKexTileTitle' in native_source:
+            out.append('title hold still composites the legacy console title card')
+        if ('staticchars_result[32][256];' not in re.sub(r'\s+', '', inventory_source)
+                or 's_resultIndex++%ARRAY_SIZE(s_result)' not in re.sub(r'\s+', '', inventory_source)):
+            out.append('localized menu lookups no longer retain independently returned strings')
+        if 'KexMenu_Text(160, 120,' not in native_source \
+           or '16, (int8_t)shade, 0, 1, 1);' not in native_source:
+            out.append('title hold no longer uses the native press-start placement/style')
+        # The title art must stay in the renderer's 320x200 logical canvas.
+        # Pre-scaling coordinates with the physical drawable dimensions makes
+        # it scale twice on high-DPI windows and crops the menu offscreen.
+        backdrop_needles = (
+            'int const z = min(divscale16(320, tw), divscale16(200, th));',
+            'int const w = mulscale16(tw, z), h = mulscale16(th, z);',
+            'RS_TOPLEFT | RS_AUTO | RS_STRETCH | RS_NOCLIP',
+        )
+        if any(needle not in native_source for needle in backdrop_needles):
+            out.append('KEX backdrop no longer uses the high-DPI-safe logical canvas')
+        # Build's r_borderless=2 means "automatic" rather than an explicit
+        # borderless request.  The KEX-facing video page must ask whether the
+        # pending resolution really matches the desktop before displaying the
+        # BORDERLESS label; otherwise ordinary windowed test resolutions are
+        # reported incorrectly.
+        video_mode_needles = (
+            'KexMenu_AutoBorderlessMatchesDesktop',
+            'SDL_GetDesktopDisplayMode(display, &desktop)',
+            'config.borderless == 1',
+            'config.borderless == 2 && KexMenu_AutoBorderlessMatchesDesktop(config)',
+        )
+        if any(needle not in native_source for needle in video_mode_needles):
+            out.append('KEX video menu no longer distinguishes automatic from forced borderless mode')
+        # KexDrawTile scales uniformly, so its destination rectangle must be
+        # identical to the pre-sized plate emitted above.  A single-pixel
+        # disagreement here leaves a visible dark seam beneath every menu row.
+        for name, expected in (('KEX_ROW_W', Menu.ROW_W),
+                               ('KEX_ROW_H', Menu.ROW_H),
+                               ('KEX_BTN_W', Menu.BTN_W),
+                               ('KEX_BTN_H', Menu.BTN_H)):
+            match = re.search(r'^\s*#define\s+%s\s+(\d+)\b' % name,
+                              native_source, re.M)
+            if match is None:
+                out.append('native menu layout omits %s' % name)
+            elif int(match.group(1)) != expected:
+                out.append('native %s is %s, generated menu art requires %d' %
+                           (name, match.group(1), expected))
+        # The main-menu capture anchors its header and plates independently of
+        # the surrounding stonework.  Keep that relationship explicit: a
+        # future padding adjustment must not bring back the oversized frame or
+        # move the visible menu content while fixing it.
+        layout = {}
+        for name in ('KEX_ROW_H', 'KEX_HEADGAP', 'KEX_PAD', 'KEX_CONTENT_PAD'):
+            match = re.search(r'^\s*#define\s+%s\s+(\d+)\b' % name,
+                              native_source, re.M)
+            if match is None:
+                out.append('native menu layout omits %s' % name)
+            else:
+                layout[name] = int(match.group(1))
+        if len(layout) == 4:
+            main_height = layout['KEX_ROW_H'] * 6 + layout['KEX_HEADGAP'] \
+                          + layout['KEX_PAD'] * 2
+            main_top = (200 - main_height) // 2
+            anchors = (main_height, main_top,
+                       main_top + layout['KEX_CONTENT_PAD'],
+                       main_top + layout['KEX_CONTENT_PAD']
+                       + layout['KEX_ROW_H'] + layout['KEX_HEADGAP'],
+                       main_top + main_height + 1)
+            if anchors != (114, 43, 49, 75, 158):
+                out.append('KEX main-menu frame anchors changed: %r' % (anchors,))
+        if 'int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;' not in native_source:
+            out.append('KEX binding labels are no longer anchored to their row plate')
+        if 'KexDrawBorder(KEX_PANEL_X0,top,KEX_PANEL_X1,bottom,4,5);' not in native:
+            out.append('KEX menu frames are missing their native black surround')
+        if 'KexDrawBorder(x0,top,x1,bottom,4,5);' not in native:
+            out.append('KEX confirmation panels are missing their native black surround')
         for needle in ('KexTable_Load("kexfont.txt",INT32_MAX,KexMenu_ParseGlyph)',
                        'tilesiz[kKexTileBackdrop].x>0&&tilesiz[kKexTilePanel].x>0',
                        'KexMenu_Glyph(\'A\')', 'KexMenu_NextCodepoint',
                        '#defineKEX_MAX_GLYPHS128', 'KexMenu_Options()',
-                       'KexMenu_Display()', 'm_display_settings', 'm_antialiasing',
+                       'staticvoidKexMenu_Audio(void)',
+                       'm_audio_output', 'm_music_volume', 'm_sound_volume',
+                       'KexMenu_AdjustVolume(intvolume,intdirection)',
+                       'setCDaudiovolume(MusicVolume);',
+                       'SetMasterFXVolume(FXVolume);',
+                       'KexMenu_Sound("k_menu_select",kSoundSwitchFoot)',
+                       'KexMenu_Sound("k_menu_highlight",kSoundSwitchWtr1)',
+                       'KexMenu_Highlight();',
+                       'VB_KEX_MENU_SCRIPT', 'staticintKexMenu_ScriptedKey(void)',
+                       'staticvoidKexMenu_Video(void)', 'KexMenu_ApplyVideo(',
+                       'm_video_settings', 'm_videoResolution', 'm_windowmode',
+                       'm_verticalSync', 'm_maxFrameRate', 'm_applychanges',
+                       'm_video_apply_confirm', 'videoSetGameMode(',
+                       'videoSetVsync(config.vsync)', 'r_maxfps=config.maxfps',
+                       'KexMenu_Hint("LEFT/RIGHT","ADJUST","ENTER","SELECT");',
+                       'KexMenu_HintIsArrowPair',
+                       'staticboolKexMenu_UseControllerPrompts(void)',
+                       'Bgetenv("VB_KEX_MENU_CONTROLLER_PROMPTS")!=NULL',
+                       'KexMenu_HintKeyTile(k,controller);',
+                       'intleftTile=controller?kKexTilePadLeft:kKexTileKeyLeft;',
+                       'intrightTile=controller?kKexTilePadRight:kKexTileKeyRight;',
+                       'KexDrawTile(leftTile,x,184,kw,12,0,0,0);',
+                       'KexDrawTile(rightTile,x+kw+1,184,kw,12,0,0,0);',
+                       'constexprintkKexGamepadVisibleRows=7;',
+                       'KexMenu_Frame(top,kKexGamepadVisibleRows);',
+                       'KexMenu_Hint("LEFT/RIGHT","ADJUST","ESC","GOBACK",kKexGamepadVisibleRows);',
+                       'constexprintkKexGameVisibleRows=7;',
+                       'KexMenu_Frame(top,kKexGameVisibleRows);',
+                       'KexMenu_Hint("ENTER","SELECTITEM","LEFT/RIGHT","ADJUST",kKexGameVisibleRows);',
+                       'if(panelRows>=8)return;',
+                       'KexMenu_Hint("ESC",KexMenu_InvText("m_prompt_back","GOBACK"),NULL,NULL,rows);',
+                       'intconstcreditWidth=KEX_PANEL_X1-KEX_PANEL_X0-8;',
+                       'if(fits||creditTextHeight<=3)',
+                       'm_input_settings', 'm_reset_settings',
+                       'm_reset_settings_confirm', 'staticvoidKexMenu_ResetSettings(void)',
+                       'm_load_game_confirm', 'm_travel', 'KexMenu_ConfirmTravel',
+                       'CONFIG_ResetKexInputDefaults();',
+                       'KexRender_SetFov(64.f);', 'KexRender_SetAntialiasing(7);',
+                       'KexRender_SetAnisotropy(16);', 'g_videoGamma=DEFAULT_GAMMA;',
+                       'kKexGame=0,kKexInput,kKexAudio,kKexDisplay,kKexLanguage,kKexVideo,kKexReset,kKexOptionsItems',
+                       'kKexDisplay', 'KexMenu_Display()', 'm_antialiasing',
                        'm_anisotrophy', 'KexRender_SetFov',
                        'KexRender_SetAnisotropy',
                        'KexMenu_Game()', 'KexMenu_Language()', 'kex_language=sel;',
-                       'kex_original_overworld',
-                       'KexMenu_TextWidth(label,textHeight)>textWidth',
-                       'while(textHeight>6', 'CONTROL_GetInput(&input)',
+                       'kex_original_overworld', 'CONTROL_GetInput(&input)',
                        'BUTTON(gamefunc_Open)', 'LastSeenInput::Joystick',
-                       'CONTROL_LastSeenInput=LastSeenInput::Keyboard'):
+                       'CONTROL_LastSeenInput=LastSeenInput::Keyboard',
+                       'KexMenu_TextWidth(label,textHeight,altFont)>textWidth',
+                       'while(textHeight>5'):
             if needle not in native:
                 out.append('native remaster menu bridge changed: %s' % needle)
+        if 'menu_AdjustVolume();' in native:
+            out.append('KEX Audio Settings still routes into the classic menu')
+        if 'KexMenu_Frame(top,kKexGamepadItems);' in native:
+            out.append('controller menu panel exceeds the KEX viewport')
+        if 'KexMenu_Frame(top,kKexGameItems);' in native:
+            out.append('Game Settings panel exceeds the KEX viewport')
         tile_ids = {
             'kKexTileBackdrop': Menu.TILE_BACKDROP,
             'kKexTilePanel': Menu.TILE_PANEL,
             'kKexTileCursor': Menu.TILE_CURSOR,
             'kKexTileRow': Menu.TILE_ROW,
             'kKexTileRowSel': Menu.TILE_ROW_SEL,
+            'kKexTileDisplayRow': Menu.TILE_DISPLAY_ROW,
+            'kKexTileDisplayRowSel': Menu.TILE_DISPLAY_ROW_SEL,
+            'kKexTileSliderDefault': Menu.TILE_SLIDER_DEFAULT,
+            'kKexTileSliderCurrent': Menu.TILE_SLIDER_CURRENT,
             'kKexTileBtn': Menu.TILE_BTN,
             'kKexTileBtnSel': Menu.TILE_BTN_SEL,
             'kKexTileCursorR': Menu.TILE_CURSOR_R,
@@ -1485,8 +1750,14 @@ def verify_menu_assets(z, outdir):
             'kKexTileArrowDown': Menu.TILE_ARROW_DOWN,
             'kKexTileArrowLeft': Menu.TILE_ARROW_LEFT,
             'kKexTileKeycap': Menu.TILE_KEYCAP,
+            'kKexTileKeycapMid': Menu.TILE_KEYCAP_MID,
             'kKexTileBlack': Menu.TILE_BLACK,
-            'kKexTileTitle': Menu.TILE_TITLE,
+            'kKexTileKeyLeft': Menu.TILE_KEY_LEFT,
+            'kKexTileKeyRight': Menu.TILE_KEY_RIGHT,
+            'kKexTilePadA': Menu.TILE_PAD_A,
+            'kKexTilePadB': Menu.TILE_PAD_B,
+            'kKexTilePadLeft': Menu.TILE_PAD_LEFT,
+            'kKexTilePadRight': Menu.TILE_PAD_RIGHT,
             'kKexTileEyeBase': Menu.TILE_EYE_BASE,
             'kKexTileEyeOriginalBase': Menu.TILE_EYE_ORIGINAL_BASE,
             'kKexTileArrowOriginalUp': Menu.TILE_ARROW_ORIGINAL_UP,

@@ -18,6 +18,7 @@
 #include "build.h"
 #include "compat.h"
 #include "baselayer.h"
+#include "sdl_inc.h"
 #include "keyboard.h"
 #include "control.h"
 #include "joystick.h"
@@ -43,6 +44,7 @@
 #include "init.h"        // SectFlag, for the air gauge
 #include "ramses.h"      // KexLanguage_Index/Code
 #include "kextactile.h"
+#include "kexbreak.h"    // KexSound_Get: menu_highlight/menu_select aliases
 
 // Mirrors the TILE_* constants in source/exhumed/tools/kexmenu.py.
 enum
@@ -61,26 +63,62 @@ enum
     kKexTileArrowLeft = 7013,
     kKexTileKeycap    = 7014,
     kKexTileBlack     = 7015,
-    kKexTileTitle     = 7016,   // the console title card, behind PRESS START
+    kKexTileKeycapMid = 7016,
+    kKexTileKeyEnter  = 7018,
+    kKexTileKeyEscape = 7019,
     kKexTileEyeBase   = 7020,
+    // The KEX keyboard prompt set carries the arrow glyphs as distinct
+    // rendered key caps.  Keep them out of the Eye-of-Ra animation range.
+    kKexTileKeyLeft   = 7058,
+    kKexTileKeyRight  = 7059,
+    kKexTilePadA      = 7075,
+    kKexTilePadB      = 7076,
+    kKexTilePadLeft   = 7077,
+    kKexTilePadRight  = 7078,
+    // The native Display Settings page uses shorter, horizontally stretched
+    // versions of the ordinary KEX row plates for its five value rows.
+    kKexTileDisplayRow    = 7079,
+    kKexTileDisplayRowSel = 7080,
+    kKexTileSliderDefault = 7081,
+    kKexTileSliderCurrent = 7082,
     kKexFontBase      = 7100,   // legacy ASCII fallback tile range
     kKexFontAlt       = 7300,
 };
 
 #define KEX_MAX_GLYPHS 128
 
-struct kexglyph_t { int32_t codepoint; int16_t tile, alttile, w, h, yoff; };
+struct kexglyph_t
+{
+    int32_t codepoint;
+    int16_t tile, alttile;
+    int16_t w, h, altw, alth, yoff;
+};
 
 static kexglyph_t s_glyph[KEX_MAX_GLYPHS];
 static int s_glyphCount;
 static int  s_state = -1;      // -1 = not probed yet, 0 = unavailable, 1 = ready
-static int  s_fontHeight = 76; // tallest glyph in the atlas, for scaling
+static int  s_fontHeight = 28;     // smallfont: ordinary KEX menu text
+static int  s_altFontHeight = 76;  // bigfont: title prompts and banners
 static char s_chosenMap[32];   // level picked on the overworld, for the game loop
+// These two KEX presentation choices do not have one-to-one Build renderer
+// switches.  Keep their state alongside the menu rather than pretending an
+// unrelated Polymost knob is equivalent to either renderer feature.
+static int  s_kexDisplaySubtractive = 1;
+static int  s_kexDisplayCrtFilter;
+// Advanced Display is a KEX renderer feature set.  Build does not expose an
+// equivalent post-processing pipeline, so retain the controls' native states
+// without falsely wiring them to unrelated renderer switches.
+static int  s_kexFixedPointGeometry;
+static int  s_kexZClipEmulation;
+static float s_kexCrtSettings[] = { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f };
+static float s_kexSubtractiveSettings[] = { .50f, .50f, .50f, .50f, .50f };
 int kex_original_overworld = 0;
 static void KexMenu_SaveSlotLabel(int nSlot, char *label, int labelSize);
 static char const *KexMenu_InvText(char const *key, char const *fallback);
 static int KexMenu_ConfirmLocalized(char const *key, char const *fallback1,
                                     char const *fallback2);
+static void KexMenu_Hud(void);
+static void KexMenu_AdvancedDisplay(void);
 
 static kexglyph_t const *KexMenu_Glyph(int codepoint)
 {
@@ -134,17 +172,25 @@ static bool KexMenu_ParseGlyph(char *line, int nRec)
 {
     UNREFERENCED_PARAMETER(nRec);
 
-    int cp, tile, alttile, w, h, yoff;
-    int const fields = Bsscanf(line, "%d %d %d %d %d %d",
-                               &cp, &tile, &alttile, &w, &h, &yoff);
-    if (fields == 5) // Old conversions: cp tile width height yoffset.
+    int cp, tile, alttile, w, h, altw, alth, yoff;
+    int const fields = Bsscanf(line, "%d %d %d %d %d %d %d %d",
+                               &cp, &tile, &alttile, &w, &h, &altw, &alth, &yoff);
+    if (fields == 6) // Earlier KEX conversions used one metric set for both fonts.
+    {
+        yoff = altw;
+        altw = w;
+        alth = h;
+    }
+    else if (fields == 5) // Old conversions: cp tile width height yoffset.
     {
         yoff = h;
         h = w;
         w = alttile;
         alttile = cp >= 32 && cp <= 126 ? kKexFontAlt + cp - 32 : tile;
+        altw = w;
+        alth = h;
     }
-    else if (fields != 6)
+    else if (fields != 8)
         return false;
 
     kexglyph_t *g = NULL;
@@ -162,7 +208,9 @@ static bool KexMenu_ParseGlyph(char *line, int nRec)
     }
     g->codepoint = cp;
     g->tile = (int16_t)tile; g->alttile = (int16_t)alttile;
-    g->w = (int16_t)w; g->h = (int16_t)h; g->yoff = (int16_t)yoff;
+    g->w = (int16_t)w; g->h = (int16_t)h;
+    g->altw = (int16_t)altw; g->alth = (int16_t)alth;
+    g->yoff = (int16_t)yoff;
     return true;
 }
 
@@ -175,11 +223,15 @@ static void KexMenu_LoadFont(void)
     // order, so there is no useful cap and the record count says nothing.
     KexTable_Load("kexfont.txt", INT32_MAX, KexMenu_ParseGlyph);
 
-    // The tallest glyph is the line height.
-    int most = 0;
+    // The compact menu face and blue title face have distinct source metrics.
+    int most = 0, altmost = 0;
     for (int i = 0; i < s_glyphCount; i++)
+    {
         if (s_glyph[i].h > most) most = s_glyph[i].h;
+        if (s_glyph[i].alth > altmost) altmost = s_glyph[i].alth;
+    }
     if (most) s_fontHeight = most;
+    if (altmost) s_altFontHeight = altmost;
 }
 
 static void KexMenu_RunBindingSelftest(void);
@@ -208,10 +260,12 @@ int KexMenu_Available(void)
 }
 
 // ---------------------------------------------------------------------------
-// Drawing helpers. Everything is laid out in Build's 320x200 virtual space.
+// Drawing helpers. Everything is laid out in KEX's 320x200 virtual space.
+// RS_AUTO owns the conversion from that canvas to the renderer's drawable
+// surface.  In particular, do not pre-scale these coordinates with xdim/ydim:
+// on a Retina window the renderer already performs that conversion and doing
+// it here a second time produces an oversized, cropped menu.
 // ---------------------------------------------------------------------------
-#define KEXZ(f) ((int)((f) * 65536.f))
-
 static void KexDrawTile(int tile, int x, int y, int w, int h, int shade, int pal, int stat)
 {
     if (tilesiz[tile].x <= 0 || tilesiz[tile].y <= 0)
@@ -222,7 +276,13 @@ static void KexDrawTile(int tile, int x, int y, int w, int h, int shade, int pal
     int const zx = divscale16(w, tilesiz[tile].x);
     int const zy = divscale16(h, tilesiz[tile].y);
     int const z  = min(zx, zy);
-    rotatesprite(x << 16, y << 16, z, 0, tile, shade, pal, stat | RS_TOPLEFT | RS_AUTO,
+    // KEX authored this interface for the whole presentation frame, not
+    // Build's default 4:3 HUD column. RS_STRETCH keeps the 320x200 inputs in
+    // the renderer's logical coordinate space while extending them across the
+    // native drawable width; unlike hand-scaling with xdim, this remains
+    // correct on Retina displays.
+    rotatesprite(x << 16, y << 16, z, 0, tile, shade, pal,
+                 stat | RS_TOPLEFT | RS_AUTO | RS_STRETCH,
                  0, 0, xdim - 1, ydim - 1);
 }
 
@@ -253,17 +313,42 @@ static void KexDrawPanel(int x0, int y0, int x1, int y1, int shade)
     KexDrawTiled(kKexTilePanel, x0, y0, x1, y1, 32, 0);
 }
 
+static void KexDrawKeycap(int x, int y, int width)
+{
+    constexpr int kCapSize = 11;
+
+    if (width <= kCapSize)
+    {
+        KexDrawTile(kKexTileKeycap, x, y, kCapSize, kCapSize, 0, 0, 0);
+        return;
+    }
+
+    // A square sprite cannot be widened by rotatesprite without leaving its
+    // aspect ratio intact.  Build the long native-style cap from its bevelled
+    // centre, then cover both ends with the complete corner tile.
+    KexDrawTiled(kKexTileKeycapMid, x, y, x + width, y + kCapSize, kCapSize, 0);
+    KexDrawTile(kKexTileKeycap, x, y, kCapSize, kCapSize, 0, 0, 0);
+    KexDrawTile(kKexTileKeycap, x + width - kCapSize, y,
+                kCapSize, kCapSize, 0, 0, 0);
+}
+
 // The remaster sets every panel in a black surround, which is what lifts it off
 // the artwork behind. Drawn as flat tiles rather than by touching the
 // framebuffer, so it works under both renderers.
-static void KexDrawBorder(int x0, int y0, int x1, int y1, int width)
+static void KexDrawBorder(int x0, int y0, int x1, int y1, int width, int height = -1)
 {
-    KexDrawTiled(kKexTileBlack, x0 - width, y0 - width, x1 + width, y1 + width, 24, 0);
+    if (height < 0)
+        height = width;
+    KexDrawTiled(kKexTileBlack, x0 - width, y0 - height, x1 + width, y0, 24, 0);
+    KexDrawTiled(kKexTileBlack, x0 - width, y1, x1 + width, y1 + height, 24, 0);
+    KexDrawTiled(kKexTileBlack, x0 - width, y0, x0, y1, 24, 0);
+    KexDrawTiled(kKexTileBlack, x1, y0, x1 + width, y1, 24, 0);
 }
 
-int KexMenu_TextWidth(const char *str, int height)
+int KexMenu_TextWidth(const char *str, int height, int altFont)
 {
     int w = 0;
+    int const fontHeight = altFont ? s_altFontHeight : s_fontHeight;
     for (const char *p = str; *p; )
     {
         int cp = KexMenu_NextCodepoint(&p);
@@ -272,7 +357,8 @@ int KexMenu_TextWidth(const char *str, int height)
         kexglyph_t const *g = KexMenu_Glyph(cp);
         if (!g)
             g = KexMenu_Glyph(' ');
-        w += g && g->w ? scale(g->w, height, s_fontHeight) : height / 3;
+        int const glyphWidth = g ? (altFont ? g->altw : g->w) : 0;
+        w += glyphWidth ? scale(glyphWidth, height, fontHeight) : height / 3;
     }
     return w;
 }
@@ -281,9 +367,10 @@ int KexMenu_TextWidth(const char *str, int height)
 void KexMenu_Text(int x, int y, const char *str, int height, int shade, int pal, int centred, int altFont)
 {
     if (centred)
-        x -= KexMenu_TextWidth(str, height) / 2;
+        x -= KexMenu_TextWidth(str, height, altFont) / 2;
 
-    int const z = divscale16(height, s_fontHeight);
+    int const fontHeight = altFont ? s_altFontHeight : s_fontHeight;
+    int const z = divscale16(height, fontHeight);
     for (const char *p = str; *p; )
     {
         int cp = KexMenu_NextCodepoint(&p);
@@ -292,27 +379,36 @@ void KexMenu_Text(int x, int y, const char *str, int height, int shade, int pal,
         kexglyph_t const *g = KexMenu_Glyph(cp);
         if (!g)
             g = KexMenu_Glyph(' ');
-        if (!g || !g->w) { x += height / 3; continue; }
+        int const glyphWidth = g ? (altFont ? g->altw : g->w) : 0;
+        if (!glyphWidth) { x += height / 3; continue; }
         int const tile = altFont ? g->alttile : g->tile;
         if (tile > 0 && tilesiz[tile].x > 0)
             rotatesprite(x << 16, y << 16, z, 0, tile, shade, pal,
-                         RS_TOPLEFT | RS_AUTO, 0, 0, xdim - 1, ydim - 1);
-        x += scale(g->w, height, s_fontHeight);
+                         RS_TOPLEFT | RS_AUTO | RS_STRETCH,
+                         0, 0, xdim - 1, ydim - 1);
+        x += scale(glyphWidth, height, fontHeight);
     }
 }
+
+static void KexDrawTiled(int tile, int x0, int y0, int x1, int y1, int cell, int stat);
 
 void KexMenu_Backdrop(void)
 {
     int const tw = tilesiz[kKexTileBackdrop].x, th = tilesiz[kKexTileBackdrop].y;
     if (tw <= 0 || th <= 0)
         return;
-    // Cover the 320x200 field rather than fit inside it: the backdrop is 16:9,
-    // so fitting would letterbox it. Scale by whichever axis needs more and
-    // centre, letting the overflow fall off the sides.
-    int const z = max(divscale16(320, tw), divscale16(200, th));
+
+    // The generated title tile is pre-compensated for the 320x200 canvas's
+    // wide-screen stretch, so it lands as KEX's original 16:9 painting in
+    // the 20:13 presentation.  Leave its letterbox bands rather than
+    // cropping the Anubis backdrop to cover the full menu canvas.
+    videoClearScreen(overscanindex);
+    int const z = min(divscale16(320, tw), divscale16(200, th));
     int const w = mulscale16(tw, z), h = mulscale16(th, z);
-    rotatesprite((160 - w / 2) << 16, (100 - h / 2) << 16, z, 0, kKexTileBackdrop, 0, 0,
-                 RS_TOPLEFT | RS_AUTO | RS_NOCLIP, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite((160 - w / 2) << 16, (100 - h / 2) << 16, z, 0,
+                 kKexTileBackdrop, 0, 0,
+                 RS_TOPLEFT | RS_AUTO | RS_STRETCH | RS_NOCLIP,
+                 0, 0, xdim - 1, ydim - 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -320,38 +416,78 @@ void KexMenu_Backdrop(void)
 // with a titled header row, evenly spaced entries, and the gold statue cursor
 // facing in from both sides of the highlighted row.
 // ---------------------------------------------------------------------------
-// Must match ROW_W/ROW_H and BTN_W/BTN_H in source/exhumed/tools/kexmenu.py:
-// the plates are authored at exactly this size so rotatesprite's uniform scale
-// lands 1:1 instead of letterboxing them.
-#define KEX_ROW_W      134
-#define KEX_ROW_H      18
+// Must match ROW_W/ROW_H and BTN_W/BTN_H in source/exhumed/tools/kexmenu.py.
+// The values below come from the native 320-wide KEX menu capture: its panel
+// core spans x=90..230 and every full-width plate spans x=100..220.  Each
+// plate is 16 logical scanlines tall, which leaves the same tight stone inlay
+// around the first and final entries as the remaster.
+#define KEX_ROW_W      120
+#define KEX_ROW_H      16
 #define KEX_BTN_W      44
 #define KEX_BTN_H      13
-#define KEX_PANEL_X0   ((320 - KEX_ROW_W) / 2 - 5)
-#define KEX_PANEL_X1   (KEX_PANEL_X0 + KEX_ROW_W + 10)
-#define KEX_TEXT_H     12
-#define KEX_PAD        6
-#define KEX_HEADGAP    12   // the reference leaves a clear break under the title row
+#define KEX_SIDE_PAD   10
+#define KEX_PANEL_X0   ((320 - KEX_ROW_W) / 2 - KEX_SIDE_PAD)
+#define KEX_PANEL_X1   (KEX_PANEL_X0 + KEX_ROW_W + KEX_SIDE_PAD * 2)
+#define KEX_TEXT_H      8
+// The compact KEX labels occupy eight logical scanlines.  With the paired
+// insets below, the header begins at y=49 and the first selectable row at y=75
+// in the 320x200 presentation.
+#define KEX_PAD         4
+#define KEX_CONTENT_PAD 6
+#define KEX_HEADGAP    10   // the reference leaves a clear break under the title row
 
-// One row of the panel: the remaster's button plate, red when selected, with
-// the label centred on it. Returns the row's bottom edge so callers stack rows.
+// One row of the panel: the remaster's brown button plate, or its authored
+// red down state when selected, with a compact gold label centred on it.
+// Returns the row's bottom edge so callers stack rows.
 static int KexMenu_Row(int y, const char *label, int selected, int enabled, int altFont = 0, int leftAlign = 0)
 {
-    int const x = KEX_PANEL_X0 + KEX_PAD;
+    int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;
     KexDrawTile(selected ? kKexTileRowSel : kKexTileRow, x, y, KEX_ROW_W, KEX_ROW_H, 0, 0, 0);
     // The Kex translations are substantially longer than the English rows
     // (notably the French checkpoint and title-screen actions).  Size each
     // one to the authored plate instead of letting a centred line spill over
-    // adjacent stonework; normal labels retain the reference 12-pixel size.
+    // adjacent stonework. Native KEX uses the compact gold face for both
+    // headers and entries; the blue/gold display face is for title prompts.
     int textHeight = KEX_TEXT_H;
     int const textWidth = KEX_ROW_W - (leftAlign ? 12 : 4);
-    while (textHeight > 6 && KexMenu_TextWidth(label, textHeight) > textWidth)
+    while (textHeight > 5 && KexMenu_TextWidth(label, textHeight, altFont) > textWidth)
         --textHeight;
-    int const ty = y + (KEX_ROW_H - textHeight) / 2 + 1;
+    int const ty = y + (KEX_ROW_H - textHeight) / 2;
     if (leftAlign)
         KexMenu_Text(x + 6, ty, label, textHeight, enabled ? 0 : 22, 0, 0, altFont);
     else
         KexMenu_Text(x + KEX_ROW_W / 2, ty, label, textHeight, enabled ? 0 : 22, 0, 1, altFont);
+    return y + KEX_ROW_H;
+}
+
+// Settings in KEX are a two-column control: the name remains anchored to the
+// left of its plate and the current value is independently right-aligned.
+// Joining the two with a colon works for short English strings, but clips
+// longer settings such as WEAPON JUMP BOBBING and translated text.  Keep the
+// columns separate so each side can use the largest legible font that fits.
+static int KexMenu_SettingRow(int y, char const *label, char const *value,
+                              int selected, int enabled)
+{
+    int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;
+    KexDrawTile(selected ? kKexTileRowSel : kKexTileRow,
+                x, y, KEX_ROW_W, KEX_ROW_H, 0, 0, 0);
+
+    int valueHeight = KEX_TEXT_H;
+    while (valueHeight > 5 && KexMenu_TextWidth(value, valueHeight) > 38)
+        --valueHeight;
+    int const valueWidth = KexMenu_TextWidth(value, valueHeight);
+
+    int labelHeight = KEX_TEXT_H;
+    int const labelWidth = KEX_ROW_W - 12 - valueWidth - 5;
+    while (labelHeight > 5 && KexMenu_TextWidth(label, labelHeight) > labelWidth)
+        --labelHeight;
+
+    int const shade = enabled ? 0 : 22;
+    KexMenu_Text(x + 6, y + (KEX_ROW_H - labelHeight) / 2,
+                 label, labelHeight, shade, 0, 0);
+    KexMenu_Text(x + KEX_ROW_W - 6 - valueWidth,
+                 y + (KEX_ROW_H - valueHeight) / 2,
+                 value, valueHeight, shade, 0, 0);
     return y + KEX_ROW_H;
 }
 
@@ -366,14 +502,58 @@ static void KexMenu_Cursor(int rowY)
 
 }
 
-// The hint bar is a black band with the key drawn in a cap, the way the
-// remaster labels its controls.
-static void KexMenu_Hint(const char *key1, const char *label1,
-                         const char *key2 = NULL, const char *label2 = NULL)
+static int KexMenu_HintKeyTile(char const *key, bool controller)
 {
+    int tile = -1;
+    if (controller)
+    {
+        if (!Bstrcasecmp(key, "A")) tile = kKexTilePadA;
+        else if (!Bstrcasecmp(key, "B")) tile = kKexTilePadB;
+    }
+    else
+    {
+        if (!Bstrcasecmp(key, "ENTER")) tile = kKexTileKeyEnter;
+        else if (!Bstrcasecmp(key, "ESC")) tile = kKexTileKeyEscape;
+    }
+
+    // KEX content can be mounted from an older converted package.  Retain
+    // the compact textual cap in that case instead of letting a missing
+    // controller tile make the prompt disappear.
+    return tile >= 0 && tilesiz[tile].x > 0 ? tile : -1;
+}
+
+static bool KexMenu_HintIsArrowPair(char const *key)
+{
+    return !Bstrcasecmp(key, "LEFT/RIGHT");
+}
+
+static bool KexMenu_UseControllerPrompts(void)
+{
+    // The normal path follows the device which supplied the most recent menu
+    // action.  The override is deliberately test-only: a headless menu sweep
+    // has no physical controller from which to establish that state, but must
+    // still be able to render-check KEX's authored generic controller art.
+    return CONTROL_LastSeenInput == LastSeenInput::Joystick
+        || Bgetenv("VB_KEX_MENU_CONTROLLER_PROMPTS") != NULL;
+}
+
+// The hint bar occupies KEX's compact lower black strip, leaving the side art
+// visible while giving the controls their native contrast.
+static void KexMenu_Hint(const char *key1, const char *label1,
+                         const char *key2 = NULL, const char *label2 = NULL,
+                         int panelRows = 0)
+{
+    // Eight content rows make a nine-row panel once its title is included.
+    // That already reaches the footer in the 320x200 virtual viewport, so
+    // keep the lower border and final control visible instead of painting the
+    // decorative strip over them.
+    if (panelRows >= 8)
+        return;
+
     // Keep the remaster's key-cap treatment useful on a controller as well as
     // a keyboard.  The actual actions remain the user's configured bindings.
-    if (CONTROL_LastSeenInput == LastSeenInput::Joystick)
+    bool const controller = KexMenu_UseControllerPrompts();
+    if (controller)
     {
         if (!Bstrcasecmp(key1, "ENTER")) key1 = "A";
         else if (!Bstrcasecmp(key1, "ESC")) key1 = "B";
@@ -383,20 +563,51 @@ static void KexMenu_Hint(const char *key1, const char *label1,
             else if (!Bstrcasecmp(key2, "ESC")) key2 = "B";
         }
     }
-    KexDrawTiled(kKexTileBlack, 0, 184, 320, 200, 16, 0);
+    KexDrawTiled(kKexTileBlack, 0, 188, 320, 200, 24, 0);
 
-    int x = 6;
+    // KEX's footer begins close to the left edge.  The keyboard PNG has its
+    // own transparent breathing room, so drawing it at the old 22-unit size
+    // turned the little cap into a clipped block on a 20:13 window.
+    int x = 11;
     for (int i = 0; i < 2; i++)
     {
         const char *k = i ? key2 : key1, *l = i ? label2 : label1;
         if (!k || !l)
             break;
-        int const kw = max(18, KexMenu_TextWidth(k, 6) + 8);
-        KexDrawTile(kKexTileKeycap, x, 187, kw, 11, 0, 0, 0);
-        KexMenu_Text(x + kw / 2, 189, k, 6, 0, 0, 1, 1);
-        x += kw + 5;
-        KexMenu_Text(x, 188, l, 8, 0, 0, 0);
-        x += KexMenu_TextWidth(l, 8) + 12;
+        int const keyTile = KexMenu_HintKeyTile(k, controller);
+        bool const arrowPair = KexMenu_HintIsArrowPair(k);
+        // The supplied keyboard textures are 100x100 caps with transparent
+        // breathing room.  Their compact KEX footer treatment is twelve
+        // virtual units, not the oversized dialog-button treatment.
+        int kw = (keyTile >= 0 || arrowPair) ? 12 : max(11, KexMenu_TextWidth(k, 3) + 1);
+        if (arrowPair)
+        {
+            // KEX renders two authored prompts, not the LEFT/RIGHT text in
+            // a fabricated box.  Match the current input device: keyboard
+            // cursor caps or the KPF's generic D-pad highlights.
+            int leftTile = controller ? kKexTilePadLeft : kKexTileKeyLeft;
+            int rightTile = controller ? kKexTilePadRight : kKexTileKeyRight;
+            if (tilesiz[leftTile].x <= 0 || tilesiz[rightTile].x <= 0)
+            {
+                leftTile = kKexTileKeyLeft;
+                rightTile = kKexTileKeyRight;
+            }
+            KexDrawTile(leftTile, x, 184, kw, 12, 0, 0, 0);
+            KexDrawTile(rightTile, x + kw + 1, 184, kw, 12, 0, 0, 0);
+            kw = kw * 2 + 1;
+        }
+        else if (kw > 11)
+            kw = max(12, kw);
+        if (keyTile >= 0)
+            KexDrawTile(keyTile, x, 184, kw, 12, 0, 0, 0);
+        else if (!arrowPair)
+        {
+            KexDrawKeycap(x, 190, kw);
+            KexMenu_Text(x + kw / 2, 193, k, 3, 0, 0, 1);
+        }
+        x += kw + 3;
+        KexMenu_Text(x, 189, l, 4, 0, 0, 0);
+        x += KexMenu_TextWidth(l, 4) + 12;
     }
 }
 
@@ -413,8 +624,17 @@ static int KexMenu_PanelTop(int rows)
 
 static void KexMenu_Frame(int top, int rows)
 {
-    int const bottom = top + KexMenu_PanelHeight(rows);
-    KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 5);
+    // The native surround carries one final stone scanline below the regular
+    // content height.  It is intentionally asymmetric after integer centring.
+    int const bottom = top + KexMenu_PanelHeight(rows) + 1;
+    // KEX isolates the stonework with a four-unit black matte.  The frame
+    // itself is still the measured 124-unit stone core; expanding the core
+    // was what previously produced an oversized panel rather than the thin
+    // native surround visible around every menu state.
+    // The KEX capture has a five-unit vertical matte around its 320x200
+    // presentation, versus four at each side.  This is surround only: the
+    // stone core and all row anchors remain the measured native positions.
+    KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 4, 5);
     KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
 }
 
@@ -424,9 +644,43 @@ static void KexMenu_Frame(int top, int rows)
 // ---------------------------------------------------------------------------
 enum { kKexKeyNone = 0, kKexKeyUp, kKexKeyDown, kKexKeyLeft, kKexKeyRight, kKexKeyEnter, kKexKeyEsc };
 
+// A headless visual sweep can follow real menu transitions without taking
+// control of a developer's keyboard or visible test window.  For example,
+// VB_KEX_MENU_SCRIPT=DDDE moves Main -> Credits.  This bypasses normal input
+// only when explicitly set, and leaves a few rendered frames between commands
+// so the ordinary frame-capture hook can sample the settled destination page.
+static int KexMenu_ScriptedKey(void)
+{
+    static char const *script;
+    static int initialized, cursor, cooldown;
+
+    if (!initialized)
+    {
+        script = Bgetenv("VB_KEX_MENU_SCRIPT");
+        initialized = 1;
+    }
+    if (!script || !script[cursor] || ++cooldown < 4)
+        return kKexKeyNone;
+    cooldown = 0;
+
+    switch (script[cursor++])
+    {
+        case 'U': return kKexKeyUp;
+        case 'D': return kKexKeyDown;
+        case 'L': return kKexKeyLeft;
+        case 'R': return kKexKeyRight;
+        case 'E': return kKexKeyEnter;
+        case 'X': return kKexKeyEsc;
+        default:  return kKexKeyNone;
+    }
+}
+
 static int KexMenu_PollKey(void)
 {
     static int held = 0;
+    if (int const scripted = KexMenu_ScriptedKey())
+        return scripted;
+
     int key = kKexKeyNone;
     ControlInfo input;
     Bmemset(&input, 0, sizeof(input));
@@ -462,7 +716,14 @@ static int KexMenu_PollKey(void)
     return key;
 }
 
-static void KexMenu_Beep(void) { PlayLocalSound(StaticSound[kSoundSwitchFoot], 0); }
+static void KexMenu_Sound(char const *alias, int fallback)
+{
+    int const sound = KexSound_Get(alias);
+    PlayLocalSound(sound >= 0 ? sound : StaticSound[fallback], 0);
+}
+
+static void KexMenu_Beep(void) { KexMenu_Sound("k_menu_select", kSoundSwitchFoot); }
+static void KexMenu_Highlight(void) { KexMenu_Sound("k_menu_highlight", kSoundSwitchWtr1); }
 
 // ---------------------------------------------------------------------------
 // Screens
@@ -518,6 +779,7 @@ static int KexMenu_Confirm(const char *line1, const char *line2)
 
         int const x0 = 42, x1 = 278;
         int const top = 68, bottom = 142;
+        KexDrawBorder(x0, top, x1, bottom, 4, 5);
         KexDrawPanel(x0, top, x1, bottom, 0);
         // The message plate spans the panel's inner width so a two-line
         // question sits inside it rather than spilling over the edges.
@@ -541,7 +803,7 @@ static int KexMenu_Confirm(const char *line1, const char *line2)
 
         switch (KexMenu_PollKey())
         {
-            case kKexKeyLeft:  case kKexKeyRight: no ^= 1; KexMenu_Beep(); break;
+            case kKexKeyLeft:  case kKexKeyRight: no ^= 1; KexMenu_Highlight(); break;
             case kKexKeyEnter: KexMenu_Beep(); return !no;
             case kKexKeyEsc:   KexMenu_Beep(); return 0;
             default: break;
@@ -571,7 +833,7 @@ static int KexMenu_SlotList(const char *title, int loading)
 
         int const top = KexMenu_PanelTop(6);
         KexMenu_Frame(top, 6);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, title, 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
@@ -581,7 +843,7 @@ static int KexMenu_SlotList(const char *title, int loading)
             // and left-aligns them, which is what tells them apart from the
             // headers at a glance.
             int const enabled = !loading || used[i];
-            KexMenu_Row(y, slotLabel[i], sel == i, enabled, 1, 1);
+            KexMenu_Row(y, slotLabel[i], sel == i, enabled, 0, 1);
             if (sel == i) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
@@ -594,13 +856,18 @@ static int KexMenu_SlotList(const char *title, int loading)
 
         switch (KexMenu_PollKey())
         {
-            case kKexKeyUp:    sel = (sel + 5) % 6; KexMenu_Beep(); break;
-            case kKexKeyDown:  sel = (sel + 1) % 6; KexMenu_Beep(); break;
+            case kKexKeyUp:    sel = (sel + 5) % 6; KexMenu_Highlight(); break;
+            case kKexKeyDown:  sel = (sel + 1) % 6; KexMenu_Highlight(); break;
             case kKexKeyEnter:
                 KexMenu_Beep();
                 if (sel == 5)
                     return -1;
                 if (loading && !used[sel])
+                    break;
+                if (loading
+                    && !KexMenu_ConfirmLocalized("m_load_game_confirm",
+                                                  "ARE YOU SURE YOU WISH TO LOAD THIS GAME?",
+                                                  NULL))
                     break;
                 if (!loading && used[sel]
                     && !KexMenu_ConfirmLocalized("m_overwrite_game_confirm",
@@ -629,6 +896,28 @@ static int KexMenu_ConfirmLocalized(char const *key, char const *fallback1,
                            text && text[0] ? NULL : fallback2);
 }
 
+// KEX writes the selected map name into m_travel's ${0} placeholder before
+// opening its confirmation plate. Do the substitution here rather than
+// hard-coding an English sentence, so every supported menu language retains
+// its authored grammar and punctuation.
+static int KexMenu_ConfirmTravel(char const *destination)
+{
+    char const * const localized = KexInv_Text("m_travel");
+    char const * const marker = localized ? Bstrstr(localized, "${0}") : NULL;
+    char message[256];
+
+    if (marker)
+    {
+        Bsnprintf(message, sizeof(message), "%.*s%s%s", (int)(marker - localized),
+                  localized, destination, marker + 4);
+    }
+    else
+    {
+        Bsnprintf(message, sizeof(message), "WILL YOU TRAVEL TO %s?", destination);
+    }
+    return KexMenu_Confirm(message, NULL);
+}
+
 // New Game in the remaster proceeds save slot -> difficulty -> overworld.
 // These are the native three settings; GO BACK returns to the slot list.
 static int KexMenu_Difficulty(void)
@@ -646,7 +935,7 @@ static int KexMenu_Difficulty(void)
 
         int const top = KexMenu_PanelTop(4);
         KexMenu_Frame(top, 4);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("difficultytitle", "SELECT DIFFICULTY"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
@@ -668,11 +957,11 @@ static int KexMenu_Difficulty(void)
         {
             case kKexKeyUp:
                 sel = (sel + kKexDifficultyCount) % (kKexDifficultyCount + 1);
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyDown:
                 sel = (sel + 1) % (kKexDifficultyCount + 1);
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyEnter:
                 KexMenu_Beep();
@@ -687,8 +976,9 @@ static int KexMenu_Difficulty(void)
     }
 }
 
-// Kex supports four fully voiced languages.  Keeping their names ASCII here
-// makes every choice readable before its own localized font table is loaded.
+// Kex ships five UI tables (Italian uses English presentation assets). Keeping
+// their names ASCII makes every choice readable before its own text table is
+// loaded.
 static void KexMenu_Language(void)
 {
     static char const * const languageNames[] =
@@ -705,7 +995,7 @@ static void KexMenu_Language(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kKexLanguageItems);
         KexMenu_Frame(top, kKexLanguageItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_language_settings", "LANGUAGE SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < kKexLanguageCount; i++)
@@ -727,7 +1017,7 @@ static void KexMenu_Language(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexLanguageItems - 1 : 1))
                   % kKexLanguageItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -747,13 +1037,27 @@ static void KexMenu_Language(void)
     }
 }
 
-// The remaster's Display Settings panel exposes the three renderer preferences
-// in its default.cfg. Build applies FOV and anisotropy immediately; its lack of
-// a KEX SMAA post-process is made explicit on the retained AA preference.
-static void KexMenu_Display(void)
+// PCExhumed exposes an output-device selector followed by separate music and
+// effect sliders.  The Build mixer has a true mono/stereo output only (its
+// backend does not synthesize 5.1/7.1 channels), so retain stereo explicitly
+// instead of advertising surround modes which could not take effect.  Volumes
+// are stored by the engine in 0..255, but shown and stepped as KEX's familiar
+// five-percent sliders.
+static int KexMenu_VolumePercent(int volume)
 {
-    enum { kKexDisplayFov = 0, kKexDisplayAntialias, kKexDisplayAnisotropy,
-           kKexDisplayBack, kKexDisplayItems };
+    return clamp((clamp(volume, 0, 255) * 100 + 127) / 255, 0, 100);
+}
+
+static int KexMenu_AdjustVolume(int volume, int direction)
+{
+    int const percent = KexMenu_VolumePercent(volume);
+    return ((clamp(percent + direction * 5, 0, 100) * 255) + 50) / 100;
+}
+
+static void KexMenu_Audio(void)
+{
+    enum { kKexAudioOutput = 0, kKexAudioMusic, kKexAudioSound,
+           kKexAudioBack, kKexAudioItems };
     int sel = 0;
 
     KB_FlushKeyboardQueue();
@@ -762,33 +1066,32 @@ static void KexMenu_Display(void)
     {
         HandleAsync();
         KexMenu_Backdrop();
-        int const top = KexMenu_PanelTop(kKexDisplayItems);
-        KexMenu_Frame(top, kKexDisplayItems);
-        int y = top + KEX_PAD;
-        KexMenu_Row(y, KexMenu_InvText("m_display_settings", "DISPLAY SETTINGS"), 0, 1);
+        int const top = KexMenu_PanelTop(kKexAudioItems);
+        KexMenu_Frame(top, kKexAudioItems);
+        int y = top + KEX_CONTENT_PAD;
+        KexMenu_Row(y, KexMenu_InvText("m_audio_settings", "AUDIO SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char fov[96], antialias[96], anisotropy[96], aaValue[32];
-        Bsnprintf(fov, sizeof(fov), "%s: %.0f",
-                  KexMenu_InvText("m_fov", "FOV"), KexRender_Fov());
-        int const aa = KexRender_Antialiasing();
-        if (aa == 7)
-            Bstrcpy(aaValue, "SMAA (COMPAT)");
-        else if (aa == 0)
-            Bstrcpy(aaValue, "OFF");
-        else
-            Bsnprintf(aaValue, sizeof(aaValue), "MODE %d (COMPAT)", aa);
-        Bsnprintf(antialias, sizeof(antialias), "%s: %s",
-                  KexMenu_InvText("m_antialiasing", "ANTIALIASING"),
-                  aaValue);
-        Bsnprintf(anisotropy, sizeof(anisotropy), "%s: %dx",
-                  KexMenu_InvText("m_anisotrophy", "ANISOTROPY"),
-                  KexRender_Anisotropy());
+        char music[16], sound[16];
+        Bsnprintf(music, sizeof(music), "%d%%", KexMenu_VolumePercent(MusicVolume));
+        Bsnprintf(sound, sizeof(sound), "%d%%", KexMenu_VolumePercent(FXVolume));
         char const * const labels[] =
-            { fov, antialias, anisotropy, KexMenu_InvText("m_go_back", "GO BACK") };
-        for (int i = 0; i < kKexDisplayItems; i++)
+            { KexMenu_InvText("m_audio_output", "AUDIO OUTPUT"),
+              KexMenu_InvText("m_music_volume", "MUSIC VOLUME"),
+              KexMenu_InvText("m_sound_volume", "SOUND VOLUME"),
+              KexMenu_InvText("m_go_back", "GO BACK") };
+        char const * const values[] =
+            { KexMenu_InvText("m_stereo", "STEREO"), music, sound, NULL };
+        for (int i = 0; i < kKexAudioItems; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
+            // Output is a visible KEX setting, but its stereo value is fixed
+            // by the mixer.  Keep it legible instead of presenting a fake
+            // surround control.
+            int const enabled = i != kKexAudioOutput;
+            if (values[i])
+                KexMenu_SettingRow(y, labels[i], values[i], sel == i, enabled);
+            else
+                KexMenu_Row(y, labels[i], sel == i, enabled);
             if (sel == i) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
@@ -800,9 +1103,9 @@ static void KexMenu_Display(void)
         int const key = KexMenu_PollKey();
         if (key == kKexKeyUp || key == kKexKeyDown)
         {
-            sel = (sel + (key == kKexKeyUp ? kKexDisplayItems - 1 : 1))
-                  % kKexDisplayItems;
-            KexMenu_Beep();
+            sel = (sel + (key == kKexKeyUp ? kKexAudioItems - 1 : 1))
+                  % kKexAudioItems;
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -812,20 +1115,711 @@ static void KexMenu_Display(void)
         else if (key == kKexKeyLeft || key == kKexKeyRight)
         {
             int const direction = key == kKexKeyLeft ? -1 : 1;
-            if (sel == kKexDisplayFov)
-                KexRender_SetFov(KexRender_Fov() + direction);
-            else if (sel == kKexDisplayAntialias)
-                KexRender_SetAntialiasing(KexRender_Antialiasing() + direction);
-            else if (sel == kKexDisplayAnisotropy)
-                KexRender_SetAnisotropy(KexRender_Anisotropy() + direction);
+            if (sel == kKexAudioMusic)
+            {
+                MusicVolume = KexMenu_AdjustVolume(MusicVolume, direction);
+                setCDaudiovolume(MusicVolume);
+            }
+            else if (sel == kKexAudioSound)
+            {
+                FXVolume = KexMenu_AdjustVolume(FXVolume, direction);
+                SetMasterFXVolume(FXVolume);
+            }
+            else
+            {
+                continue;
+            }
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEnter && sel == kKexAudioBack)
+        {
+            KexMenu_Beep();
+            return;
+        }
+        if (quitevent) return;
+    }
+}
+
+// The remaster's Display Settings panel exposes the three renderer preferences
+// in its default.cfg. Build applies FOV and anisotropy immediately; the AA
+// preference retains KEX's native presentation even though the renderer maps
+// it to its closest supported filtering mode.
+static void KexMenu_Display(void);
+
+struct KexVideoConfig
+{
+    int width, height, bpp, fullscreen, borderless, vsync, maxfps, upscale;
+};
+
+static int KexMenu_CollectVideoModes(vec2_t *modes, int capacity)
+{
+    int count = 0;
+    for (int i = 0; i < validmodecnt && count < capacity; i++)
+    {
+        // The KEX UI is only available in the true-colour renderer.  Keep one
+        // representative of each display resolution rather than exposing the
+        // legacy 8-bit variants as duplicate choices.
+        if (validmode[i].bpp < 15 || validmode[i].xdim <= 0 || validmode[i].ydim <= 0)
+            continue;
+
+        bool duplicate = false;
+        for (int j = 0; j < count; j++)
+            if (modes[j].x == validmode[i].xdim && modes[j].y == validmode[i].ydim)
+            {
+                duplicate = true;
+                break;
+            }
+        if (!duplicate)
+            modes[count++] = { validmode[i].xdim, validmode[i].ydim };
+    }
+
+    if (count == 0 && capacity > 0)
+        modes[count++] = { max(1, gSetup.xdim), max(1, gSetup.ydim) };
+    return count;
+}
+
+static int KexMenu_VideoModeIndex(vec2_t const *modes, int count, int width, int height)
+{
+    for (int i = 0; i < count; i++)
+        if (modes[i].x == width && modes[i].y == height)
+            return i;
+    return 0;
+}
+
+// r_borderless=2 is Build's useful default: make a window borderless only
+// when its requested resolution is exactly the desktop resolution.  It is
+// not the same as the user's explicit "Borderless" menu choice.  Reflect the
+// renderer's test here so the video page cannot say BORDERLESS for an
+// ordinary sized window.
+static bool KexMenu_AutoBorderlessMatchesDesktop(KexVideoConfig const &config)
+{
+#if defined(RENDERTYPESDL) && SDL_MAJOR_VERSION >= 2
+    int const displays = SDL_GetNumVideoDisplays();
+    int const display = r_displayindex >= 0 && r_displayindex < displays ? r_displayindex : 0;
+    SDL_DisplayMode desktop;
+    return displays > 0 && SDL_GetDesktopDisplayMode(display, &desktop) == 0
+        && desktop.w == config.width && desktop.h == config.height;
+#else
+    UNREFERENCED_PARAMETER(config);
+    return false;
+#endif
+}
+
+static int KexMenu_WindowMode(KexVideoConfig const &config)
+{
+    if (config.fullscreen)
+        return 1;
+    return config.borderless == 1
+        || (config.borderless == 2 && KexMenu_AutoBorderlessMatchesDesktop(config)) ? 2 : 0;
+}
+
+static void KexMenu_SetWindowMode(KexVideoConfig &config, int mode)
+{
+    config.fullscreen = mode == 1;
+    config.borderless = mode == 2;
+}
+
+static int KexMenu_NextFps(int fps, int direction)
+{
+    static int const values[] = { -1, 30, 60, 120, 144, 165, 240 };
+    int index = 0;
+    for (int i = 0; i < (int)ARRAY_SIZE(values); i++)
+        if (values[i] == fps || (fps > values[i] && (i + 1 == (int)ARRAY_SIZE(values)
+                                                      || fps < values[i + 1])))
+        {
+            index = i;
+            break;
+        }
+    return values[(index + direction + (int)ARRAY_SIZE(values)) % (int)ARRAY_SIZE(values)];
+}
+
+static int KexMenu_ApplyVideo(KexVideoConfig const &config)
+{
+    ud_setup_t const savedSetup = gSetup;
+    int const savedBorderless = r_borderless;
+    int const savedUpscale = upscalefactor;
+
+    gSetup.xdim = config.width;
+    gSetup.ydim = config.height;
+    gSetup.bpp = config.bpp;
+    gSetup.fullscreen = config.fullscreen;
+    r_borderless = config.borderless;
+    upscalefactor = config.upscale;
+    videoResetMode();
+    if (videoSetGameMode(gSetup.fullscreen, gSetup.xdim, gSetup.ydim, gSetup.bpp,
+                         upscalefactor) < 0)
+    {
+        LOG_F(ERROR, "KEX menu: unable to apply video mode %dx%d %s",
+              config.width, config.height, config.fullscreen ? "fullscreen" : "windowed");
+        gSetup = savedSetup;
+        r_borderless = savedBorderless;
+        upscalefactor = savedUpscale;
+        videoResetMode();
+        videoSetGameMode(gSetup.fullscreen, gSetup.xdim, gSetup.ydim, gSetup.bpp,
+                         upscalefactor);
+        onvideomodechange(gSetup.bpp > 8);
+        UpdateScreenSize();
+        return 0;
+    }
+
+    vsync = videoSetVsync(config.vsync);
+    r_maxfps = config.maxfps;
+    g_frameDelay = calcFrameDelay(r_maxfps);
+    onvideomodechange(gSetup.bpp > 8);
+    UpdateScreenSize();
+    return 1;
+}
+
+// KEX keeps physical display mode changes pending until APPLY CHANGES.  Its
+// renderer preferences live in the separate Display Settings branch, so do
+// not mix brightness or internal render scale into this screen.
+static void KexMenu_Video(void)
+{
+    enum { kKexVideoResolution = 0, kKexVideoWindowMode, kKexVideoVsync,
+           kKexVideoMaxFps, kKexVideoApply, kKexVideoBack, kKexVideoItems };
+    vec2_t modes[64];
+    int const modeCount = KexMenu_CollectVideoModes(modes, (int)ARRAY_SIZE(modes));
+    KexVideoConfig pending = { gSetup.xdim, gSetup.ydim, gSetup.bpp, gSetup.fullscreen,
+                               r_borderless, vsync, r_maxfps, max(1, upscalefactor) };
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+        int const top = KexMenu_PanelTop(kKexVideoItems);
+        KexMenu_Frame(top, kKexVideoItems);
+        int y = top + KEX_CONTENT_PAD;
+        KexMenu_Row(y, KexMenu_InvText("m_video_settings", "VIDEO SETTINGS"), 0, 1);
+        y += KEX_ROW_H + KEX_HEADGAP;
+
+        int const modeIndex = KexMenu_VideoModeIndex(modes, modeCount,
+                                                      pending.width, pending.height);
+        int const windowMode = KexMenu_WindowMode(pending);
+        char videoResolution[32], maxFpsValue[32];
+        Bsnprintf(videoResolution, sizeof(videoResolution), "%dx%d",
+                  modes[modeIndex].x, modes[modeIndex].y);
+        char const * const windowValue = KexMenu_InvText(
+            windowMode == 0 ? "m_windowed" : windowMode == 1 ? "m_fullscreen" : "m_borderless",
+            windowMode == 0 ? "WINDOWED" : windowMode == 1 ? "FULLSCREEN" : "BORDERLESS");
+        if (pending.maxfps < 0)
+            Bstrncpyz(maxFpsValue, KexMenu_InvText("m_unlimited", "UNLIMITED"),
+                      sizeof(maxFpsValue));
+        else
+            Bsnprintf(maxFpsValue, sizeof(maxFpsValue), "%d", pending.maxfps);
+        char const * const labels[] =
+            { KexMenu_InvText("m_videoResolution", "VIDEO RESOLUTION"),
+              KexMenu_InvText("m_windowmode", "WINDOW MODE"),
+              KexMenu_InvText("m_verticalSync", "VERTICAL SYNC"),
+              KexMenu_InvText("m_maxFrameRate", "MAX FRAME RATE"),
+              KexMenu_InvText("m_applychanges", "APPLY CHANGES"),
+              KexMenu_InvText("m_go_back", "GO BACK") };
+        char const * const values[] =
+            { videoResolution, windowValue,
+              KexMenu_InvText(pending.vsync ? "m_on" : "m_off",
+                              pending.vsync ? "ON" : "OFF"),
+              maxFpsValue, NULL, NULL };
+        for (int i = 0; i < kKexVideoItems; i++)
+        {
+            if (values[i])
+                KexMenu_SettingRow(y, labels[i], values[i], sel == i, 1);
+            else
+                KexMenu_Row(y, labels[i], sel == i, 1);
+            if (sel == i) KexMenu_Cursor(y);
+            y += KEX_ROW_H;
+        }
+
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ENTER", "SELECT");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexVideoItems - 1 : 1)) % kKexVideoItems;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyLeft || key == kKexKeyRight)
+        {
+            int const direction = key == kKexKeyLeft ? -1 : 1;
+            if (sel == kKexVideoResolution)
+            {
+                int const next = (modeIndex + direction + modeCount) % modeCount;
+                pending.width = modes[next].x;
+                pending.height = modes[next].y;
+            }
+            else if (sel == kKexVideoWindowMode)
+                KexMenu_SetWindowMode(pending, (windowMode + direction + 3) % 3);
+            else if (sel == kKexVideoVsync)
+                pending.vsync ^= 1;
+            else if (sel == kKexVideoMaxFps)
+                pending.maxfps = KexMenu_NextFps(pending.maxfps, direction);
             else
                 continue;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEnter)
+        {
+            if (sel == kKexVideoApply)
+            {
+                KexVideoConfig const saved = { gSetup.xdim, gSetup.ydim, gSetup.bpp,
+                                                gSetup.fullscreen, r_borderless, vsync,
+                                                r_maxfps, max(1, upscalefactor) };
+                KexMenu_Beep();
+                if (KexMenu_ApplyVideo(pending)
+                    && !KexMenu_ConfirmLocalized("m_video_apply_confirm",
+                                                  "KEEP THESE VIDEO SETTINGS?", NULL))
+                {
+                    KexMenu_ApplyVideo(saved);
+                }
+                pending = { gSetup.xdim, gSetup.ydim, gSetup.bpp, gSetup.fullscreen,
+                            r_borderless, vsync, r_maxfps, max(1, upscalefactor) };
+                KB_FlushKeyboardQueue();
+                KB_ClearKeysDown();
+            }
+            else if (sel == kKexVideoBack)
+            {
+                KexMenu_Beep();
+                return;
+            }
+        }
+        else if (key == kKexKeyEsc)
+        {
             KexMenu_Beep();
+            return;
+        }
+        if (quitevent) return;
+    }
+}
+
+// The remaster lays out its Display Settings screen differently from the
+// ordinary list menus: five compact left/right rows, two labelled sliders,
+// then the two navigation rows.  Keep that authored hierarchy rather than
+// flattening every setting into a colon-delimited generic row.
+static int KexMenu_DisplayRow(int y, char const *label, char const *value, int selected)
+{
+    int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;
+    constexpr int h = 10;
+    KexDrawTile(selected ? kKexTileDisplayRowSel : kKexTileDisplayRow,
+                x, y, KEX_ROW_W, h, 0, 0, 0);
+
+    int const labelWidth = value[0] ? KEX_ROW_W - 48 : KEX_ROW_W - 6;
+    int labelHeight = 7;
+    while (labelHeight > 5 && KexMenu_TextWidth(label, labelHeight) > labelWidth)
+        --labelHeight;
+    KexMenu_Text(x + 3, y + (h - labelHeight) / 2, label, labelHeight, 0, 0, 0);
+
+    int valueHeight = 7;
+    while (valueHeight > 5 && KexMenu_TextWidth(value, valueHeight) > 42)
+        --valueHeight;
+    KexMenu_Text(x + KEX_ROW_W - 3 - KexMenu_TextWidth(value, valueHeight),
+                 y + (h - valueHeight) / 2, value, valueHeight, 0, 0, 0);
+    return y + h;
+}
+
+static float KexMenu_DisplayBrightness(void)
+{
+    // KEX's UI presents a 0.00..1.00 brightness control whose default is
+    // 0.40.  Build stores the equivalent colour correction as 0.75..1.25.
+    return clamp(.40f + (g_videoGamma - DEFAULT_GAMMA) * .8f, 0.f, 1.f);
+}
+
+static void KexMenu_SetDisplayBrightness(float brightness)
+{
+    g_videoGamma = clamp(DEFAULT_GAMMA + (brightness - .40f) / .8f,
+                         (float)MIN_GAMMA, (float)MAX_GAMMA);
+    videoSetGamma();
+}
+
+static int KexMenu_DisplaySlider(int y, char const *label, char const *value,
+                                 float normal, float defaultNormal, int selected,
+                                 int showValue = 1)
+{
+    int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;
+    constexpr int w = KEX_ROW_W, h = 14, sliderY = 8, sliderH = 4;
+    KexMenu_Text(x + w / 2, y, label, 7, selected ? 0 : 0, 0, 1);
+    KexDrawTiled(kKexTileBlack, x + 2, y + sliderY, x + w - 2, y + sliderY + sliderH, 16, 0);
+
+    // The native controls have a pale default tick and a gold current-value
+    // tick.  They are UI primitives in KEX, so use matching pixel tiles here
+    // rather than a glyph whose round counters read as repeated zeroes at this
+    // scale.
+    int const track = w - 4;
+    int const defaultX = x + 2 + Blrintf(clamp(defaultNormal, 0.f, 1.f) * track);
+    int const valueX = x + 2 + Blrintf(clamp(normal, 0.f, 1.f) * track);
+    if (defaultX != valueX)
+        KexDrawTile(kKexTileSliderDefault, defaultX - 1, y + sliderY - 1, 2, 6, 0, 0, 0);
+    KexDrawTile(kKexTileSliderCurrent, valueX - 1, y + sliderY - 1, 2, 6, 0, 0, 0);
+    // FOV and Brightness show their values on the native top-level screen;
+    // the dense CRT and subtractive pages use the compact KEX sliders alone.
+    if (showValue && value[0])
+        KexMenu_Text(x + w / 2, y + sliderY - 2, value, 5, 0, 0, 1);
+    return y + h;
+}
+
+static void KexMenu_AdjustUnit(float *value, int direction)
+{
+    *value = clamp(*value + direction * .05f, 0.f, 1.f);
+}
+
+// The KEX display page leads to two proper child pages.  The original Build
+// menu used to leave this navigation row inert, which made the otherwise
+// faithful display hierarchy end in a dead end.  These pages preserve the
+// remaster's setting groups and compact slider treatment.  Their renderer
+// state is intentionally local: the corresponding KEX effects do not have a
+// truthful one-to-one implementation in the Build renderers.
+static void KexMenu_CrtSettings(void)
+{
+    static char const * const keys[] =
+        { "m_crt_param1", "m_crt_param2", "m_crt_param5", "m_crt_param6",
+          "m_crt_param7", "m_crt_param8", "m_crt_param9" };
+    static char const * const fallback[] =
+        { "HARD SCAN", "HARD PIXELS", "DARK MASKING", "LIGHT MASKING",
+          "LINEAR GAMMA", "SHADOW MASKING", "BRIGHT BOOST" };
+    enum { kKexCrtCount = ARRAY_SIZE(keys), kKexCrtBack, kKexCrtItems };
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+
+        int const top = 18, bottom = 168;
+        KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 4, 5);
+        KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
+        int y = top + 6;
+        KexDrawTile(kKexTileDisplayRow, KEX_PANEL_X0 + KEX_SIDE_PAD, y,
+                    KEX_ROW_W, 10, 0, 0, 0);
+        KexMenu_Text(160, y + 1, KexMenu_InvText("m_crt_settings", "CRT EMULATION SETTINGS"),
+                     7, 0, 0, 1);
+        y += 15;
+
+        for (int i = 0; i < kKexCrtCount; ++i)
+        {
+            char value[16];
+            Bsnprintf(value, sizeof(value), "%.2f", s_kexCrtSettings[i]);
+            y = KexMenu_DisplaySlider(y, KexMenu_InvText(keys[i], fallback[i]), value,
+                                      s_kexCrtSettings[i], 0.f, sel == i, 0) + 1;
+        }
+        KexMenu_DisplayRow(y, KexMenu_InvText("m_go_back", "GO BACK"), "",
+                           sel == kKexCrtBack);
+
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexCrtItems - 1 : 1)) % kKexCrtItems;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyLeft || key == kKexKeyRight)
+        {
+            if (sel >= kKexCrtCount)
+                continue;
+            KexMenu_AdjustUnit(&s_kexCrtSettings[sel], key == kKexKeyLeft ? -1 : 1);
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEsc || (key == kKexKeyEnter && sel == kKexCrtBack))
+        {
+            KexMenu_Beep();
+            return;
+        }
+        if (quitevent) return;
+    }
+}
+
+static void KexMenu_SubtractiveShading(void)
+{
+    static char const * const keys[] =
+        { "m_sceneIntensity", "m_sceneContrast", "m_sceneDarkenAmount",
+          "m_luminanceSmoothing", "m_desaturation" };
+    static char const * const fallback[] =
+        { "SHADOW INTENSITY", "SHADOW CONTRAST", "DARKENING STRENGTH",
+          "GAMMA STRENGTH", "DESATURATION" };
+    enum { kKexSubtractiveCount = ARRAY_SIZE(keys), kKexSubtractiveBack,
+           kKexSubtractiveItems };
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+
+        int const top = 32, bottom = 146;
+        KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 4, 5);
+        KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
+        int y = top + 6;
+        KexDrawTile(kKexTileDisplayRow, KEX_PANEL_X0 + KEX_SIDE_PAD, y,
+                    KEX_ROW_W, 10, 0, 0, 0);
+        KexMenu_Text(160, y + 1,
+                     KexMenu_InvText("m_subtractive_shading", "SUBTRACTIVE SHADING"),
+                     7, 0, 0, 1);
+        y += 15;
+
+        for (int i = 0; i < kKexSubtractiveCount; ++i)
+        {
+            char value[16];
+            Bsnprintf(value, sizeof(value), "%.2f", s_kexSubtractiveSettings[i]);
+            y = KexMenu_DisplaySlider(y, KexMenu_InvText(keys[i], fallback[i]), value,
+                                      s_kexSubtractiveSettings[i], .50f, sel == i, 0) + 1;
+        }
+        KexMenu_DisplayRow(y, KexMenu_InvText("m_go_back", "GO BACK"), "",
+                           sel == kKexSubtractiveBack);
+
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexSubtractiveItems - 1 : 1))
+                  % kKexSubtractiveItems;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyLeft || key == kKexKeyRight)
+        {
+            if (sel >= kKexSubtractiveCount)
+                continue;
+            KexMenu_AdjustUnit(&s_kexSubtractiveSettings[sel],
+                               key == kKexKeyLeft ? -1 : 1);
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEsc || (key == kKexKeyEnter && sel == kKexSubtractiveBack))
+        {
+            KexMenu_Beep();
+            return;
+        }
+        if (quitevent) return;
+    }
+}
+
+static void KexMenu_AdvancedDisplay(void)
+{
+    enum { kKexAdvancedFixedPoint = 0, kKexAdvancedZClip, kKexAdvancedCrt,
+           kKexAdvancedSubtractive, kKexAdvancedBack, kKexAdvancedItems };
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+
+        int const top = 43, bottom = 132;
+        KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 4, 5);
+        KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
+        int y = top + 6;
+        KexDrawTile(kKexTileDisplayRow, KEX_PANEL_X0 + KEX_SIDE_PAD, y,
+                    KEX_ROW_W, 10, 0, 0, 0);
+        KexMenu_Text(160, y + 1,
+                     KexMenu_InvText("m_advanced_display_settings", "ADVANCED DISPLAY SETTINGS"),
+                     7, 0, 0, 1);
+        y += 15;
+
+        y = KexMenu_DisplayRow(y,
+                                KexMenu_InvText("m_wobblyvertices", "FIXED POINT GEOMETRY"),
+                                KexMenu_InvText(s_kexFixedPointGeometry ? "m_on" : "m_off",
+                                                s_kexFixedPointGeometry ? "ON" : "OFF"),
+                                sel == kKexAdvancedFixedPoint) + 1;
+        y = KexMenu_DisplayRow(y,
+                                KexMenu_InvText("m_emulatezclipping", "Z-CLIP EMULATION"),
+                                KexMenu_InvText(s_kexZClipEmulation ? "m_on" : "m_off",
+                                                s_kexZClipEmulation ? "ON" : "OFF"),
+                                sel == kKexAdvancedZClip) + 3;
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_crt_settings", "CRT EMULATION SETTINGS"), "",
+                                sel == kKexAdvancedCrt) + 1;
+        y = KexMenu_DisplayRow(y,
+                                KexMenu_InvText("m_subtractive_shading", "SUBTRACTIVE SHADING"), "",
+                                sel == kKexAdvancedSubtractive) + 1;
+        KexMenu_DisplayRow(y, KexMenu_InvText("m_go_back", "GO BACK"), "",
+                           sel == kKexAdvancedBack);
+
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexAdvancedItems - 1 : 1))
+                  % kKexAdvancedItems;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyLeft || key == kKexKeyRight)
+        {
+            if (sel == kKexAdvancedFixedPoint)
+                s_kexFixedPointGeometry = !s_kexFixedPointGeometry;
+            else if (sel == kKexAdvancedZClip)
+                s_kexZClipEmulation = !s_kexZClipEmulation;
+            else
+                continue;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEnter)
+        {
+            if (sel == kKexAdvancedBack)
+            {
+                KexMenu_Beep();
+                return;
+            }
+            if (sel == kKexAdvancedCrt)
+            {
+                KexMenu_Beep();
+                KexMenu_CrtSettings();
+                KB_FlushKeyboardQueue();
+                KB_ClearKeysDown();
+            }
+            else if (sel == kKexAdvancedSubtractive)
+            {
+                KexMenu_Beep();
+                KexMenu_SubtractiveShading();
+                KB_FlushKeyboardQueue();
+                KB_ClearKeysDown();
+            }
+        }
+        else if (key == kKexKeyEsc)
+        {
+            KexMenu_Beep();
+            return;
+        }
+        if (quitevent) return;
+    }
+}
+
+static void KexMenu_Display(void)
+{
+    enum { kKexDisplayShading = 0, kKexDisplayAntialias, kKexDisplayResolution,
+           kKexDisplayCrtFilter, kKexDisplayAnisotropy, kKexDisplayFov,
+           kKexDisplayBrightness, kKexDisplayAdvanced, kKexDisplayBack,
+           kKexDisplayItems };
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+
+        // This panel is purpose-built for the KEX display hierarchy.  Its
+        // compact rows and two sliders fit above the normal bottom prompt.
+        int const top = 16, bottom = 154;
+        KexDrawBorder(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 4, 5);
+        KexDrawPanel(KEX_PANEL_X0, top, KEX_PANEL_X1, bottom, 0);
+        int y = top + 6;
+        KexDrawTile(kKexTileDisplayRow, KEX_PANEL_X0 + KEX_SIDE_PAD, y,
+                    KEX_ROW_W, 10, 0, 0, 0);
+        KexMenu_Text(160, y + 1, KexMenu_InvText("m_display_settings", "DISPLAY SETTINGS"),
+                     7, 0, 0, 1);
+        y += 15;
+
+        char aaValue[32], anisotropy[16], fov[16], brightness[16];
+        int const aa = KexRender_Antialiasing();
+        if (aa == 7)
+            Bstrcpy(aaValue, "SMAA");
+        else if (aa == 0)
+            Bstrcpy(aaValue, KexMenu_InvText("m_off", "OFF"));
+        else
+            Bsnprintf(aaValue, sizeof(aaValue), "MODE %d", aa);
+        Bsnprintf(anisotropy, sizeof(anisotropy), "%d", KexRender_Anisotropy());
+        Bsnprintf(fov, sizeof(fov), "%.0f", KexRender_Fov());
+        Bsnprintf(brightness, sizeof(brightness), "%.2f", KexMenu_DisplayBrightness());
+
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_shading", "SHADING MODE"),
+                                KexMenu_InvText(s_kexDisplaySubtractive ? "m_subtractive" : "m_modulate",
+                                                s_kexDisplaySubtractive ? "SUBTRACTIVE" : "MODULATE"),
+                                sel == kKexDisplayShading) + 1;
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_antialiasing", "ANTIALIASING"), aaValue,
+                                sel == kKexDisplayAntialias) + 1;
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_displayresolution", "RESOLUTION"),
+                                KexMenu_InvText(upscalefactor > 1 ? "m_low" : "m_high",
+                                                upscalefactor > 1 ? "LOW" : "HIGH"),
+                                sel == kKexDisplayResolution) + 1;
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_crtFilter", "CRT FILTER"),
+                                KexMenu_InvText(s_kexDisplayCrtFilter ? "m_on" : "m_off",
+                                                s_kexDisplayCrtFilter ? "ON" : "OFF"),
+                                sel == kKexDisplayCrtFilter) + 3;
+        y = KexMenu_DisplayRow(y, KexMenu_InvText("m_anisotrophy", "ANISOTROPY"), anisotropy,
+                                sel == kKexDisplayAnisotropy) + 2;
+
+        y = KexMenu_DisplaySlider(y, KexMenu_InvText("m_fov", "FOV"), fov,
+                                  (KexRender_Fov() - 60.f) / 80.f, .05f,
+                                  sel == kKexDisplayFov) + 1;
+        y = KexMenu_DisplaySlider(y, KexMenu_InvText("m_brightness", "BRIGHTNESS"), brightness,
+                                  KexMenu_DisplayBrightness(), .40f,
+                                  sel == kKexDisplayBrightness) + 3;
+
+        y = KexMenu_DisplayRow(y,
+                                KexMenu_InvText("m_advanced_display_settings",
+                                                "ADVANCED DISPLAY SETTINGS"), "",
+                                sel == kKexDisplayAdvanced) + 1;
+        KexMenu_DisplayRow(y, KexMenu_InvText("m_go_back", "GO BACK"), "",
+                           sel == kKexDisplayBack);
+
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK");
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? kKexDisplayItems - 1 : 1))
+                  % kKexDisplayItems;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEsc)
+        {
+            KexMenu_Beep();
+            return;
+        }
+        else if (key == kKexKeyLeft || key == kKexKeyRight)
+        {
+            int const direction = key == kKexKeyLeft ? -1 : 1;
+            if (sel == kKexDisplayShading)
+                s_kexDisplaySubtractive = !s_kexDisplaySubtractive;
+            else if (sel == kKexDisplayAntialias)
+                KexRender_SetAntialiasing(KexRender_Antialiasing() + direction);
+            else if (sel == kKexDisplayResolution)
+            {
+                KexVideoConfig const config = { gSetup.xdim, gSetup.ydim, gSetup.bpp,
+                                                gSetup.fullscreen, r_borderless, vsync,
+                                                r_maxfps, upscalefactor > 1 ? 1 : 2 };
+                if (!KexMenu_ApplyVideo(config))
+                    continue;
+            }
+            else if (sel == kKexDisplayCrtFilter)
+                s_kexDisplayCrtFilter = !s_kexDisplayCrtFilter;
+            else if (sel == kKexDisplayAnisotropy)
+                KexRender_SetAnisotropy(KexRender_Anisotropy() + direction);
+            else if (sel == kKexDisplayFov)
+                KexRender_SetFov(KexRender_Fov() + direction);
+            else if (sel == kKexDisplayBrightness)
+                KexMenu_SetDisplayBrightness(KexMenu_DisplayBrightness() + direction * .10f);
+            else
+                continue;
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEnter && sel == kKexDisplayBack)
         {
             KexMenu_Beep();
             return;
+        }
+        else if (key == kKexKeyEnter && sel == kKexDisplayAdvanced)
+        {
+            KexMenu_Beep();
+            KexMenu_AdvancedDisplay();
+            KB_FlushKeyboardQueue();
+            KB_ClearKeysDown();
         }
         if (quitevent) return;
     }
@@ -835,8 +1829,14 @@ static void KexMenu_Game(void)
 {
     enum { kKexGameCheckpoints = 0, kKexGameOverworld,
            kKexGameBobSpeed, kKexGameBobHeight, kKexGameTurnSway,
-           kKexGameJumpBob, kKexGameBack, kKexGameItems };
+           kKexGameJumpBob, kKexGameHud, kKexGameBack, kKexGameItems };
+    // The panel, its border, and the remaster's footer all fit cleanly with
+    // seven authored controls.  Keep the eighth control reachable through the
+    // same sliding window used by Gamepad Settings rather than hiding the
+    // footer band for this one screen.
+    constexpr int kKexGameVisibleRows = 7;
     int sel = 0;
+    int first = 0;
 
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
@@ -844,46 +1844,52 @@ static void KexMenu_Game(void)
     {
         HandleAsync();
         KexMenu_Backdrop();
-        int const top = KexMenu_PanelTop(kKexGameItems);
-        KexMenu_Frame(top, kKexGameItems);
-        int y = top + KEX_PAD;
+        if (sel < first)
+            first = sel;
+        else if (sel >= first + kKexGameVisibleRows)
+            first = sel - kKexGameVisibleRows + 1;
+
+        int const top = KexMenu_PanelTop(kKexGameVisibleRows);
+        KexMenu_Frame(top, kKexGameVisibleRows);
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_game_settings", "GAME SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char checkpoints[96], overworld[96], bobSpeed[96], bobHeight[96];
-        char turnSway[96], jumpBob[96];
-        Bsnprintf(checkpoints, sizeof(checkpoints), "%s: %s",
-                  KexMenu_InvText("m_checkpoints", "ALLOW CHECKPOINTS"),
-                  KexMenu_InvText(kex_enable_checkpoints ? "m_on" : "m_off",
-                                  kex_enable_checkpoints ? "ON" : "OFF"));
-        Bsnprintf(overworld, sizeof(overworld), "%s: %s",
-                  KexMenu_InvText("m_overworldScreen", "OVERWORLD SCREEN"),
-                  KexMenu_InvText(kex_original_overworld ? "m_original" : "m_new",
-                                  kex_original_overworld ? "ORIGINAL" : "NEW"));
-        Bsnprintf(bobSpeed, sizeof(bobSpeed), "%s: %.1f",
-                  KexMenu_InvText("m_viewBobSpeed", "VIEW BOB SPEED"),
-                  clamp(kex_view_bob_speed, .5f, 10.f));
-        Bsnprintf(bobHeight, sizeof(bobHeight), "%s: %.1f",
-                  KexMenu_InvText("m_viewBobHeight", "VIEW BOB HEIGHT"),
-                  clamp(kex_view_bob_height, .5f, 10.f));
-        Bsnprintf(turnSway, sizeof(turnSway), "%s: %.1f",
-                  KexMenu_InvText("m_turnSway", "TURN SWAY"),
-                  clamp(kex_turn_sway, .1f, 1.f));
-        Bsnprintf(jumpBob, sizeof(jumpBob), "%s: %s",
-                  KexMenu_InvText("m_weaponJumpBobbing", "WEAPON JUMP BOBBING"),
-                  KexMenu_InvText(kex_weapon_jump_bobbing ? "m_on" : "m_off",
-                                  kex_weapon_jump_bobbing ? "ON" : "OFF"));
+        char bobSpeed[16], bobHeight[16], turnSway[16];
+        Bsnprintf(bobSpeed, sizeof(bobSpeed), "%.1f", clamp(kex_view_bob_speed, .5f, 10.f));
+        Bsnprintf(bobHeight, sizeof(bobHeight), "%.1f", clamp(kex_view_bob_height, .5f, 10.f));
+        Bsnprintf(turnSway, sizeof(turnSway), "%.1f", clamp(kex_turn_sway, .1f, 1.f));
         char const * const labels[] =
-            { checkpoints, overworld, bobSpeed, bobHeight, turnSway, jumpBob,
+            { KexMenu_InvText("m_checkpoints", "ALLOW CHECKPOINTS"),
+              KexMenu_InvText("m_overworldScreen", "OVERWORLD SCREEN"),
+              KexMenu_InvText("m_viewBobSpeed", "VIEW BOB SPEED"),
+              KexMenu_InvText("m_viewBobHeight", "VIEW BOB HEIGHT"),
+              KexMenu_InvText("m_turnSway", "TURN SWAY"),
+              KexMenu_InvText("m_weaponJumpBobbing", "WEAPON JUMP BOBBING"),
+              KexMenu_InvText("m_hudSettings", "HUD SETTINGS"),
               KexMenu_InvText("m_go_back", "GO BACK") };
-        for (int i = 0; i < kKexGameItems; i++)
+        char const * const values[] =
+            { KexMenu_InvText(kex_enable_checkpoints ? "m_on" : "m_off",
+                              kex_enable_checkpoints ? "ON" : "OFF"),
+              KexMenu_InvText(kex_original_overworld ? "m_original" : "m_new",
+                              kex_original_overworld ? "ORIGINAL" : "NEW"),
+              bobSpeed, bobHeight, turnSway,
+              KexMenu_InvText(kex_weapon_jump_bobbing ? "m_on" : "m_off",
+                              kex_weapon_jump_bobbing ? "ON" : "OFF"),
+              NULL, NULL };
+        for (int i = 0; i < kKexGameVisibleRows; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
-            if (sel == i) KexMenu_Cursor(y);
+            int const item = first + i;
+            if (values[item])
+                KexMenu_SettingRow(y, labels[item], values[item], sel == item, 1);
+            else
+                KexMenu_Row(y, labels[item], sel == item, 1);
+            if (sel == item) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
 
-        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ENTER", "TOGGLE");
+        KexMenu_Hint("ENTER", "SELECT ITEM", "LEFT/RIGHT", "ADJUST",
+                     kKexGameVisibleRows);
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -892,7 +1898,7 @@ static void KexMenu_Game(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexGameItems - 1 : 1))
                   % kKexGameItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight || key == kKexKeyEnter)
         {
@@ -918,11 +1924,22 @@ static void KexMenu_Game(void)
             }
             else if (sel == kKexGameJumpBob)
                 kex_weapon_jump_bobbing ^= 1;
+            else if (sel == kKexGameHud && key == kKexKeyEnter)
+            {
+                KexMenu_Beep();
+                KexMenu_Hud();
+                KB_FlushKeyboardQueue();
+                KB_ClearKeysDown();
+                continue;
+            }
             else if (sel == kKexGameBack && key == kKexKeyEnter)
                 return;
             else
                 continue;
-            KexMenu_Beep();
+            if (key == kKexKeyEnter)
+                KexMenu_Beep();
+            else
+                KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -947,28 +1964,29 @@ static void KexMenu_Hud(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kKexHudItems);
         KexMenu_Frame(top, kKexHudItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_hudSettings", "HUD SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char playTime[96], messages[96], crosshair[96];
-        Bsnprintf(playTime, sizeof(playTime), "%s: %s",
-                  KexMenu_InvText("m_showPlayTime", "PLAY TIME"),
-                  KexMenu_InvText(kex_show_play_time ? "m_on" : "m_off",
-                                  kex_show_play_time ? "ON" : "OFF"));
-        Bsnprintf(messages, sizeof(messages), "%s: %s",
-                  KexMenu_InvText("m_hudtext", "HUD TEXT"),
-                  KexMenu_InvText(kex_show_hud_messages ? "m_on" : "m_off",
-                                  kex_show_hud_messages ? "ON" : "OFF"));
-        Bsnprintf(crosshair, sizeof(crosshair), "%s: %.2f",
-                  KexMenu_InvText("m_crosshairsize", "CROSSHAIR SIZE"),
-                  clamp(kex_crosshair_size, .05f, 3.f));
+        char crosshair[16];
+        Bsnprintf(crosshair, sizeof(crosshair), "%.2f", clamp(kex_crosshair_size, .05f, 3.f));
         char const * const labels[] =
-            { playTime, messages, crosshair,
+            { KexMenu_InvText("m_showPlayTime", "PLAY TIME"),
+              KexMenu_InvText("m_hudtext", "HUD TEXT"),
+              KexMenu_InvText("m_crosshairsize", "CROSSHAIR SIZE"),
               KexMenu_InvText("m_go_back", "GO BACK") };
+        char const * const values[] =
+            { KexMenu_InvText(kex_show_play_time ? "m_on" : "m_off",
+                              kex_show_play_time ? "ON" : "OFF"),
+              KexMenu_InvText(kex_show_hud_messages ? "m_on" : "m_off",
+                              kex_show_hud_messages ? "ON" : "OFF"),
+              crosshair, NULL };
         for (int i = 0; i < kKexHudItems; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
+            if (values[i])
+                KexMenu_SettingRow(y, labels[i], values[i], sel == i, 1);
+            else
+                KexMenu_Row(y, labels[i], sel == i, 1);
             if (sel == i) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
@@ -982,7 +2000,7 @@ static void KexMenu_Hud(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexHudItems - 1 : 1))
                   % kKexHudItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight || key == kKexKeyEnter)
         {
@@ -1000,7 +2018,10 @@ static void KexMenu_Hud(void)
                 return;
             else
                 continue;
-            KexMenu_Beep();
+            if (key == kKexKeyEnter)
+                KexMenu_Beep();
+            else
+                KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -1025,7 +2046,8 @@ static void KexMenu_SetMouseSensitivity(int axis, float value)
 static void KexMenu_Mouse(void)
 {
     enum { kKexMouseSensitivityX = 0, kKexMouseSensitivityY,
-           kKexMouseBack, kKexMouseItems };
+           kKexMouseSmoothing, kKexMouseInvertLook, kKexMouseBack,
+           kKexMouseItems };
     int sel = 0;
 
     KB_FlushKeyboardQueue();
@@ -1036,22 +2058,32 @@ static void KexMenu_Mouse(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kKexMouseItems);
         KexMenu_Frame(top, kKexMouseItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_mouse_settings", "MOUSE SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char sensitivityX[96], sensitivityY[96];
-        Bsnprintf(sensitivityX, sizeof(sensitivityX), "%s: %.1f",
-                  KexMenu_InvText("m_msens_x", "MOUSE SENSITIVITY X"),
-                  KexMenu_MouseSensitivity(0));
-        Bsnprintf(sensitivityY, sizeof(sensitivityY), "%s: %.1f",
-                  KexMenu_InvText("m_msens_y", "MOUSE SENSITIVITY Y"),
-                  KexMenu_MouseSensitivity(1));
+        char sensitivityX[16], sensitivityY[16];
+        Bsnprintf(sensitivityX, sizeof(sensitivityX), "%.1f", KexMenu_MouseSensitivity(0));
+        Bsnprintf(sensitivityY, sizeof(sensitivityY), "%.1f", KexMenu_MouseSensitivity(1));
         char const * const labels[] =
-            { sensitivityX, sensitivityY, KexMenu_InvText("m_go_back", "GO BACK") };
+            { KexMenu_InvText("m_msens_x", "MOUSE SENSITIVITY X"),
+              KexMenu_InvText("m_msens_y", "MOUSE SENSITIVITY Y"),
+              KexMenu_InvText("m_msmooth", "MOUSE SMOOTHING"),
+              KexMenu_InvText("m_joyinvertlook", "INVERT LOOK"),
+              KexMenu_InvText("m_go_back", "GO BACK") };
+        char const * const values[] =
+            { sensitivityX, sensitivityY,
+              KexMenu_InvText(CONTROL_MouseSmoothing ? "m_on" : "m_off",
+                              CONTROL_MouseSmoothing ? "ON" : "OFF"),
+              KexMenu_InvText(mouseflip ? "m_on" : "m_off",
+                              mouseflip ? "ON" : "OFF"),
+              NULL };
         for (int i = 0; i < kKexMouseItems; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
+            if (values[i])
+                KexMenu_SettingRow(y, labels[i], values[i], sel == i, 1);
+            else
+                KexMenu_Row(y, labels[i], sel == i, 1);
             if (sel == i) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
@@ -1064,7 +2096,7 @@ static void KexMenu_Mouse(void)
         if (key == kKexKeyUp || key == kKexKeyDown)
         {
             sel = (sel + (key == kKexKeyUp ? kKexMouseItems - 1 : 1)) % kKexMouseItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight)
         {
@@ -1073,14 +2105,28 @@ static void KexMenu_Mouse(void)
                 KexMenu_SetMouseSensitivity(0, KexMenu_MouseSensitivity(0) + direction * .5f);
             else if (sel == kKexMouseSensitivityY)
                 KexMenu_SetMouseSensitivity(1, KexMenu_MouseSensitivity(1) + direction * .5f);
+            else if (sel == kKexMouseSmoothing)
+                CONTROL_MouseSmoothing = !CONTROL_MouseSmoothing;
+            else if (sel == kKexMouseInvertLook)
+                mouseflip ^= 1;
+            else
+                continue;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEnter)
+        {
+            if (sel == kKexMouseSmoothing)
+                CONTROL_MouseSmoothing = !CONTROL_MouseSmoothing;
+            else if (sel == kKexMouseInvertLook)
+                mouseflip ^= 1;
+            else if (sel == kKexMouseBack)
+            {
+                KexMenu_Beep();
+                return;
+            }
             else
                 continue;
             KexMenu_Beep();
-        }
-        else if (key == kKexKeyEnter && sel == kKexMouseBack)
-        {
-            KexMenu_Beep();
-            return;
         }
         else if (key == kKexKeyEsc)
         {
@@ -1130,22 +2176,26 @@ static void KexMenu_GamepadDeadzones(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kKexGamepadDeadzoneItems);
         KexMenu_Frame(top, kKexGamepadDeadzoneItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_deadzone", "DEADZONE"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char left[96], right[96];
-        Bsnprintf(left, sizeof(left), "%s: %d%%",
-                  KexMenu_InvText("m_lstick", "LEFT STICK"),
+        char left[16], right[16];
+        Bsnprintf(left, sizeof(left), "%d%%",
                   KexMenu_ControllerDeadzone(CONTROLLER_AXIS_LEFTX) / 100);
-        Bsnprintf(right, sizeof(right), "%s: %d%%",
-                  KexMenu_InvText("m_rstick", "RIGHT STICK"),
+        Bsnprintf(right, sizeof(right), "%d%%",
                   KexMenu_ControllerDeadzone(CONTROLLER_AXIS_RIGHTX) / 100);
         char const * const labels[] =
-            { left, right, KexMenu_InvText("m_go_back", "GO BACK") };
+            { KexMenu_InvText("m_lstick", "LEFT STICK"),
+              KexMenu_InvText("m_rstick", "RIGHT STICK"),
+              KexMenu_InvText("m_go_back", "GO BACK") };
+        char const * const values[] = { left, right, NULL };
         for (int i = 0; i < kKexGamepadDeadzoneItems; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
+            if (values[i])
+                KexMenu_SettingRow(y, labels[i], values[i], sel == i, 1);
+            else
+                KexMenu_Row(y, labels[i], sel == i, 1);
             if (sel == i) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
@@ -1159,7 +2209,7 @@ static void KexMenu_GamepadDeadzones(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexGamepadDeadzoneItems - 1 : 1))
                   % kKexGamepadDeadzoneItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight)
         {
@@ -1180,7 +2230,7 @@ static void KexMenu_GamepadDeadzones(void)
             }
             else
                 continue;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEnter && sel == kKexGamepadDeadzoneBack)
         {
@@ -1200,8 +2250,15 @@ static void KexMenu_Gamepad(void)
 {
     enum { kKexGamepadVibration = 0, kKexGamepadVolume, kKexGamepadLookX,
            kKexGamepadLookY, kKexGamepadMove, kKexGamepadInvertLook,
-           kKexGamepadDeadzone, kKexGamepadItems };
+           kKexGamepadSmoothing, kKexGamepadSwapSticks, kKexGamepadDeadzone,
+           kKexGamepadItems };
+    // The remaster keeps its complete controller list in one menu.  Seven
+    // authored rows fit inside the 320x200 KEX field with an intact frame;
+    // retain that geometry and advance the list window as its selection
+    // reaches either edge instead of stretching a nine-row panel offscreen.
+    constexpr int kKexGamepadVisibleRows = 7;
     int sel = 0;
+    int first = 0;
 
     KB_FlushKeyboardQueue();
     KB_ClearKeysDown();
@@ -1209,46 +2266,56 @@ static void KexMenu_Gamepad(void)
     {
         HandleAsync();
         KexMenu_Backdrop();
-        int const top = KexMenu_PanelTop(kKexGamepadItems);
-        KexMenu_Frame(top, kKexGamepadItems);
-        int y = top + KEX_PAD;
+        if (sel < first)
+            first = sel;
+        else if (sel >= first + kKexGamepadVisibleRows)
+            first = sel - kKexGamepadVisibleRows + 1;
+
+        int const top = KexMenu_PanelTop(kKexGamepadVisibleRows);
+        KexMenu_Frame(top, kKexGamepadVisibleRows);
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_gamepad_settings", "GAMEPAD SETTINGS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
 
-        char vibration[96], volume[96], lookX[96], lookY[96], move[96], invert[96];
-        Bsnprintf(vibration, sizeof(vibration), "%s: %s",
-                  KexMenu_InvText("m_vibration", "VIBRATION"),
-                  KexMenu_InvText(kex_vibration ? "m_on" : "m_off",
-                                  kex_vibration ? "ON" : "OFF"));
-        Bsnprintf(volume, sizeof(volume), "%s: %d%%",
-                  KexMenu_InvText("m_vibration_volume", "VIBRATION INTENSITY"),
-                  clamp(kex_vibration_volume, 0, 100));
-        Bsnprintf(lookX, sizeof(lookX), "%s: %.2f",
-                  KexMenu_InvText("m_joylookspeed_x", "LOOK SPEED X"),
-                  KexMenu_ControllerScale(CONTROLLER_AXIS_RIGHTX));
-        Bsnprintf(lookY, sizeof(lookY), "%s: %.2f",
-                  KexMenu_InvText("m_joylookspeed_y", "LOOK SPEED Y"),
-                  KexMenu_ControllerScale(CONTROLLER_AXIS_RIGHTY));
-        Bsnprintf(move, sizeof(move), "%s: %.2f",
-                  KexMenu_InvText("m_joymovesens", "MOVE SENSITIVITY"),
-                  KexMenu_ControllerScale(CONTROLLER_AXIS_LEFTX));
-        Bsnprintf(invert, sizeof(invert), "%s: %s",
-                  KexMenu_InvText("m_joyinvertlook", "INVERT LOOK"),
-                  KexMenu_InvText(JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]
-                                      ? "m_on" : "m_off",
-                                  JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]
-                                      ? "ON" : "OFF"));
+        char volume[16], lookX[16], lookY[16], move[16];
+        Bsnprintf(volume, sizeof(volume), "%d%%", clamp(kex_vibration_volume, 0, 100));
+        Bsnprintf(lookX, sizeof(lookX), "%.2f", KexMenu_ControllerScale(CONTROLLER_AXIS_RIGHTX));
+        Bsnprintf(lookY, sizeof(lookY), "%.2f", KexMenu_ControllerScale(CONTROLLER_AXIS_RIGHTY));
+        Bsnprintf(move, sizeof(move), "%.2f", KexMenu_ControllerScale(CONTROLLER_AXIS_LEFTX));
         char const * const labels[] =
-            { vibration, volume, lookX, lookY, move, invert,
+            { KexMenu_InvText("m_vibration", "VIBRATION"),
+              KexMenu_InvText("m_vibration_volume", "VIBRATION INTENSITY"),
+              KexMenu_InvText("m_joylookspeed_x", "LOOK SPEED X"),
+              KexMenu_InvText("m_joylookspeed_y", "LOOK SPEED Y"),
+              KexMenu_InvText("m_joymovesens", "MOVE SENSITIVITY"),
+              KexMenu_InvText("m_joyinvertlook", "INVERT LOOK"),
+              KexMenu_InvText("m_joysmoothing", "LOOK SMOOTHING"),
+              KexMenu_InvText("m_swapjoysticks", "SWAP JOYSTICKS"),
               KexMenu_InvText("m_deadzone", "DEADZONE") };
-        for (int i = 0; i < kKexGamepadItems; i++)
+        char const * const values[] =
+            { KexMenu_InvText(kex_vibration ? "m_on" : "m_off", kex_vibration ? "ON" : "OFF"),
+              volume, lookX, lookY, move,
+              KexMenu_InvText(JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]
+                                  ? "m_on" : "m_off",
+                              JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]
+                                  ? "ON" : "OFF"),
+              KexMenu_InvText(CONTROL_JoyLookSmoothing ? "m_on" : "m_off",
+                              CONTROL_JoyLookSmoothing ? "ON" : "OFF"),
+              KexMenu_InvText(CONTROL_GamepadSticksSwapped ? "m_on" : "m_off",
+                              CONTROL_GamepadSticksSwapped ? "ON" : "OFF"),
+              NULL };
+        for (int i = 0; i < kKexGamepadVisibleRows; i++)
         {
-            KexMenu_Row(y, labels[i], sel == i, 1);
-            if (sel == i) KexMenu_Cursor(y);
+            int const item = first + i;
+            if (values[item])
+                KexMenu_SettingRow(y, labels[item], values[item], sel == item, 1);
+            else
+                KexMenu_Row(y, labels[item], sel == item, 1);
+            if (sel == item) KexMenu_Cursor(y);
             y += KEX_ROW_H;
         }
 
-        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK");
+        KexMenu_Hint("LEFT/RIGHT", "ADJUST", "ESC", "GO BACK", kKexGamepadVisibleRows);
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -1257,7 +2324,7 @@ static void KexMenu_Gamepad(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexGamepadItems - 1 : 1))
                   % kKexGamepadItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight)
         {
@@ -1286,9 +2353,13 @@ static void KexMenu_Gamepad(void)
                 CONTROL_SetAnalogAxisInvert(CONTROLLER_AXIS_RIGHTY,
                     JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]);
             }
+            else if (sel == kKexGamepadSmoothing)
+                CONTROL_JoyLookSmoothing = !CONTROL_JoyLookSmoothing;
+            else if (sel == kKexGamepadSwapSticks)
+                CONTROL_GamepadSticksSwapped = !CONTROL_GamepadSticksSwapped;
             else
                 continue;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -1306,6 +2377,10 @@ static void KexMenu_Gamepad(void)
                 CONTROL_SetAnalogAxisInvert(CONTROLLER_AXIS_RIGHTY,
                     JoystickAnalogueInvert[CONTROLLER_AXIS_RIGHTY]);
             }
+            else if (sel == kKexGamepadSmoothing)
+                CONTROL_JoyLookSmoothing = !CONTROL_JoyLookSmoothing;
+            else if (sel == kKexGamepadSwapSticks)
+                CONTROL_GamepadSticksSwapped = !CONTROL_GamepadSticksSwapped;
             else if (sel == kKexGamepadDeadzone)
             {
                 KexMenu_GamepadDeadzones();
@@ -1425,7 +2500,10 @@ static char const *KexMenu_BindingKeyName(KexBinding const &binding)
 
 static void KexMenu_BindingRow(int y, KexBinding const &binding, int selected)
 {
-    int const x = KEX_PANEL_X0 + KEX_PAD;
+    // Bindings use the same plate-left anchor as every ordinary menu row.
+    // KEX_PAD controls only the panel's vertical surround; sharing it here
+    // made binding labels jump left when the surround was tightened.
+    int const x = KEX_PANEL_X0 + KEX_SIDE_PAD;
     char const * const label = KexMenu_InvText(binding.key, binding.fallback);
     char const * const key = KexMenu_BindingKeyName(binding);
     int labelHeight = 9, keyHeight = 9;
@@ -1434,7 +2512,7 @@ static void KexMenu_BindingRow(int y, KexBinding const &binding, int selected)
     while (keyHeight > 6 && KexMenu_TextWidth(key, keyHeight) > 38)
         --keyHeight;
 
-    KexMenu_Row(y, "", selected, 1, 1);
+    KexMenu_Row(y, "", selected, 1);
     KexMenu_Text(x + 6, y + (KEX_ROW_H - labelHeight) / 2 + 1,
                  label, labelHeight, 0, 0, 0, 1);
     KexMenu_Text(x + KEX_ROW_W - 6, y + (KEX_ROW_H - keyHeight) / 2 + 1,
@@ -1452,8 +2530,8 @@ static kb_scancode KexMenu_CaptureBinding(KexBinding const &binding)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(1);
         KexMenu_Frame(top, 1);
-        int y = top + KEX_PAD;
-        KexMenu_Row(y, KexMenu_InvText("m_bind_prompt", "BIND ACTION"), 0, 1, 1);
+        int y = top + KEX_CONTENT_PAD;
+        KexMenu_Row(y, KexMenu_InvText("m_bind_prompt", "BIND ACTION"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         KexMenu_BindingRow(y, binding, 1);
         KexMenu_Hint("ESC", KexMenu_InvText("m_prompt_cancel", "CANCEL"));
@@ -1596,11 +2674,11 @@ static void KexMenu_Bindings(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kRowsPerPage);
         KexMenu_Frame(top, kRowsPerPage);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         char title[96];
         Bsnprintf(title, sizeof(title), "%s %d/%d",
                   KexMenu_InvText("m_bindings", "BINDINGS"), page + 1, pageCount);
-        KexMenu_Row(y, title, 0, 1, 1);
+        KexMenu_Row(y, title, 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < kRowsPerPage; i++)
         {
@@ -1617,12 +2695,12 @@ static void KexMenu_Bindings(void)
         if (key == kKexKeyUp || key == kKexKeyDown)
         {
             sel = (sel + (key == kKexKeyUp ? kRowsPerPage - 1 : 1)) % kRowsPerPage;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyLeft || key == kKexKeyRight)
         {
             page = (page + (key == kKexKeyLeft ? pageCount - 1 : 1)) % pageCount;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEnter)
         {
@@ -1645,16 +2723,158 @@ static void KexMenu_Bindings(void)
     }
 }
 
+static void KexMenu_Input(void)
+{
+    enum { kKexInputBindings, kKexInputMouse, kKexInputGamepad, kKexInputBack };
+    int items[4];
+    int itemCount = 0;
+    items[itemCount++] = kKexInputBindings;
+    if (CONTROL_MousePresent)
+        items[itemCount++] = kKexInputMouse;
+    items[itemCount++] = kKexInputGamepad;
+    items[itemCount++] = kKexInputBack;
+    int sel = 0;
+
+    KB_FlushKeyboardQueue();
+    KB_ClearKeysDown();
+    while (1)
+    {
+        HandleAsync();
+        KexMenu_Backdrop();
+        int const top = KexMenu_PanelTop(itemCount);
+        KexMenu_Frame(top, itemCount);
+        int y = top + KEX_CONTENT_PAD;
+        KexMenu_Row(y, KexMenu_InvText("m_input_settings", "INPUT SETTINGS"), 0, 1);
+        y += KEX_ROW_H + KEX_HEADGAP;
+
+        for (int i = 0; i < itemCount; i++)
+        {
+            char const *key = "m_go_back";
+            char const *fallback = "GO BACK";
+            if (items[i] == kKexInputBindings)
+            {
+                key = "m_bindings";
+                fallback = "BINDINGS";
+            }
+            else if (items[i] == kKexInputMouse)
+            {
+                key = "m_mouse_settings";
+                fallback = "MOUSE SETTINGS";
+            }
+            else if (items[i] == kKexInputGamepad)
+            {
+                key = "m_gamepad_settings";
+                fallback = "CONTROLLER SETTINGS";
+            }
+            KexMenu_Row(y, KexMenu_InvText(key, fallback), sel == i, 1);
+            if (sel == i) KexMenu_Cursor(y);
+            y += KEX_ROW_H;
+        }
+
+        KexMenu_Hint("ENTER", KexMenu_InvText("m_prompt_select", "SELECT ITEM"),
+                     "ESC", KexMenu_InvText("m_prompt_back", "GO BACK"));
+        videoNextPage();
+        Exhumed_CaptureFrame();
+
+        int const key = KexMenu_PollKey();
+        if (key == kKexKeyUp || key == kKexKeyDown)
+        {
+            sel = (sel + (key == kKexKeyUp ? itemCount - 1 : 1)) % itemCount;
+            KexMenu_Highlight();
+        }
+        else if (key == kKexKeyEsc)
+        {
+            KexMenu_Beep();
+            return;
+        }
+        else if (key == kKexKeyEnter)
+        {
+            KexMenu_Beep();
+            switch (items[sel])
+            {
+                case kKexInputBindings: KexMenu_Bindings(); break;
+                case kKexInputMouse:    KexMenu_Mouse(); break;
+                case kKexInputGamepad:  KexMenu_Gamepad(); break;
+                default: return;
+            }
+            KB_FlushKeyboardQueue();
+            KB_ClearKeysDown();
+        }
+        if (quitevent) return;
+    }
+}
+
+static void KexMenu_ResetSettings(void)
+{
+    if (!KexMenu_ConfirmLocalized("m_reset_settings_confirm",
+                                  "ARE YOU SURE YOU WISH TO RESET YOUR CONFIGURATION?",
+                                  NULL))
+        return;
+
+    // The KEX default.cfg covers binding and renderer defaults.  The remaining
+    // values here are the authored defaults for the KEX-only option panels.
+    // Do not change physical video mode or language: neither is specified by
+    // default.cfg, and changing a live display mode from a reset action is
+    // needlessly disruptive.
+    CONFIG_ResetKexInputDefaults();
+    CONTROL_MouseSmoothing = false;
+    CONTROL_JoyLookSmoothing = false;
+    CONTROL_GamepadSticksSwapped = false;
+    mouseflip = 1;
+
+    kex_enable_checkpoints = 1;
+    kex_original_overworld = 0;
+    kex_view_bob_speed = 1.f;
+    kex_view_bob_height = 1.f;
+    kex_turn_sway = 1.f;
+    kex_weapon_jump_bobbing = 1;
+    kex_show_play_time = 1;
+    kex_show_hud_messages = 1;
+    kex_crosshair_size = 1.f;
+    kex_vibration = 1;
+    kex_vibration_volume = 50;
+
+    MusicVolume = 125;
+    FXVolume = 125;
+    setCDaudiovolume(MusicVolume);
+    SetMasterFXVolume(FXVolume);
+
+    KexRender_SetFov(64.f);
+    KexRender_SetAntialiasing(7);
+    KexRender_SetAnisotropy(16);
+    s_kexDisplaySubtractive = 1;
+    s_kexDisplayCrtFilter = 0;
+    s_kexFixedPointGeometry = 0;
+    s_kexZClipEmulation = 0;
+    for (float &setting : s_kexCrtSettings)
+        setting = 0.f;
+    for (float &setting : s_kexSubtractiveSettings)
+        setting = .50f;
+    g_videoGamma = DEFAULT_GAMMA;
+    videoSetGamma();
+
+    // Display Resolution is a renderer preference rather than an outer video
+    // mode.  Restore its HIGH default while retaining the active mode, vsync,
+    // and frame cap selected in the dedicated Video Settings screen.
+    if (upscalefactor != 1)
+    {
+        KexVideoConfig const config = { gSetup.xdim, gSetup.ydim, gSetup.bpp,
+                                        gSetup.fullscreen, r_borderless, vsync,
+                                        r_maxfps, 1 };
+        KexMenu_ApplyVideo(config);
+    }
+}
+
 static void KexMenu_Options(void)
 {
-    enum { kKexAudio = 0, kKexDisplay, kKexHud, kKexGame, kKexMouse, kKexGamepad,
-           kKexBindings, kKexLanguage, kKexOptionsItems };
+    enum { kKexGame = 0, kKexInput, kKexAudio, kKexDisplay, kKexLanguage,
+           kKexVideo, kKexReset, kKexOptionsItems };
     static char const * const keys[] =
-        { "m_audio_settings", "m_display_settings", "m_hudSettings", "m_game_settings",
-          "m_mouse_settings", "m_gamepad_settings", "m_bindings", "m_language_settings" };
+        { "m_game_settings", "m_input_settings", "m_audio_settings", "m_display_settings",
+          "m_language_settings", "m_video_settings", "m_reset_settings" };
     static char const * const fallback[] =
-        { "AUDIO SETTINGS", "DISPLAY SETTINGS", "HUD SETTINGS", "GAME SETTINGS",
-          "MOUSE SETTINGS", "CONTROLLER SETTINGS", "BINDINGS", "LANGUAGE SETTINGS" };
+        { "GAME SETTINGS", "INPUT SETTINGS", "AUDIO SETTINGS", "DISPLAY SETTINGS",
+          "LANGUAGE SETTINGS", "VIDEO SETTINGS", "RESET SETTINGS" };
     int sel = 0;
 
     KB_FlushKeyboardQueue();
@@ -1665,7 +2885,7 @@ static void KexMenu_Options(void)
         KexMenu_Backdrop();
         int const top = KexMenu_PanelTop(kKexOptionsItems);
         KexMenu_Frame(top, kKexOptionsItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_options", "OPTIONS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < kKexOptionsItems; i++)
@@ -1675,7 +2895,8 @@ static void KexMenu_Options(void)
             y += KEX_ROW_H;
         }
 
-        KexMenu_Hint("ENTER", KexMenu_InvText("m_prompt_select", "SELECT ITEM"));
+        KexMenu_Hint("ENTER", KexMenu_InvText("m_prompt_select", "SELECT ITEM"),
+                     "ESC", KexMenu_InvText("m_prompt_back", "GO BACK"));
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -1684,7 +2905,7 @@ static void KexMenu_Options(void)
         {
             sel = (sel + (key == kKexKeyUp ? kKexOptionsItems - 1 : 1))
                   % kKexOptionsItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -1694,22 +2915,20 @@ static void KexMenu_Options(void)
         else if (key == kKexKeyEnter)
         {
             KexMenu_Beep();
-            if (sel == kKexAudio)
-                menu_AdjustVolume();
+            if (sel == kKexGame)
+                KexMenu_Game();
+            else if (sel == kKexInput)
+                KexMenu_Input();
+            else if (sel == kKexAudio)
+                KexMenu_Audio();
             else if (sel == kKexDisplay)
                 KexMenu_Display();
-            else if (sel == kKexHud)
-                KexMenu_Hud();
-            else if (sel == kKexGame)
-                KexMenu_Game();
-            else if (sel == kKexMouse)
-                KexMenu_Mouse();
-            else if (sel == kKexGamepad)
-                KexMenu_Gamepad();
-            else if (sel == kKexBindings)
-                KexMenu_Bindings();
             else if (sel == kKexLanguage)
                 KexMenu_Language();
+            else if (sel == kKexVideo)
+                KexMenu_Video();
+            else if (sel == kKexReset)
+                KexMenu_ResetSettings();
             KB_FlushKeyboardQueue();
             KB_ClearKeysDown();
         }
@@ -1736,15 +2955,40 @@ static void KexMenu_Credits(void)
         int const rows = (int)ARRAY_SIZE(lines);
         int const top = KexMenu_PanelTop(rows);
         KexMenu_Frame(top, rows);
-        int y = top + KEX_PAD;
+        // Credits are free-standing lines rather than button labels, so they
+        // do not pass through KexMenu_Row's normal width fitting.  Keep a
+        // common, compact size for the whole page—the long remaster credit
+        // must stay inside the stone panel, not run across the backdrop art.
+        int const creditWidth = KEX_PANEL_X1 - KEX_PANEL_X0 - 8;
+        int creditTextHeight = 8;
+        for (;;)
+        {
+            bool fits = true;
+            for (int i = 0; i < rows; i++)
+                if (lines[i][0] && KexMenu_TextWidth(lines[i], creditTextHeight) > creditWidth)
+                {
+                    fits = false;
+                    break;
+                }
+            if (fits || creditTextHeight <= 3)
+                break;
+            --creditTextHeight;
+        }
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_about", "CREDITS"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < rows; i++)
         {
-            if (lines[i][0]) KexMenu_Text(160, y + 2, lines[i], 10, 0, 0, 1);
+            if (lines[i][0])
+                KexMenu_Text(160, y + (KEX_ROW_H - creditTextHeight) / 2,
+                             lines[i], creditTextHeight, 0, 0, 1);
             y += KEX_ROW_H;
         }
-        KexMenu_Hint("ESC", KexMenu_InvText("m_prompt_back", "GO BACK"));
+        // This is the only full-height menu page.  Its panel intentionally
+        // occupies the footer lane, so do not draw the lower prompt strip
+        // across the stone surround and final credit line.
+        KexMenu_Hint("ESC", KexMenu_InvText("m_prompt_back", "GO BACK"),
+                     NULL, NULL, rows);
         videoNextPage();
         Exhumed_CaptureFrame();
 
@@ -1798,7 +3042,7 @@ int KexMenu_Main(int bInLevelMenus)
 
         int const top = KexMenu_PanelTop(kKexItems);
         KexMenu_Frame(top, kKexItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, "POWERSLAVE", 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < kKexItems; i++)
@@ -1817,7 +3061,7 @@ int KexMenu_Main(int bInLevelMenus)
         {
             int const step = (key == kKexKeyUp) ? kKexItems - 1 : 1;
             do sel = (sel + step) % kKexItems; while (!enabled[sel]);
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -1923,7 +3167,7 @@ static int KexMenu_Pause(void)
 
         int const top = KexMenu_PanelTop(kKexPauseItems);
         KexMenu_Frame(top, kKexPauseItems);
-        int y = top + KEX_PAD;
+        int y = top + KEX_CONTENT_PAD;
         KexMenu_Row(y, KexMenu_InvText("m_game_paused", "GAME PAUSED"), 0, 1);
         y += KEX_ROW_H + KEX_HEADGAP;
         for (int i = 0; i < kKexPauseItems; i++)
@@ -1941,7 +3185,7 @@ static int KexMenu_Pause(void)
         if (key == kKexKeyUp || key == kKexKeyDown)
         {
             sel = (sel + (key == kKexKeyUp ? kKexPauseItems - 1 : 1)) % kKexPauseItems;
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         else if (key == kKexKeyEsc)
         {
@@ -1989,11 +3233,20 @@ static int KexMenu_Pause(void)
 
 // ---------------------------------------------------------------------------
 // Title screen. The remaster opens on the book cinematic -- the same one this
-// port already ships as book.mov -- and then holds on the backdrop waiting for
-// a key, rather than the original's publisher logos and skull animation.
+// port already ships as book.mov -- and then holds on the authored title
+// backdrop waiting for a key, rather than the original's publisher logos and
+// skull animation.  title_backdrop.png already includes the full Powerslave
+// Exhumed logo and the Anubis scene; it must not be covered with a legacy
+// console title card.
 // ---------------------------------------------------------------------------
 void KexMenu_TitleHold(void)
 {
+    // Headless visual checks need the menu that follows this splash, not an
+    // injected key event aimed at a user-visible game window.  This is an
+    // opt-in test hook; normal launches retain the native Press Start hold.
+    if (Bgetenv("VB_KEX_SKIP_TITLE_HOLD"))
+        return;
+
     // The title track carries the menu behind this screen too; starting a
     // level replaces it, playMusicFile stopping the old track first.
     playMusicFile("music/title.ogg", true);
@@ -2007,25 +3260,26 @@ void KexMenu_TitleHold(void)
     {
         HandleAsync();
         KexMenu_Backdrop();
-        // The remaster holds on the console game's title card -- the logo, the
-        // doorway, Lobotomy's 1996 copyright line -- with the prompt over it.
-        // The backdrop under it fills the widescreen margins.
-        int const card = tilesiz[kKexTileTitle].x > 0;
-        if (card)
-            KexDrawTile(kKexTileTitle, 0, 0, 320, 200, 0, 0, 0);
 
         // A slow pulse, so the prompt reads as an invitation rather than a
         // static label. Sin() is the engine's own fixed-point table.
         int const shade = (Sin(((int)totalclock - start) << 5) >> 11) - 4;
-        KexMenu_Text(160, card ? 148 : 150,
+        // The title prompt uses the shipped blue-face/gold-outline variant,
+        // placed over the doorway rather than in the lower legal band.
+        KexMenu_Text(160, 120,
                      KexMenu_InvText("m_press_start", "PRESS START"),
-                     16, (int8_t)shade, 0, 1);
+                     16, (int8_t)shade, 0, 1, 1);
 
-        if (!card)
-        {
-            KexMenu_Text(160, 182, "POWERSLAVE AND POWERSLAVE EXHUMED ARE TRADEMARKS", 5, 0, 0, 1);
-            KexMenu_Text(160, 189, "OF THROWBACK ENTERTAINMENT INC", 5, 0, 0, 1);
-        }
+        // Keep the remaster's two-line legal line visible over the bottom of
+        // the backdrop.  The menu font is the only localized text renderer
+        // available at this point, so use its compact size to preserve the
+        // native placement without creating a separate opaque footer plate.
+        KexMenu_Text(160, 182,
+                     "POWERSLAVE AND POWERSLAVE EXHUMED ARE TRADEMARKS OF",
+                     4, 0, 0, 1);
+        KexMenu_Text(160, 188,
+                     "THROWBACK ENTERTAINMENT INC. ALL RIGHTS RESERVED",
+                     4, 0, 0, 1);
 
         videoNextPage();
         Exhumed_CaptureFrame();
@@ -2333,7 +3587,11 @@ int KexMenu_Overworld(int start)
             case kKexKeyRight: dir = 1; break;
             case kKexKeyDown:  dir = 2; break;
             case kKexKeyLeft:  dir = 3; break;
-            case kKexKeyEnter: KexMenu_Beep(); return cur;
+            case kKexKeyEnter:
+                KexMenu_Beep();
+                if (KexMenu_ConfirmTravel(L.title))
+                    return cur;
+                break;
             case kKexKeyEsc:   KexMenu_Beep(); return -1;
             default: break;
         }
@@ -2341,7 +3599,7 @@ int KexMenu_Overworld(int start)
             && KexCampaign_MapUnlocked(L.link[dir]))
         {
             cur = L.link[dir];
-            KexMenu_Beep();
+            KexMenu_Highlight();
         }
         if (quitevent)
             return -1;
@@ -2862,22 +4120,22 @@ void KexMenu_Status(bool weaponWheel)
             case kKexKeyLeft:
                 if (weaponWheel) sel = (sel & ~3) | ((sel + 3) & 3);
                 else { page = (page + kKexPageCount - 1) % kKexPageCount; sel = 0; }
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyRight:
                 if (weaponWheel) sel = (sel & ~3) | ((sel + 1) & 3);
                 else { page = (page + 1) % kKexPageCount; sel = 0; }
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyUp:
                 if (weaponWheel) sel ^= 4;
                 else if (n) sel = (sel + n - 1) % n;
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyDown:
                 if (weaponWheel) sel ^= 4;
                 else if (n) sel = (sel + 1) % n;
-                KexMenu_Beep();
+                KexMenu_Highlight();
                 break;
             case kKexKeyEnter:
                 if (weaponWheel)
