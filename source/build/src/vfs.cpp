@@ -486,7 +486,7 @@ static void kclose_grp(int32_t handle);
 
 int initgroupfile(const char *filename)
 {
-    char buf[70];
+    char buf[70] = {};
 
     // translate all backslashes (0x5c) to forward slashes (0x2f)
     toupperlookup[0x5c] = 0x2f;
@@ -504,6 +504,15 @@ int initgroupfile(const char *filename)
     if (kopen_internal(filename, &zfn, 0, 0, 0, numgroupfiles, groupfilgrp, groupfil, groupfilpos) < 0)
         return -1;
 
+    int32_t const fileSize = klseek_grp(numgroupfiles, 0, BSEEK_END);
+    klseek_grp(numgroupfiles, 0, BSEEK_SET);
+    if (fileSize < 16)
+    {
+        Xfree(zfn);
+        kclose_grp(numgroupfiles);
+        return -1;
+    }
+
 #ifdef WITHKPLIB
     // check if ZIP
     if (zfn)
@@ -513,9 +522,9 @@ int initgroupfile(const char *filename)
         {
             kclose_grp(numgroupfiles);
 
-            kzaddstack(zfn);
+            int const result = kzaddstack(zfn);
             Xfree(zfn);
-            return MAXGROUPFILES;
+            return result == 0 ? MAXGROUPFILES : -1;
         }
         klseek_grp(numgroupfiles,0,BSEEK_SET);
 
@@ -529,7 +538,13 @@ int initgroupfile(const char *filename)
     kread_grp(numgroupfiles,buf,16);
     if (!Bmemcmp(buf, "KenSilverman", 12))
     {
-        gnumfiles[numgroupfiles] = B_LITTLE32(*((int32_t *)&buf[12]));
+        int32_t const count = B_UNBUF32(buf + 12);
+        if (count < 0 || count > (fileSize - 16) / 16)
+        {
+            kclose_grp(numgroupfiles);
+            return -1;
+        }
+        gnumfiles[numgroupfiles] = count;
 
         gfilelist[numgroupfiles] = (char *)Xmalloc(gnumfiles[numgroupfiles]<<4);
         gfileoffs[numgroupfiles] = (int32_t *)Xmalloc((gnumfiles[numgroupfiles]+1)<<2);
@@ -540,6 +555,13 @@ int initgroupfile(const char *filename)
         for (bssize_t i=0; i<gnumfiles[numgroupfiles]; i++)
         {
             int32_t const k = B_LITTLE32(*((int32_t *)&gfilelist[numgroupfiles][(i<<4)+12]));
+            if (k < 0 || k > fileSize - j)
+            {
+                DO_FREE_AND_NULL(gfilelist[numgroupfiles]);
+                DO_FREE_AND_NULL(gfileoffs[numgroupfiles]);
+                kclose_grp(numgroupfiles);
+                return -1;
+            }
             gfilelist[numgroupfiles][(i<<4)+12] = 0;
             gfileoffs[numgroupfiles][i] = j;
             j += k;
@@ -563,6 +585,9 @@ int initgroupfile(const char *filename)
         int32_t numfiles;
         kread_grp(numgroupfiles, &numfiles, 4);
         numfiles = B_LITTLE32(numfiles);
+        int32_t const headerSize = version == 2 ? 267 : 254;
+        if (fileSize < headerSize || numfiles < 0 || numfiles > (fileSize - headerSize) / 121)
+            break;
 
         uint8_t temp, temp2;
 
@@ -622,7 +647,7 @@ int initgroupfile(const char *filename)
         gfilelist[numgroupfiles] = (char *)Xmalloc(gnumfiles[numgroupfiles]<<4);
         gfileoffs[numgroupfiles] = (int32_t *)Xmalloc((gnumfiles[numgroupfiles]+1)<<2);
 
-        int32_t j = (version == 2 ? 267 : 254) + (numfiles * 121), k;
+        int32_t j = headerSize + (numfiles * 121), k;
         for (bssize_t i = 0; i < numfiles; i++)
         {
             // get the string length
@@ -639,6 +664,13 @@ int initgroupfile(const char *filename)
             // get the file size
             kread_grp(numgroupfiles, &k, 4);
             k = B_LITTLE32(k);
+            if (k < 0 || k > fileSize - j)
+            {
+                DO_FREE_AND_NULL(gfilelist[numgroupfiles]);
+                DO_FREE_AND_NULL(gfileoffs[numgroupfiles]);
+                kclose_grp(numgroupfiles);
+                return -1;
+            }
 
             // record the offset of the file in the SSI
             gfileoffs[numgroupfiles][i] = j;
@@ -842,6 +874,8 @@ char const * kfileparent(int32_t const handle)
     return groupname[groupnum];
 }
 
+bool g_vfsPreferArchives;
+
 buildvfs_kfd kopen4load(const char *filename, char searchfirst)
 {
     int32_t newhandle = MAXOPENFILES-1;
@@ -861,7 +895,13 @@ buildvfs_kfd kopen4load(const char *filename, char searchfirst)
 
     char *lastpfn = NULL;
 
-    int32_t h = kopen_internal(filename, &lastpfn, searchfirst, 1, 1, newhandle, filegrp, filehan, filepos);
+    int32_t h = -1;
+    bool const explicitPath = pathsearchmode && (filename[0] == '/' || (filename[0] && filename[1] == ':')) &&
+                              buildvfs_exists(filename);
+    if (searchfirst == 0 && g_vfsPreferArchives && !explicitPath)
+        h = kopen_internal(filename, &lastpfn, 2, 1, 1, newhandle, filegrp, filehan, filepos);
+    if (h < 0)
+        h = kopen_internal(filename, &lastpfn, searchfirst, 1, 1, newhandle, filegrp, filehan, filepos);
 
     Xfree(lastpfn);
 

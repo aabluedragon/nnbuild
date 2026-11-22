@@ -73,6 +73,7 @@ extern int32_t g_numdisplays;
 extern int32_t g_displayindex;
 
 extern bool g_ImGuiCaptureInput;
+extern bool g_ImGuiExclusiveInput;
 extern bool g_ImGuiFrameActive;
 extern uint8_t g_ImGuiCapturedDevices;
 extern void engineBeginImGuiFrame(void);
@@ -351,7 +352,7 @@ static inline uint64_t calcFrameDelay(int maxFPS)
     switch (maxFPS)
     {
         case -2: return 0;
-        case -1: maxFPS = refreshfreq; break;
+        case -1: maxFPS = refreshfreq > 0 ? refreshfreq : 60; break;
         case 0: maxFPS = 1000; break;
     }
 

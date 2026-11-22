@@ -25,7 +25,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "screens.h"
 #include "renderlayer.h"
 #include "cmdline.h"
+#include "mapeditor.h"
 #include "masterserver.h"
+#include "serverlevel.h"
+#include "vbjs.h"
+
+#include <string>
+#include <vector>
 
 int32_t g_commandSetup = 0;
 int32_t g_noSetup = 0;
@@ -47,16 +53,94 @@ char** netparam = NULL;
 char firstdemofile[80] = { '\0' };
 int32_t userconfiles = 0;
 
+static std::vector<std::string> startupCommands;
+static size_t nextStartupCommand;
+
+std::vector<std::string> G_PendingStartupCommands(void)
+{
+    return {startupCommands.begin() + nextStartupCommand, startupCommands.end()};
+}
+
+void G_RestoreStartupCommands(std::vector<std::string> commands)
+{
+    startupCommands = std::move(commands);
+    nextStartupCommand = 0;
+}
+
+bool G_RunStartupCommand(void)
+{
+    if (nextStartupCommand == startupCommands.size())
+        return false;
+
+    OSD_Dispatch(startupCommands[nextStartupCommand++].c_str());
+    return true;
+}
+
+static void G_AddStartupCommands(const char *text)
+{
+    while (*text)
+    {
+        auto const length = strcspn(text, "\r\n");
+        auto const leading = strspn(text, " \t");
+        if (leading < length && text[leading] != '#')
+            startupCommands.emplace_back(text + leading, length - leading);
+        text += length + strspn(text + length, "\r\n");
+    }
+}
+
+static bool G_ReadStartupCommands(const char *path)
+{
+    buildvfs_FILE const file = buildvfs_fopen_read(path);
+    if (!file)
+        return false;
+
+    auto const length = buildvfs_flength(file);
+    bool ok = false;
+    if (length >= 0 && length <= 1024 * 1024)
+    {
+        std::string content(static_cast<size_t>(length) + 1, '\0');
+        ok = buildvfs_fread(&content[0], 1, length, file) == static_cast<size_t>(length);
+        if (ok)
+        {
+            char const *text = content.c_str();
+            if (content.compare(0, 3, "\xef\xbb\xbf") == 0)
+                text += 3;
+            G_AddStartupCommands(text);
+        }
+    }
+    buildvfs_fclose(file);
+    return ok;
+}
+
+static bool G_IsScriptPath(char const *path)
+{
+    auto const ext = Bstrrchr(path, '.');
+    return ext && (!Bstrcasecmp(ext, ".js") || !Bstrcasecmp(ext, ".ts")
+                || !Bstrcasecmp(ext, ".mjs") || !Bstrcasecmp(ext, ".mts")
+                || !Bstrcasecmp(ext, ".cjs") || !Bstrcasecmp(ext, ".cts"));
+}
+
 static void G_ShowParameterHelp(void)
 {
     const char* s = "Usage: " APPBASENAME " [files] [options]\n"
         "Example: " APPBASENAME " -q4 -a -m -tx -map nukeland.map\n\n"
-        "Files can be *.grp/zip/con/def\n"
+        "Files can be *.grp/zip/con/def/js/ts\n"
         "\n"
         "-allowvisibility\tAllows visibility adjustment in multiplayer."
         "\n"
         "-cfg [file.cfg]\tUse an alternate configuration file\n"
+        "--editor [file.map]\tOpen the integrated Duke3D map editor\n"
+        "--build-editor [file.map]\tOpen the native Build editing tools\n"
+        "--project <folder|zip>\tPlay the project or open it with --editor\n"
+        "--project-map <file.map>\tSelect a map within the project to play or edit\n"
+        "--allow-project-scripts\tEnable JavaScript and TypeScript attachments from a project ZIP\n"
+        "--editor-mcp [host[:port]]\tJoin a live editor as an MCP participant\n"
+        "--mcp-stdio\tControl this game, server or editor through MCP over stdin/stdout\n"
+        "--mcp-http <port>\tControl this instance through a loopback MCP endpoint\n"
         "-c#\t\tUse MP mode #, 1 = Dukematch, 2 = Coop, 3 = Team Dukematch\n"
+        "-c, --cmd <text>\tRun startup console commands, one per line (repeatable)\n"
+        "-cf, --cmd-file <path>\tRead startup console commands, one per line (repeatable)\n"
+        "-js, --js <path>\tLoad a JavaScript or TypeScript mod; a bare path also works\n"
         "-d[file.dmo]\tPlay a demo\n"
         "-g[file.grp]\tUse an extra group file\n"
         "-h[file.def]\tUse an alternate def\n"
@@ -78,7 +162,7 @@ static void G_ShowParameterHelp(void)
         "-startnow\tHost: begin immediately with whoever is present (even alone);\n"
         "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
         "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
-        "\t\tConsole commands: kick, ban, unban, listban, listplayers.\n"
+        "\t\tConsole commands include map, mod, mapcycle, nextmap, kick and ban.\n"
         "-headless\tHost: dedicated server with no window, graphics or sound -\n"
         "\t\tterminal only. Implies -dedicated. (alias: -console)\n"
         "\n"
@@ -140,10 +224,11 @@ static void G_ShowDebugHelp(void)
 
 void G_CheckCommandLine(int argc, char const* const* argv)
 {
-    short i, j;
+    int i, j;
     char* c;
     int firstnet = 0;
     char* k;
+    bool const resume = G_CheckCmdSwitch(argc, argv, "--server-resume");
 
     i = 1;
 
@@ -166,20 +251,73 @@ void G_CheckCommandLine(int argc, char const* const* argv)
 
     if (argc > 1)
     {
-        Bstrcpy(tempbuf, "Application parameters: ");
-
-        while (i < argc)
+        std::string parameters;
+        for (i = 1; i < argc; ++i)
         {
-            Bstrcat(tempbuf, argv[i++]);
-            Bstrcat(tempbuf, " ");
+            parameters += " ";
+            parameters += argv[i];
         }
 
-        LOG_F(INFO, "%s", tempbuf);
+        LOG_F(INFO, "Application parameters:%s", parameters.c_str());
 
         i = 1;
         while (i < argc)
         {
             c = const_cast<char*>(argv[i]);
+            if (!Bstrcmp(c, "--editor"))
+            {
+                const char *path = nullptr;
+                if (i + 1 < argc && argv[i + 1][0] != '-')
+                {
+                    auto const extension = Bstrrchr(argv[i + 1], '.');
+                    if (extension && !Bstrcasecmp(extension, ".map"))
+                        path = argv[++i];
+                }
+                MapEditor_Request(path);
+                ++i;
+                continue;
+            }
+            if (!Bstrcmp(c, "--content-rejoin"))
+            {
+                ++i;
+                continue;
+            }
+            bool const probe = !Bstrcmp(c, "--content-probe");
+            if (probe || !Bstrcmp(c, "--server-resume"))
+            {
+                if (++i == argc)
+                    Bexit(EXIT_FAILURE);
+                Net_SetServerLaunchFile(argv[i++], probe);
+                continue;
+            }
+            bool const cmd = !Bstrcmp(c, "-c") || !Bstrcmp(c, "--cmd");
+            bool const cmdFile = !Bstrcmp(c, "-cf") || !Bstrcmp(c, "--cmd-file");
+            bool const script = !Bstrcmp(c, "-js") || !Bstrcmp(c, "--js");
+            if (cmd || cmdFile || script)
+            {
+                if (++i == argc)
+                {
+                    LOG_F(ERROR, "Missing argument for %s", c);
+                    Bexit(EXIT_FAILURE);
+                }
+                if (cmd && !resume)
+                    G_AddStartupCommands(argv[i]);
+                else if (script)
+                    VBJS_SetScriptPath(argv[i]);
+                else if (cmdFile && !resume && !G_ReadStartupCommands(argv[i]))
+                {
+                    LOG_F(ERROR, "Could not read startup command file '%s'", argv[i]);
+                    Bexit(EXIT_FAILURE);
+                }
+                ++i;
+                continue;
+            }
+            if (*c != '-' && G_IsScriptPath(c) && (!firstnet || buildvfs_exists(c)))
+            {
+                VBJS_SetScriptPath(c);
+                ++i;
+                continue;
+            }
             if (((*c == '/') || (*c == '-')) && (!firstnet))
             {
                 if (!Bstrcasecmp(c + 1, "?") || !Bstrcasecmp(c + 1, "help") || !Bstrcasecmp(c + 1, "-help"))
@@ -297,8 +435,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     g_noSetup = TRUE;
                     firstnet = i;
-                    netparamcount = argc - i - 1;
-                    netparam = (char**)Xcalloc(netparamcount, sizeof(char**));
+                    netparam = (char**)Xcalloc(argc - i, sizeof(char**));
                     i++;
                     continue;
                 }
@@ -575,7 +712,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     }
 
                 }
-                netparam[i - firstnet - 1] = const_cast<char*>(argv[i]);
+                netparam[netparamcount++] = const_cast<char*>(argv[i]);
                 i++;
                 continue;
             }
@@ -600,7 +737,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                             ud.m_coop += *c - '0';
                             c++;
                         }
-                        ud.m_coop--;
+                        ud.m_coop = clamp<int>(ud.m_coop - 1, 0, MAXGAMETYPES - 1);
 
                         // Make sure that COOP still defaults to weapon stay ON.
                         if (Gametypes[ud.m_coop].flags & GAMETYPE_WEAPSTAY)

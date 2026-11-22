@@ -140,6 +140,14 @@ endif
 
 glad_cflags :=
 
+#### QuickJS (VibeBuild32 mod runtime)
+
+quickjs := quickjs
+quickjs_src := $(source)/quickjs
+quickjs_obj := $(obj)/quickjs
+quickjs_objs := dtoa.c libregexp.c libunicode.c quickjs.c
+quickjs_cflags := -x c -std=gnu11 -w -DNDEBUG
+
 
 #### mimalloc
 
@@ -710,9 +718,9 @@ vibebuild32_src := $(vibebuild32_root)/src
 vibebuild32_rsrc := $(vibebuild32_root)/rsrc
 vibebuild32_obj := $(obj)/$(vibebuild32)
 
-vibebuild32_cflags := -I$(vibebuild32_src) 
+vibebuild32_cflags := -I$(vibebuild32_src) -I$(quickjs_src) -I$(source)/glue
 
-vibebuild32_game_deps := audiolib mact
+vibebuild32_game_deps := audiolib mact quickjs
 
 ifeq ($(USE_DISCORDRPC), 1)
     vibebuild32_game_deps += discordrpc
@@ -737,6 +745,12 @@ vibebuild32_game_objs := \
     discord.cpp \
     dnames.cpp \
     dukebot.cpp \
+    editorboard.cpp \
+    editorlive.cpp \
+    editortools.cpp \
+    editormcp.cpp \
+    editorproject.cpp \
+    editorprefab.cpp \
     game.cpp \
     gamedef.cpp \
     gameexec.cpp \
@@ -746,28 +760,45 @@ vibebuild32_game_objs := \
     global.cpp \
     grpscan.cpp \
     hud.cpp \
+    mapeditor.cpp \
+    nativeeditor.cpp \
     masterserver.cpp \
     menus.cpp \
+    netcontent.cpp \
     net_predict.cpp \
     oldnet.cpp \
     osdcmds.cpp \
     osdfuncs.cpp \
     player.cpp \
     premap.cpp \
+    projectlaunch.cpp \
     projectiles.cpp \
     rts.cpp \
     savegame.cpp \
     screens.cpp \
     sector.cpp \
+    serverlevel.cpp \
     sounds.cpp \
     sync.cpp \
     utils.cpp \
+    vbjs.cpp \
+    vbjs_duke.cpp \
+    vbjs_ts.cpp \
 
 vibebuild32_game_rsrc_objs :=
 vibebuild32_game_gen_objs :=
 
 vibebuild32_game_miscdeps :=
 vibebuild32_game_orderonlydeps :=
+
+ifeq (SDL2,$(RENDERTYPE)$(SDL_TARGET))
+ifneq (,$(filter $(PLATFORM),LINUX WINDOWS DARWIN BSD))
+    vibebuild32_cflags += -DVIBEBUILD_NATIVE_EDITOR
+    vibebuild32_native_sources := $(addprefix $(engine_src)/,build.cpp config.cpp) \
+        $(addprefix $(duke3d_src)/,$(duke3d_editor_objs) $(duke3d_common_editor_objs))
+    vibebuild32_game_miscdeps += $(addprefix $(vibebuild32_obj)/native/,$(notdir $(vibebuild32_native_sources:.cpp=.$o)))
+endif
+endif
 
 ifeq ($(PLATFORM),DARWIN)
     ifeq ($(STARTUP_WINDOW),1)
@@ -832,6 +863,7 @@ libraries := \
     mact \
     voidwrap \
     discordrpc \
+    quickjs \
 
 ifneq (0,$(USE_MIMALLOC))
     libraries += mimalloc
@@ -1024,6 +1056,16 @@ $$($1_obj)/%_banner.c: $$($1_rsrc)/%.bmp | $$($1_obj)
 endef
 
 $(foreach i,$(components),$(eval $(call OBJECTRULES,$i)))
+
+define NATIVEEDITORRULE
+$(vibebuild32_obj)/native/$(notdir $(1:.cpp=.$o)): $(1) $(vibebuild32_src)/nativeeditorprefix.h
+	$$(COMPILE_STATUS)
+	$$(call MKDIR,$$(dir $$@))
+	$$(RECIPE_IF) $$(COMPILER_CXX) -fno-lto -USTARTUP_WINDOW -DVIBEBUILD_NATIVE_EDITOR -include $$(vibebuild32_src)/nativeeditorprefix.h -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
+endef
+
+include $(wildcard $(vibebuild32_obj)/native/*.d)
+$(foreach file,$(vibebuild32_native_sources),$(eval $(call NATIVEEDITORRULE,$(file))))
 
 
 ### Other special cases

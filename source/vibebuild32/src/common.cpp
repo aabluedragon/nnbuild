@@ -9,6 +9,8 @@
 #include "common_game.h"
 #include "compat.h"
 #include "grpscan.h"
+#include "editorproject.h"
+#include "netcontent.h"
 #include "palette.h"
 #include "texcache.h"
 #include "vfs.h"
@@ -110,7 +112,12 @@ const char *G_DefaultDefFile(void)
 const char *G_DefaultConFile(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE && testkopen(defaultgameconfilename[GAME_DUKE],0))
+    int search = 0;
+#ifndef USE_PHYSFS
+    if (g_vfsPreferArchives)
+        search = 2; // Look for an alternate CON entry in the mounted game data.
+#endif
+    if (DUKE && testkopen(defaultgameconfilename[GAME_DUKE], search))
         return defaultgameconfilename[GAME_DUKE];
     else if (WW2GI && testkopen(defaultgameconfilename[GAME_WW2GI],0))
         return defaultgameconfilename[GAME_WW2GI];
@@ -344,7 +351,7 @@ void G_ExtInit(void)
 
 void G_ScanGroups(void)
 {
-    ScanGroups();
+    ScanGroups(g_grpNamePtr);
 
     g_selectedGrp = NULL;
 
@@ -359,15 +366,17 @@ void G_ScanGroups(void)
         }
     }
 
-    if (g_selectedGrp == NULL)
+    if (g_selectedGrp == NULL && g_grpNamePtr == NULL)
         g_selectedGrp = foundgrps;
 }
 
 static int32_t G_TryLoadingGrp(char const * const grpfile)
 {
-    int32_t i;
-
-    if ((i = initgroupfile(grpfile)) == -1)
+    int const previousMode = pathsearchmode;
+    pathsearchmode = 1;
+    int32_t const i = initgroupfile(grpfile);
+    pathsearchmode = previousMode;
+    if (i == -1)
         LOG_F(WARNING, "Unable to open %s.", grpfile);
     else
         LOG_F(INFO, "Using %s as main data file.", grpfile);
@@ -420,13 +429,20 @@ void G_LoadGroups(int32_t autoload)
 #endif
     }
 
-    if (g_addonNum)
+    if (g_addonNum && !DukeEditor::ProjectStandalone())
         G_LoadAddon();
 
     const char *grpfile;
     int32_t i;
 
-    if ((i = G_LoadGrpDependencyChain(g_selectedGrp)) != -1)
+    if (DukeEditor::ProjectStandalone())
+    {
+        grpfile = "";
+        i = -1;
+        g_selectedGrp = nullptr;
+        g_gameType = GAMEFLAG_DUKE;
+    }
+    else if ((i = G_LoadGrpDependencyChain(g_selectedGrp)) != -1)
     {
         grpfile = g_selectedGrp->filename;
 
@@ -502,7 +518,12 @@ void G_LoadGroups(int32_t autoload)
             // Remember command-line mod group files so a multiplayer host can
             // stream them to clients automatically (see Net_SendGameFiles).
             if (g_netModFileCount < MAXNETMODFILES)
-                Bstrncpyz(g_netModFiles[g_netModFileCount++], CommandGrps->str, BMAX_PATH);
+            {
+                std::string path;
+                Net_ResolveContentPath(CommandGrps->str, path);
+                Bstrncpyz(g_netModFiles[g_netModFileCount++],
+                          path.empty() ? CommandGrps->str : path.c_str(), BMAX_PATH);
+            }
         }
 
         Xfree(CommandGrps->str);
@@ -862,6 +883,25 @@ void G_AddGroup(const char *buffer)
         return;
     }
     CommandGrps = s;
+}
+
+void G_ReplaceCommandGroups(std::vector<std::string> const &paths)
+{
+    while (CommandGrps)
+    {
+        auto const group = CommandGrps;
+        CommandGrps = group->next;
+        Xfree(group->str);
+        Xfree(group);
+    }
+
+    for (auto const &path : paths)
+        G_AddGroup(path.c_str());
+}
+
+bool G_HaveCommandGroups(void)
+{
+    return CommandGrps != nullptr;
 }
 
 void G_AddPath(const char *buffer)

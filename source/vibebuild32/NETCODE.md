@@ -83,30 +83,19 @@ A client may join a match already in progress:
 1. Master notices an empty slot completed the handshake (`!connected &&
    mmulti_slotconnected`). It **freezes** input flow (`g_lateJoinFreeze`), so
    every machine is paused on the same tick.
-2. Master waits for the joiner's `LATEJOIN_READY` (the joiner only sends it once
-   it's in its main loop reading packets — sending the snapshot earlier races
-   the joiner's init and drops chunks).
-3. Master streams the mod files it loaded (`-g` GRP/zip, via `Net_SendGameFiles`
-   → `Net_SendFile` as `FILE_HEADER`/`FILE_CHUNK`) and then snapshots the paused
-   world (a savegame via `G_SavePlayer`), streaming it as `SNAPSHOT_CHUNK`s.
-   Both are throttled by `Net_DrainReliableWindow` (keeps the 512-entry ring
-   from overflowing). The joiner writes each received file, CRC-checks it, and
-   mounts group files (`initgroupfile`).
-   - **Skip when already present:** before downloading, the joiner checks the
-     search path (`Net_HaveFile`, exact size+crc) *and* recursively scans its
-     working-dir tree (`Net_FindExistingFile`, basename case-insensitive +
-     size+crc) — a copy already sitting in a `mods/` subfolder is mounted in
-     place, no transfer.
-   - **Idle, not fixed, timeout:** the joiner aborts only after
-     `NET_LATEJOIN_IDLE_MS = 20 s` with **no** data at all
-     (`Net_NoteLateJoinProgress` resets it on every file/snapshot chunk), so a
-     large-but-progressing download never trips it; only a dead host does.
+2. The master announces its base GRP and offers the active packs. The joiner
+   checks the local file size and CRC before requesting any bytes. It mounts
+   the packs before compiling CON and loading art.
+3. The joiner sends `LATEJOIN_READY` from its main loop. The master sends the
+   current user map and its companion files, then streams the paused state
+   in `SNAPSHOT_CHUNK` messages. The reliable window stays below 512 entries,
+   and the idle timeout resets whenever new data arrives.
 4. Master broadcasts `LATEJOIN_GO` (slot, roster mask, auxiliary RNG seeds),
    integrates the joiner, and spawns it.
-5. Every existing peer applies the same integration + spawn **at the same
-   master-locked tick** (`Net_PeerCheckLateJoin` waits until
-   `g_player[connecthead].movefifoend <= movefifoplc`). The joiner itself loads
-   the streamed savegame and spawns.
+5. Existing peers drain the old input stream through the final broadcast tick
+   and apply the same spawn. The joiner loads the streamed savegame and uses
+   the current roster for its spawn. The host supplies the new input epoch so
+   peers can discard input still in transit from the previous epoch.
 6. All meet at the `Net_WaitForPlayers` ready barrier (`playerreadyflag`).
 
 Deterministic spawn: `P_SpawnLateJoiner` runs on master, joiner and peers at the
@@ -156,15 +145,53 @@ independent fixes — the transport, the barrier, the quit path and the roster:
 
 ---
 
-## 5. Maps
+## 5. Game data, packs, and map cycles
 
-- **Built-in episode maps ("ExLy")** ship in the GRP that every client has.
-  `osdcmd_map` recognizes them and loads by **volume/level** (like the map
-  rotation) — `boardfilename` stays empty, so nothing is transferred and the
-  HUD shows "E1L3", not a file path.
-- **User maps** are transferred, but the client **declines the download** if it
-  already has the identical file (`Net_HaveFile` = matching size + FNV-1a crc).
-  Only a genuinely missing or different-version file is fetched.
+Use `-gamegrp /path/to/DUKE3D.GRP` to select Duke Nukem 3D 1.3D or Atomic
+Edition. Each player needs a local copy of the server's base GRP. When the
+server identifies a known edition, the client selects that edition from its
+installed data. Use the same VibeBuild32 build on the server and clients.
+
+Enter these commands in a master/slave server console.
+
+```text
+map E1L3
+map "maps/User Arena.map"
+mod "packs/arena.pk3" E2L1
+map "maps/User Arena.map" "packs/arena.pk3"
+mod base E1L1
+```
+
+Use `map` to change levels within the current pack, optionally supplying a
+different pack after the level. `mod <pack> [level]` selects a pack and defaults
+to E1L1. Packs use GRP, ZIP, PK3, PK4, or SSI format, with resources at the
+paths the game expects. A pack can supply `EDUKE.CON` or `GAME.CON`, definitions,
+episode maps, art, sounds, and music. Episode identifiers follow the active
+pack's CON definitions.
+
+A pack change validates the target in a separate process, then starts a fresh
+match on the same address. Connected players reconnect automatically. New and
+returning players fetch missing packs before compiling CON and loading art.
+User maps and same-name map art, map hacks, and music go into a content cache.
+The server checks which files each player already has and sends the missing
+files. The running match stays open if pack validation fails.
+
+Use `sv_maprotation 1` for sequential rotation on level completion,
+`sv_maprotation 2` for random rotation, and `sv_maprotation 0` to disable
+automatic rotation. `nextmap` advances the cycle on demand.
+
+```text
+mapcycle add base E1L1
+mapcycle add "packs/arena.pk3" E2L1
+mapcycle add "packs/arena.pk3" "maps/User Arena.map"
+mapcycle list
+```
+
+For a persistent cycle, put the entries in `maplist.txt`, one per line. A
+single level or map path uses the current pack. With two fields, the first is
+the pack path, `base`, or `current`. Quote paths with spaces and use `#` for
+comments. `mapcycle reload` rereads the file. Console edits stay active through
+pack changes and last for the server session.
 
 ---
 
@@ -174,12 +201,53 @@ independent fixes — the transport, the barrier, the quit path and the roster:
   slot 0 is a non-playing spectator (`g_netServerDedicated`, hidden from the
   scoreboard/fragbar), stdin console (`g_netServerConsole`).
 - The console reads lines and runs them through `OSD_Dispatch` (`Net_PollStdin`).
-- Host-authoritative admin commands live in `osdcmds.cpp` /
-  `oldnet.cpp`: `kick`, `ban`, `unban`, `listban`, `listplayers`, `map`,
-  `nextmap`, `maplist`.
+- Host commands include `kick`, `ban`, `unban`, `listban`, `listplayers`,
+  `map`, `mod`, `mapcycle`, and `nextmap`.
+- Use `--mcp-http PORT` or `--mcp-stdio` for MCP server status and the same
+  console commands. See [MCP controls](MAP_EDITOR.md#control-the-game-server-or-local-editor).
 - **macOS note:** `Bgetappdir()` must not be called at `app_main` top — spinning
   up NSBundle/CoreFoundation before Cocoa init corrupts later SDL/Cocoa startup
   and crashes headless servers. Resolve such paths lazily.
+
+### Startup commands and scripts
+
+`-c` and `--cmd` take a command or a quoted multiline argument. `-cf` and
+`--cmd-file` take a text file with a command per line. Repeat these options to
+combine them. The server runs the commands in argument order once its game
+console is ready. The legacy `-c1`, `-c2`, and `-c3` game mode options still work.
+
+```sh
+./vibebuild32 -dedicated -startnow -c2 --cmd-file startup.txt --cmd "echo Server ready" \
+  ./server.ts -net /p23513 /n0:4
+```
+
+VibeBuild32 runs local `.js` and `.ts` files as embedded QuickJS mods. Supply a
+file path directly or use `--js`. The `vb`, `cvar`, and `fs` modules are
+available in headless mode. Scripts can use CON events, gamevars, the gameplay
+bindings, and the console. Server-only world changes should use synchronized
+host commands such as `spawn` and `monsters`. JavaScript state and timers are
+initialized again on a pack change.
+
+```ts
+import { registerCommand, sendMessage } from 'vb';
+import cvar from 'cvar';
+
+const minute: number = 60_000;
+setInterval(() => {
+    sendMessage('The map changes in one minute.');
+    setTimeout(() => cvar.run('nextmap'), minute);
+}, 10 * minute);
+
+registerCommand('help', ({ reply }) => {
+    reply('Commands: !help, !rules');
+});
+registerCommand('rules', () => 'Play the objective and keep chat friendly.');
+```
+
+Players enter `!help` in the usual multiplayer chat box. A message beginning
+with `!` goes to the server command handler. The handler receives
+`{ player, command, args, reply }`. Calls to `reply(text)` and returned strings are
+delivered only to the requesting player.
 
 ---
 

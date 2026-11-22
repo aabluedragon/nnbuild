@@ -659,6 +659,20 @@ int app_main(int argc, char const* const* argv)
 
     editstatus = 1;
 
+#ifdef VIBEBUILD_NATIVE_EDITOR
+    OSD_RegisterFunction("saveboard", "saveboard: save the current native editor map",
+        [](osdcmdptr_t parameters) {
+            if (parameters->numparms)
+                return OSDCMD_SHOWHELP;
+            auto const saved = SaveBoard(nullptr, 0);
+            if (saved)
+                OSD_Printf("Saved board to %s.\n", saved);
+            else
+                OSD_Printf("Could not save the current map.\n");
+            return OSDCMD_OK;
+        });
+#endif
+
     Bstrncpyz(game_executable, DefaultGameLocalExec, sizeof(game_executable));
 
     if ((i = ExtPreInit(argc,argv)) < 0) return -1;

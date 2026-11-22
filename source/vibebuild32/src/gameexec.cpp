@@ -123,12 +123,9 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
         return;
     }
 
-    if (!VM_HaveEvent(iEventID))
-    {
-        //Bsprintf(g_szBuf,"No event found for %d",iEventID);
-        //AddLog(g_szBuf);
+    VBJS_FireConEvent(iEventID, iActor, iPlayer, lDist);
+    if (!apScriptEvents[iEventID])
         return;
-    }
 
     {
         int og_i=vm.spriteNum, og_p=vm.playerNum, okillit_flag=vm.flags;

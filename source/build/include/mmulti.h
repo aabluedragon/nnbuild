@@ -47,6 +47,7 @@ void mmulti_sendlogoff(void);
 int mmulti_getoutputcirclesize(void);
 void mmulti_sendpacket(int other, unsigned char *bufptr, int messleng);
 int mmulti_getpacket(int *other, unsigned char *bufptr);
+int mmulti_getpacket_sized(int *other, unsigned char *bufptr, int capacity);
 void mmulti_flushpackets(void);
 void mmulti_generic(int other, unsigned char *bufptr, int messleng, int command);
 int isvalidipaddress(const char *st);

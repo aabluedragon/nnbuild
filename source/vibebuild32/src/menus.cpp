@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "duke3d.h"
 #include "masterserver.h"
+#include "mapeditor.h"
 #include "mouse.h"
 #include "osd.h"
 #include "osdcmds.h"
@@ -1848,11 +1849,13 @@ cheat_for_port_credits2:
 
         case 0:
         {
+            bool const hasEditor = MapEditor_CanOpen();
+            int const top = hasEditor ? 61 : 67, step = hasEditor ? 15 : 16;
             c = (320>>1);
             rotatesprite(c<<16,28<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
             if (PLUTOPAK)   // JBF 20030804
                 rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
-            x = M_Probe(c,67,16,7);
+            x = M_Probe(c,top,step,hasEditor ? 8 : 7);
             if (x >= 0)
             {
                 if (ud.multimode > 1 && x == 0 && ud.recstat != 2)
@@ -1886,6 +1889,12 @@ cheat_for_port_credits2:
                         ChangeToMenu(990);
                         break;
                     case 6:
+                        if (hasEditor)
+                            MapEditor_Request();
+                        else
+                            ChangeToMenu(500);
+                        break;
+                    case 7:
                         ChangeToMenu(500);
                         break;
                     }
@@ -1904,18 +1913,21 @@ cheat_for_port_credits2:
                 }
             }
 
-            menutext(c,67+16*0,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
-            menutext(c,67+16*1,MENUHIGHLIGHT(1),0,"MULTIPLAYER");
-            menutext(c,67+16*2,MENUHIGHLIGHT(2),PHX(-3),"OPTIONS");
-            menutext(c,67+16*3,MENUHIGHLIGHT(3),PHX(-4),"LOAD GAME");
+            menutext(c,top+step*0,MENUHIGHLIGHT(0),PHX(-2),"NEW GAME");
+            menutext(c,top+step*1,MENUHIGHLIGHT(1),0,"MULTIPLAYER");
+            menutext(c,top+step*2,MENUHIGHLIGHT(2),PHX(-3),"OPTIONS");
+            menutext(c,top+step*3,MENUHIGHLIGHT(3),PHX(-4),"LOAD GAME");
 
             if (!VOLUMEALL)
-                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HOW TO ORDER");
+                menutext(c,top+step*4,MENUHIGHLIGHT(4),PHX(-5),"HOW TO ORDER");
             else
-                menutext(c,67+16*4,MENUHIGHLIGHT(4),PHX(-5),"HELP");
+                menutext(c,top+step*4,MENUHIGHLIGHT(4),PHX(-5),"HELP");
 
-            menutext(c,67+16*5,MENUHIGHLIGHT(5),PHX(-6),"CREDITS");
-            menutext(c,67+16*6,MENUHIGHLIGHT(6),PHX(-7),"QUIT");
+            menutext(c,top+step*5,MENUHIGHLIGHT(5),PHX(-6),"CREDITS");
+            if (hasEditor)
+                menutext(c,top+step*6,MENUHIGHLIGHT(6),0,"MAP EDITOR");
+            int const quitRow = hasEditor ? 7 : 6;
+            menutext(c,top+step*quitRow,MENUHIGHLIGHT(quitRow),PHX(-7),"QUIT");
             break;
         }
 
@@ -1925,6 +1937,21 @@ cheat_for_port_credits2:
             rotatesprite(c<<16,32<<16,65536L,0,INGAMEDUKETHREEDEE,0,0,10,0,0,xdim-1,ydim-1);
             if (PLUTOPAK)   // JBF 20030804
                 rotatesprite((c+100)<<16,36<<16,65536L,0,PLUTOPAKSPRITE+2,(sintable[((int32_t)totalclock<<4)&2047]>>11),0,2+8,0,0,xdim-1,ydim-1);
+            if (MapEditor_Playing())
+            {
+                x = M_Probe(c,88,23,2);
+                if (x == 0 || x == -1)
+                {
+                    ud.gm &= ~MODE_MENU;
+                    ready2send = 1;
+                    totalclock = ototalclock;
+                }
+                else if (x == 1)
+                    MapEditor_StopPlaytest();
+                menutext(c,88,MENUHIGHLIGHT(0),0,"RESUME PLAYTEST");
+                menutext(c,111,MENUHIGHLIGHT(1),0,"RETURN TO EDITOR");
+                break;
+            }
             x = M_Probe(c,67,16,7);
             switch (x)
             {

@@ -46,6 +46,7 @@ apps/
 *.cfg
 textures
 texturecache
+/netcache/
 *.index
 
 *.manifest

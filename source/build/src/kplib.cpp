@@ -2460,14 +2460,34 @@ int32_t kzaddstack(const char *filnam)
         return -1;
     }
 
+    int32_t const archiveStart = kzhashpos;
+    int32_t const previousFile = kzlastfnam;
+    auto const failArchive = [&]()
+    {
+        // Undo entries already indexed for this archive so a truncated
+        // directory cannot leave an incomplete pack mounted.
+        while (kzlastfnam != previousFile)
+        {
+            auto const entry = kzhashbuf + kzlastfnam;
+            kzhashead[kzcalchash(entry + 21)] = B_UNBUF32(entry);
+            kzlastfnam = B_UNBUF32(entry + 4);
+        }
+        kzhashpos = archiveStart;
+        buildvfs_fclose(fil);
+        return -1;
+    };
+
     //Write ZIP/GRP filename to hash
     i = strlen(filnam)+1; if (!kzcheckhashsiz(i)) { buildvfs_fclose(fil); return -1; }
     strcpy(&kzhashbuf[kzhashpos],filnam);
     zipnamoffs = kzhashpos; kzhashpos += i;
 
-    buildvfs_fread(&i,4,1,fil);
+    if (buildvfs_fread(&i,4,1,fil) != 1)
+        return failArchive();
     if (i == B_LITTLE32(0x04034b50)) //'PK\3\4' is ZIP file id
     {
+        if (buildvfs_flength(fil) < 22)
+            return failArchive();
         buildvfs_fseek_abs(fil,buildvfs_flength(fil)-22);
         buildvfs_fread(tempbuf,22,1,fil);
         if (B_UNBUF32(&tempbuf[0]) == B_LITTLE32(0x06054b50u)) //Fast way of finding dir info
@@ -2483,24 +2503,30 @@ int32_t kzaddstack(const char *filnam)
                 if (!buildvfs_fread(&j,4,1,fil)) { numfiles = -1; break; }
                 if (j == B_LITTLE32(0x02014b50)) break; //Found central file header :)
                 if (j != B_LITTLE32(0x04034b50)) { numfiles = -1; break; }
-                buildvfs_fread(tempbuf,26,1,fil);
+                if (buildvfs_fread(tempbuf,26,1,fil) != 1)
+                {
+                    numfiles = -1;
+                    break;
+                }
                 buildvfs_fseek_rel(fil,B_LITTLE32(B_UNBUF32(&tempbuf[14])) + B_LITTLE16(B_UNBUF16(&tempbuf[24])) + B_LITTLE16(B_UNBUF16(&tempbuf[22])));
                 numfiles++;
             }
-            if (numfiles < 0) { buildvfs_fclose(fil); return -1; }
+            if (numfiles < 0) return failArchive();
             buildvfs_fseek_rel(fil,-4);
         }
         for (i=0; i<numfiles; i++)
         {
-            buildvfs_fread(tempbuf,46,1,fil);
-            if (B_UNBUF32(&tempbuf[0]) != B_LITTLE32(0x02014b50u)) { buildvfs_fclose(fil); return 0; }
+            if (buildvfs_fread(tempbuf,46,1,fil) != 1 ||
+                B_UNBUF32(&tempbuf[0]) != B_LITTLE32(0x02014b50u))
+                return failArchive();
 
             j = B_LITTLE16(B_UNBUF16(&tempbuf[28])); //filename length
-            buildvfs_fread(&tempbuf[46],j,1,fil);
+            if (j <= 0 || j >= BMAX_PATH || buildvfs_fread(&tempbuf[46],j,1,fil) != 1)
+                return failArchive();
             tempbuf[j+46] = 0;
 
             //Write information into hash
-            j = strlen(&tempbuf[46])+22; if (!kzcheckhashsiz(j)) { buildvfs_fclose(fil); return -1; }
+            j = strlen(&tempbuf[46])+22; if (!kzcheckhashsiz(j)) return failArchive();
             hashind = kzcalchash(&tempbuf[46]);
             B_BUF32(&kzhashbuf[kzhashpos], kzhashead[hashind]);
             B_BUF32(&kzhashbuf[kzhashpos+4], kzlastfnam);

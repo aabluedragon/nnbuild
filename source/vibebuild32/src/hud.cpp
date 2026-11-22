@@ -1,4 +1,5 @@
 #include "duke3d.h"
+#include "mapeditor.h"
 #include "hud.h"
 #include "colmatch.h"
 
@@ -1238,7 +1239,9 @@ void G_PrintLevelName(void)
         bits |= 1;
     else bits |= 1 + 32;
 
-    if (g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
+    if (auto const name = MapEditor_PlaytestName())
+        menutext_(160, 75, -g_levelTextTime + 22, 0, name, bits);
+    else if (g_mapInfo[(ud.volume_number * MAXLEVELS) + ud.level_number].name != NULL)
     {
         if (currentboardfilename[0] != 0 && ud.volume_number == 0 && ud.level_number == 7)
             menutext_(160, 75, -g_levelTextTime + 22, 0, currentboardfilename, bits);

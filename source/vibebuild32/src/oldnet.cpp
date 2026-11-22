@@ -4,14 +4,18 @@
 #include "oldnet.h"
 #include "net_predict.h"
 #include "masterserver.h"
+#include "netcontent.h"
+#include "serverlevel.h"
+#include "vbjs.h"
 
 #ifdef _WIN32
+# include <conio.h>
 # include <process.h>  // _execv, for the desync self-reconnect
 #else
 # include <unistd.h>   // execv
 #endif
-#include <dirent.h>    // recursive scan for an already-present mod file
 #include <sys/stat.h>
+#include <deque>
 
 // Masterserver the in-game lobby queries; overridable with the cl_masterserver
 // cvar. Defaults to localhost for local play/testing.
@@ -84,6 +88,9 @@ static int32_t g_asyncSentCount;
 // Per-slot client identity (from PACKET_TYPE_PLAYER_NAME). The master uses these
 // plus the slot IP to restore a reconnecting player's score by identity.
 static char g_playerGuid[MAXPLAYERS][NET_GUID_LEN];
+static uint32_t playerConnections[MAXPLAYERS];
+static uint32_t contentReconnectTime;
+static bool contentReconnectPending;
 
 // Master-side score archive: when a player leaves, we stash their score keyed by
 // GUID+IP so we can restore it if the same player rejoins the SAME match. It is
@@ -100,6 +107,7 @@ static int32_t g_lateJoinRestoreFrag = 0, g_lateJoinRestoreFraggedself = 0, g_la
 // so a score-restore decision can be made and broadcast.
 static bool g_slotAwaitingRestore[MAXPLAYERS];
 static uint16_t lateJoinGoMask;
+static uint16_t inputEpoch, lateJoinInputEpoch;
 static int32_t lateJoinGoRNG[6];
 static void Net_IntegrateLateJoin(int32_t slot);
 static void Net_CompleteLateJoin(int32_t slot);
@@ -620,12 +628,12 @@ static void Net_ApplyRemoval(int32_t slot, const char *reasonQuote)
 // ready barrier (as late-join does), then resume.
 void Net_MasterCheckDrop(void)
 {
-    if (g_pendingKickSlot < 0 || myconnectindex != connecthead)
+    int32_t const slot = g_pendingKickSlot;
+    if ((unsigned)slot >= MAXPLAYERS || myconnectindex != connecthead)
         return;
     if (movefifoplc < movefifosendplc)
         return;  // still draining
 
-    int32_t const slot = g_pendingKickSlot;
     // Everyone removes the player right before simulating this tick, so the
     // roster change lands identically without needing a ready barrier.
     int32_t const dropTick = movefifosendplc;
@@ -926,7 +934,7 @@ static void Net_JoinNotify(int ip)
 // without waiting for the idle timeout to free the slot.
 static int Net_ReconnectNotify(int slot)
 {
-    if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS)
+    if (myconnectindex != connecthead || (unsigned)slot >= MAXPLAYERS || !(ud.gm & MODE_GAME))
         return 0;
     if (slot == lateJoinPending)
         return 0;  // this slot is mid-join already; a normal handshake retry
@@ -1083,595 +1091,84 @@ void Net_ListBans(void)
 
 // Non-blocking read of console commands from stdin, for a dedicated/headless
 // host driven from a terminal. Dispatches each complete line to the OSD.
-void Net_PollStdin(void)
+static bool Net_ReadConsoleChar(char &ch)
 {
-#ifndef _WIN32
-    static char linebuf[256];
-    static int32_t linelen;
+#ifdef _WIN32
+    auto const input = GetStdHandle(STD_INPUT_HANDLE);
+    if (input == nullptr || input == INVALID_HANDLE_VALUE)
+        return false;
 
-    struct pollfd pfd = { 0 /*stdin*/, POLLIN, 0 };
-    while (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
+    DWORD mode, count;
+    if (GetConsoleMode(input, &mode))
     {
-        char c;
-        if (read(0, &c, 1) != 1)
-            break;
-        if (c == '\n')
-        {
-            linebuf[linelen] = 0;
-            linelen = 0;
-            if (linebuf[0])
-                OSD_Dispatch(linebuf);
-        }
-        else if (linelen < (int32_t)sizeof(linebuf) - 1)
-            linebuf[linelen++] = c;
+        if (!_kbhit())
+            return false;
+        ch = static_cast<char>(_getche());
+        return true;
     }
+    if (GetFileType(input) == FILE_TYPE_PIPE &&
+        (!PeekNamedPipe(input, nullptr, 0, nullptr, &count, nullptr) || !count))
+        return false;
+    return ReadFile(input, &ch, 1, &count, nullptr) && count == 1;
+#else
+    struct pollfd pfd = { 0 /*stdin*/, POLLIN, 0 };
+    return poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN) && read(0, &ch, 1) == 1;
 #endif
 }
 
-//////////////////////////////////////////////////////////////////////////////
-// Map rotation. Host-authoritative: the host picks the next map (sequentially
-// or at random) and starts it via the normal NEW_GAME broadcast, so clients
-// follow through the proven map-change path.
-//////////////////////////////////////////////////////////////////////////////
-
-#define MAXMAPROT 64
-struct maprot_t { int16_t vol, lev; char usermap[32]; };
-static maprot_t g_mapRot[MAXMAPROT];
-static int32_t g_mapRotCount;
-static int32_t g_mapRotIndex = -1;
-static int32_t g_mapRotLoaded;
-static int32_t g_pendingRotate;
-
-// Main-loop context: perform a rotation the sim requested at level end.
-void Net_CheckMapRotation(void)
+void Net_PollStdin(void)
 {
-    if (!g_pendingRotate)
-        return;
-    g_pendingRotate = 0;
-    if (myconnectindex != connecthead)
-        return;
-
-    if (Net_RotateNextMap() < 0)
+    static std::string line;
+    static bool discard;
+    char ch;
+    while (Net_ReadConsoleChar(ch))
     {
-        // Rotation is enabled but the list is empty or unreadable. Clients have
-        // already suppressed their own end-of-level advance and are waiting for
-        // our NEW_GAME (they only know rotation is on, not that the list is
-        // empty), so we must broadcast one or the match soft-locks. Restart the
-        // current map - a sensible "no list -> stay here" that keeps everyone
-        // in lockstep on the same level.
-        LOG_F(WARNING, "Map rotation enabled but no maps available; restarting the current level");
-        G_NewGame(NEWGAME_RESETALL);
-    }
-}
-
-static void Net_LoadMapList(void)
-{
-    if (g_mapRotLoaded)
-        return;
-    g_mapRotLoaded = 1;
-    g_mapRotCount = 0;
-
-    int32_t fil = kopen4loadfrommod("maplist.txt", 0);
-    if (fil == -1)
-        return;
-
-    int32_t len = kfilelength(fil);
-    char *text = (char *)Xmalloc(len + 1);
-    kread(fil, text, len);
-    text[len] = 0;
-    kclose(fil);
-
-    char *line = strtok(text, "\r\n");
-    while (line && g_mapRotCount < MAXMAPROT)
-    {
-        while (*line == ' ' || *line == '\t') line++;
-        if (*line && *line != '#')
+        if (ch == '\n' || ch == '\r')
         {
-            maprot_t &e = g_mapRot[g_mapRotCount];
-            unsigned v, l;
-            // "E<vol>L<level>" for built-in maps, otherwise a usermap filename.
-            if ((line[0] == 'e' || line[0] == 'E') && sscanf(line + 1, "%uL%u", &v, &l) == 2)
-            {
-                e.vol = (int16_t)(v - 1);
-                e.lev = (int16_t)(l - 1);
-                e.usermap[0] = 0;
-                g_mapRotCount++;
-            }
-            else
-            {
-                char name[32] = {0};
-                sscanf(line, "%31s", name);
-                if (name[0])
-                {
-                    e.vol = 0; e.lev = 7;
-                    Bstrncpyz(e.usermap, name, sizeof(e.usermap));
-                    g_mapRotCount++;
-                }
-            }
+            if (discard)
+                LOG_F(ERROR, "Console command exceeds the input limit");
+            else if (!line.empty())
+                OSD_Dispatch(line.c_str());
+            discard = false;
+            line.clear();
         }
-        line = strtok(NULL, "\r\n");
-    }
-    Xfree(text);
-    LOG_F(INFO, "Loaded %d map(s) into the rotation from maplist.txt", g_mapRotCount);
-}
-
-// Host: advance to the next map in the rotation and start it for everyone.
-int32_t Net_RotateNextMap(void)
-{
-    if (myconnectindex != connecthead)
-        return -1;
-    Net_LoadMapList();
-    if (g_mapRotCount == 0)
-        return -1;
-
-    if (g_mapRotationMode == 2)
-        g_mapRotIndex = wrand() % g_mapRotCount;      // host-chosen, then broadcast
-    else
-        g_mapRotIndex = (g_mapRotIndex + 1) % g_mapRotCount;
-
-    maprot_t const &e = g_mapRot[g_mapRotIndex];
-
-    ud.m_volume_number = ud.volume_number = e.vol;
-    ud.m_level_number  = ud.level_number  = e.lev;
-
-    if (e.usermap[0])
-    {
-        Bstrcpy(boardfilename, e.usermap);
-        // Send the map file (and host mods) BEFORE the USER_MAP name: mmulti is
-        // reliable+ordered, so a client has the file on disk before the name (and
-        // the NEW_GAME that loads it) arrive - no manual pre-sync, no desync onto
-        // a fallback level for clients that lack the map.
-        Net_SendGameFiles(-1);
-        Net_SendUserMapName();
-        LOG_F(INFO, "Rotating to usermap %s", e.usermap);
-        Bsprintf(buf, "Next map: %s", e.usermap);
-    }
-    else
-    {
-        boardfilename[0] = 0;
-        LOG_F(INFO, "Rotating to E%dL%d", e.vol + 1, e.lev + 1);
-        Bsprintf(buf, "Next map: E%dL%d", e.vol + 1, e.lev + 1);
-    }
-    G_AddUserQuote(buf);
-
-    G_NewGame(NEWGAME_RESETALL);  // broadcasts NEW_GAME; clients follow
-    return g_mapRotIndex;
-}
-
-void Net_ListMapRotation(void)
-{
-    Net_LoadMapList();
-    OSD_Printf("Map rotation (%d, mode %s):\n", g_mapRotCount,
-               g_mapRotationMode == 2 ? "random" : g_mapRotationMode == 1 ? "sequential" : "off");
-    for (int32_t i = 0; i < g_mapRotCount; i++)
-    {
-        if (g_mapRot[i].usermap[0])
-            OSD_Printf("  %d: %s%s\n", i, g_mapRot[i].usermap, i == g_mapRotIndex ? "  <-" : "");
-        else
-            OSD_Printf("  %d: E%dL%d%s\n", i, g_mapRot[i].vol + 1, g_mapRot[i].lev + 1, i == g_mapRotIndex ? "  <-" : "");
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////
-// Host -> client file transfer (maps, mods), so clients don't have to sync
-// files by hand. Reuses the chunked-stream approach proven for late-join
-// snapshots. Files land in the client's mod/working directory.
-//////////////////////////////////////////////////////////////////////////////
-
-#define FILE_CHUNK_SIZE 1024
-static char *g_recvFileBuf;
-static char g_recvFileName[64];
-static int32_t g_recvFileChunksGot, g_recvFileChunkTotal, g_recvFileLastLen;
-static uint32_t g_recvFileCrc;
-
-static uint32_t Net_FileCrc(const char *data, int32_t len)
-{
-    // FNV-1a - self-contained integrity check for transferred files.
-    uint32_t h = 2166136261u;
-    for (int32_t i = 0; i < len; i++)
-        h = (h ^ (uint8_t)data[i]) * 16777619u;
-    return h;
-}
-
-// True if the client already has this file with a matching size+crc.
-static int Net_HaveFile(const char *name, int32_t size, uint32_t crc)
-{
-    int32_t fil = kopen4loadfrommod(name, 0);
-    if (fil == -1)
-        return 0;
-    int32_t const len = kfilelength(fil);
-    if (len != size)
-    {
-        kclose(fil);
-        return 0;
-    }
-    char *tmp = (char *)Xmalloc(len);
-    kread(fil, tmp, len);
-    kclose(fil);
-    uint32_t const have = Net_FileCrc(tmp, len);
-    Xfree(tmp);
-    return have == crc;
-}
-
-// Recursively scan `dir` (bounded depth) for a file whose basename matches
-// `wantBase` case-insensitively and whose contents match size+crc. Fills `out`
-// with the full path and returns 1 on the first match.
-static int Net_ScanDirForFile(const char *dir, const char *wantBase, int32_t size, uint32_t crc,
-                              int depth, char *out, int32_t outcap)
-{
-    if (depth > 6)
-        return 0;
-    DIR *d = opendir(dir[0] ? dir : ".");
-    if (!d)
-        return 0;
-
-    int found = 0;
-    struct dirent *de;
-    while (!found && (de = readdir(d)) != NULL)
-    {
-        if (!Bstrcmp(de->d_name, ".") || !Bstrcmp(de->d_name, ".."))
-            continue;
-
-        char path[BMAX_PATH];
-        Bsnprintf(path, sizeof(path), "%s/%s", dir, de->d_name);
-
-        struct stat st;
-        if (stat(path, &st) != 0)
-            continue;
-
-        if (S_ISDIR(st.st_mode))
-            found = Net_ScanDirForFile(path, wantBase, size, crc, depth + 1, out, outcap);
-        else if (S_ISREG(st.st_mode) && (int32_t)st.st_size == size && !Bstrcasecmp(de->d_name, wantBase))
+        else if (ch == '\b')
         {
-            // name + size match - confirm identical content (same checksum the
-            // host advertised) before trusting it.
-            FILE *fp = fopen(path, "rb");
-            if (fp)
-            {
-                char *tmp = (char *)Xmalloc(size);
-                size_t const rd = fread(tmp, 1, size, fp);
-                fclose(fp);
-                if ((int32_t)rd == size && Net_FileCrc(tmp, size) == crc)
-                {
-                    Bstrncpyz(out, path, outcap);
-                    found = 1;
-                }
-                Xfree(tmp);
-            }
+            if (!line.empty())
+                line.pop_back();
         }
+        else if (line.size() == 4096)
+            discard = true;
+        else if (ch)
+            line.push_back(ch);
     }
-    closedir(d);
-    return found;
 }
 
-// Look for an already-present identical copy of an offered file anywhere under
-// the working directory (and the mod directory) - matched by basename
-// (case-insensitive) plus size + content checksum. Returns 1 and fills `out`.
-static int Net_FindExistingFile(const char *name, int32_t size, uint32_t crc, char *out, int32_t outcap)
+// Limit the packets in flight while streaming over the reliable ring.
+bool Net_DrainReliableWindow(int limit)
 {
-    if (size <= 0)
-        return 0;
-    const char *fslash = Bstrrchr(name, '/');
-    const char *bslash = Bstrrchr(name, '\\');
-    const char *base = max(fslash, bslash);
-    base = base ? base + 1 : name;
-    if (!base[0])
-        return 0;
-
-    // Scan the working-directory tree only. Also scan g_modDir when it is a
-    // real, scoped subfolder - never a filesystem root like "/" (which would
-    // crawl the whole disk and could match an unrelated copy).
-    if (Net_ScanDirForFile(".", base, size, crc, 0, out, outcap))
-        return 1;
-    if (g_modDir[0] && g_modDir[0] != '/' && Bstrcmp(g_modDir, ".") && Bstrcmp(g_modDir, "..")
-        && Net_ScanDirForFile(g_modDir, base, size, crc, 0, out, outcap))
-        return 1;
-    return 0;
-}
-
-// Block until the reliable-output backlog for every serviced peer drains below
-// a safe bound, so a large streamed payload (snapshot / mod file) can't outrun
-// the 512-entry per-peer ring and get silently overwritten. We pump the network
-// directly (mmulti_getpacket with a NULL buffer processes acks and retransmits
-// without delivering app packets) so the peers' ack counters actually advance;
-// gameHandleEvents keeps the machine responsive. A timeout prevents a dead or
-// wedged peer from freezing the host here - if it fires, the higher-level
-// late-join/idle timeouts abort the join.
-// The per-peer reliable ring (opak) holds 512 entries; throttle only as the
-// backlog nears that so we never overwrite an unacked slot. A normal snapshot
-// (~260 chunks) stays well under this, so it blasts in one pass and trickles
-// out non-blocking exactly as before - only an unusually large payload actually
-// waits here. (512 = mmulti FIFSIZ; leave a margin for the chunk we're about to
-// queue and any concurrent peer traffic counted in the max.)
-#define NET_RELIABLE_WINDOW_MAX 480
-// Returns false if the window never drained within the timeout - the peer is
-// dead or wedged, and the CALLER must abort the transfer (stop queuing chunks).
-// If it kept looping instead, every remaining chunk would spin its own full
-// timeout while the whole server is frozen, and the reliable ring would be
-// overwritten (silent corruption) once the throttle stopped holding.
-static bool Net_DrainReliableWindow(void)
-{
-    if (mmulti_getoutputcirclesize() <= NET_RELIABLE_WINDOW_MAX)
+    int pending = mmulti_getoutputcirclesize();
+    if (pending <= limit)
         return true;
 
-    uint32_t const start = timerGetTicks();
-    while (mmulti_getoutputcirclesize() > NET_RELIABLE_WINDOW_MAX)
+    uint32_t lastProgress = timerGetTicks();
+    while (pending > limit)
     {
-        int32_t o;
-        mmulti_getpacket(&o, NULL);
+        int32_t slot;
+        mmulti_getpacket(&slot, nullptr);
         gameHandleEvents();
-        if (timerGetTicks() - start > 10000)
+        int const remaining = mmulti_getoutputcirclesize();
+        uint32_t const now = timerGetTicks();
+        if (remaining < pending)
+            lastProgress = now;
+        else if (now - lastProgress > 10000)
         {
             LOG_F(WARNING, "Reliable output window stalled while streaming; peer not acking - aborting transfer");
             return false;
         }
+        pending = remaining;
     }
     return true;
-}
-
-// Host: stream a file to one client (or, with slot < 0, every client that
-// lacks it). Called before starting a map that references the file.
-void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex, int32_t fileTotal)
-{
-    if (myconnectindex != connecthead)
-        return;
-
-    int32_t fil = kopen4loadfrommod(name, 0);
-    if (fil == -1)
-    {
-        LOG_F(WARNING, "Net_SendFile: can't open %s", name);
-        return;
-    }
-    int32_t const size = kfilelength(fil);
-    char *data = (char *)Xmalloc(size + 1);
-    kread(fil, data, size);
-    kclose(fil);
-    uint32_t const crc = Net_FileCrc(data, size);
-
-    int32_t const total = (size + FILE_CHUNK_SIZE - 1) / FILE_CHUNK_SIZE;
-    LOG_F(INFO, "Sending %s (%d bytes, %d chunks)%s", name, size, total,
-          slot < 0 ? " to all" : "");
-
-    char hdr[80];
-    hdr[0] = PACKET_TYPE_FILE_HEADER;
-    int32_t hl = 1;
-    B_BUF32(&hdr[hl], size); hl += 4;
-    B_BUF32(&hdr[hl], (int32_t)crc); hl += 4;
-    B_BUF16(&hdr[hl], (uint16_t)total); hl += 2;
-    int32_t const namelen = min((int32_t)strlen(name), 63);
-    hdr[hl++] = (char)namelen;
-    Bmemcpy(&hdr[hl], name, namelen); hl += namelen;
-    // 1-based position of this file within the set, and the set size, so the
-    // joiner can show "downloading file X of Y" for multi-file transfers.
-    hdr[hl++] = (char)clamp(fileIndex, 1, 255);
-    hdr[hl++] = (char)clamp(fileTotal, 1, 255);
-
-    // An explicit slot may be a late joiner not yet marked g_player.connected
-    // (we send it the map before it loads the snapshot), so gate on the mmulti
-    // link in that case rather than on roster membership.
-    #define NET_FILE_WANTS(i) (((i) != myconnectindex) && (slot >= 0 \
-        ? ((i) == slot && mmulti_slotconnected(i)) : g_player[i].connected))
-
-    for (int32_t i = 0; i < numplayers; i++)
-    {
-        if (!NET_FILE_WANTS(i))
-            continue;
-        mmulti_sendpacket(i, (unsigned char *)hdr, hl);
-    }
-
-    char chunk[FILE_CHUNK_SIZE + 8];
-    for (int32_t seq = 0; seq < total; seq++)
-    {
-        int32_t const len = min(FILE_CHUNK_SIZE, size - seq * FILE_CHUNK_SIZE);
-        chunk[0] = PACKET_TYPE_FILE_CHUNK;
-        B_BUF16(&chunk[1], (uint16_t)seq);
-        B_BUF16(&chunk[3], (uint16_t)total);
-        B_BUF16(&chunk[5], (uint16_t)len);
-        Bmemcpy(&chunk[7], &data[seq * FILE_CHUNK_SIZE], len);
-
-        for (int32_t i = 0; i < numplayers; i++)
-        {
-            if (!NET_FILE_WANTS(i))
-                continue;
-            mmulti_sendpacket(i, (unsigned char *)chunk, len + 7);
-        }
-
-        if (!Net_DrainReliableWindow())
-        {
-            LOG_F(WARNING, "File transfer of %s aborted: a receiver stopped acking", name);
-            break;  // a peer died mid-transfer; stop rather than freeze the server
-        }
-    }
-    #undef NET_FILE_WANTS
-    Xfree(data);
-}
-
-// Host: push everything a client needs to play the current game - the usermap
-// (if any) and the mod group files the host loaded on its command line. mmulti
-// is reliable+ordered, so callers send this BEFORE the USER_MAP name packet:
-// that guarantees the file lands on disk before the client tries to open it.
-void Net_SendGameFiles(int32_t slot)
-{
-    if (myconnectindex != connecthead)
-        return;
-
-    int32_t const total = g_netModFileCount + (boardfilename[0] ? 1 : 0);
-    int32_t idx = 0;
-    for (int32_t i = 0; i < g_netModFileCount; i++)
-        Net_SendFile(slot, g_netModFiles[i], ++idx, total);
-
-    if (boardfilename[0])
-        Net_SendFile(slot, boardfilename, ++idx, total);
-}
-
-static void Net_ReceiveFileHeader(void)
-{
-    int32_t j = 1;
-    int32_t const size = (int32_t)B_UNBUF32(&packbuf[j]); j += 4;
-    g_recvFileCrc = (uint32_t)B_UNBUF32(&packbuf[j]); j += 4;
-    g_recvFileChunkTotal = B_UNBUF16(&packbuf[j]); j += 2;
-    int32_t const namelen = (uint8_t)packbuf[j++];
-    Bmemcpy(g_recvFileName, &packbuf[j], min(namelen, 63));
-    g_recvFileName[min(namelen, 63)] = 0;
-    j += namelen;
-
-    // Position of this file within the set (1-based) and the set size, so we can
-    // show "file X of Y" when the host is sending more than one file.
-    int32_t const fileIndex = (uint8_t)packbuf[j++];
-    int32_t const fileTotal = (uint8_t)packbuf[j++];
-    char ofY[24];
-    ofY[0] = 0;
-    if (fileTotal > 1)
-        Bsnprintf(ofY, sizeof(ofY), " (file %d of %d)", fileIndex, fileTotal);
-
-    DO_FREE_AND_NULL(g_recvFileBuf);
-    g_recvFileChunksGot = 0;
-    Net_NoteLateJoinProgress();
-
-    // Only download a file we don't already have. A built-in map (E1L3 etc.
-    // ships inside the GRP) or any other file we share byte-for-byte with the
-    // host needs no transfer - a matching size+crc means our copy is identical,
-    // so we use it directly. Leaving g_recvFileBuf NULL turns the streamed
-    // chunks into no-ops, so we neither rewrite the file nor show a misleading
-    // "Downloading" for something already in the game. A genuinely missing or
-    // different-version file (crc mismatch) still downloads as before.
-    if (Net_HaveFile(g_recvFileName, size, g_recvFileCrc))
-    {
-        LOG_F(INFO, "Host offered %s (%d bytes); already have it, skipping download", g_recvFileName, size);
-        if (fileTotal > 1)   // keep the multi-file counter moving over skipped files
-        {
-            Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Have %s%s", g_recvFileName, ofY);
-            g_lateJoinPercent = 100;
-        }
-        return;
-    }
-
-    // Also look through our directory tree: the user may already have this mod
-    // sitting in a subfolder (a different name-case, or just not on the search
-    // path). If a file whose basename matches case-insensitively also matches
-    // byte-for-byte (same size + content checksum the host sent), reuse it
-    // instead of downloading - mounting a group from where it already lives.
-    char foundPath[BMAX_PATH];
-    if (Net_FindExistingFile(g_recvFileName, size, g_recvFileCrc, foundPath, sizeof(foundPath)))
-    {
-        LOG_F(INFO, "Host offered %s (%d bytes); found an identical copy at %s, using it instead of downloading",
-              g_recvFileName, size, foundPath);
-        const char *ext = Bstrrchr(g_recvFileName, '.');
-        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip")
-                 || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
-        {
-            if (initgroupfile(foundPath) != -1)
-                LOG_F(INFO, "Mounted existing group file %s", foundPath);
-        }
-        Bsprintf(buf, "Using local %s", g_recvFileName);
-        G_AddUserQuote(buf);
-        if (fileTotal > 1)
-        {
-            Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Have %s%s", g_recvFileName, ofY);
-            g_lateJoinPercent = 100;
-        }
-        return;
-    }
-
-    if (g_recvFileChunkTotal > 0)
-        g_recvFileBuf = (char *)Xmalloc(g_recvFileChunkTotal * FILE_CHUNK_SIZE);
-
-    LOG_F(INFO, "Receiving %s (%d bytes) from host%s", g_recvFileName, size, ofY);
-    Bsprintf(buf, "Downloading %s...", g_recvFileName);
-    G_AddUserQuote(buf);
-
-    Bsnprintf(g_lateJoinStatus, sizeof(g_lateJoinStatus), "Downloading %s%s", g_recvFileName, ofY);
-    g_lateJoinPercent = 0;
-}
-
-static void Net_ReceiveFileChunk(void)
-{
-    Net_NoteLateJoinProgress();
-    if (g_recvFileBuf == NULL)
-        return;
-    int32_t const seq = B_UNBUF16(&packbuf[1]);
-    int32_t const total = B_UNBUF16(&packbuf[3]);
-    int32_t const len = B_UNBUF16(&packbuf[5]);
-    if (total != g_recvFileChunkTotal || (unsigned)seq >= (unsigned)total || (unsigned)len > FILE_CHUNK_SIZE)
-        return;
-
-    Bmemcpy(&g_recvFileBuf[seq * FILE_CHUNK_SIZE], &packbuf[7], len);
-    g_recvFileChunksGot++;
-    if (seq == total - 1)
-        g_recvFileLastLen = len;
-
-    if (g_recvFileChunkTotal > 0)
-        g_lateJoinPercent = 100 * g_recvFileChunksGot / g_recvFileChunkTotal;
-
-    if (g_recvFileChunksGot < g_recvFileChunkTotal)
-        return;
-
-    // Complete: write the file into the mod/working directory.
-    int32_t const filesize = (g_recvFileChunkTotal - 1) * FILE_CHUNK_SIZE + g_recvFileLastLen;
-    uint32_t const crc = Net_FileCrc(g_recvFileBuf, filesize);
-    if (crc != g_recvFileCrc)
-    {
-        // A corrupt transfer must not be written or mounted: a bad map/GRP on
-        // disk can crash the loader or desync us. Drop it; the host's reliable
-        // delivery makes a clean mismatch rare, and a failed asset surfaces as a
-        // normal "file not found" rather than silent corruption.
-        LOG_F(ERROR, "Received %s but CRC mismatch (%08x != %08x); discarding", g_recvFileName, crc, g_recvFileCrc);
-        DO_FREE_AND_NULL(g_recvFileBuf);
-        return;
-    }
-
-    // Write under the basename only - never honour an absolute path or any
-    // directory components the sender's name may carry (e.g. a leading '/' or,
-    // on Windows, a '\'), which would otherwise escape the mod directory. Strip
-    // to the last separator of either kind, and refuse anything still containing
-    // a parent-directory reference. Land it in the mod directory when one is
-    // configured, otherwise the working directory.
-    const char *fslash = Bstrrchr(g_recvFileName, '/');
-    const char *bslash = Bstrrchr(g_recvFileName, '\\');
-    const char *base = max(fslash, bslash);
-    base = base ? base + 1 : g_recvFileName;
-    if (base[0] == 0 || Bstrstr(base, ".."))
-    {
-        LOG_F(ERROR, "Refusing received file with unsafe name '%s'", g_recvFileName);
-        DO_FREE_AND_NULL(g_recvFileBuf);
-        return;
-    }
-
-    char temp[BMAX_PATH];
-    if (g_modDir[0] && g_modDir[0] != '/')
-        Bsnprintf(temp, sizeof(temp), "%s/%s", g_modDir, base);
-    else
-        Bstrcpy(temp, base);
-
-    buildvfs_FILE fp = buildvfs_fopen_write(temp);
-    if (fp)
-    {
-        buildvfs_fwrite(g_recvFileBuf, 1, filesize, fp);
-        buildvfs_fclose(fp);
-        LOG_F(INFO, "Wrote %s (%d bytes)", g_recvFileName, filesize);
-        Bsprintf(buf, "Received %s", g_recvFileName);
-        G_AddUserQuote(buf);
-
-        // Group files (custom map/art/sound packs) must be mounted so their
-        // contents become visible to the asset loader; plain files (.map, etc.)
-        // are already reachable now that they sit in the mod directory. Note CON
-        // gameplay code inside a mod is compiled at startup and won't hot-load.
-        const char *ext = Bstrrchr(g_recvFileName, '.');
-        if (ext && (!Bstrcasecmp(ext, ".grp") || !Bstrcasecmp(ext, ".zip")
-                 || !Bstrcasecmp(ext, ".pk3") || !Bstrcasecmp(ext, ".pk4")))
-        {
-            if (initgroupfile(temp) != -1)
-            {
-                LOG_F(INFO, "Mounted received group file %s", g_recvFileName);
-                Bsprintf(buf, "Mounted %s", g_recvFileName);
-                G_AddUserQuote(buf);
-            }
-        }
-    }
-    else
-        LOG_F(ERROR, "Couldn't write received file %s", g_recvFileName);
-
-    DO_FREE_AND_NULL(g_recvFileBuf);
 }
 
 // Dedicated-server status screen, drawn in place of the 3D view. Local only.
@@ -1808,7 +1305,8 @@ void Net_HandleInput(void)
             g_asyncOutCur = netInput;
             g_asyncSentCount++;
 
-            int aj = 1;
+            B_BUF16(packbuf + 1, inputEpoch);
+            int aj = 3;
             packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
             Net_AddPlayerInputToPacket(&aj, 0, &g_asyncOutPrev, &g_asyncOutCur);
             Net_AddSyncInfoToPacket(&aj);
@@ -1909,7 +1407,8 @@ void Net_HandleInput(void)
         }
 
         packbuf[0] = PACKET_TYPE_SLAVE_TO_MASTER;
-        j = 1;
+        B_BUF16(packbuf + 1, inputEpoch);
+        j = 3;
 
         osyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-2)&(MOVEFIFOSIZ-1)][myconnectindex];
         nsyn = (input_t *)&inputfifo[(g_player[myconnectindex].movefifoend-1)&(MOVEFIFOSIZ-1)][myconnectindex];
@@ -1961,7 +1460,8 @@ void Net_HandleInput(void)
         //MASTER -> SLAVE packet
         packbuf[0] = PACKET_TYPE_MASTER_TO_SLAVE;
 
-        j = 2;
+        B_BUF16(packbuf + 1, inputEpoch);
+        j = 4;
         char playerCount = 0;
         TRAVERSE_CONNECT(i)
         {
@@ -1975,7 +1475,7 @@ void Net_HandleInput(void)
             Net_AddPlayerInputToPacket(&j, i, osyn, nsyn);
             playerCount++;
         }
-        packbuf[1] = playerCount;
+        packbuf[3] = playerCount;
 
         Net_AddSyncInfoToPacket(&j); // Must always be at the end of the packet.
 
@@ -2122,6 +1622,80 @@ int32_t Net_HostSpawn(int32_t picnum, int32_t x, int32_t y, int32_t z, int32_t s
     return 0;
 }
 
+struct PrivateCommand
+{
+    int slot;
+    uint32_t connection;
+    std::string text;
+};
+static std::deque<PrivateCommand> privateCommands;
+
+uint32_t Net_PlayerConnection(int slot)
+{
+    return (unsigned)slot < MAXPLAYERS && g_player[slot].connected ? playerConnections[slot] + 1 : 0;
+}
+
+void Net_ServerMessage(int slot, const char *text)
+{
+    if (myconnectindex != connecthead || !text || !text[0])
+        return;
+
+    char packet[MAXUSERQUOTELEN] = { PACKET_TYPE_SERVER_MESSAGE };
+    Bsnprintf(packet + 1, sizeof(packet) - 1, "^07Server: %s", text);
+    int const length = 1 + Bstrlen(packet + 1);
+    if (slot < 0 || slot == myconnectindex)
+        G_AddUserQuote(packet + 1);
+
+    for (int i = 0; i < numplayers; ++i)
+        if (i != myconnectindex && g_player[i].connected && (slot < 0 || i == slot))
+            mmulti_sendpacket(i, (unsigned char *)packet, length);
+}
+
+static void Net_QueuePrivateCommand(int slot, const char *text, size_t length)
+{
+    if (length == 0 || length > 120 || *text != '!' || privateCommands.size() >= 64 ||
+        !Net_PlayerConnection(slot) || memchr(text, '\0', length))
+        return;
+
+    privateCommands.push_back({slot, Net_PlayerConnection(slot), std::string(text, length)});
+}
+
+void Net_PollPrivateCommands(void)
+{
+    auto commands = std::move(privateCommands);
+    privateCommands.clear();
+    for (auto const &command : commands)
+    {
+        if (Net_PlayerConnection(command.slot) != command.connection)
+            continue;
+        if (!VBJS_RunServerCommand(command.slot, command.connection, command.text.c_str()))
+            Net_ServerMessage(command.slot, "Unknown server command.");
+    }
+}
+
+void Net_SendServerCommand(const char *text)
+{
+    if (myconnectindex == connecthead)
+        Net_QueuePrivateCommand(myconnectindex, text, Bstrlen(text));
+    else
+    {
+        unsigned char packet[121] = { PACKET_TYPE_SERVER_COMMAND };
+        size_t const length = min<size_t>(sizeof(packet) - 1, Bstrlen(text));
+        Bmemcpy(packet + 1, text, length);
+        mmulti_sendpacket(connecthead, packet, length + 1);
+    }
+}
+
+void Net_BroadcastRotationMode(void)
+{
+    if (myconnectindex != connecthead || numplayers < 2)
+        return;
+    unsigned char packet[] = { PACKET_TYPE_ROTATION_MODE, (unsigned char)g_mapRotationMode };
+    for (int i = 1; i < numplayers; ++i)
+        if (g_player[i].connected)
+            mmulti_sendpacket(i, packet, sizeof(packet));
+}
+
 void Net_ParsePackets(void)
 {
     int i, j;
@@ -2133,7 +1707,7 @@ void Net_ParsePackets(void)
     if (numplayers < 2 || (g_networkBroadcastMode == NETMODE_OFFLINE))
         return;
 
-    while ((packbufleng = mmulti_getpacket(&other, (unsigned char*)packbuf)) > 0)
+    while ((packbufleng = mmulti_getpacket_sized(&other, (unsigned char*)packbuf, sizeof(packbuf))) > 0)
     {
 #if 0
         LOG_F(INFO, "RECEIVED PACKET: type: %d : len %d", packbuf[0], packbufleng);
@@ -2149,6 +1723,15 @@ void Net_ParsePackets(void)
         if ((unsigned)other < MAXPLAYERS)
             g_slotLastPacketMs[other] = timerGetTicks();
 
+        if (Net_HandleContentPacket(other, packbuf, packbufleng))
+        {
+            if (myconnectindex != connecthead)
+                Net_NoteLateJoinProgress();
+            continue;
+        }
+        if (Net_ContentOnly())
+            continue;
+
         switch (packbuf[0])
         {
             // ****** Base master/slave packets ******
@@ -2163,8 +1746,10 @@ void Net_ParsePackets(void)
                 osyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend - 1) & (MOVEFIFOSIZ - 1)];
                 nsyn = (input_t*)&inputfifo[(g_player[connecthead].movefifoend) & (MOVEFIFOSIZ - 1)];
 
-                char playerCount = packbuf[1];
-                j = 2;
+                if (packbufleng < 4 || B_UNBUF16(packbuf + 1) != inputEpoch)
+                    break;
+                char playerCount = packbuf[3];
+                j = 4;
                 for(int32_t i = 0; i < playerCount; i++)
                 {
                     int32_t playerNum = packbuf[j++];
@@ -2186,7 +1771,10 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_SLAVE_TO_MASTER:  //[1] (receive slave sync buffer)
             {
-                j = 1;
+                if (myconnectindex != connecthead || packbufleng < 3 ||
+                    B_UNBUF16(packbuf + 1) != inputEpoch)
+                    break;
+                j = 3;
 
                 osyn = (input_t *)&inputfifo[(g_player[other].movefifoend-1)&(MOVEFIFOSIZ-1)];
                 nsyn = (input_t *)&inputfifo[(g_player[other].movefifoend)&(MOVEFIFOSIZ-1)];
@@ -2199,11 +1787,8 @@ void Net_ParsePackets(void)
             // ****** Misc packets ******
             case PACKET_TYPE_INIT_SETTINGS:
             {
-                if (myconnectindex == connecthead)
-                {
-                    OSD_Printf("PACKET_TYPE_INIT_SETTINGS: MASTER SHOULDN'T GET THIS PACKET!\n");
+                if (myconnectindex == connecthead || packbufleng != 23)
                     continue;
-                }
 
                 j = 1;
                 ud.m_level_number = ud.level_number     = packbuf[j++];
@@ -2226,6 +1811,7 @@ void Net_ParsePackets(void)
                 // Mirror the host's rotation state so our level-end handling
                 // matches the host's (see Net_EndOfLevel / Net_BuildInitialSettings).
                 g_mapRotationMode = packbuf[j++];
+                g_netLateJoin = packbuf[j++];
 
                 if (M_DMFLAGS_TEST(DMFLAG_ALLOWVISIBILITYCHANGE))
                     LOG_F(INFO, "Visibility adjustment enabled for multiplayer.");
@@ -2236,14 +1822,16 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_LATEJOIN_ANNOUNCE:
             {
+                if (myconnectindex == connecthead || packbufleng != 1)
+                    break;
                 if (!g_netLateJoiner)
                 {
                     LOG_F(INFO, "Joining a game in progress; waiting for the state snapshot...");
                     Bstrncpyz(g_lateJoinStatus, "Connecting to game in progress", sizeof(g_lateJoinStatus));
                     g_lateJoinPercent = 0;
                     lateJoinClientStartMs = timerGetTicks();  // start the client backstop timeout
-                    Net_NoteLateJoinProgress();
                 }
+                Net_NoteLateJoinProgress();
                 g_netLateJoiner = 1;
                 g_noLogo = 1;  // Straight into the game once the snapshot lands.
                 break;
@@ -2279,6 +1867,9 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_LATEJOIN_GO:
             {
+                if (myconnectindex == connecthead || packbufleng != 30 ||
+                    static_cast<uint8_t>(packbuf[1]) >= numplayers)
+                    break;
                 // Never integrate from inside the packet parser: the joiner
                 // waits until its init is done (see Net_GetPackets), and
                 // existing peers wait until they have simulated every tick
@@ -2288,6 +1879,11 @@ void Net_ParsePackets(void)
                 lateJoinGoMask = B_UNBUF16(&packbuf[2]);
                 for (i = 0; i < 6; i++)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
+                lateJoinInputEpoch = B_UNBUF16(packbuf + 28);
+                // Drain through the final broadcast tick even when the local
+                // jitter buffer would normally keep that tick queued.
+                if (lateJoinGoSlot != myconnectindex && (ud.gm & MODE_GAME))
+                    g_lateJoinFreeze = 1;
                 break;
             }
             case PACKET_TYPE_RESTORE_SCORE:
@@ -2384,14 +1980,36 @@ void Net_ParsePackets(void)
                 g_netLagMask = 0;
                 break;
             }
-            case PACKET_TYPE_FILE_HEADER:
-                Net_ReceiveFileHeader();
+            case PACKET_TYPE_CONTENT_RECONNECT:
+                if (myconnectindex != connecthead && packbufleng == 1)
+                {
+                    contentReconnectTime = timerGetTicks();
+                    contentReconnectPending = true;
+                    ready2send = 0;
+                }
                 break;
-            case PACKET_TYPE_FILE_CHUNK:
-                Net_ReceiveFileChunk();
+            case PACKET_TYPE_ROTATION_MODE:
+                if (myconnectindex != connecthead && packbufleng == 2 &&
+                    static_cast<unsigned char>(packbuf[1]) <= 2)
+                    g_mapRotationMode = packbuf[1];
+                break;
+            case PACKET_TYPE_SERVER_COMMAND:
+                if (myconnectindex == connecthead && packbufleng >= 2)
+                    Net_QueuePrivateCommand(other, packbuf + 1, packbufleng - 1);
+                break;
+            case PACKET_TYPE_SERVER_MESSAGE:
+                if (myconnectindex != connecthead && packbufleng > 1 && packbufleng < MAXUSERQUOTELEN)
+                {
+                    packbuf[packbufleng] = 0;
+                    G_AddUserQuote(packbuf + 1);
+                    VBJS_FireChat("chatMessage", connecthead, packbuf + 1);
+                    S_PlaySound(EXITMENUSOUND);
+                }
                 break;
             case PACKET_TYPE_NEW_GAME:
             {
+                if (packbufleng != 15)
+                    break;
                 if (myconnectindex == connecthead)
                 {
                     OSD_Printf("PACKET_TYPE_NEW_GAME: MASTER SHOULDN'T GET THIS PACKET!\n");
@@ -2409,6 +2027,7 @@ void Net_ParsePackets(void)
                 ud.m_coop           = packbuf[j++];
                 ud.m_dmflags        = (int32_t)B_UNBUF32(&packbuf[j]);  j += sizeof(int32_t);
                 uint32_t flags      = (uint32_t)B_UNBUF32(&packbuf[j]); j += sizeof(int32_t);
+                inputEpoch          = B_UNBUF16(packbuf + j);
                 G_NewGame(flags | NEWGAME_FROMSERVER);
                 break;
             }
@@ -2449,6 +2068,8 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_MESSAGE:
             {
+                if (packbufleng <= 2 || packbufleng - 2 >= MAXUSERQUOTELEN)
+                    break;
                 //slaves in M/S mode only send to master
                 if (myconnectindex == connecthead)
                 {
@@ -2459,18 +2080,21 @@ void Net_ParsePackets(void)
                             if (i != other)
                                 mmulti_sendpacket(i, (unsigned char*)packbuf, packbufleng);
                     }
-                    else if (((int)packbuf[1]) != myconnectindex)
+                    else if (static_cast<uint8_t>(packbuf[1]) != myconnectindex)
                     {
                         //Master re-transmits message not intended for master
-                        mmulti_sendpacket((int)packbuf[1], (unsigned char*)packbuf, packbufleng);
+                        const auto player = static_cast<uint8_t>(packbuf[1]);
+                        if (player < numplayers && g_player[player].connected)
+                            mmulti_sendpacket(player, (unsigned char*)packbuf, packbufleng);
                         break;
                     }
                 }
 
-                Bstrcpy(recbuf, packbuf + 2);
+                Bmemcpy(recbuf, packbuf + 2, packbufleng - 2);
                 recbuf[packbufleng - 2] = 0;
 
                 G_AddUserQuote(recbuf);
+                VBJS_FireChat("chatMessage", myconnectindex == connecthead ? other : -1, recbuf);
                 S_PlaySound(EXITMENUSOUND);
 
                 pus = NUMPAGES;
@@ -2608,22 +2232,26 @@ void Net_ParsePackets(void)
                     }
                     case PACKET_TYPE_USER_MAP:
                     {
-                        Bstrcpy(boardfilename, packbuf + 1);
-                        boardfilename[packbufleng - 1] = 0;
+                        int const length = packbufleng - 1;
+                        if (length < 0 || length >= (int)sizeof(boardfilename) ||
+                            memchr(packbuf + 1, '\0', length))
+                            break;
+
+                        Bmemcpy(boardfilename, packbuf + 1, length);
+                        boardfilename[length] = 0;
                         Bcorrectfilename(boardfilename, 0);
                         if (boardfilename[0] != 0)
                         {
-                            if ((i = kopen4loadfrommod(boardfilename, 0)) < 0)
+                            i = kopen4loadfrommod(boardfilename, 0);
+                            if (i < 0)
                             {
-                                Bmemset(boardfilename, 0, sizeof(boardfilename));
-                                Net_SendUserMapName();
+                                boardfilename[0] = 0;
+                                if (myconnectindex == connecthead)
+                                    Net_SendUserMapName();
                             }
-                            else kclose(i);
+                            else
+                                kclose(i);
                         }
-
-                        if (ud.m_level_number == 7 && ud.m_volume_number == 0 && boardfilename[0] == 0)
-                            ud.m_level_number = 0;
-
                         break;
                     }
                     case PACKET_TYPE_MAP_VOTE:
@@ -2924,26 +2552,20 @@ void Net_SendPlayerName(void)
 
 void Net_SendUserMapName(void)
 {
-    if (numplayers > 1)
-    {
-        int j;
-        int ch;
+    if (numplayers < 2)
+        return;
 
-        packbuf[0] = PACKET_TYPE_USER_MAP;
-        packbuf[1] = 0;
+    Bcorrectfilename(boardfilename, 0);
+    unsigned char packet[1 + BMAX_PATH] = { PACKET_TYPE_USER_MAP };
+    int const length = Bstrlen(boardfilename);
+    Bmemcpy(packet + 1, boardfilename, length);
 
-        Bcorrectfilename(boardfilename,0);
-
-        j = Bstrlen(boardfilename);
-        boardfilename[j++] = 0;
-        Bstrcat(packbuf+1,boardfilename);
-
-        TRAVERSE_CONNECT(ch)
-        {
-            if (ch != myconnectindex) mmulti_sendpacket(ch, (unsigned char*)packbuf,j);
-            if (myconnectindex != connecthead) break; //slaves in M/S mode only send to master
-        }
-    }
+    if (myconnectindex != connecthead)
+        mmulti_sendpacket(connecthead, packet, 1 + length);
+    else
+        for (int i = 1; i < numplayers; ++i)
+            if (g_player[i].connected)
+                mmulti_sendpacket(i, packet, 1 + length);
 }
 
 uint16_t Net_ConnectedMask(void)
@@ -3058,11 +2680,20 @@ static void Net_CompleteLateJoin(int32_t slot)
     Bstrncpyz(g_lateJoinStatus, "Entering the level", sizeof(g_lateJoinStatus));
     g_lateJoinPercent = 100;
 
+    inputEpoch = lateJoinInputEpoch;
     Net_IntegrateLateJoin(slot);
 
     multiflag = 0;
     if (G_LoadPlayer(LATEJOIN_SAVE_SPOT))
         G_GameExit("Late join failed: couldn't load state snapshot.");
+
+    int const mapIndex = ud.volume_number * MAXLEVELS + ud.level_number;
+    if (static_cast<unsigned>(mapIndex) < ARRAY_SIZE(g_mapInfo))
+    {
+        auto const name = Menu_HaveUserMap() ? boardfilename : g_mapInfo[mapIndex].name;
+        if (name)
+            LOG_F(INFO, "Joined E%dL%d: %s", ud.volume_number + 1, ud.level_number + 1, name);
+    }
 
     // Auxiliary RNG streams live outside the savegame; adopt the master's.
     g_globalRandom        = (short)lateJoinGoRNG[0];
@@ -3078,6 +2709,7 @@ static void Net_CompleteLateJoin(int32_t slot)
     // bit-identical everywhere without depending on the savegame capturing
     // every side effect of the spawn.
     P_SpawnLateJoiner(myconnectindex);
+    Net_InitializePrediction();
 
     g_netLateJoiner = 2;
 }
@@ -3099,8 +2731,10 @@ void Net_PeerCheckLateJoin(void)
     // this same (master-locked) tick, matching the host's pre-snapshot spawn.
     // The joiner itself gets the spawned player from the snapshot, so it does
     // not run this.
+    inputEpoch = lateJoinInputEpoch;
     Net_IntegrateLateJoin(slot);
     P_SpawnLateJoiner(slot);
+    Net_InitializePrediction();
     Net_WaitForPlayers();
     G_ResetTimers();
 }
@@ -3136,7 +2770,17 @@ void Net_MasterCheckLateJoin(void)
                 // init, before we build the GO packet). A joiner that never sends
                 // one simply can't reclaim a score.
                 g_playerGuid[i][0] = 0;
+                ++playerConnections[i];
                 LOG_F(INFO, "Late joiner in slot %d; pausing for state transfer", i);
+
+                if (!Net_SendStartupContent(i))
+                {
+                    mmulti_dropslot(i);
+                    lateJoinPending = -1;
+                    g_lateJoinFreeze = 0;
+                    return;
+                }
+                lateJoinAnnounceStart = lateJoinLastAnnounce = timerGetTicks();
 
                 // Tell the joiner what's going on, so it knows to stay out of
                 // the startup barriers and wait for the snapshot.
@@ -3149,6 +2793,8 @@ void Net_MasterCheckLateJoin(void)
         if (lateJoinPending < 0)
             return;
     }
+
+    Net_KeepWaitingPlayersAlive(lateJoinPending);
 
     // A reconnecting client can take a variable amount of time to finish its
     // own init before it starts reading packets, so a fixed announce window is
@@ -3187,10 +2833,15 @@ void Net_MasterCheckLateJoin(void)
 
     int32_t const slot = lateJoinPending;
 
-    // The joiner needs the map (and any host mods) on disk before it can load
-    // the state snapshot that references them. Reliable+ordered delivery means
-    // these all arrive before the snapshot chunks we send next.
-    Net_SendGameFiles(slot);
+    // Packs were negotiated before the joiner compiled its CON files. The
+    // current user map must also be present before it loads the snapshot.
+    if (!Net_SendGameFiles(slot))
+    {
+        mmulti_dropslot(slot);
+        lateJoinPending = -1;
+        g_lateJoinFreeze = 0;
+        return;
+    }
 
     if (G_SavePlayer(LATEJOIN_SAVE_SPOT))
     {
@@ -3263,15 +2914,17 @@ void Net_MasterCheckLateJoin(void)
     B_BUF32(&packbuf[16], g_random.player);
     B_BUF32(&packbuf[20], g_random.playerweapon);
     B_BUF32(&packbuf[24], (int32_t)wrandomseed);
+    B_BUF16(&packbuf[28], ++inputEpoch);
 
     for (int32_t i = 0; i < numplayers; i++)
         if (i != myconnectindex && g_player[i].connected)
-            mmulti_sendpacket(i, (unsigned char *)packbuf, 28);
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 30);
 
     Net_IntegrateLateJoin(slot);
     // Snapshot was pre-spawn; spawn the joiner into our live world with the
     // same code the joiner and peers run, keeping every machine identical.
     P_SpawnLateJoiner(slot);
+    Net_InitializePrediction();
     // The joiner's GUID arrives a little later (its name packet only flushes
     // once it is fully in the game), so score restoration is deferred until
     // then - see Net_MasterCheckRestore.
@@ -3308,6 +2961,7 @@ static int32_t Net_BuildInitialSettings(void)
     // (Net_EndOfLevel); otherwise the host defers while clients advance locally
     // and the machines desync onto different levels.
     packbuf[j++] = (char)g_mapRotationMode;
+    packbuf[j++] = g_netLateJoin != 0;
 
     return j;
 }
@@ -3348,6 +3002,7 @@ void Net_SendNewGame(uint32_t flags)
     packbuf[j++] = ud.m_coop;
     B_BUF32(&packbuf[j], ud.m_dmflags); j += sizeof(int32_t);
     B_BUF32(&packbuf[j], flags);        j += sizeof(int32_t);
+    B_BUF16(&packbuf[j], ++inputEpoch); j += sizeof(uint16_t);
 
     int i;
     TRAVERSE_CONNECT(i)
@@ -3371,7 +3026,7 @@ void Net_EndOfLevel(bool secret)
     if (g_mapRotationMode && numplayers > 1)
     {
         if (myconnectindex == connecthead)
-            g_pendingRotate = 1;
+            Net_RequestMapRotation();
         return;
     }
 
@@ -3464,6 +3119,7 @@ void Net_EnterMessage(void)
                 }
 
                 G_AddUserQuote(recbuf);
+                VBJS_FireChat("chatMessage", myconnectindex, recbuf);
                 quotebot += 8;
                 l = G_GameTextLen(USERQUOTE_LEFTOFFSET,OSD_StripColors(tempbuf,recbuf));
                 while (l > (ud.config.ScreenWidth - USERQUOTE_RIGHTOFFSET))
@@ -3563,6 +3219,14 @@ void Net_EnterMessage(void)
                 ud.gm &= ~(MODE_TYPE|MODE_SENDTOWHOM);
                 return;
             }
+            if (typebuf[0] == '!' && numplayers > 1 &&
+                g_networkBroadcastMode == NETMODE_MASTERSLAVE)
+            {
+                Net_SendServerCommand(typebuf);
+                g_chatPlayer = -1;
+                ud.gm &= ~(MODE_TYPE | MODE_SENDTOWHOM);
+                return;
+            }
             if (ud.automsg)
             {
                 if (SHIFTS_IS_PRESSED) g_chatPlayer = -1;
@@ -3580,7 +3244,7 @@ void Net_EnterMessage(void)
 // itself with the identical command line to reconnect (see Net_ClientReconnect).
 static int32_t g_procArgc;
 static char const * const *g_procArgv;
-static char g_procExePath[BMAX_PATH];
+static char g_procExePath[BMAX_PATH], g_procLaunchDir[BMAX_PATH];
 
 void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
 {
@@ -3591,6 +3255,8 @@ void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
     // in CoreFoundation). The path is resolved lazily instead, at reconnect time.
     g_procArgc = argc;
     g_procArgv = argv;
+    if (!buildvfs_getcwd(g_procLaunchDir, sizeof(g_procLaunchDir)))
+        Bstrcpy(g_procLaunchDir, ".");
 }
 
 // Resolve an ABSOLUTE path to our own binary, lazily and only when a reconnect
@@ -3599,7 +3265,7 @@ void Net_StoreProcessArgs(int32_t argc, char const * const *argv)
 // directory - which the game may have chdir'd away from - so a bare/relative
 // argv[0] would fail to relaunch. Bgetappdir() gives the real executable
 // directory; join it with argv[0]'s basename.
-static char const *Net_ResolveExePath(void)
+char const *Net_ProcessExecutable(void)
 {
     if (g_procExePath[0])
         return g_procExePath;
@@ -3621,6 +3287,134 @@ static char const *Net_ResolveExePath(void)
         Xfree(dir);
 
     return g_procExePath[0] ? g_procExePath : (g_procArgv ? g_procArgv[0] : NULL);
+}
+
+char const *Net_LaunchDirectory(void)
+{
+    return g_procLaunchDir;
+}
+
+#ifdef _WIN32
+intptr_t Net_StartContentProcess(const char *const *args, const char *workingDirectory)
+{
+    std::string command;
+    for (int i = 0; args[i]; ++i)
+    {
+        if (i)
+            command.push_back(' ');
+        command.push_back('"');
+        size_t backslashes = 0;
+        for (auto p = args[i]; *p; ++p)
+        {
+            if (*p == '\\')
+            {
+                ++backslashes;
+                continue;
+            }
+            command.append(*p == '"' ? 2 * backslashes + 1 : backslashes, '\\');
+            backslashes = 0;
+            command.push_back(*p);
+        }
+        command.append(2 * backslashes, '\\');
+        command.push_back('"');
+    }
+
+    STARTUPINFOA startup = {};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process;
+    if (!CreateProcessA(args[0], &command[0], nullptr, nullptr, TRUE, 0, nullptr, workingDirectory, &startup, &process))
+        return -1;
+    CloseHandle(process.hThread);
+    return reinterpret_cast<intptr_t>(process.hProcess);
+}
+#endif
+
+static void Net_ExecContent(const char *statePath)
+{
+    auto const exe = Net_ProcessExecutable();
+    if (!exe || !g_procArgv)
+        return;
+
+    std::vector<char const *> args;
+    for (int i = 0; i < g_procArgc; ++i)
+    {
+        if (!Bstrcmp(g_procArgv[i], "--server-resume"))
+        {
+            ++i;
+            continue;
+        }
+        if (!Bstrcmp(g_procArgv[i], "--content-rejoin"))
+            continue;
+        args.push_back(g_procArgv[i]);
+    }
+    if (statePath)
+    {
+        args.push_back("--server-resume");
+        args.push_back(statePath);
+    }
+    else
+        args.push_back("--content-rejoin");
+#ifdef _WIN32
+    // Keep the executable path explicit even if the original argv[0] was relative.
+    args[0] = exe;
+    if (!G_CheckCmdSwitch(g_procArgc, g_procArgv, "-noinstancechecking"))
+        args.insert(args.begin() + 1, "-noinstancechecking");
+#endif
+    args.push_back(nullptr);
+
+    VBJS_Shutdown();
+    if (statePath)
+        Masterserver_AdvertiseStop();
+    mmulti_uninitmultiplayers();
+    if (buildvfs_chdir(g_procLaunchDir) == 0)
+    {
+#ifdef _WIN32
+        loguru::remove_callback(APPBASENAME ".log");
+        auto const process = Net_StartContentProcess(args.data());
+        if (process != -1)
+        {
+            CloseHandle(reinterpret_cast<HANDLE>(process));
+            Bexit(EXIT_SUCCESS);
+        }
+#else
+        execv(exe, const_cast<char * const *>(args.data()));
+#endif
+    }
+
+    numplayers = 1;  // The transport has already shut down.
+    G_GameExit(statePath ? "Could not restart the server with the selected pack."
+                         : "Could not reconnect to the server after the pack change.");
+}
+
+void Net_RestartForContent(const char *statePath)
+{
+    LOG_F(INFO, "Restarting the match with the selected pack; players will reconnect");
+    g_lateJoinFreeze = 1;
+    unsigned char packet[] = { PACKET_TYPE_CONTENT_RECONNECT };
+    for (int i = 1; i < numplayers; ++i)
+        if (mmulti_slotconnected(i))
+            mmulti_sendpacket(i, packet, sizeof(packet));
+
+    auto const start = timerGetTicks();
+    while (mmulti_getoutputcirclesize() > 0 && timerGetTicks() - start < 1800)
+    {
+        int sender;
+        mmulti_getpacket(&sender, nullptr);
+        handleevents();
+    }
+    Net_ExecContent(statePath);
+}
+
+bool Net_PollContentReconnect(void)
+{
+    if (!contentReconnectPending)
+        return false;
+    if (timerGetTicks() - contentReconnectTime >= 2000)
+    {
+        LOG_F(INFO, "Reconnecting to load the server's selected pack");
+        Net_ExecContent(nullptr);
+    }
+    return true;
 }
 
 // A desynced client can't safely keep simulating against the host, and there is
@@ -3655,7 +3449,7 @@ void Net_ClientReconnect(void)
     // Release our UDP socket first so the fresh image can rebind the same port.
     mmulti_uninitmultiplayers();
 
-    char const *exe = Net_ResolveExePath();
+    char const *exe = Net_ProcessExecutable();
     if (exe && g_procArgv)
     {
 #ifdef _WIN32
@@ -3680,7 +3474,7 @@ void Net_LaunchAddress(const char *hostport)
     if (!hostport || !hostport[0])
         return;
 
-    char const *exe = Net_ResolveExePath();
+    char const *exe = Net_ProcessExecutable();
     if (!exe || !g_procArgv)
     {
         G_GameExit("Cannot relaunch to join a server.");
@@ -3727,7 +3521,7 @@ void Net_LaunchAddress(const char *hostport)
 // it is forwarded via -joinerror so the JOIN GAME menu can show why.
 void Net_LaunchMenu(const char *errmsg)
 {
-    char const *exe = Net_ResolveExePath();
+    char const *exe = Net_ProcessExecutable();
     if (!exe || !g_procArgv)
     {
         G_GameExit("Could not return to the menu.");
@@ -3772,7 +3566,7 @@ void Net_LaunchMenu(const char *errmsg)
 // masterserver so it appears in the internet lobby.
 void Net_LaunchHost(int32_t advertise)
 {
-    char const *exe = Net_ResolveExePath();
+    char const *exe = Net_ProcessExecutable();
     if (!exe || !g_procArgv)
     {
         G_GameExit("Cannot relaunch to host.");
@@ -3890,15 +3684,9 @@ void Net_CheckPlayerQuit(int i)
         }
     }
 
-    // On a late-join host, a departing player's slot stays reserved so they (or
-    // anyone) can rejoin it mid-game. Shrinking numplayers here would be
-    // permanent - nothing grows it back on a late-join - so after a few
-    // leave/rejoin cycles it would fall below 2, at which point the host stops
-    // running the ready handshake (Net_WaitForPlayers early-returns) and the
-    // next joiner hangs on "WAITING FOR PLAYERS". Keep the reserved slot count
-    // stable on the host; the connect list above already dropped the slot from
-    // active traversal, mirroring the empty-but-reserved state used at startup.
-    if (!(myconnectindex == connecthead && g_netLateJoin))
+    // Every peer keeps the same slot capacity in a late-join match. The
+    // connect list tracks which players are currently present.
+    if (!g_netLateJoin)
     {
         numplayers--;
         ud.multimode--;

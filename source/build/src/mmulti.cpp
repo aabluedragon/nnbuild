@@ -96,7 +96,6 @@ int connecthead, connectpoint2[MAXPLAYERS];
 
 static int tims, lastsendtims[MAXPLAYERS];
 static char pakbuf[MAXPAKSIZ];
-static int fullpakbufsignals[MAXPLAYERS];
 
 #define FIFSIZ 512 //16384/40 = 6min:49sec
 static int ipak[MAXPLAYERS][FIFSIZ], icnt0[MAXPLAYERS];
@@ -463,7 +462,9 @@ int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
     socklen_t fromlen = sizeof(from);
     int i;
 
-    if (recvfrom(mysock,dabuf,bufsiz,0,(struct sockaddr *)&from,&fromlen) == -1) return(0);
+    int bytes = recvfrom(mysock, dabuf, bufsiz, 0, (struct sockaddr *)&from, &fromlen);
+    if (bytes <= 0)
+        return 0;
 #if (SIMMIS > 0)
     if ((wrand()&255) < SIMMIS) return(0);
 #endif
@@ -517,13 +518,13 @@ int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
 
 #if (SIMLAG > 1)
     i = simlagcnt[*other]%(SIMLAG+1);
-    *(short *)&simlagfif[*other][i][0] = bufsiz; memcpy(&simlagfif[*other][i][2],dabuf,bufsiz);
+    *(short *)&simlagfif[*other][i][0] = bytes; memcpy(&simlagfif[*other][i][2],dabuf,bytes);
     simlagcnt[*other]++; if (simlagcnt[*other] < SIMLAG+1) return(0);
     i = simlagcnt[*other]%(SIMLAG+1);
-    bufsiz = *(short *)&simlagfif[*other][i][0]; memcpy(dabuf,&simlagfif[*other][i][2],bufsiz);
+    bytes = *(short *)&simlagfif[*other][i][0]; memcpy(dabuf,&simlagfif[*other][i][2],bytes);
 #endif
 
-    return(1);
+    return bytes;
 }
 
 int isvalidipaddress(const char *st)
@@ -826,7 +827,6 @@ void mmulti_dropslot(int slot)
     ocnt1[slot] = 0;
     Bmemset(ipak[slot], 0, sizeof(ipak[slot]));
     lastsendtims[slot] = GetTickCount();
-    fullpakbufsignals[slot] = 0;
 #if (SIMLAG > 1)
     simlagcnt[slot] = 0;
 #endif
@@ -978,23 +978,16 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
 
         for (i=sendfrom;i<ocnt1[other];i++)
         {
-            j = *(short *)&pakmem[opak[other][i&(FIFSIZ-1)]]; if (!j) continue; //packet already acked
+            int const offset = opak[other][i&(FIFSIZ-1)];
+            if (!offset) continue; // packet already acked
+            j = *(short *)&pakmem[offset];
             if (k+6+j+4 > (int)sizeof(pakbuf))
-            {
-                if (!fullpakbufsignals[other])
-                {
-                    LOG_F(WARNING, "mmulti: output pakbuf filled for peer %d.", other);
-                    fullpakbufsignals[other] = 16;
-                }
                 break;
-            }
 
             *(unsigned short *)&pakbuf[k] = (unsigned short)j; k += 2;
             *(int *)&pakbuf[k] = i; k += 4;
-            memcpy(&pakbuf[k],&pakmem[opak[other][i&(FIFSIZ-1)]+2],j); k += j;
+            memcpy(&pakbuf[k],&pakmem[offset+2],j); k += j;
         }
-        if (i == ocnt1[other])
-            fullpakbufsignals[other] = max(fullpakbufsignals[other] - 1, 0);
 
         *(unsigned short *)&pakbuf[k] = 0; k += 2;
         *(unsigned short *)&pakbuf[0] = (unsigned short)k;
@@ -1033,6 +1026,11 @@ void mmulti_sendpacket(int other, unsigned char *bufptr, int messleng)
 //(used as hack for player collection)
 int mmulti_getpacket(int *retother, unsigned char *bufptr)
 {
+    return mmulti_getpacket_sized(retother, bufptr, MAXPAKSIZ);
+}
+
+int mmulti_getpacket_sized(int *retother, unsigned char *bufptr, int capacity)
+{
     int i, j, k, ic0, crc16ofs, messleng, other;
 
     if (numplayers < 2) return(0);
@@ -1050,7 +1048,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
             dosendpackets(mmulti_extraslot);
     }
 
-    while (netread(&other,pakbuf,sizeof(pakbuf)))
+    while (int const received = netread(&other, pakbuf, sizeof(pakbuf)))
     {
         //Packet format:
         //   short crc16ofs;       //offset of crc16
@@ -1062,12 +1060,15 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
         //      char pak[leng];    //actual packet data :)
         //   }
         //   unsigned short crc16; //CRC16 of everything except crc16
+        if (received < 9)
+            continue;
         k = 0;
         crc16ofs = (int)(*(unsigned short *)&pakbuf[k]); k += 2;
 
         //printf("Recv: "); for(i=0;i<crc16ofs+2;i++) printf("%02x ",pakbuf[i]); printf("\n");
 
-        if ((crc16ofs+2 <= (int)sizeof(pakbuf)) && (getcrc16(pakbuf,crc16ofs) == (*(unsigned short *)&pakbuf[crc16ofs])))
+        if (crc16ofs >= 7 && crc16ofs + 2 == received &&
+            getcrc16(pakbuf, crc16ofs) == (*(unsigned short *)&pakbuf[crc16ofs]))
         {
             ic0 = *(int *)&pakbuf[k]; k += 4;
             if (ic0 == -1)
@@ -1131,7 +1132,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                         break;
                     }
                 }
-                else if ((pakbuf[k] == 0xab) && (myconnectindex != connecthead))
+                else if ((pakbuf[k] == 0xab) && (myconnectindex != connecthead) && crc16ofs >= 9)
                 {
                     if (((unsigned int)pakbuf[k+1] < (unsigned int)pakbuf[k+2]) &&
                             ((unsigned int)pakbuf[k+2] < (unsigned int)MAXPLAYERS))
@@ -1158,7 +1159,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                     }
                 }
             }
-            else
+            else if (ic0 >= 0 && other != myconnectindex && crc16ofs >= k + 34)
             {
                 // Clamp the peer's acknowledged-count to what we've actually
                 // sent. A peer can never have received more packets than we
@@ -1175,10 +1176,10 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
                 k += 32;
 
                 messleng = (int)(*(unsigned short *)&pakbuf[k]); k += 2;
-                while (messleng)
+                while (messleng && messleng <= crc16ofs - k - 6)
                 {
                     j = *(int *)&pakbuf[k]; k += 4;
-                    if ((j >= icnt0[other]) && (!ipak[other][j&(FIFSIZ-1)]))
+                    if (j >= icnt0[other] && j - icnt0[other] < FIFSIZ && !ipak[other][j&(FIFSIZ-1)])
                     {
                         if (pakmemi+messleng+2 > PAKMEMSIZ) pakmemi = 1;
                         ipak[other][j&(FIFSIZ-1)] = pakmemi;
@@ -1201,8 +1202,11 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
             j = ipak[i][icnt0[i]&(FIFSIZ-1)];
             if (j)
             {
-                messleng = *(short *)&pakmem[j]; memcpy(bufptr,&pakmem[j+2],messleng);
+                messleng = *(short *)&pakmem[j];
                 *retother = i; ipak[i][icnt0[i]&(FIFSIZ-1)] = 0; icnt0[i]++;
+                if (messleng > capacity)
+                    continue;
+                memcpy(bufptr, &pakmem[j + 2], messleng);
                 //printf("Recv: "); for(i=0;i<messleng;i++) printf("%02x ",bufptr[i]); printf("\n");
 
                 /*Addfaz NatFree Start*/
@@ -1229,8 +1233,11 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
         j = ipak[i][icnt0[i]&(FIFSIZ-1)];
         if (j)
         {
-            messleng = *(short *)&pakmem[j]; memcpy(bufptr,&pakmem[j+2],messleng);
+            messleng = *(short *)&pakmem[j];
             *retother = i; ipak[i][icnt0[i]&(FIFSIZ-1)] = 0; icnt0[i]++;
+            if (messleng > capacity)
+                return 0;
+            memcpy(bufptr, &pakmem[j + 2], messleng);
             return(messleng);
         }
     }

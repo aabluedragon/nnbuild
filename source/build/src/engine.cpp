@@ -13969,7 +13969,7 @@ void videoClearScreen(int32_t dacol)
     {
         palette_t const p = paletteGetColor(dacol);
 
-        glViewport(0,0,xdim,ydim);
+        buildgl_setViewport(0, 0, xdim, ydim);
         glClearColor((float)p.r * (1.f/255.f),
                       (float)p.g * (1.f/255.f),
                       (float)p.b * (1.f/255.f),

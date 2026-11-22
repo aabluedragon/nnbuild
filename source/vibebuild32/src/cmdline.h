@@ -25,8 +25,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define cmdline_h__
 
 #include "compat.h"
+#include <string>
+#include <vector>
 
 void G_CheckCommandLine(int argc, char const* const* argv);
+bool G_RunStartupCommand(void);
+std::vector<std::string> G_PendingStartupCommands(void);
+void G_RestoreStartupCommands(std::vector<std::string> commands);
 
 extern int32_t g_commandSetup;
 extern int32_t g_noSetup;

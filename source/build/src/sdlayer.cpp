@@ -127,6 +127,7 @@ static mutex_t m_initprintf;
 #if SDL_MAJOR_VERSION >= 2
 static ImGuiIO *g_ImGui_IO;
 bool g_ImGuiCaptureInput = true;
+bool g_ImGuiExclusiveInput;
 #endif
 uint8_t g_ImGuiCapturedDevices;
 #ifdef _WIN32
@@ -2574,11 +2575,15 @@ int32_t handleevents_pollsdl(void)
     {
         if (g_ImGui_IO)
         {
-            if (g_ImGui_IO->WantCaptureKeyboard && (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP))
-                if (ImGui_ImplSDL2_ProcessEvent(&ev) && ev.type == SDL_TEXTINPUT)
+            if (g_ImGuiExclusiveInput && ev.type == SDL_WINDOWEVENT)
+                ImGui_ImplSDL2_ProcessEvent(&ev);
+            if ((g_ImGuiExclusiveInput || g_ImGui_IO->WantCaptureKeyboard) &&
+                (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP))
+                if (ImGui_ImplSDL2_ProcessEvent(&ev) && (g_ImGuiExclusiveInput || ev.type == SDL_TEXTINPUT))
                     continue;
 
-            if (g_ImGui_IO->WantCaptureMouse && (ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
+            if ((g_ImGuiExclusiveInput || g_ImGui_IO->WantCaptureMouse) &&
+                (ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
                 if (ImGui_ImplSDL2_ProcessEvent(&ev))
                     continue;
         }

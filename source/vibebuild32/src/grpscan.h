@@ -98,7 +98,8 @@ extern grpinfo_t *listgrps;
 
 extern grpfile_t * FindGroup(int32_t crcval);
 
-int32_t ScanGroups(void);
+int32_t ScanGroups(const char *requested = nullptr);
+bool G_IsBaseGrp(uint32_t crc, int32_t size);
 void FreeGroups(void);
 
 #ifdef __cplusplus

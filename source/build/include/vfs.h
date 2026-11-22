@@ -311,6 +311,9 @@ void klistfree(BUILDVFS_FIND_REC *rec);
 BUILDVFS_FIND_REC *klistpath(const char *path, const char *mask, int type);
 
 extern int32_t lz4CompressionLevel;
+#if !defined(USE_PHYSFS)
+extern bool g_vfsPreferArchives;
+#endif
 int32_t     kdfread(void *buffer, int dasizeof, int count, buildvfs_kfd fil);
 int32_t kdfread_LZ4(void *buffer, int dasizeof, int count, buildvfs_kfd fil);
 void     dfwrite(const void *buffer, int dasizeof, int count, buildvfs_FILE fil);

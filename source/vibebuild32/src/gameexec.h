@@ -4,6 +4,7 @@
 #include "build.h"
 #include "gamedef.h"  // vmstate_t
 #include "sector.h"  // mapstate_t
+#include "vbjs.h"
 
 enum vmflags_t
 {
@@ -25,7 +26,7 @@ void A_Fall(int iActor);
 
 static FORCE_INLINE int VM_HaveEvent(int const nEventID)
 {
-    return !!apScriptEvents[nEventID];
+    return apScriptEvents[nEventID] || g_vbjsConEventListened[nEventID];
 }
 
 void VM_DrawTileGeneric(int32_t x, int32_t y, int32_t zoom, int32_t tilenum,

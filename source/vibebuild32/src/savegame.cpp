@@ -515,6 +515,8 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_curViewscreen,sizeof(g_curViewscreen),1,fil) != 1) goto corrupt;
     if (kdfread(&connecthead,sizeof(connecthead),1,fil) != 1) goto corrupt;
     if (kdfread(connectpoint2,sizeof(connectpoint2),1,fil) != 1) goto corrupt;
+    if (spot == LATEJOIN_SAVE_SPOT && g_netLateJoiner == 1)
+        Net_RebuildConnectList(); // The snapshot predates the joining slot; use the live roster.
     if (kdfread(&g_numPlayerSprites,sizeof(g_numPlayerSprites),1,fil) != 1) goto corrupt;
     for (i=0; i<MAXPLAYERS; i++)
         if (kdfread((int16_t *)&g_player[i].frags[0],sizeof(g_player[i].frags),1,fil) != 1) goto corrupt;
@@ -1012,4 +1014,3 @@ int32_t G_SavePlayer(int32_t spot)
 
     return(0);
 }
-  

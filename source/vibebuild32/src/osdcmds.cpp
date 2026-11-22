@@ -30,6 +30,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "masterserver.h"
 #include "crc32.h"
 #include "osdfuncs.h"
+#include "netcontent.h"
+#include "serverlevel.h"
 #include <ctype.h>
 #include <limits.h>
 
@@ -109,7 +111,7 @@ static int osdcmd_nextmap(const osdfuncparm_t *parm)
         return OSDCMD_OK;
     }
     if (Net_RotateNextMap() < 0)
-        OSD_Printf("nextmap: the map rotation is empty (create maplist.txt).\n");
+        OSD_Printf("Could not advance the map cycle. Use mapcycle to see its entries.\n");
     return OSDCMD_OK;
 }
 
@@ -128,7 +130,8 @@ static int osdcmd_sendfile(const osdfuncparm_t *parm)
         OSD_Printf("sendfile: only the host of a multiplayer game can send files.\n");
         return OSDCMD_OK;
     }
-    Net_SendFile(-1, parm->parms[0]);
+    if (!Net_SendLooseFile(parm->parms[0]))
+        OSD_Printf("Could not transfer '%s'.\n", parm->parms[0]);
     return OSDCMD_OK;
 }
 
@@ -256,6 +259,13 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     BUILDVFS_FIND_REC *r;
     char filename[256];
 
+    if ((parm->numparms == 1 || parm->numparms == 2) && numplayers > 1 &&
+        myconnectindex == connecthead && g_networkBroadcastMode == NETMODE_MASTERSLAVE)
+    {
+        Net_QueueServerLevel(parm->numparms == 2 ? parm->parms[1] : nullptr, parm->parms[0]);
+        return OSDCMD_OK;
+    }
+
     if (parm->numparms != 1)
     {
         int maxwidth = 0;
@@ -333,7 +343,9 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
     if (!builtin)
     {
-        strcpy(filename,parm->parms[0]);
+        if (Bstrlen(parm->parms[0]) > sizeof(filename) - 6)
+            return OSDCMD_SHOWHELP;
+        Bstrcpy(filename,parm->parms[0]);
         if (strchr(filename,'.') == 0)
             strcat(filename,".map");
 
@@ -356,18 +368,6 @@ static int osdcmd_map(const osdfuncparm_t *parm)
     {
         if (myconnectindex == connecthead)
         {
-            // A built-in map needs no file/name push - clients load it by
-            // volume/level from the broadcast NEW_GAME. Only a user map has to be
-            // shipped (and its name announced) first: push the map (and any host
-            // mods) BEFORE the name, since reliable+ordered delivery guarantees a
-            // client has the file on disk before the USER_MAP name (and the
-            // NEW_GAME that loads it) arrive, so clients that lack the usermap
-            // sync it instead of failing to open it and desyncing onto a fallback.
-            if (!builtin)
-            {
-                Net_SendGameFiles(-1);
-                Net_SendUserMapName();
-            }
             G_NewGame(NEWGAME_RESETALL);
         }
         else if (vote.starter == -1)
@@ -395,6 +395,14 @@ static int osdcmd_map(const osdfuncparm_t *parm)
 
     G_NewGame(NEWGAME_RESETALL);
 
+    return OSDCMD_OK;
+}
+
+static int osdcmd_mod(const osdfuncparm_t *parm)
+{
+    if (parm->numparms < 1 || parm->numparms > 2)
+        return OSDCMD_SHOWHELP;
+    Net_QueueServerLevel(parm->parms[0], parm->numparms == 2 ? parm->parms[1] : "E1L1");
     return OSDCMD_OK;
 }
 
@@ -913,7 +921,7 @@ osdcvardata_t cvar[] =
     { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
     { "skin", "player skin: 0=Duke 1=Assault Trooper 2=Assault Captain 3=Octabrain 4=Assault Commander 5=Enforcer 6=Pig Cop 7=Alien Beast (unavailable skins fall back to Duke)", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
-    { "sv_maprotation", "map rotation: 0 off, 1 sequential, 2 random", (void*)&g_mapRotationMode, CVAR_INT, 0, 2 },
+    { "sv_maprotation", "map rotation: 0 off, 1 sequential, 2 random", (void*)&g_mapRotationMode, CVAR_INT | CVAR_FUNCPTR, 0, 2 },
 
     // Mouse
     { "in_aimmode", "hold button for mouse aim" CVAR_BOOL_OPTSTR, (void*)&ud.mouseaiming, CVAR_BOOL, 0, 1 },
@@ -970,9 +978,15 @@ osdcvardata_t cvar[] =
 extern int CommandWeaponChoice;
 static int osdcmd_cvar_set_game(osdcmdptr_t parm)
 {
+    bool const rotation = !Bstrcasecmp(parm->name, "sv_maprotation") && parm->numparms > 0;
+    if (rotation && numplayers > 1 && myconnectindex != connecthead)
+        return OSDCMD_OK;
+
     int const r = osdcmd_cvar_set(parm);
 
     if (r != OSDCMD_OK) return r;
+    if (rotation)
+        Net_BroadcastRotationMode();
 
     if (!Bstrcasecmp(parm->name, "r_upscalefactor"))
     {
@@ -1703,7 +1717,9 @@ int registerosdcommands(void)
     else
     {
         OSD_RegisterFunction("changelevel","changelevel <volume> <level>: warps to the given level", osdcmd_changelevel);
-        OSD_RegisterFunction("map","map <mapfile>: loads the given user map", osdcmd_map);
+        OSD_RegisterFunction("map","map <E#L#|map path> [pack|base]", osdcmd_map);
+    if (!VOLUMEONE)
+        OSD_RegisterFunction("changemap","changemap <E#L#|map path> [pack|base]", osdcmd_map);
     }
 
     OSD_RegisterFunction("addpath","addpath <path>: adds path to game filesystem", osdcmd_addpath);
@@ -1714,6 +1730,8 @@ int registerosdcommands(void)
     OSD_RegisterFunction("listban","listban: show the ban list", osdcmd_listban);
     OSD_RegisterFunction("listplayers","listplayers: show connected players, slots and IPs", osdcmd_listplayers);
     OSD_RegisterFunction("nextmap","nextmap: (host) advance to the next map in the rotation", osdcmd_nextmap);
+    OSD_RegisterFunction("mod", "mod <pack|base> [E#L#|map path]", osdcmd_mod);
+    OSD_RegisterFunction("mapcycle", "mapcycle [list|clear|reload|add [pack|base|current] <E#L#|map path>]", Net_MapCycleCommand);
     OSD_RegisterFunction("serverlist","serverlist [masterserver]: query a masterserver and print advertised servers", osdcmd_serverlist);
     OSD_RegisterFunction("monsters","monsters off | on [skill] | <skill>: (host) clear all monsters, or re-enable at a skill", osdcmd_monsters);
     OSD_RegisterFunction("spawn","spawn <picnum> <player | x y [z]>: (host) spawn an actor near a player or at coordinates", osdcmd_spawn);

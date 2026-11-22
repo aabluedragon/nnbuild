@@ -1,0 +1,99 @@
+#ifndef VIBEBUILD32_NATIVEEDITORPREFIX_H
+#define VIBEBUILD32_NATIVEEDITORPREFIX_H
+
+// These names are shared by Duke and Mapster in their original separate
+// programs. Give the native editor's definitions and calls distinct names
+// when linking both against the same Build engine in VibeBuild32.
+#define A_CheckSoundPlaying NativeEditor_A_CheckSoundPlaying
+#define AppProperName NativeEditor_AppProperName
+#define AppTechnicalName NativeEditor_AppTechnicalName
+#define Duke_CommonCleanup NativeEditor_Duke_CommonCleanup
+#define FindGroup NativeEditor_FindGroup
+#define FreeGroups NativeEditor_FreeGroups
+#define G_AddCon NativeEditor_G_AddCon
+#define G_AddConModule NativeEditor_G_AddConModule
+#define G_AddGroup NativeEditor_G_AddGroup
+#define G_AddPath NativeEditor_G_AddPath
+#define G_AddSearchPaths NativeEditor_G_AddSearchPaths
+#define G_CleanupSearchPaths NativeEditor_G_CleanupSearchPaths
+#define G_ConFile NativeEditor_G_ConFile
+#define G_DefFile NativeEditor_G_DefFile
+#define G_DefaultConFile NativeEditor_G_DefaultConFile
+#define G_DefaultDefFile NativeEditor_G_DefaultDefFile
+#define G_DefaultGrpFile NativeEditor_G_DefaultGrpFile
+#define G_DoAutoload NativeEditor_G_DoAutoload
+#define G_ExtInit NativeEditor_G_ExtInit
+#define G_ExtPreInit NativeEditor_G_ExtPreInit
+#define G_GrpFile NativeEditor_G_GrpFile
+#define G_InitMultiPsky NativeEditor_G_InitMultiPsky
+#define G_LoadGroups NativeEditor_G_LoadGroups
+#define G_LoadGroupsInDir NativeEditor_G_LoadGroupsInDir
+#define G_LoadLookups NativeEditor_G_LoadLookups
+#define G_Polymer_UnInit NativeEditor_G_Polymer_UnInit
+#define G_ScanGroups NativeEditor_G_ScanGroups
+#define G_SetupGlobalPsky NativeEditor_G_SetupGlobalPsky
+#define Gv_Init NativeEditor_Gv_Init
+#define Gv_NewArray NativeEditor_Gv_NewArray
+#define Gv_NewVar NativeEditor_Gv_NewVar
+#define M32RunScript NativeEditor_M32RunScript
+#define S_Callback NativeEditor_S_Callback
+#define S_OpenAudio NativeEditor_S_OpenAudio
+#define S_PlaySound NativeEditor_S_PlaySound
+#define S_SoundShutdown NativeEditor_S_SoundShutdown
+#define S_SoundStartup NativeEditor_S_SoundStartup
+#define S_StopAllSounds NativeEditor_S_StopAllSounds
+#define S_StopEnvSound NativeEditor_S_StopEnvSound
+#define S_Update NativeEditor_S_Update
+#define ScanGroups NativeEditor_ScanGroups
+#define SectorLabels NativeEditor_SectorLabels
+#define WallLabels NativeEditor_WallLabels
+#define aGameArrays NativeEditor_aGameArrays
+#define aGameVars NativeEditor_aGameVars
+#define apScript NativeEditor_apScript
+#define apStrings NativeEditor_apStrings
+#define apXStrings NativeEditor_apXStrings
+#define app_crashhandler NativeEditor_app_crashhandler
+#define app_main NativeEditor_app_main
+#define clearGrpNamePtr NativeEditor_clearGrpNamePtr
+#define clearScriptNamePtr NativeEditor_clearScriptNamePtr
+#define faketimerhandler NativeEditor_faketimerhandler
+#define foundgrps NativeEditor_foundgrps
+#define g_addonNum NativeEditor_g_addonNum
+#define g_errorLineNum NativeEditor_g_errorLineNum
+#define g_gameArrayCount NativeEditor_g_gameArrayCount
+#define g_gameNamePtr NativeEditor_g_gameNamePtr
+#define g_gameType NativeEditor_g_gameType
+#define g_gameVarCount NativeEditor_g_gameVarCount
+#define g_groupFileHandle NativeEditor_g_groupFileHandle
+#define g_grpNamePtr NativeEditor_g_grpNamePtr
+#define g_lineNumber NativeEditor_g_lineNumber
+#define g_maybeUpgradeSoundFormats NativeEditor_g_maybeUpgradeSoundFormats
+#define g_numEnvSoundsPlaying NativeEditor_g_numEnvSoundsPlaying
+#define g_numXStrings NativeEditor_g_numXStrings
+#define g_rtsNamePtr NativeEditor_g_rtsNamePtr
+#define g_scriptModules NativeEditor_g_scriptModules
+#define g_scriptNamePtr NativeEditor_g_scriptNamePtr
+#define g_scriptPtr NativeEditor_g_scriptPtr
+#define g_scriptSize NativeEditor_g_scriptSize
+#define g_selectedGrp NativeEditor_g_selectedGrp
+#define g_sounds NativeEditor_g_sounds
+#define g_totalLines NativeEditor_g_totalLines
+#define g_tw NativeEditor_g_tw
+#define g_useCwd NativeEditor_g_useCwd
+#define h_arrays NativeEditor_h_arrays
+#define h_gamevars NativeEditor_h_gamevars
+#define h_labels NativeEditor_h_labels
+#define insptr NativeEditor_insptr
+#define iter_tokens NativeEditor_iter_tokens
+#define label NativeEditor_label
+#define labeltype NativeEditor_labeltype
+#define listgrps NativeEditor_listgrps
+#define loaddefinitions_game NativeEditor_loaddefinitions_game
+#define lockclock NativeEditor_lockclock
+#define osdcmd_restartvid NativeEditor_osdcmd_restartvid
+#define tempbuf NativeEditor_tempbuf
+#define vm NativeEditor_vm
+// Service MCP while the native editor is handling its own events and dialogs.
+#define handleevents NativeEditor_handleevents
+
+#endif

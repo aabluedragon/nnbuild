@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "compat.h"
 #include "colmatch.h"
+#include "vbjs.h"
 
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
@@ -1448,7 +1449,8 @@ void A_DeleteSprite(int s)
 
     S_DetachSoundsFromSprite(s);
 
-    deletesprite(s);
+    if (deletesprite(s) == 0)
+        VBJS_NotifySpriteDeleted(s);
 }
 
 void A_AddToDeleteQueue(int spriteNum)

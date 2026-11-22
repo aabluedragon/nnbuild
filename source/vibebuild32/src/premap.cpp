@@ -23,6 +23,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "mapeditor.h"
+#include "editorproject.h"
+#include "vbjs.h"
+#include "netcontent.h"
 #include "osd.h"
 
 extern int everyothertime;
@@ -126,8 +130,9 @@ static void G_DoLoadScreen(const char* statustext, int percent)
 
     if (boardfilename[0] != 0 && ud.level_number == 7 && ud.volume_number == 0)
     {
-        menutext(160, 90, 0, 0, "LOADING USER MAP");
-        gametextpal(160, 90 + 10, boardfilename, 14, 2);
+        auto const name = MapEditor_PlaytestName();
+        menutext(160, 90, 0, 0, name ? "LOADING PLAYTEST" : "LOADING USER MAP");
+        gametextpal(160, 90 + 10, name ? name : boardfilename, 14, 2);
     }
     else
     {
@@ -1217,19 +1222,32 @@ static void prelevel(char g)
 // Use this when you want to start a new game, or new level.
 void G_NewGame(uint32_t flags)
 {
-    // A new match/level begins: forget any archived scores so a player who
-    // rejoins after the match ended (level changed / score limit reached)
-    // starts fresh rather than reclaiming their previous score.
-    Net_ClearScoreArchive();
-
     if (!Menu_HaveUserMap()) // Clear usermap if we're not going to one.
         boardfilename[0] = 0;
 
     if ((myconnectindex == connecthead) && !(flags & NEWGAME_NOSEND))
+    {
+        if (numplayers > 1 && boardfilename[0] && !Net_IsCachedMap(boardfilename))
+        {
+            std::string staged;
+            if (!Net_StageUserMap(boardfilename, staged) || !Net_SendMap(staged.c_str(), -1))
+            {
+                LOG_F(ERROR, "Could not transfer user map '%s'", boardfilename);
+                Bstrncpyz(boardfilename, ud.volume_number == 0 && ud.level_number == 7 ? currentboardfilename : "",
+                          sizeof(boardfilename));
+                return;
+            }
+            Bstrncpyz(boardfilename, staged.c_str(), sizeof(boardfilename));
+            Net_SendUserMapName();
+        }
         Net_SendNewGame(flags);
+    }
 
     if ((myconnectindex != connecthead) && !(flags & (NEWGAME_FROMSERVER | NEWGAME_NOSEND)))
         return;
+
+    // Start a fresh score archive for this match.
+    Net_ClearScoreArchive();
 
     if(flags & NEWGAME_RESETALL) // Clear all player inventory
         for (int32_t ALL_PLAYERS(i))
@@ -1827,16 +1845,28 @@ int G_EnterLevel(int g)
     G_UpdateScreenArea();
     ud.screen_size = i;
 
-    G_UpdateAppTitle(Menu_HaveUserMap() ? boardfilename : m.name);
+    if (auto const name = MapEditor_PlaytestName())
+        G_UpdateAppTitle(name);
+    else
+        G_UpdateAppTitle(Menu_HaveUserMap() ? boardfilename : m.name);
 
     auto& p0 = *g_player[0].ps;
     int16_t playerAngle;
 
     char levelName[BMAX_PATH];
+    VBJS_BeginLevelAttachments();
 
     if (!VOLUMEONE && G_HaveUserMap())
     {
-        if (engineLoadBoard(boardfilename, 0, &p0.pos, &playerAngle, &p0.cursectnum) < 0)
+        int const previousMode = pathsearchmode;
+        if (MapEditor_Playing() || !DukeEditor::LaunchProjectFolder().empty())
+            pathsearchmode = 1;
+        int const loaded = engineLoadBoard(boardfilename, 0, &p0.pos, &playerAngle, &p0.cursectnum);
+        if (loaded >= 0)
+            if (auto const source = MapEditor_PlaytestSource())
+                artSetupMapArt(source);
+        pathsearchmode = previousMode;
+        if (loaded < 0)
         {
             OSD_Printf(OSD_ERROR "Map \"%s\" not found or invalid map version!\n", boardfilename);
             return 1;
@@ -1919,6 +1949,7 @@ int G_EnterLevel(int g)
     g_globalRandom = 0;
 
     ud.last_level = ud.level_number+1;
+    VBJS_FireSimple("levelChanged");
 
     G_BackupInterpolations();
 
@@ -1975,6 +2006,8 @@ int G_EnterLevel(int g)
             break;
     }
 
+    DukeEditor::ActivateLaunchProjectScripts();
+    VBJS_EndLevelAttachments();
     OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
     return 0;
 }

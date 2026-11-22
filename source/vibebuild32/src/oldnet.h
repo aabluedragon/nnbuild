@@ -89,6 +89,12 @@ enum DukePacket_t
     PACKET_TYPE_PLAYER_LEAVING,    // Client -> master: dropping out now (desync reconnect); free my slot.
 
     PACKET_TYPE_HOST_EVENT,        // Master -> everyone: apply a world change (spawn / monster control) at a scheduled tick.
+    PACKET_TYPE_FILE_REPLY,
+    PACKET_TYPE_CONTENT_READY,
+    PACKET_TYPE_CONTENT_RECONNECT,
+    PACKET_TYPE_ROTATION_MODE,
+    PACKET_TYPE_SERVER_COMMAND,
+    PACKET_TYPE_SERVER_MESSAGE,
 
     PACKET_END, // Should remain last in list.
 };
@@ -142,6 +148,13 @@ void Net_ClientReconnect(void);
 void Net_LaunchAddress(const char *hostport);   // relaunch as a client joining hostport
 void Net_LaunchHost(int32_t advertise);         // relaunch as a listen host (optionally advertised)
 void Net_LaunchMenu(const char *errmsg);        // relaunch back to the menu (optional join-error banner)
+char const *Net_ProcessExecutable(void);
+char const *Net_LaunchDirectory(void);
+#ifdef _WIN32
+intptr_t Net_StartContentProcess(const char *const *args, const char *workingDirectory = nullptr);
+#endif
+void Net_RestartForContent(const char *statePath);
+bool Net_PollContentReconnect(void);
 
 // Masterserver the in-game lobby queries (settable via cl_masterserver).
 extern char g_masterServerAddr[128];
@@ -184,6 +197,8 @@ OLDNET_EXTERN int32_t g_mapRotationMode; // 0 off, 1 sequential, 2 random
 int32_t Net_RotateNextMap(void);
 void Net_ListMapRotation(void);
 void Net_CheckMapRotation(void);
+void Net_RequestMapRotation(void);
+void Net_BroadcastRotationMode(void);
 
 // Score persistence across reconnects (host, keyed by client GUID). Cleared at
 // the start of a new match so a rejoin after the match ended starts fresh.
@@ -193,8 +208,11 @@ void Net_ClearScoreArchive(void);
 #define MAXNETMODFILES 8
 OLDNET_EXTERN char g_netModFiles[MAXNETMODFILES][BMAX_PATH]; // Mods (-g grp/zip) the host loaded.
 OLDNET_EXTERN int32_t g_netModFileCount;
-void Net_SendFile(int32_t slot, const char *name, int32_t fileIndex = 1, int32_t fileTotal = 1);
-void Net_SendGameFiles(int32_t slot); // Push the current map + host mods (slot<0 = everyone).
+bool Net_DrainReliableWindow(int limit = 480);
+void Net_ServerMessage(int slot, const char *text); // -1 broadcasts, otherwise only that recipient.
+uint32_t Net_PlayerConnection(int slot);
+void Net_PollPrivateCommands(void);
+void Net_SendServerCommand(const char *text);
 
 void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);

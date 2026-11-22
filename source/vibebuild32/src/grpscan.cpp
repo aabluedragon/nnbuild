@@ -40,7 +40,7 @@ static void process_vacapp15(int32_t crcval);
 //    name                                     crc          size      flags                         dependency  scriptname     postprocessing
 static internalgrpinfo_t const internalgrpfiles[] =
 {
-    { "Duke Nukem 3D",                         DUKE13_CRC,  26524524, GAMEFLAG_DUKE,                         0, NULL, NULL},
+    { "Duke Nukem 3D (1.3D)",                  DUKE13_CRC,  26524524, GAMEFLAG_DUKE,                         0, NULL, NULL},
     { "Duke Nukem 3D (South Korean Censored)", DUKEKR_CRC,  26385383, GAMEFLAG_DUKE,                         0, NULL, NULL},
     { "Duke Nukem 3D: Atomic Edition",         DUKE15_CRC,  44356548, GAMEFLAG_DUKE,                         0, NULL, NULL},
     { "Duke Nukem 3D: Atomic Edition (WT)",    DUKEWT_CRC,  44356548, GAMEFLAG_DUKE,                         0, NULL, NULL},
@@ -354,6 +354,15 @@ grpfile_t * FindGroup(int32_t crcval)
     return NULL;
 }
 
+bool G_IsBaseGrp(uint32_t crc, int32_t size)
+{
+    for (auto const *grp = listgrps; grp; grp = grp->next)
+        if (!grp->dependency && !(grp->game & GAMEFLAG_ADDON) &&
+            static_cast<uint32_t>(grp->crcval) == crc && grp->size == size)
+            return true;
+    return false;
+}
+
 #ifndef USE_PHYSFS
 static grpinfo_t const * FindGrpInfo(int32_t crcval, int32_t size)
 {
@@ -424,8 +433,11 @@ static void ProcessGroups(BUILDVFS_FIND_REC *srch, native_t maxsize)
 
             fh = openfrompath(sidx->name, BO_RDONLY|BO_BINARY, BS_IREAD);
             if (fh < 0) continue;
-            if (Bfstat(fh, &st)) continue;
-            if (st.st_size > maxsize) continue;
+            if (Bfstat(fh, &st) || st.st_size > maxsize)
+            {
+                close(fh);
+                continue;
+            }
 
             DLOG_F(INFO, " Checksumming %s...", sidx->name);
             do
@@ -461,7 +473,7 @@ static void ProcessGroups(BUILDVFS_FIND_REC *srch, native_t maxsize)
 }
 #endif
 
-int32_t ScanGroups(void)
+int32_t ScanGroups(const char *requested)
 {
 #ifndef USE_PHYSFS
     struct grpcache *fg, *fgg;
@@ -491,6 +503,18 @@ int32_t ScanGroups(void)
         BUILDVFS_FIND_REC *srch = klistpath("/", extension, BUILDVFS_FIND_FILE);
         ProcessGroups(srch, maxsize);
         klistfree(srch);
+    }
+
+    // The normal listing is rooted in the search paths. An explicit GRP can
+    // also be a nested or absolute path outside those directories.
+    if (requested && strpbrk(requested, "/\\"))
+    {
+        BUILDVFS_FIND_REC entry = {};
+        entry.name = const_cast<char *>(requested);
+        int const previousMode = pathsearchmode;
+        pathsearchmode = 1;
+        ProcessGroups(&entry, maxsize);
+        pathsearchmode = previousMode;
     }
 
     FreeGroupsCache();

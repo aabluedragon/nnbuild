@@ -39,8 +39,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osdfuncs.h"
 #include "osdcmds.h"
 #include "masterserver.h"
+#include "mapeditor.h"
+#include "editormcp.h"
+#include "editorproject.h"
+#include "nativeeditor.h"
 #include "scriptfile.h"
 #include "grpscan.h"
+#include "netcontent.h"
+#include "serverlevel.h"
+#include "vbjs.h"
 #include "kplib.h"
 //#include "crc32.h"
 //#include "util_lib.h"
@@ -1649,6 +1656,15 @@ extern int g_doQuickSave;
 
 void G_GameExit(const char *t)
 {
+    if (Net_IsContentProbe())
+    {
+        LOG_F(ERROR, "%s", t ? t : "Content check failed");
+        Bexit(EXIT_FAILURE);
+    }
+    // Disconnect pumps events, including the network quit timeout.
+    g_gameQuit = 0;
+    MapEditor_Shutdown();
+    VBJS_Shutdown();
     // If we're an advertised host, tell the masterserver we're going away so our
     // listing is removed immediately instead of lingering until its TTL expires.
     // Self-gates on whether we're actually advertising, so it's a no-op for
@@ -2311,6 +2327,7 @@ void G_DisplayRest(int smoothratio)
 
     G_PrintGameQuotes();
     G_PrintLevelName();
+    VBJS_DrawHUD();
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
             && ud.show_help == 0
@@ -5488,6 +5505,7 @@ SPAWN_END:
         X_OnEvent(EVENT_SPAWN, newSprite, playerNum, pDist);
     }
 
+    VBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);
     return newSprite;
 }
 
@@ -7250,6 +7268,18 @@ static void G_HandleLocalKeys(void)
 
     if (g_player[myconnectindex].ps->cheat_phase == 1 || (ud.gm&(MODE_MENU|MODE_TYPE))) return;
 
+    if (MapEditor_Playing() &&
+        (KB_UnBoundKeyPressed(sc_F2) || KB_UnBoundKeyPressed(sc_F3) ||
+         BUTTON(gamefunc_Quick_Save) || BUTTON(gamefunc_Quick_Load) || g_doQuickSave))
+    {
+        KB_ClearKeyDown(sc_F2);
+        KB_ClearKeyDown(sc_F3);
+        CONTROL_ClearButton(gamefunc_Quick_Save);
+        CONTROL_ClearButton(gamefunc_Quick_Load);
+        g_doQuickSave = 0;
+        G_AddUserQuote("PLAYTEST: SAVE YOUR MAP IN THE EDITOR");
+    }
+
     if (BUTTON(gamefunc_See_Coop_View) && (GTFLAGS(GAMETYPE_COOPVIEW) || ud.recstat == 2))
     {
         CONTROL_ClearButton(gamefunc_See_Coop_View);
@@ -8350,9 +8380,6 @@ static void G_Startup(void)
 {
     int i;
 
-    timerInit(TICRATE);
-    timerSetCallback(gameTimerHandler);
-
     G_CompileScripts();
 
     if (engineInit())
@@ -8383,9 +8410,14 @@ static void G_Startup(void)
         szPlayerName[sizeof(szPlayerName)-1] = '\0';
     }
 
-    if (CommandMap)
+    if (CommandMap && numplayers < 2)
     {
-        if (VOLUMEONE)
+        if (!DukeEditor::LaunchProjectFolder().empty())
+        {
+            Bstrncpyz(boardfilename, CommandMap, sizeof(boardfilename));
+            LOG_F(INFO, "Using project level: '%s'.", boardfilename);
+        }
+        else if (VOLUMEONE)
         {
             LOG_F(ERROR, "The -map option is available in the registered version only!");
             boardfilename[0] = 0;
@@ -8468,6 +8500,7 @@ void G_UpdatePlayerFromMenu(void)
 
 void G_BackToMenu(void)
 {
+    VBJS_ClearAttachments();
     boardfilename[0] = 0;
 
     if (ud.recstat == 1)
@@ -8482,6 +8515,13 @@ void G_BackToMenu(void)
 
 void app_crashhandler(void)
 {
+#ifdef VIBEBUILD_NATIVE_EDITOR
+    if (g_nativeEditor)
+    {
+        NativeEditor_app_crashhandler();
+        return;
+    }
+#endif
     G_CloseDemoWrite();
     VM_ScriptInfo(insptr, 64);
     Net_SendQuit();
@@ -8670,6 +8710,7 @@ static void G_DrawFrame()
 
     Net_DisplaySyncMsg();
     Net_DisplayLagDialog();
+    MapEditor_DrawPlaytestHint();
 
     if (VOLUMEONE)
     {
@@ -8691,7 +8732,7 @@ static void G_CheckGametype(void)
     // LOG_F("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
 
-bool G_InitMultiplayer()
+static bool G_BeginMultiplayer()
 {
     for (int32_t i = 0; i < MAXPLAYERS; i++)
         g_player[i].playerreadyflag = 0;
@@ -8781,10 +8822,6 @@ bool G_InitMultiplayer()
 
     netparam = NULL;
     netparamcount = 0;
-    botNameSeed = time(0);
-
-    Net_SendPlayerName();
-
     if (numplayers > 1)
     {
         LOG_F(INFO, "Multiplayer initialized.");
@@ -8795,17 +8832,25 @@ bool G_InitMultiplayer()
         for (int32_t i = 1; i < numplayers; i++)
         {
             G_MaybeAllocPlayer(i);
-            g_player[i].connected = (g_netLateJoin && myconnectindex == connecthead)
-                                    ? mmulti_slotconnected(i) : 1;
+            g_player[i].connected = myconnectindex == connecthead ? mmulti_slotconnected(i) : 1;
             g_player[i].isBot = 0;
         }
 
-        if (g_netLateJoin && myconnectindex == connecthead)
+        if (myconnectindex == connecthead)
             Net_RebuildConnectList();
 
         if (numplayers > ud.multimode)
             ud.multimode = numplayers;
+    }
+    return true;
+}
 
+bool G_InitMultiplayer()
+{
+    botNameSeed = time(0);
+    Net_SendPlayerName();
+    if (numplayers > 1)
+    {
         // If the session is already running, the host announces that within
         // moments of the transport handshake; ingest pending packets so
         // g_netLateJoiner is known before the version barrier below.
@@ -8828,16 +8873,10 @@ bool G_InitMultiplayer()
 
         if (!g_netLateJoiner)
         {
-            // The map is host-authoritative. The host pushes the map + any mods
-            // first (reliable+ordered, so they land before the USER_MAP name),
-            // then announces the map name; clients that lack the files download
-            // them automatically instead of failing to open. A client must NOT
-            // broadcast its own (possibly empty) map name here - doing so would
-            // overwrite the host's authoritative boardfilename and desync which
-            // startup branch each machine takes (usermap barrier vs. logo).
             if (myconnectindex == connecthead)
             {
-                Net_SendGameFiles(-1);
+                if (!Net_SendGameFiles(-1))
+                    G_GameExit("Could not transfer the startup user map.");
                 Net_SendUserMapName();
             }
             Net_WaitForPlayers();
@@ -8885,13 +8924,59 @@ static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
 
 int app_main(int32_t argc, char const* const* argv)
 {
+    for (int i = 1; i < argc; ++i)
+        if (!Bstrcmp(argv[i], "--editor-mcp"))
+            return MapEditor_RunMcp(argc - i - 1, argv + i + 1);
+
     int i = 0;
     char cwd[BMAX_PATH];
 
     // Stash the command line so a desynced client can relaunch itself with it.
     Net_StoreProcessArgs(argc, argv);
+    if (!Mcp_ParseOptions(argc, argv))
+        return EXIT_FAILURE;
+    for (int arg = 1; arg < argc; ++arg)
+        if (!Bstrcmp(argv[arg], "--build-editor"))
+        {
+#ifdef VIBEBUILD_NATIVE_EDITOR
+            std::vector<const char *> args(argv, argv + arg);
+            args.insert(args.end(), argv + arg + 1, argv + argc);
+            g_nativeEditor = true;
+            extern const char *DefaultGameLocalExec;
+            std::string sdkPath;
+            if (auto const executable = Net_ProcessExecutable())
+            {
+                DefaultGameLocalExec = executable;
+                std::string directory = executable;
+                auto const separator = directory.find_last_of("/\\");
+                if (separator != std::string::npos)
+                {
+                    sdkPath = directory.substr(0, separator + 1) + "package/sdk";
+                    if (buildvfs_isdir(sdkPath.c_str()))
+                    {
+                        sdkPath.insert(0, "-j");
+                        args.push_back(sdkPath.c_str());
+                    }
+                }
+            }
+            args.push_back(nullptr);
+            Mcp_SetNativeEditor();
+            if (!Mcp_Start())
+                return EXIT_FAILURE;
+            return NativeEditor_app_main(args.size() - 1, args.data());
+#else
+            fprintf(stderr, "This build has no native Build tools.\n");
+            return EXIT_FAILURE;
+#endif
+        }
+    if (!DukeEditor::PrepareProjectLaunch(argc, argv))
+        return EXIT_FAILURE;
+    VBJS_CaptureLaunchDir();
 
-    engineSetLogFile(APPBASENAME ".log", LOG_GAME_MAX);
+    bool const contentProbe = G_CheckCmdSwitch(argc, argv, "--content-probe");
+    engineSetLogFile(contentProbe ? "content-probe.log" : APPBASENAME ".log", LOG_GAME_MAX,
+                     G_CheckCmdSwitch(argc, argv, "--server-resume") ||
+                     G_CheckCmdSwitch(argc, argv, "--content-rejoin") ? loguru::Append : loguru::Truncate);
     engineSetLogVerbosityCallback(dukeVerbosityCallback);
 
     // -masterserver [port]: run the standalone public lobby / STUN server and
@@ -9003,10 +9088,11 @@ int app_main(int32_t argc, char const* const* argv)
 #endif
 
     G_ScanGroups();
+    DukeEditor::SelectProjectGame();
 
 // OLDMP MERGE CHECKME
 #ifdef STARTUP_SETUP_WINDOW
-    if (readSetup < 0 || (!g_noSetup && (ud.configversion != BYTEVERSION_NETDUKE32 || ud.config.ForceSetup)) || g_commandSetup)
+    if ((!g_noSetup && (readSetup < 0 || ud.configversion != BYTEVERSION_NETDUKE32 || ud.config.ForceSetup)) || g_commandSetup)
     {
         if (quitevent || !startwin_run())
         {
@@ -9020,7 +9106,27 @@ int app_main(int32_t argc, char const* const* argv)
     }
 #endif
 
-    G_LoadGroups(!g_noAutoLoad);
+    timerInit(TICRATE);
+    timerSetCallback(gameTimerHandler);
+
+    if (!Net_RestoreServerLaunch() || (!Net_IsContentProbe() && !G_BeginMultiplayer()))
+        return EXIT_FAILURE;
+
+    bool const joining = myconnectindex != connecthead;
+    if (joining && !Net_BootstrapContent())
+        return EXIT_FAILURE;
+
+    G_LoadGroups(!g_noAutoLoad && !(numplayers > 1 && G_HaveCommandGroups()));
+    if (!DukeEditor::ValidateProjectGame())
+        return EXIT_FAILURE;
+
+#ifndef USE_PHYSFS
+    g_vfsPreferArchives = (numplayers > 1 && g_netModFileCount > 0) || Net_IsContentLaunch() ||
+                          (g_selectedGrp && g_selectedGrp->type->crcval == DUKE13_CRC);
+#endif
+
+    if (!joining && !Net_BootstrapContent())
+        return EXIT_FAILURE;
 
     i = initgroupfile(eduke32dat);
 
@@ -9079,6 +9185,12 @@ int app_main(int32_t argc, char const* const* argv)
     }
 
     G_Startup(); // a bunch of stuff including compiling cons
+
+    if (!Net_ApplyServerLaunchLevel())
+        return EXIT_FAILURE;
+
+    if (Net_IsContentProbe())
+        return Net_CheckLaunchMap() ? EXIT_SUCCESS : EXIT_FAILURE;
 
     ud.color = playerColor_getValidPal(ud.m_color);
     g_player[0].ps->palookup = g_player[0].pcolor = ud.color;
@@ -9196,6 +9308,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     CONFIG_ReadSettings();
     OSD_Exec("autoexec.cfg");
+    Net_RestoreServerSettings();
 
     CONFIG_SetDefaultKeys(keydefaults, true);
 
@@ -9227,6 +9340,10 @@ int app_main(int32_t argc, char const* const* argv)
         FX_StopAllSounds();
     }
 
+    VBJS_Init();
+    if (!Mcp_Start())
+        return EXIT_FAILURE;
+
     if (ud.warp_on > 1 && ud.multimode < 2)
     {
         videoClearViewableArea(0L);
@@ -9249,7 +9366,18 @@ MAIN_LOOP_RESTART:
     G_GetCrosshairColor();
     G_SetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
 
-    if (g_netLateJoiner)
+    if (MapEditor_Requested())
+    {
+        if (!MapEditor_CanOpen())
+        {
+            LOG_F(ERROR, "The map editor requires a local Duke3D game with SDL2 and OpenGL.");
+            return EXIT_FAILURE;
+        }
+        if (CommandMap)
+            MapEditor_Request(CommandMap);
+        G_BackToMenu();
+    }
+    else if (g_netLateJoiner)
     {
         // Joining a game in progress: the state arrives over the network.
         // Skip the logo/new-game startup, set up the prediction pointers the
@@ -9278,7 +9406,7 @@ MAIN_LOOP_RESTART:
     }
     else G_UpdateScreenArea();
 
-    if (!g_netLateJoiner && ud.warp_on == 0 && G_PlaybackDemo())
+    if (!MapEditor_Requested() && !g_netLateJoiner && ud.warp_on == 0 && G_PlaybackDemo())
     {
         FX_StopAllSounds();
 
@@ -9316,7 +9444,15 @@ MAIN_LOOP_RESTART:
 
     do // main loop
     {
-        if (gameHandleEvents() && quitevent)
+        bool const windowClosing = gameHandleEvents() && quitevent;
+        bool const editing = MapEditor_Update(windowClosing);
+        Mcp_Poll();
+        if (editing)
+        {
+            quitevent = 0;
+            continue;
+        }
+        if (windowClosing)
         {
             // JBF
             KB_KeyDown[sc_Escape] = 1;
@@ -9326,6 +9462,9 @@ MAIN_LOOP_RESTART:
         // We diverged from the host and can't keep simulating a bogus world.
         // Tell the player why, briefly, then relaunch to reconnect cleanly
         // (Net_ClientReconnect does not return on success).
+        if (Net_PollContentReconnect())
+            continue;
+
         if (g_netReconnectPending)
         {
             static uint32_t reconnectMsgStart = 0;
@@ -9376,7 +9515,7 @@ MAIN_LOOP_RESTART:
                 // console, not a live avatar; suppress its gameplay input so
                 // it stays put. (Deterministic: every machine sees empty input
                 // for the host, so this can't desync.)
-                if (g_netServerConsole)
+    if (g_netServerConsole)
                     netInput = {};
                 
                 // The while condition in this loop is a duplicate of the if condition above. Why?
@@ -9418,14 +9557,19 @@ MAIN_LOOP_RESTART:
         Net_MasterCheckTimeouts();
         // And restore a reconnecting player's score once its GUID has arrived.
         Net_MasterCheckRestore();
+        Net_PollPrivateCommands();
+        VBJS_DispatchCommands();
         Net_CheckMapRotation();
+        Net_RunServerLevelChange();
+        if (!g_netLateJoiner || (ud.gm & MODE_GAME))
+            while (!Net_ServerLevelChangePending() && G_RunStartupCommand()) {}
         Net_HostAdvertise();
         // A late joiner tells the master it's ready to receive the snapshot,
         // so the master doesn't stream it before this loop is pumping packets.
         if (g_netLateJoiner == 1 && !(ud.gm & MODE_GAME))
             Net_SendLateJoinReady();
 
-        if (g_netServerConsole)
+        if (g_netServerConsole && !Mcp_UsesStdin())
             Net_PollStdin();
 
         if (ud.gm & (MODE_EOL | MODE_RESTART))
@@ -9439,6 +9583,7 @@ MAIN_LOOP_RESTART:
 
         if (engineFPSLimit())
         {
+            VBJS_RunFrame((ud.gm & MODE_GAME) && !(ud.gm & MODE_MENU) && !ud.pause_on);
             if (g_forceHeadless)
             {
                 // Headless console server: there is no video output at all, so
@@ -10129,7 +10274,10 @@ static int G_DoMoveThings(void)
     }
 
     if (ud.pause_on == 0)
+    {
         G_MoveWorld();
+        VBJS_RunFixedUpdate(double(TICSPERFRAME) / TICRATE);
+    }
     // G_DoWorldSim() -------------------------
 
     Net_CorrectPrediction();
@@ -10382,7 +10530,15 @@ static void G_SetupGameButtons(void)
 }
 
 // [JM] Needed for build linkage
-void M32RunScript(const char* s) { UNREFERENCED_PARAMETER(s); }
+void M32RunScript(const char* s)
+{
+#ifdef VIBEBUILD_NATIVE_EDITOR
+    if (g_nativeEditor)
+        NativeEditor_M32RunScript(s);
+#else
+    UNREFERENCED_PARAMETER(s);
+#endif
+}
 //void G_Polymer_UnInit(void) { }
 
 /*
