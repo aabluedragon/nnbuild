@@ -1,0 +1,7 @@
+{
+  "name": "Ashline Relay",
+  "target": "standalone",
+  "entry": "Maps/Ashline.map",
+  "modern": true,
+  "version": 1
+}

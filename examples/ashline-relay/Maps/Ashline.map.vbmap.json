@@ -1,0 +1,46 @@
+{
+  "target": "inherit",
+  "scripts": [
+    {
+      "kind": "sector",
+      "script": "Scripts/Station.js",
+      "index": 29
+    },
+    {
+      "kind": "sector",
+      "script": "Scripts/Station.js",
+      "index": 18
+    },
+    {
+      "kind": "sector",
+      "script": "Scripts/Station.js",
+      "index": 19
+    },
+    {
+      "kind": "sector",
+      "script": "Scripts/Station.js",
+      "index": 21
+    },
+    {
+      "kind": "sprite",
+      "script": "Scripts/Station.js",
+      "index": 15
+    },
+    {
+      "kind": "sprite",
+      "script": "Scripts/Station.js",
+      "index": 21
+    },
+    {
+      "kind": "sprite",
+      "script": "Scripts/Station.js",
+      "index": 36
+    },
+    {
+      "kind": "sprite",
+      "script": "Scripts/Station.js",
+      "index": 50
+    }
+  ],
+  "version": 1
+}

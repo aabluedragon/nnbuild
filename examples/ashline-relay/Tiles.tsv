@@ -1,0 +1,343 @@
+Tile	Freedoom lump or derived asset
+21	PISTA0
+40	CLIPA0
+53	MEDIA0
+952	PUFFA0
+1405	PLAYA1 with player collision padding
+1620	BLUDA0
+2329	PUFFB0
+2330	PUFFC0
+2331	PUFFD0
+2456	Ashline Relay
+2460	STIMA0
+2462	Ashline status bar
+2472	Ashline UI HUD digits
+2473	Ashline UI HUD digits
+2474	Ashline UI HUD digits
+2475	Ashline UI HUD digits
+2476	Ashline UI HUD digits
+2477	Ashline UI HUD digits
+2478	Ashline UI HUD digits
+2479	Ashline UI HUD digits
+2480	Ashline UI HUD digits
+2481	Ashline UI HUD digits
+2494	CEIL5_1
+2497	Ashline relay title
+2521	PUNGA0
+2522	PUNGA0
+2523	Ashline crosshair
+2524	PISGA0 / PISGB0
+2525	PISGA0 / PISGB0
+2526	PISGB0 + PISFA0
+2527	PISGA0 / PISGB0
+2528	PISGA0 / PISGB0
+2529	PISGA0 / PISGB0
+2530	CLIPA0
+2532	PISGA0 / PISGB0
+2533	CLIPA0
+2595	PUFFA0
+2820	Menu cursor
+2821	Menu cursor
+2822	Ashline UI small
+2823	Ashline UI small
+2824	Ashline UI small
+2825	Ashline UI small
+2826	Ashline UI small
+2827	Ashline UI small
+2828	Ashline UI small
+2829	Ashline UI small
+2830	Ashline UI small
+2831	Ashline UI small
+2832	Ashline UI small
+2833	Ashline UI small
+2834	Ashline UI small
+2835	Ashline UI small
+2836	Ashline UI small
+2837	Ashline UI small
+2838	Ashline UI small
+2839	Ashline UI small
+2840	Ashline UI small
+2841	Ashline UI small
+2842	Ashline UI small
+2843	Ashline UI small
+2844	Ashline UI small
+2845	Ashline UI small
+2846	Ashline UI small
+2847	Ashline UI small
+2848	Ashline UI small
+2849	Ashline UI small
+2850	Ashline UI small
+2851	Ashline UI small
+2852	Ashline UI small
+2853	Ashline UI small
+2854	Ashline UI small
+2855	Ashline UI small
+2856	Ashline UI small
+2857	Ashline UI small
+2858	Ashline UI small
+2859	Ashline UI small
+2860	Ashline UI small
+2861	Ashline UI small
+2862	Ashline UI small
+2863	Ashline UI small
+2864	Ashline UI small
+2865	Ashline UI small
+2866	Ashline UI small
+2867	Ashline UI small
+2868	Ashline UI small
+2869	Ashline UI small
+2870	Ashline UI small
+2871	Ashline UI small
+2872	Ashline UI small
+2873	Ashline UI small
+2874	Ashline UI small
+2875	Ashline UI small
+2876	Ashline UI small
+2877	Ashline UI small
+2878	Ashline UI small
+2879	Ashline UI small
+2880	Ashline UI small
+2881	Ashline UI small
+2882	Ashline UI small
+2883	Ashline UI small
+2884	Ashline UI small
+2886	Ashline UI small
+2887	Ashline UI small
+2888	Ashline UI small
+2889	Ashline UI small
+2890	Ashline UI small
+2891	Ashline UI small
+2892	Ashline UI small
+2893	Ashline UI small
+2894	Ashline UI small
+2895	Ashline UI small
+2896	Ashline UI small
+2897	Ashline UI small
+2898	Ashline UI small
+2899	Ashline UI small
+2900	Ashline UI small
+2901	Ashline UI small
+2902	Ashline UI small
+2903	Ashline UI small
+2904	Ashline UI small
+2905	Ashline UI small
+2906	Ashline UI small
+2907	Ashline UI small
+2908	Ashline UI small
+2909	Ashline UI small
+2910	Ashline UI small
+2911	Ashline UI small
+2913	Ashline UI small
+2930	Ashline UI large digits
+2931	Ashline UI large digits
+2932	Ashline UI large digits
+2933	Ashline UI large digits
+2934	Ashline UI large digits
+2935	Ashline UI large digits
+2936	Ashline UI large digits
+2937	Ashline UI large digits
+2938	Ashline UI large digits
+2939	Ashline UI large digits
+2940	Ashline UI large
+2941	Ashline UI large
+2942	Ashline UI large
+2943	Ashline UI large
+2944	Ashline UI large
+2945	Ashline UI large
+2946	Ashline UI large
+2947	Ashline UI large
+2948	Ashline UI large
+2949	Ashline UI large
+2950	Ashline UI large
+2951	Ashline UI large
+2952	Ashline UI large
+2953	Ashline UI large
+2954	Ashline UI large
+2955	Ashline UI large
+2956	Ashline UI large
+2957	Ashline UI large
+2958	Ashline UI large
+2959	Ashline UI large
+2960	Ashline UI large
+2961	Ashline UI large
+2962	Ashline UI large
+2963	Ashline UI large
+2964	Ashline UI large
+2965	Ashline UI large
+3072	Ashline UI mini
+3073	Ashline UI mini
+3074	Ashline UI mini
+3075	Ashline UI mini
+3076	Ashline UI mini
+3077	Ashline UI mini
+3078	Ashline UI mini
+3079	Ashline UI mini
+3080	Ashline UI mini
+3081	Ashline UI mini
+3082	Ashline UI mini
+3083	Ashline UI mini
+3084	Ashline UI mini
+3085	Ashline UI mini
+3086	Ashline UI mini
+3087	Ashline UI mini
+3088	Ashline UI mini
+3089	Ashline UI mini
+3090	Ashline UI mini
+3091	Ashline UI mini
+3092	Ashline UI mini
+3093	Ashline UI mini
+3094	Ashline UI mini
+3095	Ashline UI mini
+3096	Ashline UI mini
+3097	Ashline UI mini
+3098	Ashline UI mini
+3099	Ashline UI mini
+3100	Ashline UI mini
+3101	Ashline UI mini
+3102	Ashline UI mini
+3103	Ashline UI mini
+3104	Ashline UI mini
+3105	Ashline UI mini
+3106	Ashline UI mini
+3107	Ashline UI mini
+3108	Ashline UI mini
+3109	Ashline UI mini
+3110	Ashline UI mini
+3111	Ashline UI mini
+3112	Ashline UI mini
+3113	Ashline UI mini
+3114	Ashline UI mini
+3115	Ashline UI mini
+3116	Ashline UI mini
+3117	Ashline UI mini
+3118	Ashline UI mini
+3119	Ashline UI mini
+3120	Ashline UI mini
+3121	Ashline UI mini
+3122	Ashline UI mini
+3123	Ashline UI mini
+3124	Ashline UI mini
+3125	Ashline UI mini
+3126	Ashline UI mini
+3127	Ashline UI mini
+3128	Ashline UI mini
+3129	Ashline UI mini
+3130	Ashline UI mini
+3131	Ashline UI mini
+3132	Ashline UI mini
+3133	Ashline UI mini
+3134	Ashline UI mini
+3136	Ashline UI mini
+3137	Ashline UI mini
+3138	Ashline UI mini
+3139	Ashline UI mini
+3140	Ashline UI mini
+3141	Ashline UI mini
+3142	Ashline UI mini
+3143	Ashline UI mini
+3144	Ashline UI mini
+3145	Ashline UI mini
+3146	Ashline UI mini
+3147	Ashline UI mini
+3148	Ashline UI mini
+3149	Ashline UI mini
+3150	Ashline UI mini
+3151	Ashline UI mini
+3152	Ashline UI mini
+3153	Ashline UI mini
+3154	Ashline UI mini
+3155	Ashline UI mini
+3156	Ashline UI mini
+3157	Ashline UI mini
+3158	Ashline UI mini
+3159	Ashline UI mini
+3160	Ashline UI mini
+3161	Ashline UI mini
+3163	Ashline UI mini
+3240	Ashline results backdrop with SKY2
+3281	Ashline Relay
+3740	STARTAN3
+3741	METAL2
+3742	BRONZE2
+3743	COMPBLUE
+3744	SUPPORT2
+3745	LITEBLU2
+3746	SILVER3
+3747	GRAY5
+3748	TEKWALL4
+3749	PIPE2
+3750	BIGDOOR3
+3751	DOORTRAK
+3752	SLADWALL
+3753	SW1COMP
+3754	SW2COMP
+3755	ASHWALL3
+3756	LITERED
+3757	CRATE1
+3758	BROWNGRN
+3759	COMPSPAN
+3760	SHAWN2
+3761	SW1TEK
+3762	SW2TEK
+3763	BRICKLIT
+3764	LITE3
+3765	BIGDOOR4
+3766	TEKWALL1
+3767	BRICK10
+3770	SKY2
+3790	FLAT5_4
+3791	FLOOR0_7
+3792	CEIL3_5
+3793	CEIL5_1
+3794	FLAT22
+3795	NUKAGE1
+3796	NUKAGE2
+3797	NUKAGE3
+3798	NUKAGE2
+3799	GRNLITE1
+3800	FLOOR4_8
+3801	RROCK14
+3802	MFLR8_4
+3803	CEIL1_3
+3804	CEIL4_2
+3805	FLOOR5_1
+3806	CEIL5_2
+3807	FLOOR1_6
+3808	TLITE6_5
+3830	POSSA1
+3831	POSSB1
+3832	POSSC1
+3833	POSSD1
+3834	POSSE1
+3835	POSSJ0
+3836	POSSG1
+3837	POSSF1
+3840	SARGA1
+3841	SARGB1
+3842	SARGC1
+3843	SARGD1
+3844	SARGE1
+3845	SARGL0
+3846	SARGH1
+3850	BKEYA0
+3851	MEDIA0
+3852	AMMOA0
+3853	STIMA0
+3854	TLMPA0
+3855	COLUA0
+3856	BAR1A0
+3857	POL1A0
+3860	TFOGB0
+3861	TFOGD0
+3862	TFOGF0
+3863	TFOGH0
+3870	ASHLINE RELAY
+3871	COOLANT
+3872	UPLINK
+3873	AUX SUPPLY
+3874	CELL STORAGE
+3875	UPLINK LIVE
+3876	EXTRACT
+3877	WATCH STEP
+3878	02
+3879	01

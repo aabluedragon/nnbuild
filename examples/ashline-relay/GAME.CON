@@ -1,0 +1,187 @@
+// Ashline Relay, original single-map game data for VibeBuild32.
+
+// Visibility, impact damage, health, armor, respawn timers, friction,
+// blast radii, ammunition limits, and optional legacy settings.
+gamestartup 448 10 100 0 768 768 52224 176
+            1500 1500 800 700 1000 700 1200
+            96 24 100 10 12 20 30 8 40 24
+            0 3 0 64 0
+
+definevolumename 0 ASHLINE RELAY
+defineskillname 0 Recon
+defineskillname 1 Night Shift
+defineskillname 2 Shutdown
+defineskillname 3 Blackout
+definelevelname 0 0 Maps/Ashline.map 06:00 02:30 Ashline Relay
+
+music 1 Sounds/relay.mid
+music 0 Sounds/relay.mid Sounds/relay.mid Sounds/relay.mid Sounds/relay.mid
+
+define PULSE 3
+define SCOUT_ATTACK 401
+define SCOUT_DOWN_SOUND 402
+define SCOUT_ALERT 403
+define GATE_OPEN 404
+define UPLINK_TONE 405
+define SUPPLY_TONE 406
+define RELAY_PAIN 407
+definesound PULSE Sounds/pulse.wav 0 0 245 0 0
+definesound SCOUT_ATTACK Sounds/claw.wav -80 80 185 0 0
+definesound SCOUT_DOWN_SOUND Sounds/down.wav -90 65 160 0 0
+definesound SCOUT_ALERT Sounds/alarm.wav -50 80 155 0 0
+definesound GATE_OPEN Sounds/gate.wav 0 0 200 0 0
+definesound UPLINK_TONE Sounds/tone.wav 0 0 200 0 0
+definesound SUPPLY_TONE Sounds/supply.wav 0 0 200 0 0
+definesound RELAY_PAIN Sounds/pain.wav 0 0 185 0 0
+definesound 0 Sounds/claw.wav 0 0 130 0 0
+definesound 1 Sounds/tone.wav 0 0 90 0 0
+definesound 2 Sounds/pain.wav 0 0 150 0 0
+definesound 33 Sounds/tone.wav 0 0 100 0 0
+definesound 4 Sounds/supply.wav 0 0 125 0 0
+definesound 5 Sounds/supply.wav 0 0 125 0 0
+definesound 215 Sounds/tone.wav 0 0 100 0 0
+definesound 14 Sounds/tone.wav 0 0 95 0 0
+definesound 244 Sounds/supply.wav 0 0 120 0 0
+definesound 249 Sounds/gate.wav 0 0 155 0 0
+
+// The single-player avatar has a hitscan target and lets the player move past
+// the collision box of their own sprite.
+onevent EVENT_PROCESSINPUT
+    cstat 256
+endevent
+
+onevent EVENT_DISPLAYSBAR
+    setvar RETURN 1
+endevent
+
+define enemy 1
+define notenemy 0
+define seekplayer 512
+define geth 2
+define faceplayer 1
+
+define RELAY_SCOUT 3830
+define RELAY_TRACKER 3840
+define RELAY_BANDAGE 3853
+define RELAY_MEDIC 3851
+define RELAY_AMMO 3852
+define PULSE_SPARK 2595
+define PULSE_SMOKE 2329
+
+action SCOUT_IDLE   0 1 1 1 10
+action SCOUT_WALK   0 4 1 1 6
+action SCOUT_STRIKE 4 1 1 1 8
+action SCOUT_FALLEN 5 1 1 1 10
+action SCOUT_RECOIL 6 1 1 1 8
+move SCOUT_CREEP 60
+move SCOUT_STOP 0
+
+state relay_scout_behavior
+    clipdist 28
+    fall
+    ifaction SCOUT_FALLEN
+        break
+    ifhitweapon
+    {
+        ifdead
+        {
+            sound SCOUT_DOWN_SOUND
+            cstat 0
+            move SCOUT_STOP
+            action SCOUT_FALLEN
+            addkills 1
+            break
+        }
+        action SCOUT_RECOIL
+        move SCOUT_STOP
+        break
+    }
+    ifaction SCOUT_RECOIL
+    {
+        ifcount 8
+        {
+            move SCOUT_CREEP seekplayer geth
+            action SCOUT_WALK
+        }
+        break
+    }
+    ifaction SCOUT_STRIKE
+    {
+        ifcount 12
+        {
+            ifpdistl 960
+                ifcanseetarget
+                {
+                    sound SCOUT_ATTACK
+                    addphealth -9
+                    palfrom 14 42 6 0
+                }
+            move SCOUT_CREEP seekplayer geth
+            action SCOUT_WALK
+        }
+        break
+    }
+    ifpdistl 800
+        ifcanseetarget
+        {
+            move SCOUT_STOP faceplayer geth
+            action SCOUT_STRIKE
+            break
+        }
+    ifaction SCOUT_IDLE
+        ifpdistl 5200
+            ifcanseetarget
+            {
+                sound SCOUT_ALERT
+                move SCOUT_CREEP seekplayer geth
+                action SCOUT_WALK
+            }
+ends
+
+useractor enemy RELAY_SCOUT 34 SCOUT_IDLE SCOUT_STOP
+    state relay_scout_behavior
+enda
+
+useractor enemy RELAY_TRACKER 55 SCOUT_IDLE SCOUT_STOP
+    state relay_scout_behavior
+enda
+
+useractor notenemy RELAY_MEDIC
+    ifpdistl 448
+        ifphealthl 100
+        {
+            addphealth 35
+            sound SUPPLY_TONE
+            killit
+        }
+enda
+
+useractor notenemy RELAY_BANDAGE
+    ifpdistl 448
+        ifphealthl 100
+        {
+            addphealth 12
+            sound SUPPLY_TONE
+            killit
+        }
+enda
+
+useractor notenemy RELAY_AMMO
+    ifpdistl 448
+    {
+        addammo 1 20
+        sound SUPPLY_TONE
+        killit
+    }
+enda
+
+actor PULSE_SPARK 15
+    ifcount 3
+        killit
+enda
+
+action SMOKE_PUFF 0 3 1 1 3
+actor PULSE_SMOKE 0 SMOKE_PUFF
+    ifactioncount 3
+        killit
+enda
