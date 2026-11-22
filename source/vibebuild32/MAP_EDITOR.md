@@ -196,6 +196,8 @@ Save the map and export the project ZIP to share the prefab and script assets.
    3D shows those cursors and selections, plus camera positions for peers
    in 3D. Use the **Live plan** button to hide or restore it.
 
+![Ashline Relay live editing with the host on the left and the connected client on the right](images/ashline-live-editing.png)
+
 A drag becomes a shared edit when released. Inspector numbers commit on
 Enter. Edits to different records can merge. When two edits conflict, review
 the current draft before retrying. **Build → Change history** shows each edit,
