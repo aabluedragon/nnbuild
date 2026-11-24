@@ -315,7 +315,7 @@ void G_ExtInit(void)
         {
             Bsnprintf(cwd, ARRAY_SIZE(cwd), "%s/"
 #if defined(_WIN32)
-                      APPNAME
+                      APPWINDOWSNAME
 #elif defined(GEKKO)
                       "apps/" APPBASENAME
 #else

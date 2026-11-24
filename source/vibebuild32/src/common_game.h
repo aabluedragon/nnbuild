@@ -21,7 +21,11 @@ extern "C" {
 extern int g_useCwd;
 
 #ifndef APPNAME
-#define APPNAME             "VibeBuild32"
+#define APPNAME             "NNBuild"
+// Existing Windows profiles and chat-pipe clients use this name.
+#define APPWINDOWSNAME      "VibeBuild32"
+#else
+#define APPWINDOWSNAME      APPNAME
 #endif
 
 #ifndef APPBASENAME

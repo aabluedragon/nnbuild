@@ -1057,6 +1057,10 @@ endef
 
 $(foreach i,$(components),$(eval $(call OBJECTRULES,$i)))
 
+ifeq ($(PLATFORM),WINDOWS)
+$(vibebuild32_obj)/gameres.$o: $(vibebuild32_rsrc)/game_icon.ico
+endif
+
 define NATIVEEDITORRULE
 $(vibebuild32_obj)/native/$(notdir $(1:.cpp=.$o)): $(1) $(vibebuild32_src)/nativeeditorprefix.h
 	$$(COMPILE_STATUS)
