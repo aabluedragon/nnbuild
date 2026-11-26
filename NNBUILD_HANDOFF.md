@@ -1,40 +1,8 @@
 # NNBuild handoff
 
 This file is written for a fresh agent starting from the repository root with
-no prior chat context. It captures the current operational state, the important
-commands, and the known unfinished work.
-
-## Current repository state
-
-As of 2026-08-16, the workspace is intentionally not clean. Before changing
-code, run:
-
-```sh
-git status --short
-```
-
-Important current observations:
-
-- There are many modified files under `source/nnbuild/`, `source/sw/`,
-  `source/build/`, `source/blood/`, `source/exhumed/`, and `source/rr/`.
-- `autojs/my-mod/` currently shows deleted generated project files in the
-  worktree. Do not restore or remove them unless the user explicitly asks.
-- There are untracked generated/runtime artifacts: `__autojs/`, `egamlj.sav`,
-  and `obj-win32/`.
-- Preserve unrelated user changes. Do not use destructive git commands.
-
-Recent committed history before this dirty state:
-
-```text
-de54ee49c Fix Ion Fury deathmatch late-join sync
-6d4563e4d Fix Ion Fury menu, sound, and late join issues
-4a29cc8e7 Match Fury setup menu font metrics
-b47266d25 Fix Ion Fury setup menu text scaling
-431bce9d8 Fix VibeBuild32 weapon fire timing
-4fa2edb21 Complete Ion Fury CON compatibility
-1c6f9336d Support Ion Fury and World Tour CON startup
-09d62bb3b Support Ion Fury and World Tour CON scripts
-```
+no prior chat context. It captures the important commands and the conventions
+to follow.
 
 ## Build command
 
@@ -44,9 +12,7 @@ Use the normal target:
 make -j8 nnbuild
 ```
 
-The last recorded build after the current Shadow-Warrior-in-Duke bridge edits
-linked successfully with warnings only. Rebuild before making claims about the
-current checkout because the worktree is dirty.
+Rebuild before making claims about the current checkout.
 
 ## Public command-line syntax
 
