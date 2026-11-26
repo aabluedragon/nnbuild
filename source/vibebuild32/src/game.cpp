@@ -10727,6 +10727,10 @@ RECHECK:
 
         if (engineFPSLimit())
         {
+            // The title menu and demo playback run in this loop rather than the
+            // main one, so scripts and the debugger are serviced here as well.
+            VBJS_RunFrame(0);
+
             if (foundemo == 0)
             {
                 videoClearScreen(0);

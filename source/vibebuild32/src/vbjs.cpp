@@ -356,17 +356,24 @@ static char *vbjs_read_file(const char *path, size_t *out_len)
     return buf;
 }
 
+// The VS Code files every generated project receives (launch and task
+// definitions, a short guide and the debug adapter). They are compiled in so
+// the generator works from any directory.
+#include "vbjs_templates.inc"
+
 static char *vbjs_read_vscode_template(const char *file, size_t *out_len)
 {
-    char source[1400];
-
-    snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_launchDir, file);
-    if (char *contents = vbjs_read_file(source, out_len)) return contents;
-
-    if (s_exeDir[0])
+    for (auto const &tpl : k_vbjsVscodeTemplates)
     {
-        snprintf(source, sizeof(source), "%s/autojs/my-mod/.vscode/%s", s_exeDir, file);
-        if (char *contents = vbjs_read_file(source, out_len)) return contents;
+        if (strcmp(tpl.name, file))
+            continue;
+
+        size_t const len = strlen(tpl.text);
+        char *copy = (char *)malloc(len + 1);
+        if (!copy) return nullptr;
+        memcpy(copy, tpl.text, len + 1);
+        if (out_len) *out_len = len;
+        return copy;
     }
 
     return nullptr;

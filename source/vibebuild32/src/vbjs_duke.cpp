@@ -25,14 +25,19 @@ static std::deque<std::string> scriptCommands;
 # include "imgui_impl_opengl3.h"
 # include "sdl_inc.h"
 # include "glbuild.h"
-# ifdef __APPLE__
+# ifdef _WIN32
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+# else
 #  include <sys/socket.h>
 #  include <netinet/in.h>
 #  include <arpa/inet.h>
 #  include <fcntl.h>
-#  include <signal.h>
 #  include <unistd.h>
-#  include <pthread.h>
+# endif
+# include <signal.h>
+# include <pthread.h>
+# ifdef __APPLE__
 extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window);
 extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window);
 extern "C" void VBJS_CocoaDevtoolsShow(void);
@@ -374,27 +379,27 @@ static ImGuiContext *s_devtoolsImGui = nullptr;
 static Uint32 s_devtoolsWindowId = 0;
 static int s_devtoolsWindowClosed = 0;
 
-#ifdef __APPLE__
-static int s_webDevtoolsListen = -1;
-static int s_webDevtoolsPort = 0;
-static int s_webDevtoolsLaunched = 0;
+// ---- Debugger bridge: a localhost HTTP listener for the VS Code debug
+// adapter (and, on macOS, the browser DevTools). Available on every platform.
 static int s_webDebuggerListen = -1;
 static int s_webDebuggerPort = 0;
 static pthread_t s_webDebuggerThread;
 static int s_webDebuggerThreadStarted = 0;
 
-static void vbjs_web_devtools_focus(void)
+static void vbjs_web_close(int fd)
 {
-    if (s_webDevtoolsPort <= 0) return;
-    char url[96]; snprintf(url, sizeof(url), "http://127.0.0.1:%d/", s_webDevtoolsPort);
-    if (fork() == 0) { execl("/usr/bin/open", "open", "-a", "Google Chrome", url, (char *)nullptr); _exit(127); }
+#ifdef _WIN32
+    closesocket((SOCKET)fd);
+#else
+    close(fd);
+#endif
 }
 
 static void vbjs_web_reply(int fd, char const *body, char const *type = "text/plain; charset=utf-8")
 {
     char header[256];
-    int const headerLen = snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n", type, strlen(body));
-    send(fd, header, headerLen, 0); send(fd, body, strlen(body), 0);
+    int const headerLen = snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n\r\n", type, (unsigned)strlen(body));
+    send(fd, header, headerLen, 0); send(fd, body, (int)strlen(body), 0);
 }
 
 static void vbjs_web_decode(char *dst, size_t dstSize, char const *src)
@@ -415,7 +420,7 @@ static void *vbjs_web_debugger_thread(void *)
 {
     for (;;)
     {
-        int fd = accept(s_webDebuggerListen, nullptr, nullptr);
+        int fd = (int)accept(s_webDebuggerListen, nullptr, nullptr);
         if (fd < 0) break;
         char request[16384]; int bytes = (int)recv(fd, request, sizeof(request) - 1, 0); request[bytes > 0 ? bytes : 0] = 0;
         if (strncmp(request, "GET /send?m=", 12) == 0)
@@ -431,8 +436,12 @@ static void *vbjs_web_debugger_thread(void *)
             // PID is available in that case). Reply first, then use SIGTERM;
             // the engine's installed signal handler flushes and exits cleanly.
             vbjs_web_reply(fd, "terminating");
-            close(fd);
+            vbjs_web_close(fd);
+#ifdef _WIN32
+            TerminateProcess(GetCurrentProcess(), 0);
+#else
             kill(getpid(), SIGTERM);
+#endif
             continue;
         }
         else if (strncmp(request, "GET /poll", 9) == 0)
@@ -442,7 +451,7 @@ static void *vbjs_web_debugger_thread(void *)
             vbjs_web_reply(fd, json, "application/json; charset=utf-8");
         }
         else vbjs_web_reply(fd, "not found");
-        close(fd);
+        vbjs_web_close(fd);
     }
     return nullptr;
 }
@@ -450,15 +459,31 @@ static void *vbjs_web_debugger_thread(void *)
 static void vbjs_web_debugger_start(void)
 {
     if (s_webDebuggerThreadStarted) return;
-    s_webDebuggerListen = socket(AF_INET, SOCK_STREAM, 0); if (s_webDebuggerListen < 0) return;
-    int one = 1; setsockopt(s_webDebuggerListen, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+#ifdef _WIN32
+    WSADATA wsa; if (WSAStartup(MAKEWORD(2, 2), &wsa)) return;
+#endif
+    s_webDebuggerListen = (int)socket(AF_INET, SOCK_STREAM, 0); if (s_webDebuggerListen < 0) return;
+    int one = 1; setsockopt(s_webDebuggerListen, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
     // A stable, localhost-only port lets an external Debug Adapter attach to
     // a running game. The browser inspector uses the same bridge internally.
     sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(VBJS_DebugPort());
-    if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
+    if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
     socklen_t length = sizeof(address); getsockname(s_webDebuggerListen, (sockaddr *)&address, &length); s_webDebuggerPort = ntohs(address.sin_port);
     if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) s_webDebuggerThreadStarted = 1;
-    else { close(s_webDebuggerListen); s_webDebuggerListen = -1; }
+    else { vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; }
+}
+
+#ifdef __APPLE__
+// ---- Browser DevTools window (macOS): served over its own localhost listener.
+static int s_webDevtoolsListen = -1;
+static int s_webDevtoolsPort = 0;
+static int s_webDevtoolsLaunched = 0;
+
+static void vbjs_web_devtools_focus(void)
+{
+    if (s_webDevtoolsPort <= 0) return;
+    char url[96]; snprintf(url, sizeof(url), "http://127.0.0.1:%d/", s_webDevtoolsPort);
+    if (fork() == 0) { execl("/usr/bin/open", "open", "-a", "Google Chrome", url, (char *)nullptr); _exit(127); }
 }
 
 static void vbjs_web_devtools_tick(void)
@@ -759,29 +784,31 @@ extern "C" void VBJS_DevtoolsFocus(void)
 
 extern "C" void VBJS_DevtoolsStartDebuggerBridge(void)
 {
-#ifdef __APPLE__
     vbjs_web_debugger_start();
-#endif
 }
 
 extern "C" void VBJS_DevtoolsShutdownWindow(void)
 {
 #ifdef __APPLE__
     if (s_webDevtoolsListen >= 0) { close(s_webDevtoolsListen); s_webDevtoolsListen = -1; }
+#endif
     if (s_webDebuggerListen >= 0)
     {
         // Wake accept() before joining so no debugger thread survives engine
-        // teardown.  Closing alone is not sufficient on every macOS socket
+        // teardown.  Closing alone is not sufficient on every socket
         // implementation when it happens from a different thread.
+#ifdef _WIN32
+        shutdown((SOCKET)s_webDebuggerListen, SD_BOTH);
+#else
         shutdown(s_webDebuggerListen, SHUT_RDWR);
-        close(s_webDebuggerListen); s_webDebuggerListen = -1;
+#endif
+        vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1;
     }
     if (s_webDebuggerThreadStarted)
     {
         pthread_join(s_webDebuggerThread, nullptr);
         s_webDebuggerThreadStarted = 0;
     }
-#endif
     if (!s_devtoolsWindow) return;
     ImGuiContext *const old = ImGui::GetCurrentContext();
     ImGui::SetCurrentContext(s_devtoolsImGui);
