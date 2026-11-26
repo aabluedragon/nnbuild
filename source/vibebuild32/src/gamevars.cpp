@@ -36,6 +36,53 @@ int g_gameArrayCount = 0;
 void Gv_RefreshPointers(void);
 extern void G_FreeMapState(int mapnum);
 
+static void Gv_FreeMapStates(void)
+{
+    for (int i=0; i<(MAXVOLUMES*MAXLEVELS); i++)
+        if (g_mapInfo[i].savedstate)
+            G_FreeMapState(i);
+}
+
+static int Gv_ReadMapStatePayload(int fil, mapstate_t *save, intptr_t *discardValues)
+{
+    if (kdfread(save, sizeof(mapstate_t), 1, fil) != 1)
+        return 1;
+
+    bool const discard = discardValues != nullptr;
+
+    if (!discard)
+        Bmemset(&save->vars[0], 0, sizeof(save->vars));
+
+    for (int j=0; j<g_gameVarCount; j++)
+    {
+        if (aGameVars[j].flags & GAMEVAR_NORESET)
+            continue;
+
+        int count = 0;
+
+        if (aGameVars[j].flags & GAMEVAR_PERPLAYER)
+            count = MAXPLAYERS;
+        else if (aGameVars[j].flags & GAMEVAR_PERACTOR)
+            count = MAXSPRITES;
+
+        if (count <= 0)
+            continue;
+
+        intptr_t *dest = discardValues;
+
+        if (!discard)
+        {
+            save->vars[j] = (intptr_t*)Xcalloc(count, sizeof(intptr_t));
+            dest = save->vars[j];
+        }
+
+        if (kdfread(dest, sizeof(intptr_t), count, fil) != count)
+            return 1;
+    }
+
+    return 0;
+}
+
 static void Gv_Free(void) /* called from Gv_ReadSave() and Gv_ResetVars() */
 {
     for (auto& gameVar : aGameVars)
@@ -77,22 +124,26 @@ void Gv_Clear(void)
     return;
 }
 
-int Gv_ReadSave(int fil)
+int Gv_ReadSave(int fil, bool lateJoinSnapshot)
 {
-    int i, j;
+    int i;
     intptr_t l;
     char savedstate[MAXVOLUMES*MAXLEVELS];
+    mapstate_t *discardMapState = nullptr;
+    intptr_t *discardValues = nullptr;
 
     Bmemset(&savedstate,0,sizeof(savedstate));
 
     //     AddLog("Reading gamevars from savegame");
 
+    Gv_FreeMapStates();
     Gv_Free(); // nuke 'em from orbit, it's the only way to be sure...
 
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
     //  AddLog(g_szBuf);
 
     if (kdfread(&g_gameVarCount,sizeof(g_gameVarCount),1,fil) != 1) goto corrupt;
+    if ((unsigned)g_gameVarCount > MAXGAMEVARS) goto corrupt;
     for (i=0;i<g_gameVarCount;i++)
     {
         if (kdfread(&(aGameVars[i]),sizeof(gamevar_t),1,fil) != 1) goto corrupt;
@@ -111,8 +162,8 @@ int Gv_ReadSave(int fil)
             if (kdfread(&aGameVars[i].pValues[0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
         }
     }
-
     if (kdfread(&g_gameArrayCount,sizeof(g_gameArrayCount),1,fil) != 1) goto corrupt;
+    if ((unsigned)g_gameArrayCount > MAXGAMEARRAYS) goto corrupt;
     for (i=0;i<g_gameArrayCount;i++)
     {
         if (kdfread(&(aGameArrays[i]),sizeof(gamearray_t),1,fil) != 1) goto corrupt;
@@ -127,7 +178,6 @@ int Gv_ReadSave(int fil)
             if (kdfread(aGameArrays[i].pValues, arrayAllocSize, 1, fil) < 1) goto corrupt;
         }
     }
-
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
     //  AddLog(g_szBuf);
 
@@ -137,33 +187,30 @@ int Gv_ReadSave(int fil)
     {
         if (savedstate[i])
         {
-            if (g_mapInfo[i].savedstate == NULL)
-                g_mapInfo[i].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
-            if (kdfread(g_mapInfo[i].savedstate,sizeof(mapstate_t),1,fil) != sizeof(mapstate_t)) goto corrupt;
-            for (j=0;j<g_gameVarCount;j++)
+            if (lateJoinSnapshot)
             {
-                if (aGameVars[j].flags & GAMEVAR_NORESET) continue;
-                if (aGameVars[j].flags & GAMEVAR_PERPLAYER)
-                {
-                    if (!g_mapInfo[i].savedstate->vars[j])
-                        g_mapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXPLAYERS, sizeof(intptr_t));
-                    if (kdfread(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil) != 1) goto corrupt;
-                }
-                else if (aGameVars[j].flags & GAMEVAR_PERACTOR)
-                {
-                    if (!g_mapInfo[i].savedstate->vars[j])
-                        g_mapInfo[i].savedstate->vars[j] = (intptr_t*)Xcalloc(MAXSPRITES, sizeof(intptr_t));
-                    if (kdfread(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t), MAXSPRITES, fil) != MAXSPRITES) goto corrupt;
-                }
+                // Late-join snapshots synchronize the active world. Cached
+                // interlevel map states contain host-process pointers and are
+                // not needed for joining the current level, so consume and
+                // discard them while preserving save-stream alignment.
+                if (!discardMapState)
+                    discardMapState = (mapstate_t*)Xmalloc(sizeof(mapstate_t));
+                if (!discardValues)
+                    discardValues = (intptr_t*)Xmalloc(sizeof(intptr_t) * MAXSPRITES);
+                if (Gv_ReadMapStatePayload(fil, discardMapState, discardValues))
+                    goto corrupt;
             }
-        }
-        else if (g_mapInfo[i].savedstate)
-        {
-            G_FreeMapState(i);
+            else
+            {
+                g_mapInfo[i].savedstate = (mapstate_t*)Xcalloc(1,sizeof(mapstate_t));
+                if (Gv_ReadMapStatePayload(fil, g_mapInfo[i].savedstate, nullptr))
+                    goto corrupt;
+            }
         }
     }
 
     if (kdfread(&l,sizeof(l),1,fil) != 1) goto corrupt;
+    if ((unsigned long)l >= sizeof(g_szBuf)) goto corrupt;
     if (kdfread(g_szBuf,l,1,fil) != 1) goto corrupt;
     g_szBuf[l]=0;
     OSD_Printf("%s\n",g_szBuf);
@@ -176,6 +223,8 @@ int Gv_ReadSave(int fil)
     //  Bsprintf(g_szBuf,"CP:%s %d",__FILE__,__LINE__);
     //  AddLog(g_szBuf);
     Gv_RefreshPointers();
+    DO_FREE_AND_NULL(discardMapState);
+    DO_FREE_AND_NULL(discardValues);
 #if 0
     {
         FILE *fp;
@@ -191,10 +240,14 @@ int Gv_ReadSave(int fil)
 #endif
     return(0);
 corrupt:
+    DO_FREE_AND_NULL(discardMapState);
+    DO_FREE_AND_NULL(discardValues);
+    if (lateJoinSnapshot)
+        LOG_F(ERROR, "Late join gamevars: corrupt or unsupported gamevar block");
     return(1);
 }
 
-void Gv_WriteSave(FILE *fil)
+void Gv_WriteSave(FILE *fil, bool skipMapStates)
 {
     int i, j;
     intptr_t l;
@@ -235,29 +288,31 @@ void Gv_WriteSave(FILE *fil)
             dfwrite(aGameArrays[i].pValues, arrayAllocSize, 1, fil);
     }
 
-    for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
-        if (g_mapInfo[i].savedstate != NULL)
-            savedstate[i] = 1;
+    if (!skipMapStates)
+        for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
+            if (g_mapInfo[i].savedstate != NULL)
+                savedstate[i] = 1;
 
     dfwrite(&savedstate[0],sizeof(savedstate),1,fil);
 
-    for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
-        if (g_mapInfo[i].savedstate)
-        {
-            dfwrite(g_mapInfo[i].savedstate,sizeof(mapstate_t),1,fil);
-            for (j=0;j<g_gameVarCount;j++)
+    if (!skipMapStates)
+        for (i=0;i<(MAXVOLUMES*MAXLEVELS);i++)
+            if (g_mapInfo[i].savedstate)
             {
-                if (aGameVars[j].flags & GAMEVAR_NORESET) continue;
-                if (aGameVars[j].flags & GAMEVAR_PERPLAYER)
+                dfwrite(g_mapInfo[i].savedstate,sizeof(mapstate_t),1,fil);
+                for (j=0;j<g_gameVarCount;j++)
                 {
-                    dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil);
-                }
-                else if (aGameVars[j].flags & GAMEVAR_PERACTOR)
-                {
-                    dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXSPRITES, 1, fil);
+                    if (aGameVars[j].flags & GAMEVAR_NORESET) continue;
+                    if (aGameVars[j].flags & GAMEVAR_PERPLAYER)
+                    {
+                        dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXPLAYERS, 1, fil);
+                    }
+                    else if (aGameVars[j].flags & GAMEVAR_PERACTOR)
+                    {
+                        dfwrite(&g_mapInfo[i].savedstate->vars[j][0],sizeof(intptr_t) * MAXSPRITES, 1, fil);
+                    }
                 }
             }
-        }
 
     Bsprintf(g_szBuf,"EOF: EDuke32");
     l=strlen(g_szBuf);
@@ -565,6 +620,9 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
         int       arrayIndexVar = *insptr++;
         int       arrayIndex = Gv_GetVar(arrayIndexVar, spriteNum, playerNum);
         int const labelNum = *insptr++;
+        auto const currentActorSector = [&]() {
+            return (unsigned)spriteNum < MAXSPRITES ? sprite[spriteNum].sectnum : -1;
+        };
 
         switch (gv - sysVarIDs.structs)
         {
@@ -590,15 +648,15 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 break;
 
             case STRUCT_SECTOR:
-                if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = vm.pSprite->sectnum;
+                if (arrayIndexVar == sysVarIDs.THISACTOR || arrayIndex == MAXSPRITES)
+                    arrayIndex = currentActorSector();
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetSector(arrayIndex, labelNum);
                 break;
 
             case STRUCT_SECTOR_INTERNAL__:
-                if (arrayIndexVar == sysVarIDs.THISACTOR)
-                    arrayIndex = vm.pSprite->sectnum;
+                if (arrayIndexVar == sysVarIDs.THISACTOR || arrayIndex == MAXSPRITES)
+                    arrayIndex = currentActorSector();
                 CHECK_INDEX(MAXSECTORS);
                 returnValue = VM_GetStruct(SectorLabels[labelNum].flags, (intptr_t*)((intptr_t)&sector[arrayIndex] + SectorLabels[labelNum].offset));
                 break;
@@ -660,14 +718,12 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
                 CHECK_INDEX(MAXTILES);
                 returnValue = VM_GetTileData(arrayIndex, labelNum);
                 break;
-#if 0
             case STRUCT_PALDATA:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
                     arrayIndex = vm.pSprite->pal;
                 CHECK_INDEX(MAXPALOOKUPS);
                 returnValue = VM_GetPalData(arrayIndex, labelNum);
                 break;
-#endif
 
             case STRUCT_INPUT:
                 if (arrayIndexVar == sysVarIDs.THISACTOR)
@@ -684,7 +740,7 @@ static int __fastcall Gv_GetArrayOrStruct(int const gameVar, int const spriteNum
     }
     else // if (gameVar & GV_FLAG_ARRAY)
     {
-        int const arrayIndex = Gv_GetVar(*insptr++, spriteNum, playerNum);
+        int const arrayIndex = Gv_NormalizeArrayIndex(gv, Gv_GetVar(*insptr++, spriteNum, playerNum));
 
         CHECK_INDEX(aGameArrays[gv].size);
 
@@ -797,6 +853,17 @@ int Gv_GetVarByLabel(const char *szGameLabel, int lDefault, int iActor, int iPla
 {
     int gameVar = hash_find(&h_gamevars,szGameLabel);
     return EDUKE32_PREDICT_TRUE(gameVar >= 0) ? Gv_GetVar(gameVar, iActor, iPlayer) : lDefault;
+}
+
+int Gv_SetVarByLabel(const char *szGameLabel, int lValue, int iActor, int iPlayer)
+{
+    int const gameVar = hash_find(&h_gamevars, szGameLabel);
+
+    if (EDUKE32_PREDICT_FALSE(gameVar < 0))
+        return 0;
+
+    Gv_SetVar(gameVar, lValue, iActor, iPlayer);
+    return 1;
 }
 
 static intptr_t* Gv_GetVarDataPtr(const char* szGameLabel)
@@ -912,14 +979,12 @@ static weapondata_t weapondefaults[MAX_WEAPONS] = {
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
 
-#if 0
     {
         FLAMETHROWER_WEAPON, 0, 0, 2, 16, 0,
         WEAPON_RESET,
         FIREBALL__, 0, 0, 0, FLAMETHROWER_INTRO, FLAMETHROWER_INTRO, 0, 0,
         EJECT_CLIP, INSERT_CLIP, SELECT_WEAPON, RGB_TO_INT(216, 52, 20)
     },
-#endif
 
 #endif
 };
@@ -1038,7 +1103,7 @@ static void Gv_AddSystemVars(void)
     Gv_NewVar("userdef",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
     Gv_NewVar("input",          -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
     Gv_NewVar("tiledata",       -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
-    //Gv_NewVar("paldata",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
+    Gv_NewVar("paldata",        -1, GAMEVAR_READONLY | GAMEVAR_SYSTEM | GAMEVAR_SPECIAL);
 
     if (NAM_WW2GI)
     {
@@ -1161,6 +1226,7 @@ static void Gv_AddSystemVars(void)
 
     Gv_NewVar("current_menu",(intptr_t)&g_currentMenu, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
     Gv_NewVar("numplayers",(intptr_t)&numplayers, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY);
+    Gv_NewVar("automapping",(intptr_t)&automapping, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
     Gv_NewVar("viewingrange",(intptr_t)&viewingrange, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("yxaspect",(intptr_t)&yxaspect, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR | GAMEVAR_READONLY | GAMEVAR_SYNCCHECK);
     Gv_NewVar("gravitationalconstant",(intptr_t)&g_spriteGravity, GAMEVAR_SYSTEM | GAMEVAR_INT32PTR);
@@ -1346,6 +1412,7 @@ void Gv_RefreshPointers(void)
     aGameVars[Gv_GetVarIndex("numsectors")].lValue = (intptr_t)&numsectors;
     aGameVars[Gv_GetVarIndex("numplayers")].lValue = (intptr_t)&numplayers;
     aGameVars[Gv_GetVarIndex("current_menu")].lValue = (intptr_t)&g_currentMenu;
+    aGameVars[Gv_GetVarIndex("automapping")].lValue = (intptr_t)&automapping;
     aGameVars[Gv_GetVarIndex("viewingrange")].lValue = (intptr_t)&viewingrange;
     aGameVars[Gv_GetVarIndex("yxaspect")].lValue = (intptr_t)&yxaspect;
     aGameVars[Gv_GetVarIndex("gravitationalconstant")].lValue = (intptr_t)&g_spriteGravity;

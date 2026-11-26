@@ -1079,8 +1079,25 @@ void G_RefreshLights(void)
 }
 #endif // POLYMER
 
+// A_RadiusDamage() only reaches sprites in Duke's own status lists, and under
+// crossplay the host's map props (breakables, cracked walls, the yellow tape
+// and vent covers on E1L1's rooftop) are parked outside them so they keep
+// animating.  A Duke gas canister therefore exploded right next to them without
+// touching them.  The host installs a hook here and runs its own blast over its
+// own props with the same origin, radius and strength.
+static void (*g_vbDukeAIRadiusDamageHook)(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
+
+extern "C" void VB_DukeAI_SetRadiusDamageHook(void (*hook)(int spriteNum, int x, int y, int z, int sectnum,
+                                                           int radius, int damage))
+{
+    g_vbDukeAIRadiusDamageHook = hook;
+}
+
 void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
 {
+    if (g_vbDukeAIRadiusDamageHook != NULL)
+        g_vbDukeAIRadiusDamageHook(i, sprite[i].x, sprite[i].y, sprite[i].z, sprite[i].sectnum, klabs(r), hp4);
+
     spritetype *s=&sprite[i],*sj;
     walltype *wal;
     int d, q, x1, y1;
@@ -1168,7 +1185,10 @@ SKIPWALLCHECK:
                     {
                         if (A_CheckEnemySprite(sj) && !cansee(sj->x, sj->y,sj->z+q, sj->sectnum, s->x, s->y, s->z+q, s->sectnum))
                             goto BOLT;
-                        A_DamageObject_Internal(j, i);
+                        if (FURY)
+                            A_DamageObject_Generic(j, i);
+                        else
+                            A_DamageObject_Internal(j, i);
                     }
             }
             else if (sj->extra >= 0 && sj != s && (sj->picnum == TRIPBOMB || A_CheckEnemySprite(sj) || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL || (sj->cstat&257) || sj->picnum == DUKELYINGDEAD))
@@ -1250,13 +1270,13 @@ SKIPWALLCHECK:
                             X_OnEvent(EVENT_POSTDAMAGESPRITE, i, -1, -1);
                         }
 
-                        if (sj->picnum == PODFEM1 || sj->picnum == FEM1 ||
+                        if (!FURY && (sj->picnum == PODFEM1 || sj->picnum == FEM1 ||
                                 sj->picnum == FEM2 || sj->picnum == FEM3 ||
                                 sj->picnum == FEM4 || sj->picnum == FEM5 ||
                                 sj->picnum == FEM6 || sj->picnum == FEM7 ||
                                 sj->picnum == FEM8 || sj->picnum == FEM9 ||
                                 sj->picnum == FEM10 || sj->picnum == STATUE ||
-                                sj->picnum == STATUEFLASH || sj->picnum == SPACEMARINE || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL)
+                                sj->picnum == STATUEFLASH || sj->picnum == SPACEMARINE || sj->picnum == QUEBALL || sj->picnum == STRIPEBALL))
                             A_DamageObject_Internal(j, i);
                     }
                     else if (s->extra == 0) actor[j].htextra = 0;
@@ -1449,6 +1469,10 @@ void A_DeleteSprite(int s)
 
     S_DetachSoundsFromSprite(s);
 
+    // Give JS components a real lifecycle notification before the Build
+    // sprite slot is recycled.  Components can still inspect their sprite
+    // from onDestroy(), exactly as they can from Unity's callback.
+    VBJS_FireActor("actorDestroyed", s, sprite[s].owner, sprite[s].picnum);
     if (deletesprite(s) == 0)
         VBJS_NotifySpriteDeleted(s);
 }
@@ -1582,8 +1606,10 @@ static void ms(int i)
     //T1,T2 and T3 are used for all the sector moving stuff!!!
     spritetype *s = &sprite[i];
 
+    int32_t playerDist;
+    int const playerNum = A_FindPlayer(s, &playerDist);
     int originIdx = T2(i);
-    int rotateAngle = T3(i);
+    int rotateAngle = X_OnEventWithReturn(EVENT_MOVESECTOR, i, playerNum, T3(i));
     vec2_t result;
 
     s->x += (s->xvel*(sintable[(s->ang+512)&2047]))>>14;
@@ -1601,6 +1627,19 @@ static void ms(int i)
 }
 
 // sleeping monsters, etc
+// VibeBuild32 crossplay: some of Duke's actors drive map machinery that a
+// foreign host owns rather than Duke -- explosive sectors, door effectors and
+// the host's copy of the SEENINE/OOZFILTER charges.  Duke reaches all of it by
+// hitag, so the host installs one hook that receives that hitag and drives its
+// own equivalents.  Without this an adopted actor detonates without triggering
+// anything.  See source/vibebuild32/src/crossplay_dukeai.cpp.
+static void (*g_vbDukeAIMapTriggerHook)(int hitag);
+
+extern "C" void VB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag))
+{
+    g_vbDukeAIMapTriggerHook = hook;
+}
+
 static void G_MoveZombieActors(void)
 {
     int spriteNum = headspritestat[STAT_ZOMBIEACTOR];
@@ -1728,6 +1767,12 @@ int A_IncurDamage(int spriteNum)
     auto const pSprite = &sprite[spriteNum];
     auto const pActor = &actor[spriteNum];
 
+    if (pActor->htextra < 0 || pSprite->extra < 0 || pActor->htpicnum < 0)
+    {
+        pActor->htextra = -1;
+        return -1;
+    }
+
     if (pActor->htextra >= 0)
     {
         if (sprite[spriteNum].extra >= 0)
@@ -1782,7 +1827,7 @@ int A_IncurDamage(int spriteNum)
                             break;
                         default:
                         {
-                            int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (actor[spriteNum].projectile.workslike & PROJECTILE_RPG));
+                            int const isRPG = (A_CheckSpriteTileFlags(pActor->htpicnum, SFLAG_PROJECTILE) && (Proj_GetProjectile(pActor->htpicnum)->workslike & PROJECTILE_RPG));
                             P_Nudge(playerNum, spriteNum, 1 << isRPG);
                             break;
                         }
@@ -3030,6 +3075,11 @@ DETONATE:
 
                     g_earthquakeTime = 16;
 
+                    // Hand the tag to the host before driving Duke's own copies
+                    // of these effectors, which a foreign host runs instead.
+                    if (g_vbDukeAIMapTriggerHook != NULL)
+                        g_vbDukeAIMapTriggerHook(s->hitag);
+
                     j = headspritestat[STAT_EFFECTOR];
                     while (j >= 0)
                     {
@@ -3741,6 +3791,9 @@ static void G_MoveWeapons(void)
                             //actor[j].htowner = s->owner;
                             //actor[j].htpicnum = s->picnum;
                             //actor[j].htextra += pProj->extra;
+
+                            if (pProj->workslike & PROJECTILE_RPG_IMPACT_DAMAGE)
+                                actor[j].htextra += pProj->extra;
 
                             A_DoProjectileEffects(spriteNum, &davect, 0);
 
@@ -6429,6 +6482,14 @@ static void G_MoveEffectors(void)   //STATNUM 3
         int const  nextSprite = nextspritestat[spriteNum];
         auto const pSprite = &sprite[spriteNum];
         sectortype* const pSector = &sector[pSprite->sectnum];
+        int32_t playerDist;
+        int const playerNum = A_FindPlayer(pSprite, &playerDist);
+
+        if (X_OnEventWithReturn(EVENT_MOVEEFFECTORS, spriteNum, playerNum, 0))
+        {
+            spriteNum = nextSprite;
+            continue;
+        }
 
         st = pSprite->lotag;
         sh = pSprite->hitag;
@@ -8617,17 +8678,20 @@ int A_CheckEnemySprite(const void *s)
     return(A_CheckEnemyTile(((uspriteptr_t)s)->picnum));
 }
 
-int A_CheckSwitchTile(int i)
+// Split out from A_CheckSwitchTile() so the SW crossplay bridge can ask the same
+// question about a tile it has not spawned: the bridge has to reproduce the
+// solidity Duke's spawn gives a wall switch.
+int A_CheckSwitchTileNum(int tileNum)
 {
     int j;
     //MULTISWITCH has 4 states so deal with it separately
-    if ((PN(i) >= MULTISWITCH) && (PN(i) <=MULTISWITCH+3)) return 1;
+    if ((tileNum >= MULTISWITCH) && (tileNum <=MULTISWITCH+3)) return 1;
     // ACCESSSWITCH and ACCESSSWITCH2 are only active in 1 state so deal with them separately
-    if ((PN(i) == ACCESSSWITCH) || (PN(i) == ACCESSSWITCH2)) return 1;
+    if ((tileNum == ACCESSSWITCH) || (tileNum == ACCESSSWITCH2)) return 1;
     //loop to catch both states of switches
     for (j=1;j>=0;j--)
     {
-        switch (tileGetMapping(PN(i)-j))
+        switch (tileGetMapping(tileNum-j))
         {
         case HANDPRINTSWITCH__:
             //case HANDPRINTSWITCH+1:
@@ -8675,6 +8739,11 @@ int A_CheckSwitchTile(int i)
     return 0;
 }
 
+int A_CheckSwitchTile(int i)
+{
+    return A_CheckSwitchTileNum(PN(i));
+}
+
 static void G_RecordOldSpritePos(void)
 {
     int statNum = 0;
@@ -8692,8 +8761,267 @@ static void G_RecordOldSpritePos(void)
     } while (statNum < MAXSTATUS);
 }
 
+// Debug aid shared with the crossplay bridge: VB_CP_WATCH_TILE=<tile> follows
+// the first sprite spawned as that tile.  VB_CP_FORCEWAKE=<tic> stages a
+// reproducible encounter: the player is pinned beside the actor (line of sight,
+// kept alive) shortly before <tic>, the actor is woken at <tic> if still
+// asleep, and the actor's full movement state is logged every tic in a window
+// around the wake -- identically under native Duke and under a foreign host
+// running Duke's AI, so the two traces can be diffed line by line.
+int g_vbDukeWatchSprite = -1;
+
+static void VB_DukeWatchTick(void)
+{
+    static int32_t watchTile = -2;
+    static int32_t wakeTic = -1;
+    static int32_t tic = 0;
+
+    if (watchTile == -2)
+    {
+        char const *const envTile = Bgetenv("VB_CP_WATCH_TILE");
+        char const *const envWake = Bgetenv("VB_CP_FORCEWAKE");
+        watchTile = envTile != NULL ? Batoi(envTile) : -1;
+        wakeTic = envWake != NULL ? Batoi(envWake) : -1;
+    }
+
+    if (watchTile <= 0)
+        return;
+
+    ++tic;
+
+    // VB_CP_WATCH_SPRITE pins an exact sprite index (map order), overriding both
+    // the spawn hook and the first-tile scan; needed on maps with several actors
+    // of the watched tile.
+    {
+        static int32_t watchIndex = -2;
+        static int32_t indexPinned = 0;
+        if (watchIndex == -2)
+        {
+            char const *const envIdx = Bgetenv("VB_CP_WATCH_SPRITE");
+            watchIndex = envIdx != NULL ? Batoi(envIdx) : -1;
+        }
+
+        if (watchIndex >= 0 && !indexPinned)
+        {
+            if (sprite[watchIndex].statnum >= MAXSTATUS)
+                return;
+
+            indexPinned = 1;
+            g_vbDukeWatchSprite = watchIndex;
+            LOG_F(INFO, "CPDBG pin sprite=%d tile=%d tic=%d", watchIndex, TrackerCast(sprite[watchIndex].picnum), tic);
+        }
+    }
+
+    if (g_vbDukeWatchSprite < 0)
+    {
+        for (int32_t i = 0; i < MAXSPRITES; ++i)
+        {
+            if (sprite[i].statnum < MAXSTATUS && sprite[i].picnum == watchTile)
+            {
+                g_vbDukeWatchSprite = i;
+                LOG_F(INFO, "CPDBG pin sprite=%d tile=%d tic=%d", i, watchTile, tic);
+                break;
+            }
+        }
+    }
+
+    if (g_vbDukeWatchSprite < 0 || sprite[g_vbDukeWatchSprite].statnum >= MAXSTATUS)
+        return;
+
+    int const i = g_vbDukeWatchSprite;
+
+    if (wakeTic > 0)
+    {
+        auto const ps = g_player[0].ps;
+
+        static int32_t pinLow = -1;
+        if (pinLow < 0)
+        {
+            char const *const envLow = Bgetenv("VB_CP_PINLOW");
+            pinLow = (envLow != NULL && envLow[0] == '1') ? 1 : 0;
+        }
+
+        // Pin the player beside the actor from shortly before the wake, so both
+        // runtimes stage the identical encounter and keep line of sight.
+        // VB_CP_PINLOW=1 places the player standing on the ground instead of
+        // floating beside the actor -- the way a real player approaches -- and
+        // skips the forced wake so the natural line-of-sight wake fires.
+        static int32_t pinDist = -1;
+        if (pinDist < 0)
+        {
+            char const *const envDist = Bgetenv("VB_CP_PINDIST");
+            pinDist = envDist != NULL ? Batoi(envDist) : 1536;
+        }
+
+        static int32_t approach = -1;
+        static int32_t pinAng = 0;
+        if (approach < 0)
+        {
+            char const *const envAp = Bgetenv("VB_CP_APPROACH");
+            char const *const envAngE = Bgetenv("VB_CP_PINANG");
+            approach = (envAp != NULL && envAp[0] == '1') ? 1 : 0;
+            pinAng = envAngE != NULL ? (Batoi(envAngE) & 2047) : 0;
+        }
+
+        int32_t const pinStart = approach ? (wakeTic - 300) : (wakeTic - 30);
+
+        if (ps != NULL && tic >= pinStart)
+        {
+            int32_t dist = pinDist;
+            if (approach)
+            {
+                // Walk in from far away at player speed, like a real approach.
+                dist = 8000 - 24 * (tic - pinStart);
+                if (dist < 1400)
+                    dist = 1400;
+            }
+
+            ps->pos.x = sprite[i].x + ((dist * (int32_t)sintable[(pinAng + 512) & 2047]) >> 14);
+            ps->pos.y = sprite[i].y + ((dist * (int32_t)sintable[pinAng & 2047]) >> 14);
+            ps->pos.z = sprite[i].z - (10 << 8);
+
+            int16_t pinnedSect = ps->cursectnum;
+            updatesector(ps->pos.x, ps->pos.y, &pinnedSect);
+            if (pinnedSect >= 0)
+                ps->cursectnum = pinnedSect;
+
+            if (pinLow && (unsigned)ps->cursectnum < (unsigned)numsectors)
+            {
+                ps->pos.z = getflorzofslope(ps->cursectnum, ps->pos.x, ps->pos.y) - (38 << 8);
+
+                // Jump pulse: 12 of every 100 tics, eye rises like a real jump.
+                if ((tic % 100) < 12)
+                    ps->pos.z -= (24 << 8);
+            }
+
+            ps->opos = ps->pos;
+
+            ps->q16ang = fix16_from_int((getangle(sprite[i].x - ps->pos.x, sprite[i].y - ps->pos.y) + 1024) & 2047);
+
+            if ((unsigned)ps->i < MAXSPRITES)
+            {
+                setsprite(ps->i, &ps->pos);
+                // Keep the encounter alive; the bridge maintains a larger pool of
+                // its own, so this only raises native Duke's player.
+                if (sprite[ps->i].extra < 5000)
+                    sprite[ps->i].extra = 5000;
+            }
+        }
+
+        if (tic == wakeTic && sprite[i].statnum == STAT_ZOMBIEACTOR)
+        {
+            actor[i].timetosleep = 0;
+            changespritestat(i, STAT_ACTOR);
+            LOG_F(INFO, "CPDBG forcewake tic=%d sprite=%d", tic, i);
+        }
+
+        // VB_CP_FORCEHIDE=<tic>: put a trooper into the pal-21 teleport-hide AI
+        // (AITROOPHIDE) exactly as CON's `ai` would, so the hide cycle can be
+        // A/B'd deterministically.  Script offsets are for the stock 1.3d GRP.
+        static int32_t hideTic = -2;
+        if (hideTic == -2)
+        {
+            char const *const envHide = Bgetenv("VB_CP_FORCEHIDE");
+            hideTic = envHide != NULL ? Batoi(envHide) : -1;
+        }
+
+        // VB_CP_FORCEBOX=<tic>: teleport the watched trooper INTO the dumpster
+        // interior grounded in seek AI -- the state the user's screenshots show --
+        // so the escape-by-phigher dynamics can be A/B'd.  The pinned player
+        // jumps for 12 of every 100 tics, like a live player would.
+        static int32_t boxTic = -2;
+        if (boxTic == -2)
+        {
+            char const *const envBox = Bgetenv("VB_CP_FORCEBOX");
+            boxTic = envBox != NULL ? Batoi(envBox) : -1;
+        }
+
+        if (boxTic > 0 && tic == boxTic && sprite[i].statnum == STAT_ACTOR)
+        {
+            vec3_t boxPos = { 19456, 45568, -33 << 8 };
+            int16_t boxSect = sprite[i].sectnum;
+            updatesector(boxPos.x, boxPos.y, &boxSect);
+            sprite[i].xyz = boxPos;
+            if (boxSect >= 0 && boxSect != sprite[i].sectnum)
+                changespritesect(i, boxSect);
+
+            AC_ACTION_ID(actor[i].t_data) = 8458;   // ATROOPWALKING
+            AC_MOVE_ID(actor[i].t_data) = 8602;     // TROOPWALKVELS
+            sprite[i].hitag = 512;                  // seekplayer
+            AC_COUNT(actor[i].t_data) = 0;
+            AC_ACTION_COUNT(actor[i].t_data) = 0;
+            AC_CURFRAME(actor[i].t_data) = 0;
+            sprite[i].zvel = 0;
+            LOG_F(INFO, "CPDBG forcebox tic=%d sprite=%d sect=%d", tic, i, boxSect);
+        }
+
+        if (hideTic > 0 && tic == hideTic && sprite[i].statnum == STAT_ACTOR)
+        {
+            AC_ACTION_ID(actor[i].t_data) = 8570;   // ATROOPABOUTHIDE
+            AC_MOVE_ID(actor[i].t_data) = 8622;     // TROOPSTOPPED
+            sprite[i].hitag = 1;                    // faceplayer
+            AC_COUNT(actor[i].t_data) = 0;
+            AC_ACTION_COUNT(actor[i].t_data) = 0;
+            AC_CURFRAME(actor[i].t_data) = 0;
+            LOG_F(INFO, "CPDBG forcehide tic=%d sprite=%d", tic, i);
+        }
+
+        // VB_CP_BURN=1 additionally feeds the actor small periodic fire damage
+        // from the wake on, reproducing an actor standing in Duke FIRE -- the
+        // ingredient visible in the reported screenshot.
+        static int32_t burn = -1;
+        if (burn < 0)
+        {
+            char const *const envBurn = Bgetenv("VB_CP_BURN");
+            burn = (envBurn != NULL && envBurn[0] == '1') ? 1 : 0;
+        }
+
+        if (burn && tic >= wakeTic && ((tic - wakeTic) & 7) == 0 && sprite[i].extra > 0)
+        {
+            actor[i].htpicnum = FIRE;
+            actor[i].htextra += 1;
+            actor[i].htowner = (ps != NULL) ? ps->i : -1;
+        }
+
+        if (tic >= wakeTic - 30 && tic <= wakeTic + 600)
+            LOG_F(INFO, "CPDBG tk=%d st=%d z=%d zv=%d xv=%d ang=%d fd=%d cz=%d ac=%d mv=%d mf=%d cnt=%d cs=%d xr=%d x=%d y=%d",
+                  tic - wakeTic, sprite[i].statnum, TrackerCast(sprite[i].z) >> 8, TrackerCast(sprite[i].zvel),
+                  TrackerCast(sprite[i].xvel), TrackerCast(sprite[i].ang),
+                  (actor[i].floorz - sprite[i].z) >> 8, actor[i].ceilingz >> 8,
+                  AC_ACTION_ID(actor[i].t_data), AC_MOVE_ID(actor[i].t_data), TrackerCast(sprite[i].hitag),
+                  AC_COUNT(actor[i].t_data), TrackerCast(sprite[i].cstat), TrackerCast(sprite[i].xrepeat),
+                  TrackerCast(sprite[i].x), TrackerCast(sprite[i].y));
+
+        return;
+    }
+
+    // Sampled logging when no staged wake was requested: one line per second for
+    // up to ten minutes, plus an immediate line whenever statnum/action/AI state
+    // changes -- enough to reconstruct a real play session afterwards.
+    static int32_t logged = 0;
+    static int32_t lastStat = -1, lastAction = -1, lastMove = -1;
+
+    int const st = sprite[i].statnum;
+    int const ac = AC_ACTION_ID(actor[i].t_data);
+    int const mv = AC_MOVE_ID(actor[i].t_data);
+    int const changed = (st != lastStat || ac != lastAction || mv != lastMove);
+
+    if (logged >= 600 || (!changed && (tic % 30) != 0))
+        return;
+
+    lastStat = st; lastAction = ac; lastMove = mv;
+    ++logged;
+    LOG_F(INFO, "CPDBG watch t=%d st=%d z=%d zv=%d xv=%d ang=%d fd=%d cz=%d ac=%d mv=%d mf=%d cs=%d xr=%d x=%d y=%d",
+          tic, st, TrackerCast(sprite[i].z) >> 8, TrackerCast(sprite[i].zvel), TrackerCast(sprite[i].xvel),
+          TrackerCast(sprite[i].ang), (actor[i].floorz - sprite[i].z) >> 8, actor[i].ceilingz >> 8,
+          ac, mv, TrackerCast(sprite[i].hitag), TrackerCast(sprite[i].cstat), TrackerCast(sprite[i].xrepeat),
+          TrackerCast(sprite[i].x), TrackerCast(sprite[i].y));
+}
+
 void G_MoveWorld(void)
 {
+    VB_DukeWatchTick();
+
     X_OnEvent(EVENT_PREWORLD, -1, -1, 0);
 
     if (VM_HaveEvent(EVENT_PREGAME))
@@ -8776,3 +9104,20 @@ void G_MoveWorld(void)
     G_MoveFX();               //ST 11
 }
 
+// VibeBuild32 crossplay: run only the actor-side half of Duke's world tic.
+// A foreign runtime hosting a Duke level owns the player, the sectors and the
+// effectors, so those loops must not run here; everything that gives Duke
+// enemies their behavior does.  See source/vibebuild32/src/crossplay_dukeai.cpp.
+extern "C" void VB_DukeAI_MoveActorsOnly(void)
+{
+    VB_DukeWatchTick();
+
+    G_RecordOldSpritePos();
+
+    G_MoveZombieActors();     //ST 2
+    G_MoveWeapons();          //ST 4
+    G_MoveFallers();          //ST 12
+    G_MoveMisc();             //ST 5
+    G_MoveActors();           //ST 1
+    G_MoveStandables();       //ST 6
+}

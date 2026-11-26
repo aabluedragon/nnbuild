@@ -47,7 +47,7 @@ const char* credits = {
     "- Gosimer\r\n"
     "- DatMaxNub\r\n"
     "- Noldor Ranzou\r\n"
-    "- Fernando Márquez\r\n"
+    "- Fernando Mrquez\r\n"
     "- Marz\r\n"
     "- Radar\r\n"
     "- Vandclash\r\n"
@@ -475,39 +475,8 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
         break;
     }
 
-    case WM_CLOSE:
-        if (mode == TAB_CONFIG) done = 0;
-        else quitevent++;
-        return TRUE;
-
-    case WM_DESTROY:
-        if (hbmp)
-        {
-            DeleteObject(hbmp);
-            hbmp = NULL;
-        }
-
-        if (pages[TAB_CONFIG])
-        {
-            DestroyWindow(pages[TAB_CONFIG]);
-            pages[TAB_CONFIG] = NULL;
-        }
-
-        startupdlg = NULL;
-        return TRUE;
-
-    case WM_COMMAND:
-        switch (LOWORD(wParam))
-        {
-        case WIN_STARTWIN_CANCEL:
-            if (mode == TAB_CONFIG) done = 0;
-            else quitevent++;
-            return TRUE;
-        case WIN_STARTWIN_START:
-            done = 1;
-            return TRUE;
-        }
-        return FALSE;
+    #define STARTWIN_WIN32_SHARED_CASE_CLOSE_DESTROY_COMMAND_BASIC
+    #include "../../build/include/startwin_win32_shared.cpp.inc"
 
     case WM_CTLCOLORSTATIC:
         if ((HWND)lParam == pages[TAB_MESSAGES])
@@ -520,11 +489,8 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
 
     return FALSE;
 }
-
-bool startwin_isopen(void)
-{
-    return !!startupdlg;
-}
+#define STARTWIN_WIN32_SHARED_ISOPEN
+#include "../../build/include/startwin_win32_shared.cpp.inc"
 
 int startwin_open(void)
 {
@@ -690,4 +656,3 @@ int startwin_run(void)
 
     return done;
 }
-

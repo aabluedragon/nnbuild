@@ -97,6 +97,8 @@ ANIMATOR DoSuicide, DoUziSmoke;
 ANIMATOR DoShrapJumpFall;
 ANIMATOR DoFastShrapJumpFall;
 
+static SWBOOL SW_CrossplayMeleeDamageDukeMapWall(short hit_wall, int hit_x, int hit_y, int hit_z, short owner);
+static SWBOOL SW_CrossplayProjectileDamageDukeMapWall(short weapon, short hit_wall);
 int SpawnSmokePuff(short SpriteNum);
 SWBOOL WarpToUnderwater(short *sectnum, int *x, int *y, int *z);
 SWBOOL WarpToSurface(short *sectnum, int *x, int *y, int *z);
@@ -104,6 +106,7 @@ short ElectroFindClosestEnemy(short SpriteNum);
 int InitElectroJump(SPRITEp wp, SPRITEp sp);
 SWBOOL TestDontStickSector(short hit_sect);
 int SpawnShrapX(short SpriteNum);
+int16_t g_swCrossplayLastRocket = -1;
 SWBOOL WeaponMoveHit(short SpriteNum);
 int HelpMissileLateral(int16_t Weapon, int dist);
 void SpawnMidSplash(short SpriteNum);
@@ -4400,6 +4403,9 @@ VehicleMoveHit(short SpriteNum)
         short hit_sprite = NORM_SPRITE(u->ret);
         SPRITEp hsp = &sprite[hit_sprite];
 
+        if (SW_CrossplayDamageDukeMapSprite(SpriteNum, hit_sprite, &sprite[SpriteNum].xyz))
+            return TRUE;
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hit_sprite, u->ID);
@@ -4570,6 +4576,9 @@ WeaponMoveHit(short SpriteNum)
         hsp = &sprite[hit_sprite];
         hu = User[hit_sprite];
 
+        if (SW_CrossplayDamageDukeMapSprite(SpriteNum, hit_sprite, &sp->xyz))
+            return TRUE;
+
         if (hsp->statnum == STAT_ENEMY)
         {
             ////DSPRINTF(ds, "Bullet Hit Monster %d, stat %d ", hsp-sprite, (short)hsp->statnum);
@@ -4656,6 +4665,22 @@ WeaponMoveHit(short SpriteNum)
         SECTOR_OBJECTp sop;
 
         ASSERT(wph->extra != -1);
+
+        if (Bgetenv("VB_CP_MIRROR_DEBUG") != NULL)
+            LOG_F(INFO, "CPMIR missile spr=%d hit wall=%d pic=%d over=%d extra=%d lotag=%d cstat=%d", (int)SpriteNum,
+                  (int)hitinfo.wall, TrackerCast(wph->picnum), TrackerCast(wph->overpicnum),
+                  TrackerCast(wph->extra), TrackerCast(wph->lotag), TrackerCast(wph->cstat));
+
+        // A Duke wall answering the hit -- breaking, flickering a light, setting
+        // off a charge -- is not a reason for the missile to survive it.  Zeroing
+        // u->ret here used to say "handled, nothing was hit", and DoRocket() only
+        // detonates `if (WeaponMoveHit() && u->ret)`, so the rocket lived through
+        // its own impact and hit the same wall again on the next tic.  That is
+        // the rocket seen sliding along a mirror instead of exploding on it: the
+        // mirror's sector carries a light, the bridge reported the hit handled,
+        // and the explosion never happened.
+        if (SW_CrossplayProjectileDamageDukeMapWall(SpriteNum, hitinfo.wall))
+            return TRUE;
 
         if (TEST(wph->extra, WALLFX_SECTOR_OBJECT))
         {
@@ -7777,6 +7802,24 @@ void TraverseBreakableWalls(short start_sect, int x, int y, int z, short ang, in
 }
 
 
+// Maps an explosion sprite's ID to its DamageData entry, mirroring the choices
+// DoDamage() makes for the same IDs.  Used where damage has to be computed for a
+// target that has no SW USER record, such as a Duke crossplay sprite.
+static int SW_ExplosionDamageIndex(short id)
+{
+    switch (id)
+    {
+    case BOLT_EXP:        return DMG_BOLT_EXP;
+    case TANK_SHELL_EXP:  return DMG_TANK_SHELL_EXP;
+    case MICRO_EXP:
+    case MINE_EXP:        return DMG_MINE_EXP;
+    case NAP_EXP:         return DMG_NAPALM_EXP;
+    case MUSHROOM_CLOUD:  return DMG_NUCLEAR_EXP;
+    case GRENADE_EXP:
+    default:              return DMG_GRENADE_EXP;
+    }
+}
+
 int DoExpDamageTest(short Weapon)
 {
     SPRITEp wp = &sprite[Weapon];
@@ -7843,6 +7886,14 @@ int DoExpDamageTest(short Weapon)
             }
         }
     }
+
+    // Duke's sprites are not in SW's damage lists, so the blast has to reach them
+    // separately; without this an SW grenade could go off inside a Duke enemy and
+    // leave it untouched.  The strength comes from SW's own DamageData entry for
+    // this explosion, so the weapon hits Duke's actors exactly as hard as it hits
+    // SW's own.
+    SW_CrossplayExplodeDukeMapSprites(Weapon, wp->x, wp->y, wp->z, wp->sectnum, wu->Radius,
+                                      DamageData[SW_ExplosionDamageIndex(wu->ID)].damage_hi);
 
     if (wu->ID == MUSHROOM_CLOUD) return 0;   // Central Nuke doesn't break stuff
     // Only secondaries do that
@@ -8038,6 +8089,12 @@ DoStar(int16_t Weapon)
 
 #define STAR_STICK_RNUM 400
 #define STAR_BOUNCE_RNUM 600
+
+            if (SW_CrossplayProjectileDamageDukeMapWall(Weapon, hit_wall))
+            {
+                KillSprite(Weapon);
+                return TRUE;
+            }
 
             if (wph->lotag == TAG_WALL_BREAK)
             {
@@ -10206,6 +10263,25 @@ DoRocket(int16_t Weapon)
     {
         if (WeaponMoveHit(Weapon) && u->ret)
         {
+            if (Bgetenv("VB_CP_TEST_ROCKET") != NULL && !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
+            {
+                int const hit = TEST(u->ret, HIT_MASK);
+                int idx = -1, pic = -1;
+                if (hit == HIT_WALL)
+                    idx = NORM_WALL(u->ret);
+                else if (hit == HIT_SPRITE)
+                {
+                    idx = NORM_SPRITE(u->ret);
+                    pic = TrackerCast(sprite[idx].picnum);
+                }
+                else if (hit == HIT_SECTOR)
+                    idx = NORM_SECTOR(u->ret);
+                LOG_F(INFO, "CPROCKET died spr=%d hit=%s idx=%d pic=%d ret=%d", (int)Weapon,
+                      hit == HIT_SECTOR ? "SECTOR" : hit == HIT_WALL ? "WALL" :
+                      hit == HIT_SPRITE ? "SPRITE" : hit == HIT_PLAX_WALL ? "PLAX" : "other",
+                      idx, pic, (int)u->ret);
+            }
+
             if (u->ID == BOLT_THINMAN_R4)
             {
                 SpawnBunnyExp(Weapon);
@@ -13789,6 +13865,10 @@ InitSwordAttack(PLAYERp pp)
                 extern STATE s_TrashCanPain[];
                 SPRITEp hsp = &sprite[hitinfo.sprite];
                 tu = User[hitinfo.sprite];
+                vec3_t const hitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &hitPos))
+                    return 0;
 
                 if (tu) // JBF: added null check
                     switch (tu->ID)
@@ -13847,6 +13927,11 @@ InitSwordAttack(PLAYERp pp)
                             return 0;
                         }
                     }
+                }
+
+                if (SW_CrossplayMeleeDamageDukeMapWall(hitinfo.wall, hitinfo.x, hitinfo.y, hitinfo.z, pp->PlayerSprite))
+                {
+                    return 0;
                 }
 
                 if (wall[hitinfo.wall].lotag == TAG_WALL_BREAK)
@@ -13979,6 +14064,10 @@ InitFistAttack(PLAYERp pp)
                 extern STATE s_TrashCanPain[];
                 SPRITEp hsp = &sprite[hitinfo.sprite];
                 tu = User[hitinfo.sprite];
+                vec3_t const hitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &hitPos))
+                    return 0;
 
                 if (tu)     // JBF: added null check
                     switch (tu->ID)
@@ -14050,6 +14139,11 @@ InitFistAttack(PLAYERp pp)
                             return 0;
                         }
                     }
+                }
+
+                if (SW_CrossplayMeleeDamageDukeMapWall(hitinfo.wall, hitinfo.x, hitinfo.y, hitinfo.z, pp->PlayerSprite))
+                {
+                    return 0;
                 }
 
                 if (wall[hitinfo.wall].lotag == TAG_WALL_BREAK)
@@ -14915,6 +15009,17 @@ int ContinueHitscan(PLAYERp pp, short sectnum, int x, int y, int z, short ang, i
                 return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hitinfo.sprite,0);
@@ -15086,6 +15191,17 @@ InitShotgun(PLAYERp pp)
             if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
             {
                 if (MissileHitMatch(-1, WPN_SHOTGUN, hitinfo.sprite))
+                    continue;
+            }
+
+            // A Duke prop is Duke's to answer for, and it answers to a bullet as
+            // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+            // list and stopped there, so nothing Duke owns could be shot at all --
+            // only an explosion, which reaches a sprite without consulting its cstat.
+            {
+                vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
                     continue;
             }
 
@@ -15400,6 +15516,7 @@ InitZillaRail(short SpriteNum)
 int
 InitRocket(PLAYERp pp)
 {
+    g_swCrossplayLastRocket = -1;
     USERp u = User[pp->PlayerSprite];
     USERp wu;
     SPRITEp wp;
@@ -15507,6 +15624,36 @@ InitRocket(PLAYERp pp)
     wu->Counter = 1;
     if (TestMissileSetPos(w, DoRocket, 1200, zvel))
     {
+    if (Bgetenv("VB_CP_TEST_ROCKET") != NULL)
+        {
+            int const hit = TEST(wu->ret, HIT_MASK);
+            int cz = 0, fz = 0;
+            if ((unsigned)wp->sectnum < (unsigned)numsectors)
+            {
+                cz = sector[wp->sectnum].ceilingz;
+                fz = sector[wp->sectnum].floorz;
+            }
+            int hitdist = -1, hitidx = -1;
+            if (hit == HIT_WALL)
+            {
+                hitidx = NORM_WALL(wu->ret);
+                int64_t const wx = (int64_t)wall[hitidx].x - nx, wy = (int64_t)wall[hitidx].y - ny;
+                hitdist = (int)ksqrt((uint32_t)min<int64_t>(wx * wx + wy * wy, 0x7fffffff));
+            }
+            else if (hit == HIT_SPRITE)
+            {
+                hitidx = NORM_SPRITE(wu->ret);
+                int64_t const sx = (int64_t)sprite[hitidx].x - nx, sy = (int64_t)sprite[hitidx].y - ny;
+                hitdist = (int)ksqrt((uint32_t)min<int64_t>(sx * sx + sy * sy, 0x7fffffff));
+            }
+            LOG_F(INFO, "CPROCKET preflight-kill hit=%s idx=%d dist=%d moved=%d sect=%d z=%d ceil=%d floor=%d headroom=%d",
+                  hit == HIT_SECTOR ? "SECTOR" : hit == HIT_WALL ? "WALL" :
+                  hit == HIT_SPRITE ? "SPRITE" : hit == HIT_PLAX_WALL ? "PLAX" : "other",
+                  hitidx, hitdist,
+                  (int)ksqrt((uint32_t)min<int64_t>(((int64_t)wp->x - nx) * ((int64_t)wp->x - nx) +
+                                                   ((int64_t)wp->y - ny) * ((int64_t)wp->y - ny), 0x7fffffff)),
+                  (int)wp->sectnum, (int)wp->z, cz, fz, (int)(wp->z - cz));
+        }
         pp->SpriteP->clipdist = oclipdist;
         KillSprite(w);
         return 0;
@@ -15528,6 +15675,7 @@ InitRocket(PLAYERp pp)
     wu->ychange = MOVEy(wp->xvel, wp->ang);
     wu->zchange = zvel;
 
+    g_swCrossplayLastRocket = w;
     return 0;
 }
 
@@ -17630,6 +17778,9 @@ BulletHitSprite(SPRITEp sp, short hit_sprite, int hit_x, int hit_y, int hit_z, s
     short New;
     short id;
 
+    if (SW_CrossplayDamageDukeMapSprite(sp - sprite, hit_sprite, &hit_pos))
+        return TRUE;
+
     // hit a NPC or PC?
     if (TEST(hsp->extra, SPRX_PLAYER_OR_ENEMY))
     {
@@ -17945,6 +18096,17 @@ InitUzi(PLAYERp pp)
                 return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE) && HitBreakSprite(hitinfo.sprite,0))
         {
             return 0;
@@ -18118,6 +18280,17 @@ InitEMP(PLAYERp pp)
         if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
         {
             if (MissileHitMatch(-1, WPN_UZI, hitinfo.sprite))
+                return 0;
+        }
+
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
                 return 0;
         }
 
@@ -18633,6 +18806,17 @@ InitSobjMachineGun(short SpriteNum, PLAYERp pp)
             return 0;
         }
 
+        // A Duke prop is Duke's to answer for, and it answers to a bullet as
+        // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+        // list and stopped there, so nothing Duke owns could be shot at all --
+        // only an explosion, which reaches a sprite without consulting its cstat.
+        {
+            vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+            if (SW_CrossplayDamageDukeMapSprite(pp->PlayerSprite, hitinfo.sprite, &dukeHitPos))
+                return 0;
+        }
+
         if (TEST(hsp->extra, SPRX_BREAKABLE))
         {
             HitBreakSprite(hitinfo.sprite,0);
@@ -19065,6 +19249,17 @@ InitTurretMgun(SECTOR_OBJECTp sop)
                 if (hsp->lotag == TAG_SPRITE_HIT_MATCH)
                 {
                     if (MissileHitMatch(-1, WPN_UZI, hitinfo.sprite))
+                        continue;
+                }
+
+                // A Duke prop is Duke's to answer for, and it answers to a bullet as
+                // readily as to a blast.  Every hitscan weapon reached SW's own breakable
+                // list and stopped there, so nothing Duke owns could be shot at all --
+                // only an explosion, which reaches a sprite without consulting its cstat.
+                {
+                    vec3_t const dukeHitPos = { hitinfo.x, hitinfo.y, hitinfo.z };
+
+                    if (SW_CrossplayDamageDukeMapSprite(sp - sprite, hitinfo.sprite, &dukeHitPos))
                         continue;
                 }
 
@@ -19770,6 +19965,9 @@ InitEnemyFireball(short SpriteNum)
 SWBOOL
 WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
 {
+    if (sectnum == NULL || (unsigned)*sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     short i, nexti;
     SECT_USERp sectu = SectUser[*sectnum];
     SPRITEp under_sp = NULL, over_sp = NULL;
@@ -19778,7 +19976,7 @@ WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
     int sx, sy;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for DIVE_AREA "over" sprite for reference point
@@ -19849,6 +20047,9 @@ WarpToUnderwater(short *sectnum, int *x, int *y, int *z)
 SWBOOL
 WarpToSurface(short *sectnum, int *x, int *y, int *z)
 {
+    if (sectnum == NULL || (unsigned)*sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     short i, nexti;
     SECT_USERp sectu = SectUser[*sectnum];
     short over, under;
@@ -19858,7 +20059,7 @@ WarpToSurface(short *sectnum, int *x, int *y, int *z)
     char Found = FALSE;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for UNDERWATER "under" sprite for reference point
@@ -19921,6 +20122,9 @@ WarpToSurface(short *sectnum, int *x, int *y, int *z)
 SWBOOL
 SpriteWarpToUnderwater(SPRITEp sp)
 {
+    if (sp == NULL || (unsigned)sp->sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     USERp u = User[sp - sprite];
     short i, nexti;
     SECT_USERp sectu = SectUser[sp->sectnum];
@@ -19930,7 +20134,7 @@ SpriteWarpToUnderwater(SPRITEp sp)
     int sx, sy;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for DIVE_AREA "over" sprite for reference point
@@ -19999,6 +20203,9 @@ SpriteWarpToUnderwater(SPRITEp sp)
 SWBOOL
 SpriteWarpToSurface(SPRITEp sp)
 {
+    if (sp == NULL || (unsigned)sp->sectnum >= (unsigned)numsectors)
+        return FALSE;
+
     USERp u = User[sp - sprite];
     short i, nexti;
     SECT_USERp sectu = SectUser[sp->sectnum];
@@ -20009,7 +20216,7 @@ SpriteWarpToSurface(SPRITEp sp)
     char Found = FALSE;
 
     // 0 not valid for water match tags
-    if (sectu->number == 0)
+    if (sectu == NULL || sectu->number == 0)
         return FALSE;
 
     // search for UNDERWATER "under" sprite for reference point
@@ -20598,6 +20805,11 @@ int QueueHole(short hit_sect, short hit_wall, int hit_x, int hit_y, int hit_z)
     SPRITEp sp;
     short sectnum;
 
+    {
+        vec3_t hitPos = { hit_x, hit_y, hit_z };
+        if (SW_CrossplayDamageDukeMapWall(-1, hit_wall, &hitPos))
+            return -1;
+    }
 
     if (TestDontStick(-1,hit_wall))
         return -1;
@@ -20645,6 +20857,21 @@ int QueueHole(short hit_sect, short hit_wall, int hit_x, int hit_y, int hit_z)
         changespritesect(SpriteNum, sectnum);
 
     return SpriteNum;
+}
+
+static SWBOOL SW_CrossplayMeleeDamageDukeMapWall(short hit_wall, int hit_x, int hit_y, int hit_z, short owner)
+{
+    vec3_t hitPos = { hit_x, hit_y, hit_z };
+    return SW_CrossplayDamageDukeMapWall(owner, hit_wall, &hitPos) != 0;
+}
+
+static SWBOOL SW_CrossplayProjectileDamageDukeMapWall(short weapon, short hit_wall)
+{
+    if ((unsigned)weapon >= (unsigned)MAXSPRITES)
+        return FALSE;
+
+    SPRITEp const sp = &sprite[weapon];
+    return SW_CrossplayDamageDukeMapWall(weapon, hit_wall, &sp->xyz) != 0;
 }
 
 #define FLOORBLOOD_RATE 30

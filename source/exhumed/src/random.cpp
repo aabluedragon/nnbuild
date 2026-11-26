@@ -1,0 +1,134 @@
+//-------------------------------------------------------------------------
+/*
+Copyright (C) 2010-2019 EDuke32 developers and contributors
+Copyright (C) 2019 sirlemonhead, Nuke.YKT
+
+This file is part of PCExhumed.
+
+PCExhumed is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+//-------------------------------------------------------------------------
+
+#include "random.h"
+#include "save.h"
+
+static int randseed = 0x1010101;
+
+
+void InitRandom()
+{
+    randseed = 0x1010101;
+}
+
+int RandomGetSeed()
+{
+    return randseed;
+}
+
+int RandomBit()
+{
+    randseed = (randseed >> 1) | ((((randseed >> 1) ^ (randseed >> 28)) & 1) << 28);
+    return randseed & 1;
+}
+
+char RandomByte()
+{
+    char randByte = RandomBit() << 7;
+    randByte |= RandomBit() << 6;
+    randByte |= RandomBit() << 5;
+    randByte |= RandomBit() << 4;
+    randByte |= RandomBit() << 3;
+    randByte |= RandomBit() << 2;
+    randByte |= RandomBit() << 1;
+    randByte |= RandomBit();
+    return randByte;
+}
+
+uint16_t RandomWord()
+{
+    short randWord = RandomByte() << 8;
+    randWord |= RandomByte();
+    return randWord;
+}
+
+int RandomLong()
+{
+    int randLong = RandomWord() << 16;
+    randLong |= RandomWord();
+    return randLong;
+}
+
+int RandomSize(int nSize)
+{
+    int randSize = 0;
+
+    while (nSize > 0)
+    {
+        randSize = randSize * 2 | RandomBit();
+        nSize--;
+    }
+
+    return randSize;
+}
+
+uint16_t KexRandomWord()
+{
+    // RandomSize builds the first bit into bit 15 and never promotes its
+    // signed char return value.  The classic RandomWord() is intentionally
+    // left alone for compatibility, while KEX's UInt16() gets all 65536
+    // source values on platforms where char is signed.
+    return (uint16_t)RandomSize(16);
+}
+
+uint32_t KexRandomLong()
+{
+    uint32_t const high = KexRandomWord();
+    return (high << 16) | KexRandomWord();
+}
+
+int KexRandomMax(int max)
+{
+    if (max <= 1)
+        return 0;
+
+    // KEX's Max(n) consumes a full random value for an integer in [0,n).
+    // Scaling a 16-bit word avoids the severe skew from reducing a shorter
+    // bit range modulo an arbitrary bound (notably 3, 10, 15 and 20000).
+    return (int)(((uint64_t)KexRandomWord() * (uint32_t)max) >> 16);
+}
+
+class RandomLoadSave : public LoadSave
+{
+public:
+    virtual void Load();
+    virtual void Save();
+};
+
+void RandomLoadSave::Load()
+{
+    Read(&randseed, sizeof(randseed));
+}
+
+void RandomLoadSave::Save()
+{
+    Write(&randseed, sizeof(randseed));
+}
+
+static RandomLoadSave* myLoadSave;
+
+void RandomLoadSaveConstruct()
+{
+    myLoadSave = new RandomLoadSave();
+}

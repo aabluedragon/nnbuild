@@ -30,34 +30,4 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 //****************************************************************************
 
-#ifndef _gamedefs_public_
-#define _gamedefs_public_
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-//****************************************************************************
-//
-// DEFINES
-//
-//****************************************************************************
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXJOYBUTTONS 32
-#define MAXJOYBUTTONSANDHATS (MAXJOYBUTTONS+4)
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXMOUSEAXES 2
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXJOYAXES 9
-#define MAXJOYDIGITAL (MAXJOYAXES*2)
-
-// default mouse scale
-#define DEFAULTMOUSEANALOGUESCALE           65536
-
-#ifdef __cplusplus
-};
-#endif
-#endif
-
+#include "../../build/include/gamedefs_shared.h"

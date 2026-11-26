@@ -72,6 +72,14 @@ extern int32_t r_maxfps;
 extern int32_t g_numdisplays;
 extern int32_t g_displayindex;
 
+// Blood (NotBlood) mirror-rendering compat. Stubbed no-ops in our engine, so
+// Blood compiles/runs (mirror sectors simply don't render). r_mirrormodemulti
+// bit 4 selects the multiplayer-synced mode in NotBlood.
+extern int32_t r_mirrormode, r_mirrormodemulti;
+#define MIRRORMODE (r_mirrormodemulti & 4 ? r_mirrormodemulti & 3 : r_mirrormode)
+void videoMirrorTile(uint8_t *pTile, int nWidth, int nHeight);
+void videoMirrorDrawing(void);
+
 extern bool g_ImGuiCaptureInput;
 extern bool g_ImGuiExclusiveInput;
 extern bool g_ImGuiFrameActive;
@@ -327,6 +335,7 @@ void keyFlushChars(void);
 void mouseInit(void);
 void mouseUninit(void);
 int32_t mouseReadAbs(vec2_t *pResult, vec2_t const *pInput);
+void mouseMoveToCenter(void);  // Blood (NotBlood) compat
 void mouseGrabInput(bool grab);
 void mouseLockToWindow(char a);
 int32_t mouseReadButtons(void);

@@ -50,6 +50,7 @@ typedef struct {
     short htpicnum, htang, htextra, htowner, movflag;
     short tempang, actorstayput, dispicnum;
     short timetosleep;
+    int8_t floorzoffset, waterzoffset;
     char cgg;
     char filler;
     projectile_t projectile;
@@ -145,6 +146,7 @@ int A_CheckInventorySprite(spritetype* s);
 int A_CheckEnemyTile(int pn);
 int A_CheckEnemySprite(void const* s);
 int A_CheckSwitchTile(int i);
+int A_CheckSwitchTileNum(int tileNum);
 int A_CheckNoSE7Water(uspriteptr_t const pSprite, int sectNum, int sectLotag, int32_t* pOther);
 
 void G_MovePlayerSprite(int playerNum);

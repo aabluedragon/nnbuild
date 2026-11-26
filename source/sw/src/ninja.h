@@ -37,6 +37,7 @@ void InitPlayerSprite(PLAYERp pp);
 void InitAllPlayerSprites(void);
 void PlayerPanelSetup(void);
 void PlayerDeathReset(PLAYERp pp);
+void PlayerGameReset(PLAYERp pp);
 void SpawnPlayerUnderSprite(PLAYERp pp);
 
 #endif

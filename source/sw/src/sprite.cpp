@@ -78,6 +78,35 @@ SECTOR_OBJECT SectorObject[MAX_SECTOR_OBJECTS];
 
 int DirArr[] = {NORTH, NE, EAST, SE, SOUTH, SW, WEST, NW, NORTH, NE, EAST, SE, SOUTH, SW, WEST, NW};
 
+static SWBOOL SW_CrossplayIgnoreDukeMapMissilePreflightHit(short spritenum, int retval)
+{
+    if (!retval || !SW_CrossplayDukeMapBridgeActive() || (unsigned)spritenum >= MAXSPRITES)
+        return FALSE;
+
+    USERp const u = User[spritenum];
+    if (u == NULL || !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
+        return FALSE;
+
+    switch (TEST(retval, HIT_MASK))
+    {
+    case HIT_PLAX_WALL:
+        return TRUE;
+
+    case HIT_SECTOR:
+    {
+        short const sectnum = NORM_SECTOR(retval);
+        if ((unsigned)sectnum >= (unsigned)numsectors)
+            return FALSE;
+
+        return TEST(sector[sectnum].ceilingstat, CEILING_STAT_PLAX) ||
+               TEST(sector[sectnum].floorstat, FLOOR_STAT_PLAX);
+    }
+
+    default:
+        return FALSE;
+    }
+}
+
 #define SCROLL_RATE 20
 #define SCROLL_FIRE_RATE 20
 
@@ -1724,6 +1753,99 @@ void TraverseSectors(short start_sect)
 }
 #endif
 
+
+// VibeBuild32 crossplay: a Duke enemy drops its weapon by spawning a Duke pickup
+// during play, and the pass that turns a Duke pickup into a Shadow Warrior one runs
+// only at map load.  Setting one up after the fact needs the STATE that
+// SpriteSetup()'s per-icon switch would have given it, and those live here, so the
+// lookup and the spawn live here too.
+struct sw_crossplay_icon_state_t
+{
+    int16_t picnum;
+    STATEp state;
+};
+
+static sw_crossplay_icon_state_t const g_swCrossplayIconStates[] = {
+    { ICON_STAR, s_IconStar },
+    { ICON_UZI, s_IconUzi },
+    { ICON_LG_UZI_AMMO, s_IconLgUziAmmo },
+    { ICON_UZIFLOOR, s_IconUziFloor },
+    { ICON_ROCKET, s_IconRocket },
+    { ICON_LG_ROCKET, s_IconLgRocket },
+    { ICON_SHOTGUN, s_IconShotgun },
+    { ICON_LG_SHOTSHELL, s_IconLgShotshell },
+    { ICON_AUTORIOT, s_IconAutoRiot },
+    { ICON_GRENADE_LAUNCHER, s_IconGrenadeLauncher },
+    { ICON_LG_GRENADE, s_IconLgGrenade },
+    { ICON_LG_MINE, s_IconLgMine },
+    { ICON_HEART, s_IconHeart },
+    { ICON_HEART_LG_AMMO, s_IconHeartLgAmmo },
+    { ICON_MICRO_GUN, s_IconMicroGun },
+    { ICON_MICRO_BATTERY, s_IconMicroBattery },
+    { ICON_RAIL_GUN, s_IconRailGun },
+    { ICON_RAIL_AMMO, s_IconRailAmmo },
+    { ICON_ARMOR, s_IconArmor },
+    { ICON_MEDKIT, s_IconMedkit },
+    { ICON_SM_MEDKIT, s_IconSmMedkit },
+    { ICON_CHEMBOMB, s_IconChemBomb },
+    { ICON_FLASHBOMB, s_IconFlashBomb },
+    { ICON_NUKE, s_IconNuke },
+    { ICON_CALTROPS, s_IconCaltrops },
+    { ICON_BOOSTER, s_IconBooster },
+    { ICON_HEAT_CARD, s_IconHeatCard },
+    { ICON_CLOAK, s_IconCloak },
+    { ICON_FLY, s_IconFly },
+    { ICON_NIGHT_VISION, s_IconNightVision },
+    { RED_CARD, s_RedCard },
+    { BLUE_CARD, s_BlueCard },
+    { GREEN_CARD, s_GreenCard },
+    { YELLOW_CARD, s_YellowCard },
+    { GOLD_SKELKEY, s_GoldSkelKey },
+    { SILVER_SKELKEY, s_SilverSkelKey },
+    { BRONZE_SKELKEY, s_BronzeSkelKey },
+    { RED_SKELKEY, s_RedSkelKey },
+};
+
+// Gives an already-converted sprite the USER record and state a Shadow Warrior
+// pickup needs, so the player can actually pick it up.  Returns FALSE for a tile
+// with no pickup state, and the caller leaves the sprite alone.
+SWBOOL SW_CrossplaySetupConvertedDukePickup(int16_t SpriteNum)
+{
+    if ((unsigned)SpriteNum >= MAXSPRITES)
+        return FALSE;
+
+    SPRITEp const sp = &sprite[SpriteNum];
+    STATEp state = NULL;
+
+    for (size_t i = 0; i < sizeof(g_swCrossplayIconStates) / sizeof(g_swCrossplayIconStates[0]); ++i)
+        if (g_swCrossplayIconStates[i].picnum == sp->picnum)
+        {
+            state = g_swCrossplayIconStates[i].state;
+            break;
+        }
+
+    if (state == NULL)
+        return FALSE;
+
+    if (User[SpriteNum] != NULL)
+        return TRUE;
+
+    USERp const u = SpawnUser(SpriteNum, sp->picnum, state);
+    if (u == NULL)
+        return FALSE;
+
+    u->ID = sp->picnum;
+    u->spal = sp->pal;
+    u->Radius = 500;
+
+    // IconDefault()'s essentials: off the floor, gettable, and not in the way.
+    RESET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+    SET(sp->cstat, CSTAT_SPRITE_ALIGNMENT_FACING);
+    change_sprite_stat(SpriteNum, STAT_ITEM);
+    DoActorZrange(SpriteNum);
+
+    return TRUE;
+}
 
 void
 SpriteSetupPost(void)
@@ -7256,10 +7378,12 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
     SPRITEp sp;
     USERp u = User[spritenum];
     short lastsectnum;
+    vec3_t oldpos;
 
     sp = &sprite[spritenum];
 
     ASSERT(u);
+    oldpos = sp->xyz;
 
     // Can't modify sprite sectors
     // directly becuase of linked lists
@@ -7292,6 +7416,15 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
         // we've gone beyond a white wall - kill it
         retval = 0;
         SET(retval, HIT_PLAX_WALL);
+        if (SW_CrossplayIgnoreDukeMapMissilePreflightHit(spritenum, retval))
+        {
+            sp->xyz = oldpos;
+            if (u != NULL)
+                u->ret = 0;
+
+            return 0;
+        }
+
         return retval;
     }
 
@@ -7380,6 +7513,18 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
             RESET(retval, HIT_WALL|HIT_SECTOR);
             SET(retval, HIT_PLAX_WALL);
         }
+    }
+
+    if (SW_CrossplayIgnoreDukeMapMissilePreflightHit(spritenum, retval))
+    {
+        if (sp->sectnum != lastsectnum && (unsigned)lastsectnum < (unsigned)numsectors)
+            changespritesect(spritenum, lastsectnum);
+
+        sp->xyz = oldpos;
+        if (u != NULL)
+            u->ret = 0;
+
+        return 0;
     }
 
     return retval;

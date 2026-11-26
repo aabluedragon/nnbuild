@@ -50,7 +50,10 @@ typedef struct
     StructTracker(Sector, int8_t) floorshade;
     StructTracker(Sector, uint8_t) floorpal, floorxpanning, floorypanning;
     StructTracker(Sector, uint8_t) /*CM_CEILINGZ:*/ visibility, fogpal;
-    StructTracker(Sector, int16_t) lotag, hitag;
+    union {
+        StructTracker(Sector, int16_t) lotag, type;  // Blood: 'type' aliases lotag
+    };
+    StructTracker(Sector, int16_t) hitag;
     StructTracker(Sector, int16_t) extra;
 } StructName(sectortypev7);
 
@@ -83,7 +86,10 @@ typedef struct
     StructTracker(Wall, int16_t) picnum, overpicnum;
     StructTracker(Wall, int8_t) shade;
     StructTracker(Wall, uint8_t) pal, xrepeat, yrepeat, xpanning, ypanning;
-    StructTracker(Wall, int16_t) lotag, hitag;
+    union {
+        StructTracker(Wall, int16_t) lotag, type;  // Blood: 'type' aliases lotag
+    };
+    StructTracker(Wall, int16_t) hitag;
     StructTracker(Wall, int16_t) extra;
 } StructName(walltypev7);
 
@@ -183,11 +189,14 @@ typedef struct
     union {
         struct
         {
-            StructTracker(Sprite, int16_t) xvel, yvel, zvel;
+            union { StructTracker(Sprite, int16_t) xvel, index; };     // Blood: 'index' aliases xvel
+            StructTracker(Sprite, int16_t) yvel;
+            union { StructTracker(Sprite, int16_t) zvel, inittype; };  // Blood: 'inittype' aliases zvel
         };
         vec3_16_t vel;
     };
-    StructTracker(Sprite, int16_t) lotag, hitag;
+    union { StructTracker(Sprite, int16_t) lotag, type; };   // Blood: 'type' aliases lotag
+    union { StructTracker(Sprite, int16_t) hitag, flags; };  // Blood: 'flags' aliases hitag
     StructTracker(Sprite, int16_t) extra;
 } StructName(spritetypev7);
 
@@ -215,11 +224,14 @@ typedef struct
     union {
         struct
         {
-            int16_t xvel, yvel, zvel;
+            union { int16_t xvel, index; };     // Blood: 'index' aliases xvel
+            int16_t yvel;
+            union { int16_t zvel, inittype; };  // Blood: 'inittype' aliases zvel
         };
         vec3_16_t vel;
     };
-    int16_t lotag, hitag;
+    union { int16_t lotag, type; };   // Blood: 'type' aliases lotag
+    union { int16_t hitag, flags; };  // Blood: 'flags' aliases hitag
     int16_t extra;
 } tspritetype;
 #endif

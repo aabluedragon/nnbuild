@@ -1,0 +1,1047 @@
+//-------------------------------------------------------------------------
+/*
+Copyright (C) 2010-2019 EDuke32 developers and contributors
+Copyright (C) 2019 Nuke.YKT
+
+This file is part of NBlood.
+
+NBlood is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+//-------------------------------------------------------------------------
+#include "compat.h"
+#include "baselayer.h"
+#include "keyboard.h"
+#include "mouse.h"
+#include "joystick.h"
+#include "control.h"
+#include "function.h"
+#include "common_game.h"
+#include "blood.h"
+#include "config.h"
+#include "controls.h"
+#include "demo.h"
+#include "globals.h"
+#include "levels.h"
+#include "map2d.h"
+#include "messages.h"
+#include "sound.h"
+#include "trig.h"
+#include "view.h"
+#include "weapon.h"
+
+
+int32_t ctrlCheckAllInput(void)
+{
+    return (
+        KB_KeyWaiting() ||
+        MOUSE_GetButtons() ||
+        JOYSTICK_GetButtons()
+        );
+}
+
+void ctrlClearAllInput(void)
+{
+    KB_FlushKeyboardQueue();
+    KB_FlushKeyboardQueueScans();
+    KB_ClearKeysDown();
+    MOUSE_ClearAllButtons();
+    JOYSTICK_ClearAllButtons();
+}
+
+GINPUT gInput, gNetInput;
+bool bSilentAim = false;
+bool gTimeSlowed = false;
+
+int32_t GetTime(void)
+{
+    return (int32_t)totalclock;
+}
+
+void ctrlInit(void)
+{
+    KB_ClearKeysDown();
+    KB_FlushKeyboardQueue();
+    KB_FlushKeyboardQueueScans();
+    CONTROL_Startup(controltype_keyboardandmouse, &GetTime, 120);
+    CONFIG_SetupMouse();
+    CONFIG_SetupJoystick();
+
+    CONTROL_JoystickEnabled = (gSetup.usejoystick && CONTROL_JoyPresent);
+    CONTROL_MouseEnabled = (gSetup.usemouse && CONTROL_MousePresent);
+
+    // JBF 20040215: evil and nasty place to do this, but joysticks are evil and nasty too
+    for (int i = 0; i < joystick.numAxes; i++)
+        JOYSTICK_SetDeadZone(i, JoystickAnalogueDead[i], JoystickAnalogueSaturate[i]);
+    CONTROL_DefineFlag(gamefunc_Move_Forward, false);
+    CONTROL_DefineFlag(gamefunc_Move_Backward, false);
+    CONTROL_DefineFlag(gamefunc_Turn_Left, false);
+    CONTROL_DefineFlag(gamefunc_Turn_Right, false);
+    CONTROL_DefineFlag(gamefunc_Turn_Around, false);
+    CONTROL_DefineFlag(gamefunc_Strafe, false);
+    CONTROL_DefineFlag(gamefunc_Strafe_Left, false);
+    CONTROL_DefineFlag(gamefunc_Strafe_Right, false);
+    CONTROL_DefineFlag(gamefunc_Jump, false);
+    CONTROL_DefineFlag(gamefunc_Crouch, false);
+    CONTROL_DefineFlag(gamefunc_Run, false);
+    CONTROL_DefineFlag(gamefunc_AutoRun, false);
+    CONTROL_DefineFlag(gamefunc_Open, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_Fire, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_Special_Fire, false);
+    CONTROL_DefineFlag(gamefunc_Aim_Up, false);
+    CONTROL_DefineFlag(gamefunc_Aim_Down, false);
+    CONTROL_DefineFlag(gamefunc_Aim_Center, false);
+    CONTROL_DefineFlag(gamefunc_Look_Up, false);
+    CONTROL_DefineFlag(gamefunc_Look_Down, false);
+    CONTROL_DefineFlag(gamefunc_Tilt_Left, false);
+    CONTROL_DefineFlag(gamefunc_Tilt_Right, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_1, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_2, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_3, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_4, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_5, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_6, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_7, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_8, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_9, false);
+    CONTROL_DefineFlag(gamefunc_Weapon_10, false);
+    CONTROL_DefineFlag(gamefunc_Inventory_Use, false);
+    CONTROL_DefineFlag(gamefunc_Inventory_Left, false);
+    CONTROL_DefineFlag(gamefunc_Inventory_Right, false);
+    CONTROL_DefineFlag(gamefunc_Map_Toggle, false);
+    CONTROL_DefineFlag(gamefunc_Map_Follow_Mode, false);
+    CONTROL_DefineFlag(gamefunc_Shrink_Screen, false);
+    CONTROL_DefineFlag(gamefunc_Enlarge_Screen, false);
+    CONTROL_DefineFlag(gamefunc_Send_Message, false);
+    CONTROL_DefineFlag(gamefunc_Send_Message_Team, false);
+    CONTROL_DefineFlag(gamefunc_See_Coop_View, false);
+    CONTROL_DefineFlag(gamefunc_See_Chase_View, false);
+    CONTROL_DefineFlag(gamefunc_Mouse_Aiming, false);
+    CONTROL_DefineFlag(gamefunc_Toggle_Crosshair, false);
+    CONTROL_DefineFlag(gamefunc_Next_Weapon, false);
+    CONTROL_DefineFlag(gamefunc_Previous_Weapon, false);
+    CONTROL_DefineFlag(gamefunc_Last_Weapon, false);
+    CONTROL_DefineFlag(gamefunc_Radial_Weapon_Menu, false);
+    CONTROL_DefineFlag(gamefunc_Holster_Weapon, false);
+    CONTROL_DefineFlag(gamefunc_Show_Opponents_Weapon, false);
+    CONTROL_DefineFlag(gamefunc_BeastVision, false);
+    CONTROL_DefineFlag(gamefunc_CrystalBall, false);
+    CONTROL_DefineFlag(gamefunc_JumpBoots, false);
+    CONTROL_DefineFlag(gamefunc_MedKit, false);
+    CONTROL_DefineFlag(gamefunc_ProximityBombs, false);
+    CONTROL_DefineFlag(gamefunc_RemoteBombs, false);
+}
+
+void ctrlTerm(void)
+{
+    CONTROL_Shutdown();
+}
+
+int32_t mouseyaxismode = -1;
+
+fix16_t gViewLook, gViewAngle;
+float gViewAngleAdjust;
+float gViewLookAdjust;
+int gViewLookRecenter;
+int gCrouchToggleState = 0;
+
+void ctrlRadialWeaponMenu(const ControlInfo *pInput, const bool bReset);
+
+void ctrlGetInput(void)
+{
+    ControlInfo info;
+
+    if (!gGameStarted || gInputMode != INPUT_MODE_0)
+    {
+        gInput = {};
+        gInput.keyFlags.isTyping = (gInputMode == INPUT_MODE_2) && gGameStarted && !VanillaMode(); // only show typing indicator for non-vanilla mode
+        CONTROL_GetInput(&info);
+        ctrlRadialWeaponMenu(NULL, true);
+        return;
+    }
+
+    GINPUT input = {};
+    static double lastInputTicks;
+    auto const    currentHiTicks    = timerGetFractionalTicks();
+    double const  elapsedInputTicks = currentHiTicks - lastInputTicks;
+
+    static int32_t lastInputClock;  // MED
+    int32_t const  elapsedTics = (int32_t)totalclock - lastInputClock;
+
+    lastInputTicks = currentHiTicks;
+    lastInputClock = (int32_t) totalclock;
+
+    auto scaleAdjustmentToInterval = [=](double x) { return x * kTicsPerSec / (1000.0 / elapsedInputTicks); };
+
+    CONTROL_ProcessBinds();
+
+    if (gMouseAiming)
+        gMouseAim = 0;
+
+    if (BUTTON(gamefunc_Mouse_Aiming))
+    {
+        if (gMouseAiming)
+            gMouseAim = 1;
+        else
+        {
+            CONTROL_ClearButton(gamefunc_Mouse_Aiming);
+            gMouseAim = !gMouseAim;
+            if (gMouseAim)
+            {
+                if (!bSilentAim)
+                    viewSetMessage("Mouse aiming ON");
+            }
+            else
+            {
+                if (!bSilentAim)
+                    viewSetMessage("Mouse aiming OFF");
+                gInput.keyFlags.lookCenter = 1;
+            }
+        }
+    }
+    else if (gMouseAiming)
+        gInput.keyFlags.lookCenter = 1;
+
+    CONTROL_GetInput(&info);
+
+    if (MouseDeadZone)
+    {
+        if (info.mousey > 0)
+            info.mousey = max(info.mousey - MouseDeadZone, 0);
+        else if (info.mousey < 0)
+            info.mousey = min(info.mousey + MouseDeadZone, 0);
+
+        if (info.mousex > 0)
+            info.mousex = max(info.mousex - MouseDeadZone, 0);
+        else if (info.mousex < 0)
+            info.mousex = min(info.mousex + MouseDeadZone, 0);
+    }
+
+    if (MouseBias)
+    {
+        if (klabs(info.mousex) > klabs(info.mousey))
+            info.mousey = tabledivide32_noinline(info.mousey, MouseBias);
+        else
+            info.mousex = tabledivide32_noinline(info.mousex, MouseBias);
+    }
+
+    if (gQuitRequest)
+        gInput.keyFlags.quit = 1;
+
+    if (gGameStarted && gInputMode != INPUT_MODE_2 && gInputMode != INPUT_MODE_1
+        && BUTTON(gamefunc_Send_Message))
+    {
+        CONTROL_ClearButton(gamefunc_Send_Message);
+        keyFlushScans();
+        gInputMode = INPUT_MODE_2;
+        gPlayerMsg.bTeamMessage = 0;
+    }
+
+    if (gGameStarted && gInputMode != INPUT_MODE_2 && gInputMode != INPUT_MODE_1
+        && BUTTON(gamefunc_Send_Message_Team))
+    {
+        CONTROL_ClearButton(gamefunc_Send_Message_Team);
+        keyFlushScans();
+        gInputMode = INPUT_MODE_2;
+        gPlayerMsg.bTeamMessage = gGameOptions.nGameType == kGameTypeTeams;
+    }
+
+    if (BUTTON(gamefunc_AutoRun))
+    {
+        CONTROL_ClearButton(gamefunc_AutoRun);
+        gAutoRun = !gAutoRun;
+        if (gAutoRun)
+            viewSetMessage("Auto run ON");
+        else
+            viewSetMessage("Auto run OFF");
+    }
+
+    if (BUTTON(gamefunc_Map_Toggle))
+    {
+        CONTROL_ClearButton(gamefunc_Map_Toggle);
+        viewToggle(gViewMode);
+    }
+
+    if (gViewMode == 4 && BUTTON(gamefunc_Map_Follow_Mode))
+    {
+        CONTROL_ClearButton(gamefunc_Map_Follow_Mode);
+        gFollowMap = !gFollowMap;
+        gViewMap.FollowMode(gFollowMap);
+    }
+
+    if (BUTTON(gamefunc_Shrink_Screen))
+    {
+        if (gViewMode == 3)
+        {
+            CONTROL_ClearButton(gamefunc_Shrink_Screen);
+            viewResizeView(gViewSize + 1);
+        }
+        if (gViewMode == 2 || gViewMode == 4)
+        {
+            gZoom = ClipLow(gZoom - (elapsedTics<<5), 64);
+            gViewMap.nZoom = gZoom;
+        }
+    }
+
+    if (BUTTON(gamefunc_Enlarge_Screen))
+    {
+        if (gViewMode == 3)
+        {
+            CONTROL_ClearButton(gamefunc_Enlarge_Screen);
+            viewResizeView(gViewSize - 1);
+        }
+        if (gViewMode == 2 || gViewMode == 4)
+        {
+            gZoom = ClipHigh(gZoom + (elapsedTics<<5), 4096);
+            gViewMap.nZoom = gZoom;
+        }
+    }
+
+    if (BUTTON(gamefunc_Toggle_Crosshair))
+    {
+        static int32_t nAimReticleOld = 1;
+        CONTROL_ClearButton(gamefunc_Toggle_Crosshair);
+        if (!gAimReticle)
+            gAimReticle = nAimReticleOld;
+        else
+            nAimReticleOld = gAimReticle, gAimReticle = 0;
+    }
+
+    if (BUTTON(gamefunc_Next_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Next_Weapon);
+        gInput.keyFlags.nextWeapon = 1;
+    }
+
+    if (BUTTON(gamefunc_Previous_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Previous_Weapon);
+        gInput.keyFlags.prevWeapon = 1;
+    }
+
+    if (BUTTON(gamefunc_Last_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Last_Weapon);
+        gInput.keyFlags.lastWeapon = 1;
+    }
+
+    if (BUTTON(gamefunc_Show_Opponents_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Show_Opponents_Weapon);
+        gShowWeapon = (gShowWeapon+1)%3;
+    }
+
+    if (BUTTON(gamefunc_Jump))
+        gInput.buttonFlags.jump = 1;
+
+    if (BUTTON(gamefunc_Crouch))
+    {
+        gInput.buttonFlags.crouch = 1;
+        if (gCrouchToggle && gMe && !gMe->isUnderwater)
+        {
+            if (gCrouchToggleState == 0)
+                gCrouchToggleState = 1;
+            else if (gCrouchToggleState == 2) // stop crouching
+                gCrouchToggleState = 3, gInput.buttonFlags.crouch = 0;
+            else if (gCrouchToggleState == 3)
+                gInput.buttonFlags.crouch = 0;
+        }
+    }
+    else if (gCrouchToggle && (gCrouchToggleState > 0) && (gCrouchToggleState < 3) && gMe && !gMe->isUnderwater)
+    {
+        gInput.buttonFlags.crouch = 1;
+        gCrouchToggleState = 2;
+    }
+    else
+    {
+        gCrouchToggleState = 0;
+    }
+
+    if (gCrouchToggle && gInput.buttonFlags.jump) // reset crouch toggle state on jump
+        gCrouchToggleState = 0;
+
+    if (gCrouchAuto && gMe && gMe->pSprite && !gMe->isUnderwater)
+    {
+        static int gLastCrouchCheck = 0;
+        static char bCrouchState = 0;
+        while (gLastCrouchCheck != gLevelTime)
+        {
+            bCrouchState = 0;
+            gLastCrouchCheck = gLevelTime;
+
+            spritetype *pSprite = gMe->pSprite;
+            int16_t nSectnum = pSprite->sectnum;
+            if (!sectRangeIsFine(nSectnum))
+                break;
+            if (gLowerLink[nSectnum] >= 0) // we have a ror sector above us, abort
+                break;
+            int32_t nAng, nX, nY, nZ, fZ, cZ, fZCurrentSect, nDiff;
+            nAng = pSprite->ang;
+            nX = pSprite->x;
+            nY = pSprite->y;
+            nZ = pSprite->z;
+            getzsofslope(nSectnum, nX, nY, &cZ, &fZCurrentSect); // get current floor
+            if ((sector[nSectnum].ceilingpicnum < 4080) || (sector[nSectnum].ceilingpicnum > 4095)) // if sector does not have a fake ceiling (e.g. E4M4 elevator), checking this sector
+            {
+                nDiff = cZ - fZCurrentSect;
+                if ((nDiff < -3072) && (nDiff > -15000)) // we're in tiny crawl space, keep crouching
+                {
+                    bCrouchState = 1;
+                    break;
+                }
+            }
+
+            const char bInAir = (pSprite->flags&kPhysFalling) && (zvel[pSprite->index] < -1000);
+            const int32_t nStepX = mulscale30(128, Cos(nAng));
+            const int32_t nStepY = mulscale30(128, Sin(nAng));
+            int16_t nSectnumNew = nSectnum;
+            for (int i = 0; i < 3; i++) // check sector in front of player
+            {
+                nX += nStepX; // move forward
+                nY += nStepY;
+                updatesector(nX, nY, &nSectnumNew);
+                if (nSectnumNew == nSectnum)
+                    continue;
+                if (nSectnumNew == -1) // we drilled too far sir, abort
+                    break;
+                if (gLowerLink[nSectnumNew] >= 0) // we have a ror sector above us, abort
+                    break;
+                if ((sector[nSectnumNew].ceilingpicnum >= 4080) && (sector[nSectnumNew].ceilingpicnum <= 4095)) // if sector HAS a fake ceiling (e.g. E4M4 elevator), skip
+                    continue;
+                getzsofslope(nSectnumNew, nX, nY, &cZ, &fZ);
+                if (bInAir) // if player is in air, use current Z height position as compare
+                    nDiff = cZ - nZ;
+                else
+                    nDiff = cZ - fZCurrentSect;
+                if ((nDiff < -3072) && (nDiff > -15000))
+                {
+                    nDiff = cZ - (nDiff>>1);
+                    bCrouchState = cansee(nX, nY, nDiff, nSectnumNew, pSprite->x, pSprite->y, nDiff, nSectnum); // if the area we want to crouch in has direct line of sight to the player
+                    break;
+                }
+            }
+            break;
+        }
+        if (bCrouchState && !gInput.buttonFlags.jump)
+            gInput.buttonFlags.crouch = 1;
+    }
+
+    if (BUTTON(gamefunc_Weapon_Fire))
+        gInput.buttonFlags.shoot = 1;
+
+    if (BUTTON(gamefunc_Weapon_Special_Fire))
+        gInput.buttonFlags.shoot2 = 1;
+
+    if (BUTTON(gamefunc_Open))
+    {
+        CONTROL_ClearButton(gamefunc_Open);
+        gInput.keyFlags.action = 1;
+    }
+
+    gInput.buttonFlags.lookUp |= BUTTON(gamefunc_Look_Up);
+    gInput.buttonFlags.lookDown |= BUTTON(gamefunc_Look_Down);
+
+    if (BUTTON(gamefunc_Look_Up) || BUTTON(gamefunc_Look_Down))
+        gInput.keyFlags.lookCenter = 1;
+    else
+    {
+        gInput.buttonFlags.lookUp |= BUTTON(gamefunc_Aim_Up);
+        gInput.buttonFlags.lookDown |= BUTTON(gamefunc_Aim_Down);
+    }
+
+    if (BUTTON(gamefunc_Aim_Center))
+    {
+        CONTROL_ClearButton(gamefunc_Aim_Center);
+        gInput.keyFlags.lookCenter = 1;
+    }
+
+    gInput.keyFlags.spin180 |= BUTTON(gamefunc_Turn_Around);
+
+    if (BUTTON(gamefunc_Inventory_Left))
+    {
+        CONTROL_ClearButton(gamefunc_Inventory_Left);
+        gInput.keyFlags.prevItem = 1;
+    }
+
+    if (BUTTON(gamefunc_Inventory_Right))
+    {
+        CONTROL_ClearButton(gamefunc_Inventory_Right);
+        gInput.keyFlags.nextItem = 1;
+    }
+
+    if (BUTTON(gamefunc_Inventory_Use))
+    {
+        CONTROL_ClearButton(gamefunc_Inventory_Use);
+        gInput.keyFlags.useItem = 1;
+    }
+
+    if (BUTTON(gamefunc_BeastVision))
+    {
+        CONTROL_ClearButton(gamefunc_BeastVision);
+        gInput.useFlags.useBeastVision = 1;
+    }
+
+    if (BUTTON(gamefunc_CrystalBall))
+    {
+        CONTROL_ClearButton(gamefunc_CrystalBall);
+        gInput.useFlags.useCrystalBall = 1;
+    }
+
+    if (BUTTON(gamefunc_JumpBoots))
+    {
+        CONTROL_ClearButton(gamefunc_JumpBoots);
+        gInput.useFlags.useJumpBoots = 1;
+    }
+
+    if (BUTTON(gamefunc_MedKit) || gAutoMedkit)
+    {
+        CONTROL_ClearButton(gamefunc_MedKit);
+        gInput.useFlags.useMedKit = 1;
+    }
+
+    for (int i = 0; i < 10; i++)
+    {
+        if (BUTTON(gamefunc_Weapon_1 + i))
+        {
+            CONTROL_ClearButton(gamefunc_Weapon_1 + i);
+            gInput.newWeapon = 1 + i;
+        }
+    }
+
+    if (BUTTON(gamefunc_ProximityBombs))
+    {
+        CONTROL_ClearButton(gamefunc_ProximityBombs);
+        gInput.newWeapon = kWeaponProxyTNT;
+        if (!VanillaMode())
+            gInput.newWeapon += kWeaponMax; // adding kWeaponMax will flag the new weapon selection to ignore the TNT/remote/proxy cycling behavior
+    }
+
+    if (BUTTON(gamefunc_RemoteBombs))
+    {
+        CONTROL_ClearButton(gamefunc_RemoteBombs);
+        gInput.newWeapon = kWeaponRemoteTNT;
+        if (!VanillaMode())
+            gInput.newWeapon += kWeaponMax; // adding kWeaponMax will flag the new weapon selection to ignore the TNT/remote/proxy cycling behavior
+    }
+
+    if (BUTTON(gamefunc_Holster_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Holster_Weapon);
+        gInput.keyFlags.holsterWeapon = 1;
+    }
+
+    int const run = gRunKeyMode ? (BUTTON(gamefunc_Run) | gAutoRun) : (BUTTON(gamefunc_Run) ^ gAutoRun);
+    int const run2 = BUTTON(gamefunc_Run);
+    int const keyMove = (1 + run) << 10;
+
+    gInput.syncFlags.run |= run;
+
+    if (gInput.forward < keyMove && gInput.forward > -keyMove)
+    {
+        if (BUTTON(gamefunc_Move_Forward))
+            input.forward += keyMove;
+        if (BUTTON(gamefunc_Move_Backward))
+            input.forward -= keyMove;
+    }
+
+    if (gInput.strafe < keyMove && gInput.strafe > -keyMove)
+    {
+        if (BUTTON(gamefunc_Strafe_Left))
+            input.strafe += keyMove;
+        if (BUTTON(gamefunc_Strafe_Right))
+            input.strafe -= keyMove;
+    }
+
+
+    char turnLeft = 0, turnRight = 0;
+
+    if (BUTTON(gamefunc_Strafe))
+    {
+        if (gInput.strafe < keyMove && gInput.strafe > -keyMove)
+        {
+            if (BUTTON(gamefunc_Turn_Left))
+                input.strafe += keyMove;
+            if (BUTTON(gamefunc_Turn_Right))
+                input.strafe -= keyMove;
+        }
+    }
+    else
+    {
+        if (BUTTON(gamefunc_Turn_Left))
+            turnLeft = 1;
+        if (BUTTON(gamefunc_Turn_Right))
+            turnRight = 1;
+    }
+    if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+    {
+        input.strafe = -input.strafe;
+        info.mousex = -info.mousex;
+        if (turnLeft && !turnRight)
+            turnLeft = 0, turnRight = 1;
+        else if (turnRight && !turnLeft)
+            turnLeft = 1, turnRight = 0;
+        info.dx = -info.dx;
+        info.dyaw = -info.dyaw;
+    }
+    if ((MIRRORMODE & 2) && gMouseAim) // mirror mode (vert), invert y axis for mouse aiming
+    {
+        info.mousey = -info.mousey;
+        info.dpitch = -info.dpitch;
+    }
+
+    static int32_t turnHeldTime;
+
+    if (turnLeft || turnRight)
+        turnHeldTime += elapsedTics;
+    else
+        turnHeldTime = 0;
+
+    if (turnLeft)
+        input.q16turn = fix16_ssub(input.q16turn, fix16_from_float(scaleAdjustmentToInterval(ClipHigh(12 * turnHeldTime, gTurnSpeed)>>2)));
+    if (turnRight)
+        input.q16turn = fix16_sadd(input.q16turn, fix16_from_float(scaleAdjustmentToInterval(ClipHigh(12 * turnHeldTime, gTurnSpeed)>>2)));
+
+    if (!gTurnAcceleration || (((gTurnAcceleration == 2) || run2 || run) && (turnHeldTime > 24)))
+        input.q16turn <<= 1;
+
+    if (BUTTON(gamefunc_Strafe))
+        input.strafe -= info.mousex;
+    else
+        input.q16turn = fix16_sadd(input.q16turn, fix16_sdiv(fix16_from_int(info.mousex), F16(32)));
+
+    if (gMouseAim)
+        input.q16mlook = fix16_sadd(input.q16mlook, fix16_sdiv(fix16_from_int(gMouseAimingFlipped ? info.mousey : -info.mousey), F16(128)));
+    else
+        input.forward -= info.mousey;
+
+    ctrlRadialWeaponMenu(&info, false);
+    if (gWeaponRadialMenuState != 0) // clear button state if radial menu is active
+    {
+        gInput.buttonFlags.shoot = gInput.buttonFlags.shoot2 = 0;
+        gInput.keyFlags.lastWeapon = gInput.keyFlags.nextWeapon = gInput.keyFlags.prevWeapon = 0;
+        gInput.keyFlags.action = 0;
+        gInput.keyFlags.nextItem = gInput.keyFlags.prevItem = gInput.keyFlags.useItem = 0;
+        if (gWeaponRadialMenuState > -2) // don't mute analog stick input while button cooldown is active after closing radial menu
+            return;
+    }
+
+    if (CONTROL_JoystickEnabled) // controller input
+    {
+        constexpr float analogExtent  = 32767.f; // KEEPINSYNC sdlayer.cpp
+        input.strafe = fix16_ssub(input.strafe, fix16_from_float(scaleAdjustmentToInterval(info.dx / analogExtent)));
+        input.forward = fix16_ssub(input.forward, fix16_from_float(scaleAdjustmentToInterval(info.dz / analogExtent)));
+        if (!run) // when autorun is off/run is not held, reduce overall speed for controller
+        {
+            input.strafe = clamp(input.strafe, -256, 256);
+            input.forward = clamp(input.forward, -256, 256);
+        }
+        if (info.mousey == 0)
+        {
+            if (gMouseAim)
+                input.q16mlook = fix16_sadd(input.q16mlook, fix16_from_float(scaleAdjustmentToInterval((gMouseAimingFlipped ? info.dpitch : -info.dpitch) * 64.0 / analogExtent)));
+            else
+                input.forward -= lrint(scaleAdjustmentToInterval(info.dyaw / analogExtent));
+        }
+        input.q16turn = fix16_sadd(input.q16turn, fix16_from_float(scaleAdjustmentToInterval(info.dyaw * 64.0 / analogExtent)));
+        if (gTargetAimAssist && !info.mousex && !info.mousey && gMe && gMe->pSprite)
+        {
+            static int nLastLevelTick = 0;
+            static char bLookingAtTarget = 0;
+            if (nLastLevelTick != gLevelTime)
+            {
+                const int nHit = HitScan(gMe->pSprite, gMe->zView, Cos(gMe->pSprite->ang)>>16, Sin(gMe->pSprite->ang)>>16, gMe->slope, CLIPMASK0, 0);
+                bLookingAtTarget = (nHit == 3) && IsDudeSprite(&sprite[gHitInfo.hitsprite]);
+                nLastLevelTick = gLevelTime;
+            }
+            if (bLookingAtTarget)
+                input.q16turn >>= 1;
+        }
+        if (gCenterViewOnDrop == 2)
+        {
+            gInput.keyFlags.lookCenter = 1;
+            gCenterViewOnDrop = 1;
+        }
+    }
+
+    if (KB_KeyPressed(sc_Pause)) // 0xc5 in disassembly
+    {
+        if (gDemo.bRecording) // hack - open the menu instead of pausing as pausing is broken for demo playback (yes, even for v1.21)
+        {
+            keyFlushScans();
+            keySetState(sc_Escape, 1);
+        }
+        else
+            gInput.keyFlags.pause = 1;
+        KB_ClearKeyDown(sc_Pause);
+    }
+
+    if (!gViewMap.bFollowMode && gViewMode == 4)
+    {
+        const int nForward = gMouseAim ? input.forward : clamp(-info.mousey, -2048, 2048);
+        const int nStrafe = input.strafe;
+        const int nSpeed = ClipLow((4096-gZoom)>>6, 16);
+        gViewMap.turn += input.q16turn<<2;
+        gViewMap.forward += gMouseAim ? int(scaleAdjustmentToInterval(nForward))*nSpeed : nForward;
+        gViewMap.strafe += int(scaleAdjustmentToInterval(nStrafe))*nSpeed;
+        input.q16turn = 0;
+        input.forward = 0;
+        input.strafe = 0;
+    }
+    gInput.forward = clamp(gInput.forward + input.forward, -2048, 2048);
+    gInput.strafe = clamp(gInput.strafe + input.strafe, -2048, 2048);
+    gInput.q16turn = fix16_sadd(gInput.q16turn, input.q16turn);
+    gInput.q16mlook = fix16_clamp(fix16_sadd(gInput.q16mlook, input.q16mlook), F16(-127)>>2, F16(127)>>2);
+    if (gMe && gMe->pXSprite->health != 0 && !gPaused && ((osd->flags & OSD_DRAW) != OSD_DRAW))
+    {
+        CONSTEXPR int upAngle = 289;
+        CONSTEXPR int downAngle = -347;
+        CONSTEXPR double lookStepUp = 4.0*upAngle/60.0;
+        CONSTEXPR double lookStepDown = -4.0*downAngle/60.0;
+        gViewAngle = (gViewAngle + input.q16turn + fix16_from_float(scaleAdjustmentToInterval(gViewAngleAdjust))) & 0x7ffffff;
+        if (gViewLookRecenter)
+        {
+            if (gViewLook < 0)
+                gViewLook = fix16_min(gViewLook+fix16_from_float(scaleAdjustmentToInterval(lookStepDown)), F16(0));
+            if (gViewLook > 0)
+                gViewLook = fix16_max(gViewLook-fix16_from_float(scaleAdjustmentToInterval(lookStepUp)), F16(0));
+        }
+        else
+        {
+            gViewLook = fix16_clamp(gViewLook+fix16_from_float(scaleAdjustmentToInterval(gViewLookAdjust)), F16(downAngle), F16(upAngle));
+        }
+        gViewLook = fix16_clamp(gViewLook+(input.q16mlook << 3), F16(downAngle), F16(upAngle));
+    }
+}
+
+void ctrlJoystickRumble(int nTime)
+{
+    if (!CONTROL_JoystickEnabled || !joystick.hasRumble || !gSetup.joystickrumble)
+        return;
+
+    const int nRumble = nTime<<9;
+    nTime = ClipLow(nTime, 28)<<3;
+    joystick.rumbleHigh = UINT16_MAX > joystick.rumbleHigh + nRumble ? joystick.rumbleHigh + nRumble : UINT16_MAX;
+    joystick.rumbleLow  = UINT16_MAX > joystick.rumbleHigh + nRumble ? joystick.rumbleLow  + nRumble : UINT16_MAX;
+    joystick.rumbleHigh >>= 1;
+    joystick.rumbleTime = nTime      > joystick.rumbleTime ? nTime : joystick.rumbleTime;
+}
+
+int gWeaponRadialMenuState = 0;
+int gWeaponRadialMenuChoice = -1;
+
+void ctrlRadialWeaponMenu(const ControlInfo *pInput, const bool bReset)
+{
+    const char *sSfxSound[3] = {"runeuse", "footstn1", "footstn2"};
+    const int nSfxVol[3] = {42, 44, 64};
+    const int nSfxFreq[3] = {14600, 11025, 11025};
+    const int nSfxChoice = (gRadialMenuSfx&3)-1;
+    const char kWeaponSelectTable[12] = // angle to weapon slot
+    {
+        kWeaponTNT,
+        kWeaponSprayCan,
+        kWeaponShotgun,
+        kWeaponTommy,
+        kWeaponFlare,
+        kWeaponPitchfork,
+        kWeaponLifeLeech,
+        kWeaponVoodoo,
+        kWeaponTesla,
+        kWeaponNapalm,
+        kWeaponRemoteTNT,
+        kWeaponProxyTNT,
+    };
+    const char kWeaponSlotTable[12] = // weapon enum to slot
+    {
+        5,
+        4,
+        2,
+        3,
+        9,
+        0,
+        1,
+        8,
+        6,
+        7,
+        11,
+        10,
+    };
+    static int nMenuCooldown = 0;
+    static int nOldMouseX = 0, nOldMouseY = 0;
+
+    if (bReset || !gMe || (gMe->pXSprite->health == 0))
+    {
+        gWeaponRadialMenuState = nMenuCooldown = 0;
+        if (gTimeSlowed)
+        {
+            timerInit(CLOCKTICKSPERSECOND);
+            gTimeSlowed = false;
+        }
+        nOldMouseX = nOldMouseY = 0; // reset mouse state when radial is closed
+        return;
+    }
+
+    int nX, nY;
+    switch (gRadialMenuYaw)
+    {
+    case 0: // strafe
+        nX = pInput->dz;
+        break;
+    case 1: // move
+        nX = pInput->dx;
+        if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+            nX = -nX;
+        break;
+    case 2: // turn
+        nX = pInput->dpitch;
+        if (MIRRORMODE & 2) // mirror mode (vert), invert y axis
+            nX = -nX;
+        break;
+    case 3: // look
+        nX = pInput->dyaw;
+        if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+            nX = -nX;
+        break;
+    default:
+        nX = 0;
+        break;
+    }
+    switch (gRadialMenuPitch)
+    {
+    case 0: // strafe
+        nY = pInput->dz;
+        break;
+    case 1: // move
+        nY = pInput->dx;
+        if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+            nY = -nY;
+        break;
+    case 2: // turn
+        nY = pInput->dpitch;
+        if (MIRRORMODE & 2) // mirror mode (vert), invert y axis
+            nY = -nY;
+        break;
+    case 3: // look
+        nY = pInput->dyaw;
+        if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+            nY = -nY;
+        break;
+    default:
+        nY = 0;
+        break;
+    }
+
+    int nThresholdX, nThresholdY;
+    if (!nX && !nY) // no input, defaul to mouse input
+    {
+        nOldMouseY += pInput->mousey;
+        nX = nOldMouseY>>2;
+        if (MIRRORMODE & 2) // mirror mode (vert), invert y axis
+            nX = -nX;
+        nOldMouseX += pInput->mousex;
+        nY = nOldMouseX>>2;
+        if (MIRRORMODE & 1) // mirror mode (horiz), invert controls
+            nY = -nY;
+        nThresholdX = nThresholdY = gRadialMenuMouseThreshold;
+    }
+    else
+    {
+        if (gRadialMenuYawInvert)
+            nX = -nX;
+        if (gRadialMenuPitchInvert)
+            nY = -nY;
+        nThresholdX = gRadialMenuThresholdX;
+        nThresholdY = gRadialMenuThresholdY;
+    }
+
+    char bButton = BUTTON(gamefunc_Radial_Weapon_Menu);
+    if (!bButton && (gRadialMenuToggle == 2) && (gWeaponRadialMenuState < 1))
+        bButton = gInput.keyFlags.nextWeapon || gInput.keyFlags.prevWeapon;
+    if (gWeaponRadialMenuState > 0) // bind next/prev item buttons to change wheel position
+    {
+        if (gInput.keyFlags.nextItem)
+            gInput.keyFlags.nextWeapon = 1;
+        if (gInput.keyFlags.prevItem)
+            gInput.keyFlags.prevWeapon = 1;
+    }
+
+    switch (gWeaponRadialMenuState)
+    {
+    case 0:
+    {
+        if (!bButton)
+            break;
+        gWeaponRadialMenuState = gRadialMenuToggle ? 4 : 1;
+        if (gRadialMenuSlowDown && (gGameOptions.nGameType == kGameTypeSinglePlayer)) // only allow slowdown during singleplayer
+        {
+            timerInit(CLOCKTICKSPERSECOND>>4);
+            gTimeSlowed = true;
+        }
+        if ((gMe->input.newWeapon >= kWeaponPitchfork) && (gMe->input.newWeapon <= kWeaponRemoteTNT)) // set the reticle to the weapon being switched to
+            gWeaponRadialMenuChoice = gMe->input.newWeapon;
+        else if ((gMe->nextWeapon >= kWeaponPitchfork) && (gMe->nextWeapon <= kWeaponRemoteTNT)) // set the reticle to the weapon being switched to
+            gWeaponRadialMenuChoice = gMe->nextWeapon;
+        else if ((gMe->curWeapon >= kWeaponPitchfork) && (gMe->curWeapon <= kWeaponRemoteTNT)) // weapon is not being switched, fall back to currently held weapon
+            gWeaponRadialMenuChoice = gMe->curWeapon;
+        else if (WeaponIsEquipable(gMe, kWeaponPitchfork)) // no current weapon found, fallback to pitchfork (if available)
+            gWeaponRadialMenuChoice = kWeaponPitchfork;
+        else // something went terribly wrong, don't set to any weapon slot
+            gWeaponRadialMenuChoice = -1;
+        break;
+    }
+    case 4:
+    case 5:
+    case 1:
+    {
+        char bAbort = 0;
+        if (gInput.buttonFlags.shoot || gInput.buttonFlags.shoot2 || gInput.keyFlags.lastWeapon || gInput.keyFlags.action || gInput.keyFlags.useItem) // these button instantly picks currently selected weapon and close menu
+            bAbort = 1;
+        else if (gRadialMenuToggle && !bButton && (gWeaponRadialMenuState == 4)) // wait until button is released before checking to close radial menu for toggle mode
+            gWeaponRadialMenuState = 5;
+        else if (gRadialMenuToggle && bButton && (gWeaponRadialMenuState == 5)) // second click, wait for player to release the toggle button before closing
+            gWeaponRadialMenuState = 1;
+        else if ((!gRadialMenuToggle && !bButton) || (gRadialMenuToggle && !bButton && gWeaponRadialMenuState == 1))
+            bAbort = 1;
+
+        if (bAbort) // we're done, safely close radial menu
+        {
+            gWeaponRadialMenuState = 2;
+            break;
+        }
+
+        int nNewChoice;
+        if ((gInput.keyFlags.nextWeapon || gInput.keyFlags.prevWeapon) && (gWeaponRadialMenuChoice != -1)) // set selection to next/previous wheel slice (assuming we have a slot already selected)
+        {
+            nNewChoice = kWeaponSlotTable[gWeaponRadialMenuChoice-1];
+            for (;;) // loop to next/prev weapon in wheel
+            {
+                if (gInput.keyFlags.prevWeapon)
+                {
+                    nNewChoice++;
+                    if (nNewChoice > 11) // check for overflow
+                        nNewChoice -= 12;
+                }
+                else
+                {
+                    nNewChoice--;
+                    if (nNewChoice < 0) // check for overflow
+                        nNewChoice += 12;
+                }
+                const int nNewWeapon = kWeaponSelectTable[nNewChoice];
+                if (gMe->curWeapon == nNewWeapon || WeaponIsEquipable(gMe, nNewWeapon))
+                {
+                    nNewChoice = nNewWeapon;
+                    break;
+                }
+            }
+            if ((gWeaponRadialMenuChoice != nNewChoice) && WeaponIsEquipable(gMe, nNewChoice)) // if we have a new slot selected, check if it is valid and we have the weapon
+            {
+                gWeaponRadialMenuChoice = nNewChoice;
+                if (nSfxChoice >= 0)
+                    sndStartSample(sSfxSound[nSfxChoice], nSfxVol[nSfxChoice], -1, nSfxFreq[nSfxChoice]);
+            }
+        }
+        else if ((klabs(nX) >= nThresholdX) || (klabs(nY) >= nThresholdY)) // above threshold, read from stick
+        {
+            nNewChoice = getangle(nX, nY) * (12*5) / kAngMask;
+            const int nChoiceRounded = nNewChoice%5;
+            if ((nChoiceRounded != 0) && (nChoiceRounded != 1) && (nChoiceRounded != 4)) // if player has NOT selected the middle of slice, or the two adjacent points next to the middle, abort
+                break;
+            if (nChoiceRounded == 1) // counter-clockwise adjacent slice
+            {
+                nNewChoice--;
+            }
+            else if (nChoiceRounded == 4) // clockwise adjacent slice
+            {
+                nNewChoice++;
+                if (nNewChoice >= 12*5) // check for overflow
+                    nNewChoice -= 12*5;
+            }
+            nNewChoice = ClipRange(nNewChoice/5U, 0, 12);
+            const int nNewWeapon = kWeaponSelectTable[nNewChoice];
+            if ((nNewWeapon != gWeaponRadialMenuChoice) && WeaponIsEquipable(gMe, nNewWeapon)) // if we have a new slot selected, check if it is valid and we have the weapon
+            {
+                gWeaponRadialMenuChoice = nNewWeapon;
+                if (nSfxChoice >= 0)
+                    sndStartSample(sSfxSound[nSfxChoice], nSfxVol[nSfxChoice], -1, nSfxFreq[nSfxChoice]);
+            }
+            else if (nNewWeapon != gWeaponRadialMenuChoice) // new slot is unselectable, check neighbor slots
+            {
+                int nChoiceNext = nNewChoice+1, nChoicePrev = nNewChoice-1; // try adjacent slot
+                if (nChoiceNext >= 12)
+                    nChoiceNext = 0;
+                if (nChoicePrev < 0)
+                    nChoicePrev = 11;
+                nChoiceNext = kWeaponSelectTable[nChoiceNext];
+                nChoicePrev = kWeaponSelectTable[nChoicePrev];
+                const char bCanPickNext = (nChoiceNext == gWeaponRadialMenuChoice) || WeaponIsEquipable(gMe, nChoiceNext);
+                const char bCanPickPrev = (nChoicePrev == gWeaponRadialMenuChoice) || WeaponIsEquipable(gMe, nChoicePrev);
+                if (bCanPickNext != bCanPickPrev) // if ONLY ONE of our neighbor slots are valid, snap to adjacent slice
+                {
+                    if (bCanPickNext)
+                    {
+                        if ((nSfxChoice >= 0) && (gWeaponRadialMenuChoice != nChoiceNext))
+                            sndStartSample(sSfxSound[nSfxChoice], nSfxVol[nSfxChoice], -1, nSfxFreq[nSfxChoice]);
+                        gWeaponRadialMenuChoice = nChoiceNext;
+                    }
+                    else if (bCanPickPrev)
+                    {
+                        if ((nSfxChoice >= 0) && (gWeaponRadialMenuChoice != nChoicePrev))
+                            sndStartSample(sSfxSound[nSfxChoice], nSfxVol[nSfxChoice], -1, nSfxFreq[nSfxChoice]);
+                        gWeaponRadialMenuChoice = nChoicePrev;
+                    }
+                }
+            }
+        }
+        else // player not moving stick above threshold or pressing next/previous weapon buttons - don't update selection
+            break;
+        nOldMouseX = ClipRange(nOldMouseX, -nThresholdX*2, nThresholdX*2); // picked a slot, clamp mouse state
+        nOldMouseY = ClipRange(nOldMouseY, -nThresholdY*2, nThresholdY*2);
+        break;
+    }
+    case 2:
+    {
+        gWeaponRadialMenuState = -1;
+        if ((gWeaponRadialMenuChoice != -1) || (gMe->curWeapon == gWeaponRadialMenuChoice)) // don't bother re-equipping same weapon
+        {
+            if (!VanillaMode(true))
+                gInput.newWeapon = gWeaponRadialMenuChoice+kWeaponMax; // adding kWeaponMax will flag the new weapon selection to ignore the TNT/remote/proxy cycling behavior
+            else
+                gInput.newWeapon = gWeaponRadialMenuChoice;
+        }
+        if (gTimeSlowed)
+        {
+            timerInit(CLOCKTICKSPERSECOND);
+            gTimeSlowed = false;
+        }
+        break;
+    }
+    case -1: // await until player releases button
+    {
+        if (bButton)
+            break;
+        gWeaponRadialMenuState = -2; // start countdown
+        nMenuCooldown = gLevelTime;
+        break;
+    }
+    case -2: // this state is used to add a delay between radial menu closure and clearing button inputs (fixes triggering buttons on tick after closing menu)
+    {
+        if (klabs(nMenuCooldown - gLevelTime) >= (kTicsPerSec>>2)) // if enough time has passed, allow button inputs to become active again
+            gWeaponRadialMenuState = nMenuCooldown = 0;
+        nOldMouseX = nOldMouseY = 0; // reset mouse state when radial is closed
+        break;
+    }
+    default:
+        break;
+    }
+}

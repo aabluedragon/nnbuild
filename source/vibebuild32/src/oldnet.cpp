@@ -1,6 +1,8 @@
 #define OLDNET_CPP_
 
 #include "duke3d.h"
+#include "crc32.h"
+#include "grpscan.h"
 #include "oldnet.h"
 #include "net_predict.h"
 #include "masterserver.h"
@@ -108,13 +110,45 @@ static int32_t g_lateJoinRestoreFrag = 0, g_lateJoinRestoreFraggedself = 0, g_la
 static bool g_slotAwaitingRestore[MAXPLAYERS];
 static uint16_t lateJoinGoMask;
 static uint16_t inputEpoch, lateJoinInputEpoch;
-static int32_t lateJoinGoRNG[6];
+enum
+{
+    LATEJOIN_RNG_RANDOMSEED,
+    LATEJOIN_RNG_GLOBAL_RANDOM,
+    LATEJOIN_RNG_AUX_GLOBAL,
+    LATEJOIN_RNG_ANIMWALL,
+    LATEJOIN_RNG_PLAYER,
+    LATEJOIN_RNG_PLAYERWEAPON,
+    LATEJOIN_RNG_WRANDOMSEED,
+    LATEJOIN_RNG_COUNT
+};
+static int32_t lateJoinGoRNG[LATEJOIN_RNG_COUNT];
 static void Net_IntegrateLateJoin(int32_t slot);
 static void Net_CompleteLateJoin(int32_t slot);
 static void Net_DropLaggard(int32_t slot);
 static char *snapshotBuf;
+static uint8_t *snapshotChunkSeen;
 static int32_t snapshotChunksGot, snapshotChunkTotal, snapshotLastLen;
 #define SNAPSHOT_CHUNK_SIZE 1024
+
+static void Net_ClearLateJoinSnapshot(void)
+{
+    DO_FREE_AND_NULL(snapshotBuf);
+    DO_FREE_AND_NULL(snapshotChunkSeen);
+    snapshotChunksGot = 0;
+    snapshotChunkTotal = 0;
+    snapshotLastLen = 0;
+}
+
+static void Net_ApplyLateJoinRNG(void)
+{
+    randomseed           = (uint32_t)lateJoinGoRNG[LATEJOIN_RNG_RANDOMSEED];
+    g_globalRandom       = (short)lateJoinGoRNG[LATEJOIN_RNG_GLOBAL_RANDOM];
+    g_random.global      = lateJoinGoRNG[LATEJOIN_RNG_AUX_GLOBAL];
+    g_random.animwall    = lateJoinGoRNG[LATEJOIN_RNG_ANIMWALL];
+    g_random.player      = lateJoinGoRNG[LATEJOIN_RNG_PLAYER];
+    g_random.playerweapon = lateJoinGoRNG[LATEJOIN_RNG_PLAYERWEAPON];
+    wrandomseed          = (uint32_t)lateJoinGoRNG[LATEJOIN_RNG_WRANDOMSEED];
+}
 
 static int g_chatPlayer = -1;
 static char recbuf[180];
@@ -1264,7 +1298,9 @@ void Net_DisplayLagDialog(void)
         gametext(160, y, "Reconnect or you will be dropped", 14, 2);
 }
 
-void faketimerhandler(void) { };
+// Renamed from faketimerhandler: the engine's per-tic callback is now a
+// dispatcher in gameselect.cpp routing to this (Duke, a no-op) or SW's.
+void Duke_faketimerhandler(void) { };
 
 void Net_HandleInput(void)
 {
@@ -1845,9 +1881,11 @@ void Net_ParsePackets(void)
                 if (total <= 0 || (unsigned)seq >= (unsigned)total || (unsigned)len > SNAPSHOT_CHUNK_SIZE)
                     break;
 
-                if (snapshotBuf == NULL)
+                if (snapshotBuf == NULL || snapshotChunkTotal != total)
                 {
+                    Net_ClearLateJoinSnapshot();
                     snapshotBuf = (char *)Xmalloc(total * SNAPSHOT_CHUNK_SIZE);
+                    snapshotChunkSeen = (uint8_t *)Xcalloc(total, sizeof(uint8_t));
                     snapshotChunksGot = 0;
                     snapshotChunkTotal = total;
                     Bstrncpyz(g_lateJoinStatus, "Receiving game state", sizeof(g_lateJoinStatus));
@@ -1855,7 +1893,11 @@ void Net_ParsePackets(void)
                 }
 
                 Bmemcpy(&snapshotBuf[seq * SNAPSHOT_CHUNK_SIZE], &packbuf[7], len);
-                snapshotChunksGot++;
+                if (!snapshotChunkSeen[seq])
+                {
+                    snapshotChunkSeen[seq] = 1;
+                    snapshotChunksGot++;
+                }
                 Net_NoteLateJoinProgress();
                 if (seq == total - 1)
                     snapshotLastLen = len;
@@ -1867,9 +1909,16 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_LATEJOIN_GO:
             {
-                if (myconnectindex == connecthead || packbufleng != 30 ||
+                if (myconnectindex == connecthead || packbufleng != 4 + LATEJOIN_RNG_COUNT * 4 + 2 ||
                     static_cast<uint8_t>(packbuf[1]) >= numplayers)
                     break;
+                if (g_netLateJoiner == 1 && (snapshotBuf == NULL || snapshotChunksGot < snapshotChunkTotal))
+                {
+                    LOG_F(WARNING, "Late join: GO arrived before complete snapshot (%d/%d chunks); waiting",
+                          snapshotChunksGot, snapshotChunkTotal);
+                    break;
+                }
+
                 // Never integrate from inside the packet parser: the joiner
                 // waits until its init is done (see Net_GetPackets), and
                 // existing peers wait until they have simulated every tick
@@ -1877,9 +1926,9 @@ void Net_ParsePackets(void)
                 // all machines fold the new player in on the identical tick.
                 lateJoinGoSlot = (uint8_t)packbuf[1];
                 lateJoinGoMask = B_UNBUF16(&packbuf[2]);
-                for (i = 0; i < 6; i++)
+                for (i = 0; i < LATEJOIN_RNG_COUNT; i++)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
-                lateJoinInputEpoch = B_UNBUF16(packbuf + 28);
+                lateJoinInputEpoch = B_UNBUF16(packbuf + 4 + LATEJOIN_RNG_COUNT * 4);
                 // Drain through the final broadcast tick even when the local
                 // jitter buffer would normally keep that tick queued.
                 if (lateJoinGoSlot != myconnectindex && (ud.gm & MODE_GAME))
@@ -2675,17 +2724,20 @@ static void Net_CompleteLateJoin(int32_t slot)
     buildvfs_fwrite(snapshotBuf, 1,
                     (snapshotChunkTotal - 1) * SNAPSHOT_CHUNK_SIZE + snapshotLastLen, fil);
     buildvfs_fclose(fil);
-    DO_FREE_AND_NULL(snapshotBuf);
+    Net_ClearLateJoinSnapshot();
 
     Bstrncpyz(g_lateJoinStatus, "Entering the level", sizeof(g_lateJoinStatus));
     g_lateJoinPercent = 100;
 
     inputEpoch = lateJoinInputEpoch;
+    LOG_F(INFO, "Late join: integrate slot %d before snapshot load", slot);
     Net_IntegrateLateJoin(slot);
 
+    LOG_F(INFO, "Late join: loading state snapshot for slot %d", slot);
     multiflag = 0;
     if (G_LoadPlayer(LATEJOIN_SAVE_SPOT))
         G_GameExit("Late join failed: couldn't load state snapshot.");
+    LOG_F(INFO, "Late join: loaded state snapshot for slot %d", slot);
 
     int const mapIndex = ud.volume_number * MAXLEVELS + ud.level_number;
     if (static_cast<unsigned>(mapIndex) < ARRAY_SIZE(g_mapInfo))
@@ -2695,21 +2747,28 @@ static void Net_CompleteLateJoin(int32_t slot)
             LOG_F(INFO, "Joined E%dL%d: %s", ud.volume_number + 1, ud.level_number + 1, name);
     }
 
-    // Auxiliary RNG streams live outside the savegame; adopt the master's.
-    g_globalRandom        = (short)lateJoinGoRNG[0];
-    g_random.global       = lateJoinGoRNG[1];
-    g_random.animwall     = lateJoinGoRNG[2];
-    g_random.player       = lateJoinGoRNG[3];
-    g_random.playerweapon = lateJoinGoRNG[4];
-    wrandomseed           = (uint32_t)lateJoinGoRNG[5];
+    // The snapshot was captured before this slot was inserted into the running
+    // roster, and savegames restore connecthead/connectpoint2 from that
+    // pre-join state. Re-apply the master's authoritative roster after loading
+    // so this client traverses the same player list as the host and peers.
+    Net_ApplyConnectedMask(lateJoinGoMask);
+    Net_RebuildConnectList();
+    LOG_F(INFO, "Late join: restored roster mask 0x%x for slot %d", lateJoinGoMask, slot);
+
+    // RNG state lives outside the savegame snapshot. Deathmatch late-spawn
+    // placement consumes randomseed, so restore the master's exact state before
+    // running P_SpawnLateJoiner.
+    Net_ApplyLateJoinRNG();
 
     // The snapshot is a pre-spawn world (our slot was never present, so it is
     // dead at the origin). Spawn ourselves now with the exact same code every
     // other machine runs against the same pre-spawn state, so the result is
     // bit-identical everywhere without depending on the savegame capturing
     // every side effect of the spawn.
+    LOG_F(INFO, "Late join: spawning local player %d (connecthead %d)", myconnectindex, connecthead);
     P_SpawnLateJoiner(myconnectindex);
     Net_InitializePrediction();
+    LOG_F(INFO, "Late join: spawned local player %d", myconnectindex);
 
     g_netLateJoiner = 2;
 }
@@ -2727,6 +2786,7 @@ void Net_PeerCheckLateJoin(void)
     int32_t const slot = lateJoinGoSlot;
     lateJoinGoSlot = -1;
     Net_ApplyConnectedMask(lateJoinGoMask);
+    Net_ApplyLateJoinRNG();
     // Existing peers spawn the joiner's player locally, deterministically and at
     // this same (master-locked) tick, matching the host's pre-snapshot spawn.
     // The joiner itself gets the spawned player from the snapshot, so it does
@@ -2906,19 +2966,21 @@ void Net_MasterCheckLateJoin(void)
     packbuf[0] = PACKET_TYPE_LATEJOIN_GO;
     packbuf[1] = (char)slot;
     B_BUF16(&packbuf[2], Net_ConnectedMask());
-    // The auxiliary RNG streams aren't part of the savegame snapshot; ship
-    // them along so the joiner can seed them after loading.
-    B_BUF32(&packbuf[4], (int32_t)g_globalRandom);
-    B_BUF32(&packbuf[8], g_random.global);
-    B_BUF32(&packbuf[12], g_random.animwall);
-    B_BUF32(&packbuf[16], g_random.player);
-    B_BUF32(&packbuf[20], g_random.playerweapon);
-    B_BUF32(&packbuf[24], (int32_t)wrandomseed);
-    B_BUF16(&packbuf[28], ++inputEpoch);
+    // RNG state isn't fully covered by the savegame snapshot. Deathmatch late
+    // spawn placement consumes randomseed, and sync.cpp validates it, so the GO
+    // packet carries the exact pre-spawn RNG state used by all machines.
+    B_BUF32(&packbuf[4], (int32_t)randomseed);
+    B_BUF32(&packbuf[8], (int32_t)g_globalRandom);
+    B_BUF32(&packbuf[12], g_random.global);
+    B_BUF32(&packbuf[16], g_random.animwall);
+    B_BUF32(&packbuf[20], g_random.player);
+    B_BUF32(&packbuf[24], g_random.playerweapon);
+    B_BUF32(&packbuf[28], (int32_t)wrandomseed);
+    B_BUF16(&packbuf[4 + LATEJOIN_RNG_COUNT * 4], ++inputEpoch);
 
     for (int32_t i = 0; i < numplayers; i++)
         if (i != myconnectindex && g_player[i].connected)
-            mmulti_sendpacket(i, (unsigned char *)packbuf, 30);
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 4 + LATEJOIN_RNG_COUNT * 4 + 2);
 
     Net_IntegrateLateJoin(slot);
     // Snapshot was pre-spawn; spawn the joiner into our live world with the
@@ -3582,8 +3644,11 @@ void Net_LaunchHost(int32_t advertise)
         nv[n++] = g_procArgv[i];
     }
     nv[n++] = "-startnow";
-    nv[n++] = "-v1";
-    nv[n++] = "-l1";
+    static char volumeArg[16], levelArg[16];
+    Bsnprintf(volumeArg, sizeof(volumeArg), "-v%d", ud.m_volume_number + 1);
+    Bsnprintf(levelArg, sizeof(levelArg), "-l%d", ud.m_level_number + 1);
+    nv[n++] = volumeArg;
+    nv[n++] = levelArg;
     if (advertise && g_masterServerAddr[0])
     {
         nv[n++] = "-advertise";
@@ -3755,6 +3820,11 @@ void Net_WaitForPlayers()
                     LOG_F(WARNING, "Player %d (%s) never became ready; disconnecting to keep the server alive.",
                           i, g_player[i].user_name);
                     g_player[i].connected = 0;
+                    if (g_player[i].ps && (unsigned)g_player[i].ps->i < MAXSPRITES)
+                    {
+                        P_QuickKill(g_player[i].ps);
+                        A_DeleteSprite(g_player[i].ps->i);
+                    }
                     mmulti_dropslot(i);
                     if ((unsigned)i < MAXPLAYERS)
                         g_slotLastPacketMs[i] = 0;

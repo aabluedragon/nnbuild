@@ -152,6 +152,130 @@ PLAYER Player[MAX_SW_PLAYERS_REG + 1];
 
 short NormalVisibility;
 
+static int SW_CrossplayIsDukeLikeLevelsGame(void)
+{
+    switch (artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS))
+    {
+    case ART_CROSSPLAY_GAME_DUKE:
+    case ART_CROSSPLAY_GAME_WORLDTOUR:
+    case ART_CROSSPLAY_GAME_NAM:
+    case ART_CROSSPLAY_GAME_NAPALM:
+    case ART_CROSSPLAY_GAME_WW2GI:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+int SW_CrossplayUseDukePlayerDimensions(void)
+{
+    return artCrossplayRuntimeGame() == ART_CROSSPLAY_GAME_SW && SW_CrossplayIsDukeLikeLevelsGame();
+}
+
+int SW_PlayerHeight(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(38) : SW_NATIVE_PLAYER_HEIGHT;
+}
+
+int SW_PlayerCrawlHeight(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(24) : SW_NATIVE_PLAYER_CRAWL_HEIGHT;
+}
+
+int SW_PlayerStepHeight(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(20) : SW_NATIVE_PLAYER_STEP_HEIGHT;
+}
+
+int SW_PlayerJumpStepHeight(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(34) : SW_NATIVE_PLAYER_JUMP_STEP_HEIGHT;
+}
+
+int SW_PlayerFallStepHeight(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(16) : SW_NATIVE_PLAYER_FALL_STEP_HEIGHT;
+}
+
+int SW_PlayerRunFloorDist(void)
+{
+    return SW_PlayerHeight() - SW_PlayerStepHeight();
+}
+
+int SW_PlayerCrawlFloorDist(void)
+{
+    return SW_PlayerCrawlHeight() - PLAYER_CRAWL_STEP_HEIGHT;
+}
+
+int SW_PlayerWadeFloorDist(void)
+{
+    return SW_PlayerHeight() - SW_PlayerStepHeight();
+}
+
+int SW_PlayerJumpFloorDist(void)
+{
+    return SW_PlayerHeight() - SW_PlayerJumpStepHeight();
+}
+
+int SW_PlayerFallFloorDist(void)
+{
+    return SW_PlayerHeight() - SW_PlayerFallStepHeight();
+}
+
+int SW_PlayerRunCeilingDist(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? Z(4) : SW_NATIVE_PLAYER_RUN_CEILING_DIST;
+}
+
+int SW_PlayerSpriteClipdist(void)
+{
+    // Duke's runtime clip radius is 164; SW movement passes sprite clipdist << 2.
+    return SW_CrossplayUseDukePlayerDimensions() ? 41 : 64;
+}
+
+int SW_PlayerActorRadius(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? 164 : 400;
+}
+
+// The player's WORLD sprite keeps Duke's own scale on Duke maps: Duke's enemy
+// code aims with A_CheckHitSprite(), a horizontal ray at shoulder height that
+// has to strike the player's sprite, so a sprite sized for Shadow Warrior's
+// taller player makes Duke's enemies fail to shoot.  Lo Wang's art is much
+// bigger than Duke's player art though, so drawing it at that scale is what
+// made him tower over the level -- the drawn size is corrected separately at
+// draw time by SW_CrossplayScalePlayerTSprite().
+int SW_PlayerSpriteXRepeat(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? 42 : SW_NATIVE_PLAYER_NINJA_XREPEAT;
+}
+
+int SW_PlayerSpriteYRepeat(void)
+{
+    return SW_CrossplayUseDukePlayerDimensions() ? 36 : SW_NATIVE_PLAYER_NINJA_YREPEAT;
+}
+
+// Drawn scale for a crossplay player sprite: keep Lo Wang's own proportions and
+// make him one Duke player tall, independent of the world sprite's Duke-sized
+// targeting box above.
+void SW_CrossplayScalePlayerTSprite(tspriteptr_t tsp)
+{
+    if (tsp == NULL || !SW_CrossplayUseDukePlayerDimensions())
+        return;
+
+    int const runtimeHeight = SW_PlayerHeight();
+    int const nativeHeight = SW_NATIVE_PLAYER_HEIGHT;
+
+    if (nativeHeight <= 0)
+        return;
+
+    int const drawX = (SW_NATIVE_PLAYER_NINJA_XREPEAT * runtimeHeight + nativeHeight / 2) / nativeHeight;
+    int const drawY = (SW_NATIVE_PLAYER_NINJA_YREPEAT * runtimeHeight + nativeHeight / 2) / nativeHeight;
+
+    tsp->xrepeat = (uint8_t)max(1, drawX);
+    tsp->yrepeat = (uint8_t)max(1, drawY);
+}
+
 int InitBloodSpray(int16_t SpriteNum, SWBOOL dogib, short velocity);
 
 SPRITEp FindNearSprite(SPRITEp sp, short stat);
@@ -1520,9 +1644,13 @@ DoPlayerSetWadeDepth(PLAYERp pp)
 
     if (TEST(sectp->extra, SECTFX_SINK))
     {
+        SECT_USERp const sectu = SectUser[pp->lo_sectp - sector];
+        if (sectu == NULL)
+            return;
+
         // make sure your even in the water
-        if (pp->posz + PLAYER_HEIGHT > pp->lo_sectp->floorz - Z(SectUser[pp->lo_sectp - sector]->depth))
-            pp->WadeDepth = SectUser[pp->lo_sectp - sector]->depth;
+        if (pp->posz + PLAYER_HEIGHT > pp->lo_sectp->floorz - Z(sectu->depth))
+            pp->WadeDepth = sectu->depth;
     }
 }
 
@@ -4380,7 +4508,7 @@ DoPlayerCrawl(PLAYERp pp)
     // Current Z position, adjust down to the floor, adjust to player height,
     // adjust for "bump head"
 //#define PLAYER_STANDING_ROOM(pp) ((pp)->posz + PLAYER_CRAWL_HEIGHT - PLAYER_HEIGHT - PLAYER_RUN_CEILING_DIST)
-#define PLAYER_STANDING_ROOM Z(68)
+#define PLAYER_STANDING_ROOM (SW_CrossplayUseDukePlayerDimensions() ? (SW_PlayerHeight() + SW_PlayerRunCeilingDist()) : Z(68))
 
     if (TEST(pp->Flags, PF_LOCK_CRAWL))
     {
@@ -4986,6 +5114,8 @@ DoPlayerWarpToUnderwater(PLAYERp pp)
     if (Prediction)
         return;
 
+    if (sectu == NULL)
+        return;
 
     // search for DIVE_AREA "over" sprite for reference point
     TRAVERSE_SPRITE_STAT(headspritestat[STAT_DIVE_AREA], i, nexti)
@@ -5060,6 +5190,9 @@ DoPlayerWarpToSurface(PLAYERp pp)
     char Found = FALSE;
 
     if (Prediction)
+        return;
+
+    if (sectu == NULL)
         return;
 
     // search for UNDERWATER "under" sprite for reference point
@@ -5226,7 +5359,7 @@ void DoPlayerBeginDiveNoWarp(PLAYERp pp)
 
     CheckFootPrints(pp);
 
-    if (TEST(pp->lo_sectp->extra, SECTFX_LIQUID_MASK) == SECTFX_LIQUID_LAVA)
+    if (pp->lo_sectp && TEST(pp->lo_sectp->extra, SECTFX_LIQUID_MASK) == SECTFX_LIQUID_LAVA)
     {
         SET(pp->Flags, PF_DIVING_IN_LAVA);
         u->DamageTics = 0;
@@ -6955,7 +7088,8 @@ void DoPlayerDeathCheckKeys(PLAYERp pp)
 
         NewStateGroup(pp->PlayerSprite, u->ActorActionSet->Stand);
         pp->SpriteP->picnum = u->State->Pic;
-        pp->SpriteP->xrepeat = pp->SpriteP->yrepeat = PLAYER_NINJA_XREPEAT;
+        pp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+        pp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
         RESET(pp->SpriteP->cstat, CSTAT_SPRITE_YCENTER);
         pp->SpriteP->x = pp->posx;
         pp->SpriteP->y = pp->posy;
@@ -8167,6 +8301,10 @@ domovethings(void)
         PlayerGlobal(pp);
     }
 
+    // Duke map effectors run after player input in Duke. Keep the crossplay
+    // bridge in the same phase so train/sector carry does not fight SW's
+    // player clipmove and create visible jitter while riding Duke geometry.
+    SW_CrossplayMoveForeignMapEffectors();
 
     MultiPlayLimits();
 
@@ -8430,6 +8568,14 @@ InitMultiPlayerInfo(void)
             User[start0] = NULL;
         }
         sprite[start0].picnum = ST1;
+
+        // A start position, not something to look at.  Shadow Warrior's own ART
+        // draws nothing for this tile so it has always got away with being left
+        // visible, but on a Duke level the tile resolves into Duke's art, where
+        // the sprite at that index is the editor's SECTOREFFECTOR -- which is
+        // drawn with the word "ST1" across it, hanging in the air at the spot the
+        // player spawned.
+        SET(sprite[start0].cstat, CSTAT_SPRITE_INVISIBLE);
     }
 
     memset(SpawnPositionUsed,0,sizeof(SpawnPositionUsed));

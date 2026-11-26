@@ -34,6 +34,7 @@ float frealmaxshade;
 
 #if defined(USE_OPENGL)
 palette_t palookupfog[MAXPALOOKUPS];
+float palookupfogfactor[MAXPALOOKUPS];  // Blood (NotBlood) compat
 #endif
 
 // For every pal number, whether tsprite pal should not be taken over from
@@ -143,6 +144,7 @@ static void maybe_alloc_palookup(int32_t palnum);
 //
 void paletteLoadFromDisk(void)
 {
+    if (paletteLoadFromDisk_replace) { paletteLoadFromDisk_replace(); return; }  // Blood palettes
     paletteInitClosestColorScale(30, 59, 11);
     paletteInitClosestColorGrid();
 
@@ -152,7 +154,7 @@ void paletteLoadFromDisk(void)
 #endif
 
     buildvfs_kfd fil;
-    if ((fil = kopen4load("palette.dat", 0)) == buildvfs_kfd_invalid)
+    if ((fil = kopen4load("palette.dat", artGetBaseSearchFirst())) == buildvfs_kfd_invalid)
         return;
 
 

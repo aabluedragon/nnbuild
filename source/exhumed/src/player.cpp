@@ -1,0 +1,3842 @@
+//-------------------------------------------------------------------------
+/*
+Copyright (C) 2010-2019 EDuke32 developers and contributors
+Copyright (C) 2019 sirlemonhead, Nuke.YKT
+
+This file is part of PCExhumed.
+
+PCExhumed is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License version 2
+as published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+*/
+//-------------------------------------------------------------------------
+
+#include "compat.h"
+#include "player.h"
+#include "vbnet.h"
+#include "runlist.h"
+#include "exhumed.h"
+#include "names.h"
+#include "ramses.h"
+#include "gun.h"
+#include "items.h"
+#include "engine.h"
+#include "move.h"
+#include "sequence.h"
+#include "lighting.h"
+#include "view.h"
+#include "bubbles.h"
+#include "random.h"
+#include "ra.h"
+#include "input.h"
+#include "light.h"
+#include "status.h"
+#include "mouse.h"
+#include "keyboard.h"
+#include "control.h"
+#include "config.h"
+#include "sound.h"
+#include "init.h"
+#include "move.h"
+#include "trigdat.h"
+#include "anims.h"
+#include "grenade.h"
+#include "menu.h"
+#include "cd.h"
+#include "map.h"
+#include "sound.h"
+#include "save.h"
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include "kexinv.h"
+#include "kexbreak.h"
+#include "kexmenu.h"
+
+bool bDemoPlayerFinishedLevel = false;
+
+struct PlayerSave
+{
+    int x;
+    int y;
+    int z;
+    short nSector;
+    short nAngle;
+};
+
+fix16_t lPlayerXVel = 0;
+fix16_t lPlayerYVel = 0;
+fix16_t nPlayerDAng = 0;
+short obobangle = 0, bobangle  = 0;
+short bPlayerPan = 0;
+short bLockPan  = 0;
+bool bLookCentre = false;
+
+
+static actionSeq ActionSeq[] = {
+    {18,  0}, {0,   0}, {9,   0}, {27,  0}, {63,  0},
+    {72,  0}, {54,  0}, {45,  0}, {54,  0}, {81,  0},
+    {90,  0}, {99,  0}, {108, 0}, {8,   0}, {0,   0},
+    {139, 0}, {117, 1}, {119, 1}, {120, 1}, {121, 1},
+    {122, 1}
+};
+
+static short nHeightTemplate[] = { 0, 0, 0, 0, 0, 0, 7, 7, 7, 9, 9, 9, 9, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+short nActionEyeLevel[] = {
+    -14080, -14080, -14080, -14080, -14080, -14080, -8320,
+    -8320,  -8320,  -8320,  -8320,  -8320,  -8320,  -14080,
+    -14080, -14080, -14080, -14080, -14080, -14080, -14080
+};
+
+uint16_t nGunLotag[] = { 52, 53, 54, 55, 56, 57 };
+uint16_t nGunPicnum[] = { 57, 488, 490, 491, 878, 899, 3455 };
+
+int16_t nItemText[] = {
+    -1, -1, -1, -1, -1, -1, 18, 20, 19, 13, -1, 10, 1, 0, 2, -1, 3,
+    -1, 4, 5, 9, 6, 7, 8, -1, 11, -1, 13, 12, 14, 15, -1, 16, 17,
+    -1, -1, -1, 21, 22, -1, -1, -1, -1, -1, -1, 23, 24, 25, 26, 27,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+
+int nLocalPlayer = 0;
+
+short nBreathTimer[kMaxPlayers];
+short nPlayerSwear[kMaxPlayers];
+short nPlayerPushSect[kMaxPlayers];
+short nDeathType[kMaxPlayers];
+short nPlayerScore[kMaxPlayers];
+short nPlayerColor[kMaxPlayers];
+int nPlayerDY[kMaxPlayers];
+int nPlayerDX[kMaxPlayers];
+char playerNames[kMaxPlayers][11];
+short nPistolClip[kMaxPlayers];
+int nXDamage[kMaxPlayers];
+int nYDamage[kMaxPlayers];
+short nDoppleSprite[kMaxPlayers];
+short namelen[kMaxPlayers];
+short nPlayerOldWeapon[kMaxPlayers];
+short nPlayerClip[kMaxPlayers];
+short nPlayerPushSound[kMaxPlayers];
+short nTauntTimer[kMaxPlayers];
+short nPlayerTorch[kMaxPlayers];
+uint16_t nPlayerWeapons[kMaxPlayers]; // each set bit represents a weapon the player has
+short nPlayerLives[kMaxPlayers];
+short nPlayerItem[kMaxPlayers];
+Player PlayerList[kMaxPlayers];
+short nPlayerInvisible[kMaxPlayers];
+short nPlayerDouble[kMaxPlayers];
+short nPlayerViewSect[kMaxPlayers];
+short nPlayerFloorSprite[kMaxPlayers];
+PlayerSave sPlayerSave[kMaxPlayers];
+int totalvel[kMaxPlayers] = { 0 };
+int16_t eyelevel[kMaxPlayers], oeyelevel[kMaxPlayers];
+short nNetStartSprite[kMaxPlayers] = { 0 };
+// PF_NEEDTOGASP is KEX actor state. It affects the Dolphin's surface breach,
+// so retain it separately from the DOS breath counter and serialize it.
+static uint8_t s_kexNeedGasp[kMaxPlayers];
+
+// kexPlayer::UpdateAirSupply runs at 60 Hz.  The native player loop is 30
+// Hz, so advance its air state twice per update instead of reusing the DOS
+// ninety-tick breath cadence.  nAir and nBreathTimer are both already saved
+// with PlayerLoadSave; in KEX mode they are the remaster's 0..64 supply and
+// airSupplyTime respectively.
+static void KexAirSupply_Update(int nPlayer, short nSprite, int bUnderwater)
+{
+    Player &p = PlayerList[nPlayer];
+    int const dolphin = KexInv_DollCount(nPlayer) >= KEX_DOLLS_DOLPHIN;
+    if (!bUnderwater)
+    {
+        if (s_kexNeedGasp[nPlayer])
+        {
+            if (dolphin)
+            {
+                // PMOVE_SPEED_JUMP is 10.25 source units, the same upward
+                // magnitude as the port's ordinary -3584 jump impulse.
+                int const sound = KexSound_Get(((int32_t)totalclock & 1) ? "k_dolph1" : "k_dolph2");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+                sprite[nSprite].zvel -= 3584;
+            }
+            else
+            {
+                int const sound = KexSound_Get("jon_gasp");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+            }
+            s_kexNeedGasp[nPlayer] = 0;
+        }
+        nBreathTimer[nPlayer] = 0;
+        p.nAir = min(64, p.nAir + 16); // two source ticks, +8 each
+        airpages = 0;
+        if (nPlayer == nLocalPlayer)
+            SetAirFrame();
+        return;
+    }
+
+    airpages = 1;
+    int const masked = KexInv_HasArtifact(nPlayer, kKexArtiMask);
+    int const period = masked ? 100 : 5;
+    for (int tick = 0; tick < 2; tick++)
+    {
+        nBreathTimer[nPlayer]++;
+        if (dolphin)
+            s_kexNeedGasp[nPlayer] = 1;
+        if (nBreathTimer[nPlayer] < period)
+            continue;
+
+        if (p.nAir > 0)
+        {
+            nBreathTimer[nPlayer] = 0;
+            p.nAir = max(0, p.nAir - 2);
+            if (!s_kexNeedGasp[nPlayer] && p.nAir <= 48)
+                s_kexNeedGasp[nPlayer] = 1;
+            if (masked && !dolphin && (p.nAir & 3) == 2)
+            {
+                int const sound = KexSound_Get("jon_scub");
+                if (sound >= 0)
+                    D3PlayFX(sound, nSprite);
+            }
+        }
+        else if ((nBreathTimer[nPlayer] & 0x7f) == 0)
+        {
+            // The source's damage is in visible KEX health points;
+            // runlist_DamageEnemy supplies the port's x4 health conversion.
+            runlist_DamageEnemy(nSprite, -1, nBreathTimer[nPlayer] >> 2);
+        }
+    }
+    if (nPlayer == nLocalPlayer)
+        SetAirFrame();
+}
+
+// VB_KEX_AIR_TEST=1 probes the native KEX update rate without moving the
+// player into test geometry. Restore every touched value so it is safe to
+// run beside an ordinary hidden map load.
+static void KexAirSupply_RunSelftest(int nPlayer, short nSprite)
+{
+    static int ran = 0;
+    if (ran || !Bgetenv("VB_KEX_AIR_TEST") || nPlayer != nLocalPlayer
+        || nSprite < 0 || nSprite >= kMaxSprites)
+        return;
+    ran = 1;
+
+    Player &p = PlayerList[nPlayer];
+    short const oldAir = p.nAir;
+    short const oldBreath = nBreathTimer[nPlayer];
+    uint8_t const oldNeedGasp = s_kexNeedGasp[nPlayer];
+    short const oldAirPages = airpages;
+    KexInv const oldInv = KexInvList[nPlayer];
+
+    // Keep all four probes independent of campaign progress: Dolphin mode
+    // intentionally requests a surface breach every underwater source tick.
+    KexInvList[nPlayer] = {};
+
+    // At 60 Hz, one native update covers two source ticks. Starting at timer
+    // four crosses the unmasked five-tick period exactly once.
+    p.nAir = 64;
+    nBreathTimer[nPlayer] = 4;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const drain = p.nAir == 62 && nBreathTimer[nPlayer] == 1
+                    && !s_kexNeedGasp[nPlayer];
+
+    p.nAir = 48;
+    nBreathTimer[nPlayer] = 4;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const warning = p.nAir == 46 && nBreathTimer[nPlayer] == 1
+                      && s_kexNeedGasp[nPlayer];
+
+    // Sobek's Mask is permanent, but it extends the five-tick depletion
+    // cadence to 100 source ticks rather than granting infinite air. Start at
+    // 63 so its one 2-point drain does not deliberately emit jon_scub.
+    KexInvList[nPlayer].artifacts = (uint8_t)(1 << kKexArtiMask);
+    p.nAir = 63;
+    nBreathTimer[nPlayer] = 99;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 1);
+    bool const masked = p.nAir == 61 && nBreathTimer[nPlayer] == 1
+                     && !s_kexNeedGasp[nPlayer];
+
+    // No pending gasp here, so the surface path tests the refill without
+    // intentionally playing an effect during an unattended run.
+    p.nAir = 48;
+    nBreathTimer[nPlayer] = 17;
+    s_kexNeedGasp[nPlayer] = 0;
+    KexAirSupply_Update(nPlayer, nSprite, 0);
+    bool const surface = p.nAir == 64 && nBreathTimer[nPlayer] == 0
+                      && !s_kexNeedGasp[nPlayer] && !airpages;
+
+    p.nAir = oldAir;
+    nBreathTimer[nPlayer] = oldBreath;
+    s_kexNeedGasp[nPlayer] = oldNeedGasp;
+    airpages = oldAirPages;
+    KexInvList[nPlayer] = oldInv;
+    SetAirFrame();
+
+    OSD_Printf("Kex air test: %s (64->62/5 ticks, warning 48->46, 63->61/100 ticks, surface 48->64)\n",
+               drain && warning && masked && surface ? "PASS" : "FAIL");
+}
+
+// kexPuppet::OnDamage uses an independent presentation RNG for its pain
+// variants. Derive our choice from the current game tick instead of touching
+// PCExhumed's synchronized RandomBit stream, which would alter gameplay and
+// multiplayer state merely because a sound was played.
+static void KexPlayer_PlaySound(short nSprite, char const *name)
+{
+    int const sound = KexSound_Get(name);
+    if (sound >= 0)
+        D3PlayFX(sound, nSprite);
+}
+
+static void KexPlayer_DamageFeedback(int nPlayer, short nSprite, short nInstigator)
+{
+    static char const * const kUnderwaterPain[] =
+        { "k_whit1", "k_whit2", "k_whit3", "k_whit4", "k_whit5" };
+    static char const * const kLandPain[] = { "jon_hit1", "jon_hit2", "jon_hit3" };
+
+    if (!g_kexMode || nPlayer != nLocalPlayer)
+        return;
+
+    // The physical sprite remains in the submerged half while its head is at
+    // the surface. nPlayerViewSect is the port's PF_ABOVESURFACE equivalent,
+    // so it is the sector the remaster uses for water pain and drowning.
+    int const nViewSector = nPlayerViewSect[nPlayer];
+    bool const underwater = (unsigned)nViewSector < (unsigned)kMaxSectors
+        ? (SectFlag[nViewSector] & kSectUnderwater) != 0
+        : (SectFlag[sprite[nSprite].sectnum] & kSectUnderwater) != 0;
+    bool const electrocuted = KexForce_IsElectrocuted(nSprite);
+    if (PlayerList[nPlayer].nHealth <= 0)
+    {
+        // kexPuppet::OnDamage gives water and an actual instigator precedence
+        // over an electric death. Lava/slime emit their own death pair after
+        // this callback, and falling adds pxdeath in its caller.
+        if (underwater)
+            KexPlayer_PlaySound(nSprite, "jon_drwn");
+        else if (nInstigator >= 0)
+            KexPlayer_PlaySound(nSprite, "jon_die3");
+        else if (electrocuted)
+            KexPlayer_PlaySound(nSprite, "k_jdie1");
+        return;
+    }
+
+    // KexForce_OnWallHit has already set its lock and green flash. Its
+    // nonfatal shock is the only normal OnDamage case that has no red flash.
+    if (electrocuted)
+    {
+        KexPlayer_PlaySound(nSprite, "k_electrocute");
+        return;
+    }
+
+    if (KexHazard_IsActive(nPlayer))
+    {
+        KexPlayer_PlaySound(nSprite, "jon_pois");
+        return;
+    }
+
+    int const which = ((int)totalclock + nPlayer * 7) & 7;
+    if (underwater)
+        KexPlayer_PlaySound(nSprite, kUnderwaterPain[which % ARRAY_SIZE(kUnderwaterPain)]);
+    else
+        KexPlayer_PlaySound(nSprite, kLandPain[which % ARRAY_SIZE(kLandPain)]);
+}
+
+short nStandHeight;
+
+short nPlayerGrenade[kMaxPlayers];
+short nGrenadePlayer[50];
+
+short word_D282A[32];
+
+short PlayerCount;
+
+short nNetStartSprites;
+short nCurStartSprite;
+
+short nLocalSpr;
+
+/*
+typedef struct
+{
+fixed     dx;
+fixed     dy;
+fixed     dz;
+fixed     dyaw;
+fixed     dpitch;
+fixed     droll;
+} ControlInfo;
+*/
+
+extern void testsave();
+extern void testload();
+
+void PlayerInterruptKeys()
+{
+    ControlInfo info;
+    CONTROL_ProcessBinds();
+    memset(&info, 0, sizeof(ControlInfo)); // this is done within CONTROL_GetInput() anyway
+    CONTROL_GetInput(&info);
+
+    if (mouseaiming) {
+        aimmode = 0;
+    }
+
+    #if 0
+    if (keystatus[sc_J])
+    {
+        keystatus[sc_J] = 0;
+        testsave();
+    }
+    if (keystatus[sc_K])
+    {
+        keystatus[sc_K] = 0;
+        testload();
+    }
+    #endif
+
+    if (BUTTON(gamefunc_Mouse_Aiming))
+    {
+        if (mouseaiming)
+            aimmode = 1;
+        else
+        {
+            CONTROL_ClearButton(gamefunc_Mouse_Aiming);
+            aimmode = !aimmode;
+            if (aimmode)
+            {
+                StatusMessage(150, "Mouse aiming ON");
+            }
+            else
+            {
+                StatusMessage(150, "Mouse aiming OFF");
+                bLookCentre = true;
+            }
+        }
+    }
+    else if (mouseaiming)
+    {
+        bLookCentre = true;
+    }
+
+    if (BUTTON(gamefunc_AutoRun))
+    {
+        CONTROL_ClearButton(gamefunc_AutoRun);
+        auto_run = !auto_run;
+        if (auto_run)
+            StatusMessage(150, "Auto run ON");
+        else
+            StatusMessage(150, "Auto run OFF");
+    }
+
+    if (MouseDeadZone)
+    {
+        if (info.mousey > 0)
+            info.mousey = max(info.mousey - MouseDeadZone, 0);
+        else if (info.mousey < 0)
+            info.mousey = min(info.mousey + MouseDeadZone, 0);
+
+        if (info.mousex > 0)
+            info.mousex = max(info.mousex - MouseDeadZone, 0);
+        else if (info.mousex < 0)
+            info.mousex = min(info.mousex + MouseDeadZone, 0);
+    }
+
+    if (MouseBias)
+    {
+        if (klabs(info.mousex) > klabs(info.mousey))
+            info.mousey = tabledivide32_noinline(info.mousey, MouseBias);
+        else
+            info.mousex = tabledivide32_noinline(info.mousex, MouseBias);
+    }
+
+    if (PlayerList[nLocalPlayer].nHealth == 0)
+    {
+        lPlayerYVel = 0;
+        lPlayerXVel = 0;
+        nPlayerDAng = 0;
+        return;
+    }
+
+    // JBF: Run key behaviour is selectable
+    int const playerRunning = (runkey_mode) ? (BUTTON(gamefunc_Run) | auto_run) : (auto_run ^ BUTTON(gamefunc_Run));
+    int const turnAmount = playerRunning ? 12 : 8;
+    int const keyMove    = playerRunning ? 12 : 6;
+    constexpr int const analogTurnAmount = 12;
+    constexpr int const analogExtent = 32767; // KEEPINSYNC sdlayer.cpp
+    int fvel = 0, svel = 0;
+    fix16_t q16avel = 0, q16horz = 0;
+
+    if (BUTTON(gamefunc_Strafe))
+    {
+        static int strafeyaw;
+
+        svel = -(info.mousex + strafeyaw) >> 6;
+        strafeyaw  = (info.mousex + strafeyaw) % 64;
+
+        svel -= info.dyaw * keyMove / analogExtent;
+    }
+    else
+    {
+        q16avel = fix16_div(fix16_from_int(info.mousex), F16(32));
+        q16avel += fix16_from_int(info.dyaw) / analogExtent * (analogTurnAmount << 1);
+    }
+
+    if (aimmode)
+        q16horz = fix16_div(fix16_from_int(info.mousey), F16(64));
+    else
+        fvel = -(info.mousey >> 6);
+
+    if (mouseflip) q16horz = -q16horz;
+
+    q16horz -= fix16_from_int(info.dpitch) / analogExtent * analogTurnAmount;
+    svel -= info.dx * keyMove / analogExtent;
+    fvel -= info.dz * keyMove / analogExtent;
+
+    if (BUTTON(gamefunc_Strafe))
+    {
+        if (BUTTON(gamefunc_Turn_Left))
+            svel -= -keyMove;
+
+        if (BUTTON(gamefunc_Turn_Right))
+            svel -= keyMove;
+    }
+    else
+    {
+        static int turn = 0;
+        static int counter = 0;
+        // normal, non strafing movement
+        if (BUTTON(gamefunc_Turn_Left))
+        {
+            turn -= 2;
+
+            if (turn < -turnAmount)
+                turn = -turnAmount;
+        }
+        else if (BUTTON(gamefunc_Turn_Right))
+        {
+            turn += 2;
+
+            if (turn > turnAmount)
+                turn = turnAmount;
+        }
+
+        if (turn < 0)
+        {
+            turn++;
+            if (turn > 0)
+                turn = 0;
+        }
+
+        if (turn > 0)
+        {
+            turn--;
+            if (turn < 0)
+                turn = 0;
+        }
+
+        if ((counter++) % 4 == 0)
+            q16avel += fix16_from_int(turn<<2);
+    }
+
+    if (BUTTON(gamefunc_Strafe_Left))
+        svel += keyMove;
+
+    if (BUTTON(gamefunc_Strafe_Right))
+        svel += -keyMove;
+
+    if (BUTTON(gamefunc_Move_Forward))
+        fvel += keyMove;
+
+    if (BUTTON(gamefunc_Move_Backward))
+        fvel += -keyMove;
+
+    fvel = clamp(fvel, -12, 12);
+    svel = clamp(svel, -12, 12);
+
+    if (!bFollowMode && nMapMode)
+    {
+        mapTurn += q16avel << 3;
+        mapForward += fvel << 8;
+        mapStrafe += svel << 8;;
+
+        lPlayerYVel = 0;
+        lPlayerXVel = 0;
+        nPlayerDAng = 0;
+        return;
+    }
+
+    nPlayerDAng += q16avel;
+
+    inita &= kAngleMask;
+
+    lPlayerXVel += fvel * Cos(inita) + svel * Sin(inita);
+    lPlayerYVel += fvel * Sin(inita) - svel * Cos(inita);
+
+    lPlayerXVel -= (lPlayerXVel >> 5) + (lPlayerXVel >> 6);
+    lPlayerYVel -= (lPlayerYVel >> 5) + (lPlayerYVel >> 6);
+
+    // A horiz diff of 128 equal 45 degrees,
+    // so we convert horiz to 1024 angle units
+
+    float horizAngle = atan2f(nVertPan[nLocalPlayer] - F16(92), F16(128)) * (512.f / fPI) + fix16_to_float(q16horz);
+    nVertPan[nLocalPlayer] = fix16_clamp(F16(92) + Blrintf(F16(128) * tanf(horizAngle * (fPI / 512.f))), F16(0), F16(184));
+
+#if 0
+    info.dyaw *= (lMouseSens >> 1) + 1;
+
+    int nXVel, nYVel;
+
+    inita &= kAngleMask;
+
+    if (BUTTON(gamefunc_Run))
+    {
+        nXVel = Cos(inita) * 12;
+        nYVel = Sin(inita) * 12;
+    }
+    else
+    {
+        nXVel = Cos(inita) * 6;
+        nYVel = Sin(inita) * 6;
+    }
+
+    // loc_18E60
+    if (BUTTON(gamefunc_Move_Forward))
+    {
+        lPlayerXVel += nXVel;
+        lPlayerYVel += nYVel;
+    }
+    else if (BUTTON(gamefunc_Move_Backward))
+    {
+        lPlayerXVel -= nXVel;
+        lPlayerYVel -= nYVel;
+    }
+    if (info.mousey)
+    {
+        if (info.mousey < -6400)
+        {
+            info.mousey = -6400;
+        }
+        else if (info.mousey > 6400)
+        {
+            info.mousey = 6400;
+        }
+
+        if (mouseaiming)
+            aimmode = BUTTON(gamefunc_Mouseview);
+        else
+        {
+            CONTROL_ClearButton(gamefunc_Mouseview);
+            aimmode = !aimmode;
+        }
+
+        // loc_18EE4
+        if (aimmode)
+        {
+            fix16_t nVPan = nVertPan[nLocalPlayer] - fix16_from_int((info.mousey >> 7));
+
+            if (nVPan < F16(0))
+            {
+                nVPan = F16(0);
+            }
+            else if (nVPan > F16(184))
+            {
+                nVPan = F16(184);
+            }
+
+            nVertPan[nLocalPlayer] = nVPan;
+        }
+        else
+        {
+            if (BUTTON(gamefunc_Run))
+            {
+                lPlayerXVel += Cos(inita) * ((-info.mousey) >> 7);
+                lPlayerYVel += Sin(inita) * ((-info.mousey) >> 7);
+            }
+            else
+            {
+                lPlayerXVel += Cos(inita) * ((-info.mousey) >> 8);
+                lPlayerYVel += Sin(inita) * ((-info.mousey) >> 8);
+            }
+        }
+    }
+
+    // loc_18FD4
+    if (BUTTON(gamefunc_Strafe_Left))
+    {
+        lPlayerXVel += nYVel / 4;
+        lPlayerYVel -= nXVel / 4;
+    }
+    else if (BUTTON(gamefunc_Strafe_Right))
+    {
+        lPlayerXVel -= nYVel / 4;
+        lPlayerYVel += nXVel / 4;
+    }
+    else
+    {
+        if (BUTTON(gamefunc_Strafe))
+        {
+            if (BUTTON(gamefunc_Turn_Left))
+            {
+                lPlayerXVel += nYVel;
+                lPlayerYVel -= nXVel;
+            }
+            else if (BUTTON(gamefunc_Turn_Right))
+            {
+                lPlayerXVel -= nYVel;
+                lPlayerYVel += nXVel;
+            }
+            else
+            {
+                if (BUTTON(gamefunc_Run))
+                {
+                    lPlayerXVel -= Sin(inita) * (info.dyaw >> 5);
+                    lPlayerYVel += Sin(inita + 512) * (info.dyaw >> 5);
+                }
+                else
+                {
+                    lPlayerXVel -= Sin(inita) * (info.dyaw >> 7);
+                    lPlayerYVel += Sin(inita + 512) * (info.dyaw >> 7);
+                }
+            }
+        }
+        else
+        {
+            // normal, non strafing movement
+            if (BUTTON(gamefunc_Turn_Left))
+            {
+                nPlayerDAng -= 2;
+
+                if (BUTTON(gamefunc_Run))
+                {
+                    if (nPlayerDAng < -12)
+                        nPlayerDAng = -12;
+                }
+                else if (nPlayerDAng < -8)
+                {
+                    nPlayerDAng = -8;
+                }
+            }
+            else if (BUTTON(gamefunc_Turn_Right))
+            {
+                nPlayerDAng += 2;
+
+                if (BUTTON(gamefunc_Run))
+                {
+                    if (nPlayerDAng > 12)
+                        nPlayerDAng = 12;
+                }
+                else if (nPlayerDAng > 8)
+                {
+                    nPlayerDAng = 8;
+                }
+            }
+            else
+            {
+                int nAng = info.dyaw >> 8;
+
+                // loc_19201:
+                if (info.dyaw < 0)
+                {
+                    if (nAng > -2) {
+                        nAng = -2;
+                    }
+
+                    nPlayerDAng = nAng;
+                }
+                else if (info.dyaw > 0)
+                {
+                    if (nAng < 2) {
+                        nAng = 2;
+                    }
+
+                    nPlayerDAng = nAng;
+                }
+            }
+        }
+    }
+
+    // loc_19231
+    if (nPlayerDAng < 0)
+    {
+        nPlayerDAng++;
+        if (nPlayerDAng > 0)
+            nPlayerDAng = 0;
+    }
+
+    if (nPlayerDAng > 0)
+    {
+        nPlayerDAng--;
+        if (nPlayerDAng < 0)
+            nPlayerDAng = 0;
+    }
+
+    lPlayerXVel -= (lPlayerXVel >> 5) + (lPlayerXVel >> 6);
+    lPlayerYVel -= (lPlayerYVel >> 5) + (lPlayerYVel >> 6);
+#endif
+}
+
+void RestoreSavePoint(int nPlayer, int *x, int *y, int *z, short *nSector, short *nAngle)
+{
+    *x = sPlayerSave[nPlayer].x;
+    *y = sPlayerSave[nPlayer].y;
+    *z = sPlayerSave[nPlayer].z;
+    *nSector = sPlayerSave[nPlayer].nSector;
+    *nAngle  = sPlayerSave[nPlayer].nAngle;
+}
+
+void SetSavePoint(int nPlayer, int x, int y, int z, short nSector, short nAngle)
+{
+    sPlayerSave[nPlayer].x = x;
+    sPlayerSave[nPlayer].y = y;
+    sPlayerSave[nPlayer].z = z;
+    sPlayerSave[nPlayer].nSector = nSector;
+    sPlayerSave[nPlayer].nAngle = nAngle;
+}
+
+void feebtag(int x, int y, int z, int nSector, int *nSprite, int nVal2, int nVal3)
+{
+    *nSprite = -1;
+
+    int startwall = sector[nSector].wallptr;
+
+    int nWalls = sector[nSector].wallnum;
+
+    int var_20 = nVal2 & 2;
+    int var_14 = nVal2 & 1;
+
+    while (1)
+    {
+        if (nSector != -1)
+        {
+            short i = headspritesect[nSector];
+
+            while (i != -1)
+            {
+                short nNextSprite = nextspritesect[i];
+                short nStat = sprite[i].statnum;
+
+                if (nStat >= 900 && !(sprite[i].cstat & 0x8000))
+                {
+                    uint32_t xDiff = klabs(sprite[i].x - x);
+                    uint32_t yDiff = klabs(sprite[i].y - y);
+                    int zDiff = sprite[i].z - z;
+
+                    if (zDiff < 5120 && zDiff > -25600)
+                    {
+                        uint32_t diff = xDiff * xDiff + yDiff * yDiff;
+
+                        if (diff > INT_MAX)
+                        {
+                            OSD_Printf("%s %d: overflow\n", EDUKE32_FUNCTION, __LINE__);
+                            diff = INT_MAX;
+                        }
+
+                        int theSqrt = ksqrt(diff);
+
+                        if (theSqrt < nVal3 && (nStat != 950 && nStat != 949 || !(var_14 & 1)) && (nStat != 912 && nStat != 913 || !(var_20 & 2)))
+                        {
+                            nVal3 = theSqrt;
+                            *nSprite = i;
+                        }
+                    }
+                }
+
+                i = nNextSprite;
+            }
+        }
+
+        nWalls--;
+        if (nWalls < -1)
+            return;
+
+        nSector = wall[startwall].nextsector;
+        startwall++;
+    }
+}
+
+void InitPlayer()
+{
+    for (int i = 0; i < kMaxPlayers; i++) {
+        PlayerList[i].nSprite = -1;
+    }
+}
+
+void InitPlayerKeys(short nPlayer)
+{
+    PlayerList[nPlayer].keys = 0;
+}
+
+void InitPlayerInventory(short nPlayer)
+{
+    memset(&PlayerList[nPlayer], 0, sizeof(Player));
+    KexInv_Reset(nPlayer);
+    if (nPlayer == nLocalPlayer)
+        KexCheckpoint_Reset();
+
+    nPlayerItem[nPlayer] = -1;
+    nPlayerSwear[nPlayer] = 4;
+
+    ResetPlayerWeapons(nPlayer);
+    KexInv_InitAmmo(nPlayer);
+
+    // kexSlavePlayer::Reset has a live full-health player before NewGame
+    // writes its initial slot. The classic path historically waited until
+    // RestartPlayer(), which left a zero-health backing save in KEX mode.
+    if (g_kexMode)
+        PlayerList[nPlayer].nHealth = (short)KexInv_MaxHealth(nPlayer);
+
+    nPlayerLives[nPlayer] = kDefaultLives;
+
+    PlayerList[nPlayer].nSprite = -1;
+    PlayerList[nPlayer].nRun = -1;
+
+    nPistolClip[nPlayer] = 6;
+    nPlayerClip[nPlayer] = 0;
+
+    PlayerList[nPlayer].nCurrentWeapon = 0;
+
+    if (nPlayer == nLocalPlayer) {
+        nMapMode = 0;
+    }
+
+    nPlayerScore[nPlayer] = 0;
+
+    short nTile = kTile3571 + nPlayer;
+
+    if (!waloff[nTile]) tileLoad(nTile);
+
+    nPlayerColor[nPlayer] = *(uint8_t*)(waloff[nTile] + tilesiz[nTile].x * tilesiz[nTile].y / 2);
+}
+
+short GetPlayerFromSprite(short nSprite)
+{
+    return RunData[sprite[nSprite].owner].nVal;
+}
+
+void RestartPlayer(short nPlayer)
+{
+    int nSprite = PlayerList[nPlayer].nSprite;
+    int nDopSprite = nDoppleSprite[nPlayer];
+
+    int floorspr;
+
+    if (nSprite > -1)
+    {
+        runlist_DoSubRunRec(sprite[nSprite].owner);
+        runlist_FreeRun(sprite[nSprite].lotag - 1);
+
+        changespritestat(nSprite, 0);
+
+        PlayerList[nPlayer].nSprite = -1;
+
+        int nFloorSprite = nPlayerFloorSprite[nPlayer];
+        if (nFloorSprite > -1) {
+            mydeletesprite(nFloorSprite);
+        }
+
+        if (nDopSprite > -1)
+        {
+            runlist_DoSubRunRec(sprite[nDopSprite].owner);
+            runlist_FreeRun(sprite[nDopSprite].lotag - 1);
+            mydeletesprite(nDopSprite);
+        }
+    }
+
+    nSprite = GrabBody();
+
+    mychangespritesect(nSprite, sPlayerSave[nPlayer].nSector);
+    changespritestat(nSprite, 100);
+
+    assert(nSprite >= 0 && nSprite < kMaxSprites);
+
+    int nDSprite = insertsprite(sprite[nSprite].sectnum, 100);
+    nDoppleSprite[nPlayer] = nDSprite;
+
+    assert(nDSprite >= 0 && nDSprite < kMaxSprites);
+
+    if (nTotalPlayers > 1)
+    {
+        int nNStartSprite = nNetStartSprite[nCurStartSprite];
+        nCurStartSprite++;
+
+        if (nCurStartSprite >= nNetStartSprites) {
+            nCurStartSprite = 0;
+        }
+
+        sprite[nSprite].x = sprite[nNStartSprite].x;
+        sprite[nSprite].y = sprite[nNStartSprite].y;
+        sprite[nSprite].z = sprite[nNStartSprite].z;
+        mychangespritesect(nSprite, sprite[nNStartSprite].sectnum);
+        PlayerList[nPlayer].q16angle = fix16_from_int(sprite[nNStartSprite].ang & kAngleMask);
+        sprite[nSprite].ang = fix16_to_int(PlayerList[nPlayer].q16angle);
+
+        floorspr = insertsprite(sprite[nSprite].sectnum, 0);
+        assert(floorspr >= 0 && floorspr < kMaxSprites);
+
+        sprite[floorspr].x = sprite[nSprite].x;
+        sprite[floorspr].y = sprite[nSprite].y;
+        sprite[floorspr].z = sprite[nSprite].z;
+        sprite[floorspr].yrepeat = 64;
+        sprite[floorspr].xrepeat = 64;
+        sprite[floorspr].cstat = 32;
+        sprite[floorspr].picnum = nPlayer + kTile3571;
+    }
+    else
+    {
+        sprite[nSprite].x = sPlayerSave[nPlayer].x;
+        sprite[nSprite].y = sPlayerSave[nPlayer].y;
+        // KEX map actors spawn at their compiled Z. This is normally the
+        // floor, but a few retail starts and every restored checkpoint retain
+        // an authored vertical offset; gravity settles them naturally. Keep
+        // the classic floor spawn byte-for-byte outside the KEX bridge.
+        sprite[nSprite].z = g_kexMode ? sPlayerSave[nPlayer].z
+                                      : sector[sPlayerSave[nPlayer].nSector].floorz;
+        PlayerList[nPlayer].q16angle = fix16_from_int(sPlayerSave[nPlayer].nAngle&kAngleMask);
+        sprite[nSprite].ang = fix16_to_int(PlayerList[nPlayer].q16angle);
+
+        floorspr = -1;
+    }
+
+    PlayerList[nPlayer].opos = sprite[nSprite].xyz;
+    PlayerList[nPlayer].q16oangle = PlayerList[nPlayer].q16angle;
+
+    nPlayerFloorSprite[nPlayer] = floorspr;
+
+    sprite[nSprite].cstat = 0x101;
+    sprite[nSprite].shade = -12;
+    sprite[nSprite].clipdist = 58;
+    sprite[nSprite].pal = 0;
+    sprite[nSprite].xrepeat = 40;
+    sprite[nSprite].yrepeat = 40;
+    sprite[nSprite].xoffset = 0;
+    sprite[nSprite].yoffset = 0;
+    sprite[nSprite].picnum = seq_GetSeqPicnum(kSeqJoe, 18, 0);
+
+    int nHeight = GetSpriteHeight(nSprite);
+    sprite[nSprite].xvel = 0;
+    sprite[nSprite].yvel = 0;
+    sprite[nSprite].zvel = 0;
+
+    nStandHeight = nHeight;
+
+    sprite[nSprite].hitag = 0;
+    sprite[nSprite].extra = -1;
+    sprite[nSprite].lotag = runlist_HeadRun() + 1;
+
+    sprite[nDSprite].x = sprite[nSprite].x;
+    sprite[nDSprite].y = sprite[nSprite].y;
+    sprite[nDSprite].z = sprite[nSprite].z;
+    sprite[nDSprite].xrepeat = sprite[nSprite].xrepeat;
+    sprite[nDSprite].yrepeat = sprite[nSprite].yrepeat;
+    sprite[nDSprite].xoffset = 0;
+    sprite[nDSprite].yoffset = 0;
+    sprite[nDSprite].shade = sprite[nSprite].shade;
+    sprite[nDSprite].ang = sprite[nSprite].ang;
+    sprite[nDSprite].cstat = sprite[nSprite].cstat;
+
+    sprite[nDSprite].lotag = runlist_HeadRun() + 1;
+
+    PlayerList[nPlayer].nAction = 0;
+    PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
+
+    if (nNetPlayerCount) {
+        PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer) * 2;
+    }
+
+    PlayerList[nPlayer].nFrame = 0;
+    PlayerList[nPlayer].nSprite = nSprite;
+    PlayerList[nPlayer].bIsMummified = kFalse;
+
+    if (PlayerList[nPlayer].invincibility >= 0) {
+        PlayerList[nPlayer].invincibility = 0;
+    }
+
+    nPlayerTorch[nPlayer] = 0;
+    PlayerList[nPlayer].nMaskAmount = 0;
+
+    SetTorch(nPlayer, 0);
+
+    nPlayerInvisible[nPlayer] = 0;
+
+    PlayerList[nPlayer].bIsFiring = 0;
+    PlayerList[nPlayer].nWeaponFrame = 0;
+    nPlayerViewSect[nPlayer] = sPlayerSave[nPlayer].nSector;
+    PlayerList[nPlayer].nWeaponState = 0;
+
+    nPlayerDouble[nPlayer] = 0;
+
+    PlayerList[nPlayer].nSeq = kSeqJoe;
+
+    nPlayerPushSound[nPlayer] = -1;
+
+    PlayerList[nPlayer].nNewWeapon = -1;
+
+    if (PlayerList[nPlayer].nCurrentWeapon == 7) {
+        PlayerList[nPlayer].nCurrentWeapon = PlayerList[nPlayer].nLastWeapon;
+    }
+
+    PlayerList[nPlayer].nLastWeapon = 0;
+    PlayerList[nPlayer].nAir = g_kexMode ? 64 : 100;
+    airpages = 0;
+
+    if (levelnum <= kMap20)
+    {
+        RestoreMinAmmo(nPlayer);
+    }
+    else
+    {
+        ResetPlayerWeapons(nPlayer);
+        PlayerList[nPlayer].nMagic = 0;
+    }
+
+    nPlayerGrenade[nPlayer] = -1;
+    oeyelevel[nPlayer] = eyelevel[nPlayer] = -14080;
+    dVertPan[nPlayer] = 0;
+
+    nTemperature[nPlayer] = 0;
+
+    nYDamage[nPlayer] = 0;
+    nXDamage[nPlayer] = 0;
+
+    PlayerList[nPlayer].q16ohoriz = PlayerList[nPlayer].q16horiz = nVertPan[nPlayer] = F16(92);
+    nDestVertPan[nPlayer] = F16(92);
+    nBreathTimer[nPlayer] = g_kexMode ? 0 : 90;
+    s_kexNeedGasp[nPlayer] = 0;
+
+    nTauntTimer[nPlayer] = RandomSize(3) + 3;
+
+    sprite[nDSprite].owner = runlist_AddRunRec(sprite[nDSprite].lotag - 1, nPlayer, kRunPlayer);
+    sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nPlayer, kRunPlayer);
+
+    if (PlayerList[nPlayer].nRun < 0) {
+        PlayerList[nPlayer].nRun = runlist_AddRunRec(NewRun, nPlayer, kRunPlayer);
+    }
+
+    BuildRa(nPlayer);
+
+    if (nPlayer == nLocalPlayer)
+    {
+        nLocalSpr = nSprite;
+        nPlayerDAng = 0;
+
+        SetMagicFrame();
+        RestoreGreenPal();
+
+        bPlayerPan = 0;
+        bLockPan = 0;
+
+		nCameraDist = 0;
+		nCameraClock = (int32_t)totalclock;
+
+        SetMapPosition(sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].ang);
+    }
+
+    // VibeBuild32: -name (locally) and each peer's OPTIONS packet fill playerNames[]
+    // during ExNet_Connect(), long before the first RestartPlayer(). Keep those --
+    // otherwise every level start renamed everyone back to the stock "JOEn"
+    // placeholder and chat lines were attributed to the wrong-looking player.
+    if (!ExNet_Enabled() || !playerNames[nPlayer][0])
+        sprintf(playerNames[nPlayer], "JOE%d", nPlayer);
+    namelen[nPlayer] = strlen(playerNames[nPlayer]);
+
+    totalvel[nPlayer] = 0;
+
+    memset(&sPlayerInput[nPlayer], 0, sizeof(PlayerInput));
+    sPlayerInput[nPlayer].nItem = -1;
+
+    nDeathType[nPlayer] = 0;
+    nQuake[nPlayer] = 0;
+
+    if (nPlayer == nLocalPlayer) {
+        SetHealthFrame(0);
+    }
+}
+
+int GrabPlayer()
+{
+    if (PlayerCount >= kMaxPlayers) {
+        return -1;
+    }
+
+    return PlayerCount++;
+}
+
+void StartDeathSeq(int nPlayer, int nVal)
+{
+    FreeRa(nPlayer);
+
+    short nSprite = PlayerList[nPlayer].nSprite;
+    PlayerList[nPlayer].nHealth = 0;
+
+    short nLotag = sector[sprite[nSprite].sectnum].lotag;
+
+    if (nLotag > 0) {
+        runlist_SignalRun(nLotag - 1, nPlayer | 0x70000);
+    }
+
+    if (nPlayerGrenade[nPlayer] >= 0)
+    {
+        ThrowGrenade(nPlayer, 0, 0, 0, -10000);
+    }
+    else
+    {
+        if (nNetPlayerCount)
+        {
+            int nWeapon = PlayerList[nPlayer].nCurrentWeapon;
+
+            if (nWeapon > kWeaponSword && nWeapon <= kWeaponRing)
+            {
+                short nSector = sprite[nSprite].sectnum;
+                if (SectBelow[nSector] > -1) {
+                    nSector = SectBelow[nSector];
+                }
+
+                int nGunSprite = GrabBodyGunSprite();
+                changespritesect(nGunSprite, nSector);
+
+                sprite[nGunSprite].x = sprite[nSprite].x;
+                sprite[nGunSprite].y = sprite[nSprite].y;
+                sprite[nGunSprite].z = sector[nSector].floorz - 512;
+
+                changespritestat(nGunSprite, nGunLotag[nWeapon] + 900);
+
+                sprite[nGunSprite].picnum = nGunPicnum[nWeapon];
+
+                BuildItemAnim(nGunSprite);
+            }
+        }
+    }
+
+    StopFiringWeapon(nPlayer);
+
+    PlayerList[nPlayer].q16ohoriz = PlayerList[nPlayer].q16horiz = nVertPan[nPlayer] = F16(92);
+    oeyelevel[nPlayer] = eyelevel[nPlayer] = -14080;
+    nPlayerInvisible[nPlayer] = 0;
+    dVertPan[nPlayer] = 15;
+
+    sprite[nSprite].cstat &= 0x7FFF;
+
+    SetNewWeaponImmediate(nPlayer, -2);
+
+    if (SectDamage[sprite[nSprite].sectnum] <= 0)
+    {
+        nDeathType[nPlayer] = nVal;
+    }
+    else
+    {
+        nDeathType[nPlayer] = 2;
+    }
+
+    nVal *= 2;
+
+    if (nVal || !(SectFlag[sprite[nSprite].sectnum] & kSectUnderwater))
+    {
+        PlayerList[nPlayer].nAction = nVal + 17;
+    }
+    else {
+        PlayerList[nPlayer].nAction = 16;
+    }
+
+    PlayerList[nPlayer].nFrame = 0;
+
+    sprite[nSprite].cstat &= 0xFEFE;
+
+    if (g_kexMode && nTotalPlayers == 1)
+    {
+        // KEX has no finite-life respawn. Its death state automatically
+        // reloads the current map and restores the latest checkpoint.
+        KexCheckpoint_DeathStart(nPlayer);
+    }
+    else if (nTotalPlayers == 1)
+    {
+        short nLives = nPlayerLives[nPlayer];
+
+        if (nLives > 0) {
+            BuildStatusAnim((3 * (nLives - 1)) + 7, 0);
+        }
+
+        if (levelnum > 0) { // if not on the training level
+            nPlayerLives[nPlayer]--;
+        }
+
+        if (nPlayerLives[nPlayer] < 0) {
+            nPlayerLives[nPlayer] = 0;
+        }
+    }
+
+    totalvel[nPlayer] = 0;
+
+    if (nPlayer == nLocalPlayer) {
+        RefreshStatus();
+    }
+}
+
+int AddAmmo(int nPlayer, int nWeapon, int nAmmoAmount)
+{
+    if (!nAmmoAmount) {
+        nAmmoAmount = 1;
+    }
+
+    short nCurAmmo = PlayerList[nPlayer].nAmmo[nWeapon];
+    int const nMaxAmmo = g_kexMode ? KexInv_AmmoMax(nWeapon) : 300;
+
+    if (nCurAmmo >= nMaxAmmo && nAmmoAmount > 0) {
+        return 0;
+    }
+
+    nAmmoAmount = nCurAmmo + nAmmoAmount;
+    if (nAmmoAmount > nMaxAmmo) {
+        nAmmoAmount = nMaxAmmo;
+    }
+
+    PlayerList[nPlayer].nAmmo[nWeapon] = nAmmoAmount;
+
+    if (nPlayer == nLocalPlayer)
+    {
+        if (nWeapon == nCounterBullet) {
+            SetCounter(nAmmoAmount);
+        }
+    }
+
+    if (nWeapon == 1)
+    {
+        if (!nPistolClip[nPlayer]) {
+            nPistolClip[nPlayer] = 6;
+        }
+    }
+
+    return 1;
+}
+
+void SetPlayerMummified(int nPlayer, int bIsMummified)
+{
+    int nSprite = PlayerList[nPlayer].nSprite;
+
+    sprite[nSprite].yvel = 0;
+    sprite[nSprite].xvel = 0;
+
+    PlayerList[nPlayer].bIsMummified = bIsMummified;
+
+    if (bIsMummified)
+    {
+        PlayerList[nPlayer].nAction = 13;
+        PlayerList[nPlayer].nSeq = kSeqMummy;
+    }
+    else
+    {
+        PlayerList[nPlayer].nAction = 0;
+        PlayerList[nPlayer].nSeq = kSeqJoe;
+    }
+
+    PlayerList[nPlayer].nFrame = 0;
+}
+
+void ShootStaff(int nPlayer)
+{
+    PlayerList[nPlayer].nAction = 15;
+    PlayerList[nPlayer].nFrame = 0;
+    PlayerList[nPlayer].nSeq = kSeqJoe;
+}
+
+void PlayAlert(const char *str)
+{
+    StatusMessage(300, str);
+    PlayLocalSound(StaticSound[kSoundSawOn], 0);
+}
+
+void DoKenTest()
+{
+    int nPlayerSprite = PlayerList[0].nSprite;
+    if ((unsigned int)nPlayerSprite >= kMaxSprites)
+    {
+        return;
+    }
+
+    int nSector = sprite[nPlayerSprite].sectnum;
+    if ((unsigned int)nSector >= kMaxSectors)
+    {
+        LOG_F(INFO, "DoKenTest: (unsigned int)nSector >= kMaxSectors");
+        return;
+    }
+
+    for (int i = headspritesect[nSector]; ; i = nextspritesect[i])
+    {
+        if (i == -1) {
+            return;
+        }
+
+        if (nextspritesect[i] == i) {
+            bail2dos("ERROR in Ken's linked list!\n");
+        }
+    }
+}
+
+static void PlayerCheckItemRespawnOrDelete(int nItemSprite, int nVal)
+{
+    // CHECKME - is order of evaluation correct?
+    if (levelnum <= 20 || nVal >= 25 && (nVal <= 25 || nVal == 50))
+    {
+        DestroyItemAnim(nItemSprite);
+        mydeletesprite(nItemSprite);
+    }
+    else
+    {
+        StartRegenerate(nItemSprite);
+    }
+}
+
+static void SetItemPickupMessage(int nPlayer, int nVal)
+{
+    if (nPlayer != nLocalPlayer)
+        return;
+
+    // VibeBuild32: in Kex mode the remaster's own wording wins, for the items
+    // that mean the same thing in both games.
+    if (g_kexMode && nTotalPlayers == 1)
+    {
+        if (char const *const caption = Kex_PickupCaption(nVal))
+        {
+            StatusMessage(400, "%s", caption);
+            return;
+        }
+    }
+
+    if (nItemText[nVal] > -1 && nTotalPlayers == 1)
+    {
+        StatusMessage(400, gString[nItemTextIndex + nItemText[nVal]]);
+    }
+}
+
+static void WeaponPickup(int nPlayer, int nSprite, int nWeapon, int nAddAmmo, int nItem, int rTint, int gTint)
+{
+    int nPickupSound = -1;
+    int weaponBit = 1 << nWeapon;
+
+    if (g_kexMode)
+    {
+        if (nPlayerWeapons[nPlayer] & weaponBit)
+        {
+            // Native KEX normally removes this actor at level initialization.
+            // Do the same if one is introduced later in the frame.
+            DestroyItemAnim(nSprite);
+            mydeletesprite(nSprite);
+            return;
+        }
+
+        // GiveWeapon(slot, true) only marks and selects the weapon. Its ammo
+        // pool was initialized to max when the player was reset.
+        nPlayerWeapons[nPlayer] |= weaponBit;
+        StopFiringWeapon(nPlayer);
+        SetNewWeapon(nPlayer, nWeapon);
+        nPickupSound = StaticSound[kSoundWeapon];
+    }
+    else if (nPlayerWeapons[nPlayer] & weaponBit)
+    {
+        if (levelnum > 20)
+        {
+            AddAmmo(nPlayer, WeaponInfo[nWeapon].nAmmoType, nAddAmmo);
+        }
+    }
+    else
+    {
+        SetNewWeaponIfBetter(nPlayer, nWeapon);
+
+        nPlayerWeapons[nPlayer] |= weaponBit;
+
+        AddAmmo(nPlayer, WeaponInfo[nWeapon].nAmmoType, nAddAmmo);
+
+        nPickupSound = StaticSound[kSoundWeapon];
+    }
+
+    if (nWeapon == kWeaponM60) {
+        CheckClip(nPlayer);
+    }
+
+    if (g_kexMode)
+    {
+        DestroyItemAnim(nSprite);
+        mydeletesprite(nSprite);
+    }
+    else if (nItem <= 50)
+    {
+        PlayerCheckItemRespawnOrDelete(nSprite, nItem);
+    }
+    else
+    {
+        sprite[nSprite].cstat = 0x8000;
+        DestroyItemAnim(nSprite);
+    }
+
+    SetItemPickupMessage(nPlayer, nItem);
+    if (g_kexMode)
+        ItemFlash();
+    else
+        TintPalette(rTint * 4, gTint * 4, 0);
+
+    if (nPickupSound > -1) {
+        PlayLocalSound(nPickupSound, 0);
+    }
+}
+
+static void PlayerPickupKey(int nPlayer, int nKey, int nSprite, int nItem)
+{
+    int keyBit = 0x1000 << nKey;
+
+    if (!(PlayerList[nPlayer].keys & keyBit))
+    {
+        if (nPlayer == nLocalPlayer) {
+            BuildStatusAnim(36 + (nKey * 2), 0);
+        }
+
+        PlayerList[nPlayer].keys |= keyBit;
+
+        if (nTotalPlayers <= 1)
+        {
+            PlayerCheckItemRespawnOrDelete(nSprite, nItem);
+        }
+
+        SetItemPickupMessage(nPlayer, nItem);
+        if (g_kexMode)
+            ItemFlash();
+        else
+            TintPalette(0, 16 * 4, 0);
+    }
+}
+
+void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
+{
+    int nPlayerSprite = PlayerList[nPlayer].nSprite;
+
+    if (nPickupSprite >= 0 && sprite[nPickupSprite].statnum >= 900)
+    {
+        int rTint = 0;
+        int gTint = 16;
+        int nPickupSound = 9;
+
+        int nItem = sprite[nPickupSprite].statnum - 900;
+
+        // TODO - handle 0-5 ?
+
+        if (nItem > 60) // item end at number 60
+            return;
+
+        switch (nItem)
+        {
+            default:
+            {
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+            case 6: // Speed Loader
+            {
+                if (AddAmmo(nPlayer, 1, sprite[nPickupSprite].hitag))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                return;
+            }
+            case 7: // Fuel Canister
+            {
+                if (AddAmmo(nPlayer, 3, sprite[nPickupSprite].hitag))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                return;
+            }
+            case 8: // M - 60 Ammo Belt
+            {
+                if (AddAmmo(nPlayer, 2, sprite[nPickupSprite].hitag))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    CheckClip(nPlayer);
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                return;
+            }
+            case 9: // Grenade
+            case 27:
+            case 55:
+            {
+                if (g_kexMode && nItem == 9)
+                {
+                    WeaponPickup(nPlayer, nPickupSprite, kWeaponGrenade, 0, nItem, rTint, gTint);
+                    return;
+                }
+
+                if (AddAmmo(nPlayer, 4, 1))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    if (!(nPlayerWeapons[nPlayer] & 0x10))
+                    {
+                        nPlayerWeapons[nPlayer] |= 0x10;
+                        SetNewWeaponIfBetter(nPlayer, 4);
+                    }
+
+                    if (nItem == 55)
+                    {
+                        sprite[nPickupSprite].cstat = 0x8000;
+                        DestroyItemAnim(nPickupSprite);
+                        break;
+                    }
+                    else
+                    {
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                }
+                return;
+            }
+
+            // VibeBuild32: in Kex mode these four "pickable items" carry the
+            // remaster's artifacts, transmitter pieces, team dolls and ankhs,
+            // the hitag naming which (kexinv.h).
+            case kKexLotagArtifact:
+            case kKexLotagTransmitter:
+            case kKexLotagDoll:
+            case kKexLotagAnkh:
+            {
+                if (g_kexMode && KexInv_Pickup(nPlayer, nItem, sprite[nPickupSprite].hitag))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 31: // VibeBuild32: the remaster's Manacle (Kex mode); a pickable no-op otherwise
+            {
+                if (g_kexMode)
+                {
+                    WeaponPickup(nPlayer, nPickupSprite, kWeaponManacle, 6, nItem, rTint, gTint);
+                    return;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 10: // Pickable item (Kex: full weapon-power orb)
+            {
+                if (g_kexMode && sprite[nPickupSprite].hitag == KEX_POWER_DROP_HITAG)
+                {
+                    if (KexInv_PickupPower(nPlayer))
+                    {
+                        nPickupSound = StaticSound[kSoundWeapon];
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                    return;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagFullHealth:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupFullHealth(nPlayer))
+                        return;
+                    nPickupSound = StaticSound[kSoundMana2];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagFullAmmo:
+            {
+                if (g_kexMode)
+                {
+                    KexInv_PickupFullAmmo(nPlayer);
+                    nPickupSound = StaticSound[kSoundWeapon];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagAmmo:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupAmmo(nPlayer, sprite[nPickupSprite].hitag))
+                        return;
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case kKexLotagHealth:
+            {
+                if (g_kexMode)
+                {
+                    if (!KexInv_PickupHealth(nPlayer, sprite[nPickupSprite].hitag))
+                        return;
+                    nPickupSound = StaticSound[kSound9];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 16: // Reserved
+            case 35:
+            case 43:
+            case 44:
+            case 51:
+            case 58:
+            {
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 11: // Map
+            {
+                GrabMap();
+                if (g_kexMode)
+                    KexInvList[nPlayer].map = 1;
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 12: // Berry Twig
+            {
+                if (sprite[nPickupSprite].hitag == 0) {
+                    return;
+                }
+
+                nPickupSound = 20;
+                int nHealthModifier = 40;
+
+                if (nHealthModifier <= 0 || (!(valueFlag & 2)))
+                {
+                    if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
+                    {
+                        PlayerList[nPlayer].nHealth += nHealthModifier;
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
+                        {
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
+                        }
+                        else
+                        {
+                            if (PlayerList[nPlayer].nHealth < 0)
+                            {
+                                nPickupSound = -1;
+                                StartDeathSeq(nPlayer, 0);
+                            }
+                        }
+                    }
+
+                    if (nLocalPlayer == nPlayer)
+                    {
+                        SetHealthFrame(1);
+                    }
+
+                    if (nItem == 12)
+                    {
+                        sprite[nPickupSprite].hitag = 0;
+                        sprite[nPickupSprite].picnum++;
+
+                        changespritestat(nPickupSprite, 0);
+                        break;
+                    }
+                    else
+                    {
+                        if (nItem != 14)
+                        {
+                            nPickupSound = 21;
+                        }
+                        else
+                        {
+                            rTint = gTint;
+                            nPickupSound = 22;
+                            gTint = 0;
+                        }
+
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                }
+
+                return;
+            }
+
+            case 13: // Blood Bowl
+            {
+                int nHealthModifier = 160;
+
+                // Same code as case 12 now till break
+                if (nHealthModifier <= 0 || (!(valueFlag & 2)))
+                {
+                    if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
+                    {
+                        PlayerList[nPlayer].nHealth += nHealthModifier;
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
+                        {
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
+                        }
+                        else
+                        {
+                            if (PlayerList[nPlayer].nHealth < 0)
+                            {
+                                nPickupSound = -1;
+                                StartDeathSeq(nPlayer, 0);
+                            }
+                        }
+                    }
+
+                    if (nLocalPlayer == nPlayer)
+                    {
+                        SetHealthFrame(1);
+                    }
+
+                    if (nItem == 12)
+                    {
+                        sprite[nPickupSprite].hitag = 0;
+                        sprite[nPickupSprite].picnum++;
+
+                        changespritestat(nPickupSprite, 0);
+                        break;
+                    }
+                    else
+                    {
+                        if (nItem != 14)
+                        {
+                            nPickupSound = 21;
+                        }
+                        else
+                        {
+                            rTint = gTint;
+                            nPickupSound = 22;
+                            gTint = 0;
+                        }
+
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                }
+
+                return;
+            }
+
+            case 14: // Cobra Venom Bowl
+            {
+                int nHealthModifier = -200;
+
+                // Same code as case 12 and 13 from now till break
+                if (nHealthModifier <= 0 || (!(valueFlag & 2)))
+                {
+                    if (!PlayerList[nPlayer].invincibility || nHealthModifier > 0)
+                    {
+                        PlayerList[nPlayer].nHealth += nHealthModifier;
+                        if (PlayerList[nPlayer].nHealth > KexInv_MaxHealth(nPlayer))
+                        {
+                            PlayerList[nPlayer].nHealth = KexInv_MaxHealth(nPlayer);
+                        }
+                        else
+                        {
+                            if (PlayerList[nPlayer].nHealth < 0)
+                            {
+                                nPickupSound = -1;
+                                StartDeathSeq(nPlayer, 0);
+                            }
+                        }
+                    }
+
+                    if (nLocalPlayer == nPlayer)
+                    {
+                        SetHealthFrame(1);
+                    }
+
+                    if (nItem == 12)
+                    {
+                        sprite[nPickupSprite].hitag = 0;
+                        sprite[nPickupSprite].picnum++;
+
+                        changespritestat(nPickupSprite, 0);
+                        break;
+                    }
+                    else
+                    {
+                        if (nItem != 14)
+                        {
+                            nPickupSound = 21;
+                        }
+                        else
+                        {
+                            rTint = gTint;
+                            nPickupSound = 22;
+                            gTint = 0;
+                        }
+
+                        PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                        break;
+                    }
+                }
+
+                return;
+            }
+
+            case 17: // Bubble Nest
+            {
+                PlayerList[nPlayer].nAir += 10;
+                if (PlayerList[nPlayer].nAir > 100) {
+                    PlayerList[nPlayer].nAir = 100; // TODO - constant
+                }
+
+                SetAirFrame();
+
+                if (nBreathTimer[nPlayer] < 89)
+                {
+                    D3PlayFX(StaticSound[kSoundJonBubbleNest], nPlayerSprite);
+                }
+
+                nBreathTimer[nPlayer] = 90;
+                return;
+            }
+
+            case 18: // Still Beating Heart
+            {
+                if (GrabItem(nPlayer, kItemHeart))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 19: // Scarab amulet (Invicibility)
+            {
+                if (GrabItem(nPlayer, kItemInvincibility))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 20: // Severed Slave Hand(double damage)
+            {
+                if (GrabItem(nPlayer, kItemDoubleDamage))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 21: // Unseen eye (Invisibility)
+            {
+                if (GrabItem(nPlayer, kItemInvisibility))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 22: // Torch
+            {
+                if (GrabItem(nPlayer, kItemTorch))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 23: // Sobek Mask
+            {
+                if (g_kexMode)
+                {
+                    KexInv_GiveArtifact(nPlayer, kKexArtiMask);
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+                if (GrabItem(nPlayer, kItemMask))
+                {
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 25: // Extra Life
+            {
+                nPickupSound = -1;
+
+                if (nPlayerLives[nPlayer] >= kMaxPlayerLives) {
+                    return;
+                }
+
+                nPlayerLives[nPlayer]++;
+
+                if (nPlayer == nLocalPlayer) {
+                    BuildStatusAnim(146 + ((nPlayerLives[nPlayer] - 1) * 2), 0);
+                }
+
+                gTint = 32;
+                rTint = 32;
+
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 26: // lotag 26, sword pickup??
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponSword, 0, nItem, rTint, gTint);
+                return;
+            }
+
+            case 28: // lotag 28, .357 Magnum Revolver
+            case 52:
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponPistol, 6, nItem, rTint, gTint);
+                return;
+            }
+
+            case 29: // M - 60 Machine Gun
+            case 53:
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponM60, 24, nItem, rTint, gTint);
+                return;
+            }
+
+            case 30: // Flame Thrower
+            case 54:
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponFlamer, 100, nItem, rTint, gTint);
+                return;
+            }
+
+            case 32: // Cobra Staff
+            case 56:
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponStaff, 20, nItem, rTint, gTint);
+                return;
+            }
+
+            case 33: // Eye of Ra Gauntlet
+            case 57:
+            {
+                WeaponPickup(nPlayer, nPickupSprite, kWeaponRing, 2, nItem, rTint, gTint);
+                return;
+            }
+
+            case 37: // Cobra staff ammo
+            {
+                if (AddAmmo(nPlayer, 5, 1))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 38: // Raw Energy
+            {
+                if (AddAmmo(nPlayer, 6, sprite[nPickupSprite].hitag))
+                {
+                    nPickupSound = StaticSound[kSoundAmmoPickup];
+                    PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                    break;
+                }
+
+                return;
+            }
+
+            case 45: // Power key
+            {
+                PlayerPickupKey(nPlayer, 0, nPickupSprite, nItem);
+                return;
+            }
+            case 46: // Time key
+            {
+                PlayerPickupKey(nPlayer, 1, nPickupSprite, nItem);
+                return;
+            }
+            case 47: // War key
+            {
+                PlayerPickupKey(nPlayer, 2, nPickupSprite, nItem);
+                return;
+            }
+            case 48: // Earth key
+            {
+                PlayerPickupKey(nPlayer, 3, nPickupSprite, nItem);
+                return;
+            }
+
+            case 49: // Magical Essence
+            case 50: // ?
+            {
+                if (PlayerList[nPlayer].nMagic >= kMaxMagic) {
+                    return;
+                }
+
+                nPickupSound = StaticSound[kSoundMana1];
+
+                PlayerList[nPlayer].nMagic += 100;
+                if (PlayerList[nPlayer].nMagic >= kMaxMagic) {
+                    PlayerList[nPlayer].nMagic = kMaxMagic;
+                }
+
+                if (nLocalPlayer == nPlayer)
+                {
+                    SetMagicFrame();
+                }
+
+                PlayerCheckItemRespawnOrDelete(nPickupSprite, nItem);
+                break;
+            }
+
+            case 59: // Scarab (Checkpoint)
+            {
+                if (g_kexMode && !KexCheckpoint_Mark(nPlayer, nPickupSprite))
+                    return;
+
+                if (nLocalPlayer == nPlayer)
+                {
+                    short nAnim = sprite[nPickupSprite].owner;
+                    AnimList[nAnim].nSeq++;
+                    AnimFlags[nAnim] &= 0xEF;
+                    AnimList[nAnim].nFrame = 0;
+
+                    changespritestat(nPickupSprite, 899);
+                }
+
+                if (!g_kexMode)
+                    SetSavePoint(nPlayer, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y,
+                                 sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
+                                 sprite[nPlayerSprite].ang);
+                return;
+            }
+
+            case 60: // Golden Sarcophagus (End Level)
+            {
+                // Map_Tomb2 is source map index 22.  Accept the original
+                // bridge's 24 tag too so already-converted data still enters
+                // Tomb End; fresh conversion writes 22.
+                if (g_kexMode && (sprite[nPickupSprite].hitag == 22
+                                  || sprite[nPickupSprite].hitag == 24))
+                {
+                    KexTravel_ChangeMap(22); // Obj_Ramses_Body -> Map_Tomb2
+                    // Native commits the newly selected destination and the
+                    // updated unlock vector to the active campaign slot.
+                    menu_GameSave(SavePosition);
+                    DestroyItemAnim(nPickupSprite);
+                    mydeletesprite(nPickupSprite);
+                    return;
+                }
+                if (g_kexMode && sprite[nPickupSprite].hitag == 1)
+                {
+                    // Obj_WarpPryamid requests a save before returning to
+                    // the campaign's Tomb hub (Map_Tomb1).
+                    SetSavePoint(nPlayer, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y,
+                                 sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
+                                 sprite[nPlayerSprite].ang);
+                    KexTravel_ChangeMap(0);
+                    // requestSave is evaluated after mapDestination, so the
+                    // slot records KEX_TOMB rather than the level being left.
+                    menu_GameSave(SavePosition);
+                    DestroyItemAnim(nPickupSprite);
+                    mydeletesprite(nPickupSprite);
+                    return;
+                }
+                if (g_kexMode && sprite[nPickupSprite].hitag == 0)
+                {
+                    // Obj_Camel is a Kex travel object: its destination is
+                    // the overworld, not the next numeric Build level.
+                    const char *next = KexMenu_ChooseNextMap(gUserMapFilename);
+                    if (next)
+                    {
+                        KexCampaign_StagePlayer(nPlayer);
+                        Bstrncpyz(gUserMapFilename, next, BMAX_PATH);
+                        bUserMap = true;
+                        levelnew = levelnum;
+                        menu_GameSave(SavePosition);
+                        DestroyItemAnim(nPickupSprite);
+                        mydeletesprite(nPickupSprite);
+                    }
+                    return;
+                }
+                // TOMBEND's Obj_Choppa is the remaster's travel object. Its
+                // giveArtifacts 63 flag completes the artifact set before
+                // FinishLevel selects the good or bad ending movie.
+                int const kexChoppa = g_kexMode && sprite[nPickupSprite].hitag == 63;
+                if (kexChoppa)
+                {
+                    for (int i = 0; i < kKexArtiCount; i++)
+                        KexInv_GiveArtifact(nPlayer, i);
+                    // Obj_Choppa's mapDestination -2 is terminal and its
+                    // requestSave runs after giveArtifacts. Mark the numeric
+                    // loop sentinel before saving so loading this slot cannot
+                    // replay TOMBEND or award the ending repeatedly.
+                    levelnew = 100;
+                    menu_GameSave(SavePosition);
+                }
+                if (!bInDemo) {
+                    FinishLevel();
+                }
+                else {
+                    // KB_Addch(32);
+                    bDemoPlayerFinishedLevel = true;
+                }
+
+                DestroyItemAnim(nPickupSprite);
+                mydeletesprite(nPickupSprite);
+                return;
+            }
+        }
+
+        SetItemPickupMessage(nPlayer, nItem);
+        if (g_kexMode)
+            ItemFlash();
+        else
+            TintPalette(rTint * 4, gTint * 4, 0);
+
+        if (nPickupSound > -1) {
+            PlayLocalSound(nPickupSound, 0);
+        }
+    }
+}
+
+void FuncPlayer(int a, int nDamage, int nRun)
+{
+    int var_48 = 0;
+
+    short nPlayer = RunData[nRun].nVal;
+    assert(nPlayer >= 0 && nPlayer < kMaxPlayers);
+
+    if (PlayerList[nPlayer].someNetVal == -1)
+        return;
+
+    short nPlayerSprite = PlayerList[nPlayer].nSprite;
+
+    short nDopple = nDoppleSprite[nPlayer];
+
+    short nAction = PlayerList[nPlayer].nAction;
+    short nActionB = PlayerList[nPlayer].nAction;
+
+    int nMessage = a & kMessageMask;
+
+    short nSprite2;
+
+    PlayerList[nPlayer].opos = sprite[nPlayerSprite].xyz;
+    PlayerList[nPlayer].q16oangle = PlayerList[nPlayer].q16angle;
+    PlayerList[nPlayer].q16ohoriz = PlayerList[nPlayer].q16horiz;
+    oeyelevel[nPlayer] = eyelevel[nPlayer];
+
+    switch (nMessage)
+    {
+        case 0x90000:
+        {
+            seq_PlotSequence(a & 0xFFFF, SeqOffsets[PlayerList[nPlayer].nSeq] + ActionSeq[nAction].a, PlayerList[nPlayer].nFrame, ActionSeq[nAction].b);
+            return;
+        }
+
+        case 0xA0000:
+        {
+            if (PlayerList[nPlayer].nHealth <= 0) {
+                return;
+            }
+
+            nDamage = runlist_CheckRadialDamage(nPlayerSprite);
+            if (!nDamage) {
+                return;
+            }
+
+            nSprite2 = nRadialOwner;
+            // fall through to case 0x80000
+            fallthrough__;
+        }
+
+        case 0x80000:
+        {
+            // Dunno how to do this otherwise... we fall through from above but don't want to do this check..
+            if (nMessage != 0xA0000)
+            {
+                if (!nDamage) {
+                    return;
+                }
+
+                nSprite2 = a & 0xFFFF;
+            }
+
+            // ok continue case 0x80000 as normal, loc_1C57C
+            if (!PlayerList[nPlayer].nHealth) {
+                return;
+            }
+
+            if (!PlayerList[nPlayer].invincibility)
+            {
+                PlayerList[nPlayer].nHealth -= nDamage;
+                if (nPlayer == nLocalPlayer)
+                {
+                    // kexPuppet::OnDamage skips the ordinary red flash for
+                    // a surviving force-field electrocution, whose green
+                    // ElectrocuteFlash is started by KexForce_OnWallHit.
+                    if (!g_kexMode || !KexForce_IsElectrocuted(nPlayerSprite)
+                        || PlayerList[nPlayer].nHealth <= 0)
+                    {
+                        if (g_kexMode)
+                            KexHud_DamageFlash();
+                        else
+                            TintPalette(nDamage, 0, 0);
+                    }
+                    if (g_kexMode)
+                        KexPlayer_DamageFeedback(nPlayer, nPlayerSprite, nSprite2);
+                    SetHealthFrame(-1);
+                }
+            }
+
+            if (PlayerList[nPlayer].nHealth > 0)
+            {
+                if (nDamage > 40 || (totalmoves & 0xF) < 2)
+                {
+                    if (PlayerList[nPlayer].invincibility) {
+                        return;
+                    }
+
+                    if (SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater)
+                    {
+                        if (nAction != 12)
+                        {
+                            PlayerList[nPlayer].nFrame = 0;
+                            PlayerList[nPlayer].nAction = 12;
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        if (nAction != 4)
+                        {
+                            PlayerList[nPlayer].nFrame = 0;
+                            PlayerList[nPlayer].nAction = 4;
+
+                            if (!g_kexMode && nSprite2 > -1)
+                            {
+                                nPlayerSwear[nPlayer]--;
+                                if (nPlayerSwear[nPlayer] <= 0)
+                                {
+                                    D3PlayFX(StaticSound[kSoundJonHit3], nDopple);
+                                    nPlayerSwear[nPlayer] = RandomSize(3) + 4;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return;
+            }
+            else
+            {
+                // player has died
+                if (nSprite2 > -1 && sprite[nSprite2].statnum == 100)
+                {
+                    short nPlayer2 = GetPlayerFromSprite(nSprite2);
+
+                    if (nPlayer2 == nPlayer) // player caused their own death
+                    {
+                        nPlayerScore[nPlayer]--;
+                    }
+                    else
+                    {
+                        nPlayerScore[nPlayer]++;
+                    }
+                }
+                else if (nSprite2 < 0)
+                {
+                    nPlayerScore[nPlayer]--;
+                }
+
+                if (nMessage == 0xA0000)
+                {
+                    for (int i = 122; i <= 131; i++)
+                    {
+                        BuildCreatureChunk(nPlayerSprite, seq_GetSeqPicnum(kSeqJoe, i, 0));
+                    }
+
+                    StartDeathSeq(nPlayer, 1);
+                }
+                else
+                {
+                    StartDeathSeq(nPlayer, 0);
+                }
+            }
+
+            return;
+        }
+
+        case 0x20000:
+        {
+            sprite[nPlayerSprite].xvel = sPlayerInput[nPlayer].xVel >> 14;
+            sprite[nPlayerSprite].yvel = sPlayerInput[nPlayer].yVel >> 14;
+
+            if (sPlayerInput[nPlayer].nItem > -1)
+            {
+                UseItem(nPlayer, sPlayerInput[nPlayer].nItem);
+                sPlayerInput[nPlayer].nItem = -1;
+            }
+
+            int var_EC = PlayerList[nPlayer].nFrame;
+
+            sprite[nPlayerSprite].picnum = seq_GetSeqPicnum(PlayerList[nPlayer].nSeq, ActionSeq[nHeightTemplate[nAction]].a, var_EC);
+            sprite[nDopple].picnum = sprite[nPlayerSprite].picnum;
+
+            // for showing correct player animations for player sprite on 2D map mode
+            nMapPic = seq_GetSeqPicnum(PlayerList[nPlayer].nSeq, ActionSeq[nAction].a, PlayerList[nPlayer].nFrame);
+
+            if (nPlayerTorch[nPlayer] > 0)
+            {
+                nPlayerTorch[nPlayer]--;
+                if (nPlayerTorch[nPlayer] == 0)
+                {
+                    SetTorch(nPlayer, 0);
+                }
+                else
+                {
+                    if (nPlayer != nLocalPlayer)
+                    {
+                        nFlashDepth = 5;
+                        AddFlash(sprite[nPlayerSprite].sectnum,
+                            sprite[nPlayerSprite].x,
+                            sprite[nPlayerSprite].y,
+                            sprite[nPlayerSprite].z, 0);
+                    }
+                }
+            }
+
+            if (nPlayerDouble[nPlayer] > 0)
+            {
+                nPlayerDouble[nPlayer]--;
+                if (nPlayerDouble[nPlayer] == 150 && nPlayer == nLocalPlayer) {
+                    PlayAlert("WEAPON POWER IS ABOUT TO EXPIRE");
+                }
+            }
+
+            if (nPlayerInvisible[nPlayer] > 0)
+            {
+                nPlayerInvisible[nPlayer]--;
+                if (nPlayerInvisible[nPlayer] == 0)
+                {
+                    sprite[nPlayerSprite].cstat &= 0x7FFF; // set visible
+                    short nFloorSprite = nPlayerFloorSprite[nPlayerSprite];
+
+                    if (nFloorSprite > -1) {
+                        sprite[nFloorSprite].cstat &= 0x7FFF; // set visible
+                    }
+                }
+                else if (nPlayerInvisible[nPlayer] == 150 && nPlayer == nLocalPlayer)
+                {
+                    PlayAlert("INVISIBILITY IS ABOUT TO EXPIRE");
+                }
+            }
+
+            if (PlayerList[nPlayer].invincibility > 0)
+            {
+                PlayerList[nPlayer].invincibility--;
+                if (PlayerList[nPlayer].invincibility == 150 && nPlayer == nLocalPlayer) {
+                    PlayAlert("INVINCIBILITY IS ABOUT TO EXPIRE");
+                }
+            }
+
+            if (nQuake[nPlayer] != 0)
+            {
+                nQuake[nPlayer] = -nQuake[nPlayer];
+                if (nQuake[nPlayer] > 0)
+                {
+                    nQuake[nPlayer] -= 512;
+                    if (nQuake[nPlayer] < 0)
+                        nQuake[nPlayer] = 0;
+                }
+            }
+
+            // loc_1A494:
+            PlayerList[nPlayer].q16angle = (PlayerList[nPlayer].q16angle + sPlayerInput[nPlayer].nAngle) & 0x7FFFFFF;
+            PlayerList[nPlayer].q16horiz = sPlayerInput[nPlayer].horizon;
+            sprite[nPlayerSprite].ang = fix16_to_int(PlayerList[nPlayer].q16angle);
+
+            // sprite[nPlayerSprite].zvel is modified within Gravity()
+            short zVel = sprite[nPlayerSprite].zvel;
+
+            Gravity(nPlayerSprite);
+
+            if (sprite[nPlayerSprite].zvel >= 6500 && zVel < 6500)
+            {
+                D3PlayFX(StaticSound[kSoundJonFall], nPlayerSprite);
+            }
+
+            // loc_1A4E6
+            short nSector = sprite[nPlayerSprite].sectnum;
+            short nSectFlag = SectFlag[nPlayerViewSect[nPlayer]];
+
+            int playerX = sprite[nPlayerSprite].x;
+            int playerY = sprite[nPlayerSprite].y;
+
+            int x = (sPlayerInput[nPlayer].xVel * 4) >> 2;
+            int y = (sPlayerInput[nPlayer].yVel * 4) >> 2;
+
+            // The Dolphin ability begins at ten team dolls and doubles the
+            // remaster's swimming acceleration.
+            if (g_kexMode && (SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater)
+                && KexInv_DollCount(nPlayer) >= KEX_DOLLS_DOLPHIN)
+            {
+                x *= 2;
+                y *= 2;
+            }
+            int z = (sprite[nPlayerSprite].zvel * 4) >> 2;
+
+            if (sprite[nPlayerSprite].zvel > 8192)
+                sprite[nPlayerSprite].zvel = 8192;
+
+            if (PlayerList[nPlayer].bIsMummified)
+            {
+                x /= 2;
+                y /= 2;
+            }
+
+            int spr_x = sprite[nPlayerSprite].x;
+            int spr_y = sprite[nPlayerSprite].y;
+            int spr_z = sprite[nPlayerSprite].z;
+            int spr_sectnum = sprite[nPlayerSprite].sectnum;
+
+            // TODO
+            // nSectFlag & kSectUnderwater;
+
+            zVel = sprite[nPlayerSprite].zvel;
+
+            int nMove = 0; // TEMP
+
+            // VibeBuild32 test hook: VB_KEX_WALK=<ticks> walks the player
+            // straight ahead for that many ticks, then logs where it got to
+            // (Kex units), so a step or a sill can be tried without a hand
+            // on the keys.
+            {
+                static int s_kexWalk = -1;
+                if (s_kexWalk < 0)
+                {
+                    char const *const env = Bgetenv("VB_KEX_WALK");
+                    s_kexWalk = env ? Batoi(env) : 0;
+                }
+                if (s_kexWalk > 0)
+                {
+                    x = Cos(sprite[nPlayerSprite].ang) * 12;
+                    y = Sin(sprite[nPlayerSprite].ang) * 12;
+                    --s_kexWalk;
+                    if (s_kexWalk % 100 == 0)
+                        LOG_F(INFO, "Kex walk: %d ticks left, at build (%d, %d, %d) ang %d, kex (%d, %d, %d), sector %d",
+                              s_kexWalk, sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z,
+                              sprite[nPlayerSprite].ang, sprite[nPlayerSprite].x / 6, -sprite[nPlayerSprite].y / 6,
+                              -sprite[nPlayerSprite].z / 96, sprite[nPlayerSprite].sectnum);
+                }
+            }
+
+            if (bSlipMode)
+            {
+                nMove = 0;
+
+                sprite[nPlayerSprite].x += (x >> 14);
+                sprite[nPlayerSprite].y += (y >> 14);
+
+                vec3_t pos = { sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z };
+                setsprite(nPlayerSprite, &pos);
+
+                sprite[nPlayerSprite].z = sector[sprite[nPlayerSprite].sectnum].floorz;
+            }
+            else
+            {
+                nMove = movesprite(nPlayerSprite, x, y, z, 5120, -Kex_PlayerStep(), CLIPMASK0);
+
+                short var_54 = sprite[nPlayerSprite].sectnum;
+
+                pushmove_old(&sprite[nPlayerSprite].x, &sprite[nPlayerSprite].y, &sprite[nPlayerSprite].z, &var_54, sprite[nPlayerSprite].clipdist << 2, 5120, -Kex_PlayerStep(), CLIPMASK0);
+                if (var_54 != sprite[nPlayerSprite].sectnum) {
+                    mychangespritesect(nPlayerSprite, var_54);
+                }
+
+                // Vanilla change: Below block moved up from below, so it's only if we're not in noclip mode.
+                if (inside(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].sectnum) != 1)
+                {
+                    mychangespritesect(nPlayerSprite, spr_sectnum);
+
+                    sprite[nPlayerSprite].x = spr_x;
+                    sprite[nPlayerSprite].y = spr_y;
+
+                    if (zVel < sprite[nPlayerSprite].zvel) {
+                        sprite[nPlayerSprite].zvel = zVel;
+                    }
+                }
+            }
+
+            // loc_1A6E4
+#if 0 // Vanilla change: this block moved above. Don't do this check if we're in noclip cheat mode so we can walk through all walls.
+            if (inside(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].sectnum) != 1)
+            {
+                mychangespritesect(nPlayerSprite, spr_sectnum);
+
+                sprite[nPlayerSprite].x = spr_x;
+                sprite[nPlayerSprite].y = spr_y;
+
+                if (zVel < sprite[nPlayerSprite].zvel) {
+                    sprite[nPlayerSprite].zvel = zVel;
+                }
+            }
+#endif
+
+//			int _bTouchFloor = bTouchFloor;
+            short bUnderwater = SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater;
+
+            if (bUnderwater)
+            {
+                nXDamage[nPlayer] /= 2;
+                nYDamage[nPlayer] /= 2;
+            }
+
+            // Trigger Ramses?
+            if ((SectFlag[sprite[nPlayerSprite].sectnum] & 0x8000) && bTouchFloor)
+            {
+                if (nTotalPlayers <= 1)
+                {
+                    PlayerList[nPlayer].q16angle = fix16_from_int(GetAngleToSprite(nPlayerSprite, nSpiritSprite) & kAngleMask);
+                    PlayerList[nPlayer].q16oangle = PlayerList[nPlayer].q16angle;
+                    sprite[nPlayerSprite].ang = fix16_to_int(PlayerList[nPlayer].q16angle);
+
+                    PlayerList[nPlayer].q16ohoriz = PlayerList[nPlayer].q16horiz = nVertPan[nPlayer] = F16(92);
+
+                    lPlayerXVel = 0;
+                    lPlayerYVel = 0;
+
+                    sprite[nPlayerSprite].xvel = 0;
+                    sprite[nPlayerSprite].yvel = 0;
+                    sprite[nPlayerSprite].zvel = 0;
+
+                    nPlayerDAng = 0;
+
+                    if (nFreeze < 1)
+                    {
+                        nFreeze = 1;
+                        StopAllSounds();
+                        StopLocalSound();
+                        InitSpiritHead();
+
+                        nDestVertPan[nPlayer] = F16(92);
+
+                        if (levelnum == 11)
+                        {
+                            nDestVertPan[nPlayer] += F16(46);
+                        }
+                        else
+                        {
+                            nDestVertPan[nPlayer] += F16(11);
+                        }
+                    }
+                }
+                else
+                {
+                    FinishLevel();
+                }
+
+                return;
+            }
+
+            if (nMove & 0x3C000)
+            {
+                if (bTouchFloor)
+                {
+                    // Damage stuff..
+                    nXDamage[nPlayer] /= 2;
+                    nYDamage[nPlayer] /= 2;
+
+                    if (nPlayer == nLocalPlayer)
+                    {
+                        short zVelB = zVel;
+
+                        if (zVelB < 0) {
+                            zVelB = -zVelB;
+                        }
+
+                        if (zVelB > 512 && !bLockPan) {
+                            nDestVertPan[nPlayer] = F16(92);
+                        }
+                    }
+
+                    if (g_kexMode)
+                    {
+                        // kexPuppet::CheckFallDamage(): its 60 Hz velocity
+                        // unit is 96 Build Z units, while this port updates
+                        // at 30 Hz. Thus 28.5 * 96 * 2 = 5472 here, and
+                        // (-amt * 16) becomes (zVel - 5472) / 12.
+                        int nDamage = (zVel - 5472) / 12;
+                        nDamage *= KexInv_AnkhCount(nPlayer) + 1;
+
+                        if (nDamage > 0)
+                        {
+                            sprite[nPlayerSprite].xvel >>= 2;
+                            sprite[nPlayerSprite].yvel >>= 2;
+
+                            runlist_DamageEnemy(nPlayerSprite, -1, (short)nDamage);
+
+                            if (PlayerList[nPlayer].nHealth <= 0)
+                            {
+                                int const sound = KexSound_Get("jon_fdie");
+                                if (sound >= 0)
+                                    D3PlayFX(sound, nPlayerSprite);
+                            }
+                        }
+                    }
+                    else if (zVel >= 6500)
+                    {
+                        sprite[nPlayerSprite].xvel >>= 2;
+                        sprite[nPlayerSprite].yvel >>= 2;
+
+                        runlist_DamageEnemy(nPlayerSprite, -1, ((zVel - 6500) >> 7) + 10);
+
+                        if (PlayerList[nPlayer].nHealth <= 0)
+                        {
+                            sprite[nPlayerSprite].xvel = 0;
+                            sprite[nPlayerSprite].yvel = 0;
+
+                            StopSpriteSound(nPlayerSprite);
+					    PlayFXAtXYZ(StaticSound[kSoundJonFDie], sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum |= 0x4000); // CHECKME
+                        }
+                        else
+                        {
+                            D3PlayFX(StaticSound[kSoundJonHLand] | 0x2000, nPlayerSprite);
+                        }
+                    }
+                }
+
+                if (((nMove & 0xC000) == 0x4000) || ((nMove & 0xC000) == 0x8000))
+                {
+                    int bx = 0;
+
+                    if ((nMove & 0xC000) == 0x4000)
+                    {
+                        bx = nMove & 0x3FFF;
+                    }
+                    else if ((nMove & 0xC000) == 0x8000)
+                    {
+                        bx = wall[nMove & 0x3FFF].nextsector;
+                    }
+
+                    if (bx >= 0)
+                    {
+                        int var_B4 = bx;
+
+                        if ((sector[bx].hitag == 45) && bTouchFloor)
+                        {
+                            int nNormal = GetWallNormal(nMove & 0x3FFF);
+                            int nDiff = AngleDiff(nNormal, (sprite[nPlayerSprite].ang + 1024) & kAngleMask);
+
+                            if (nDiff < 0) {
+                                nDiff = -nDiff;
+                            }
+
+                            if (nDiff <= 256)
+                            {
+                                nPlayerPushSect[nPlayer] = bx;
+
+                                int var_F4 = sPlayerInput[nPlayer].xVel;
+                                int var_F8 = sPlayerInput[nPlayer].yVel;
+                                int nMyAngle = GetMyAngle(sPlayerInput[nPlayer].xVel, sPlayerInput[nPlayer].yVel);
+
+                                MoveSector(var_B4, nMyAngle, &var_F4, &var_F8);
+
+                                if (nPlayerPushSound[nPlayer] <= -1)
+                                {
+                                    nPlayerPushSound[nPlayer] = 1;
+                                    short nBlock = sector[nPlayerPushSect[nPlayer]].extra;
+                                    int nBlockSprite = sBlockInfo[nBlock].nSprite;
+
+                                    D3PlayFX(StaticSound[kSoundAmbientStone], nBlockSprite | 0x4000);
+                                }
+                                else
+                                {
+                                    sprite[nPlayerSprite].x = spr_x;
+                                    sprite[nPlayerSprite].y = spr_y;
+                                    sprite[nPlayerSprite].z = spr_z;
+
+                                    mychangespritesect(nPlayerSprite, spr_sectnum);
+                                }
+
+                                movesprite(nPlayerSprite, var_F4, var_F8, z, 5120, -Kex_PlayerStep(), CLIPMASK0);
+                                goto loc_1AB8E;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // loc_1AB46:
+            if (nPlayerPushSound[nPlayer] > -1)
+            {
+                if (nPlayerPushSect[nPlayer] > -1)
+                {
+                    StopSpriteSound(sBlockInfo[sector[nPlayerPushSect[nPlayer]].extra].nSprite);
+                }
+
+                nPlayerPushSound[nPlayer] = -1;
+            }
+
+loc_1AB8E:
+            if (!bPlayerPan && !bLockPan)
+            {
+                fix16_t nPanVal = fix16_from_int(spr_z - sprite[nPlayerSprite].z) / 32 + F16(92);
+
+                if (nPanVal < F16(0)) {
+                    nPanVal = F16(0);
+                }
+                else if (nPanVal > F16(183))
+                {
+                    nPanVal = F16(183);
+                }
+
+                nDestVertPan[nPlayer] = nPanVal;
+            }
+
+            playerX -= sprite[nPlayerSprite].x;
+            playerY -= sprite[nPlayerSprite].y;
+
+            uint32_t sqrtNum = playerX * playerX + playerY * playerY;
+
+            if (sqrtNum > INT_MAX)
+            {
+                OSD_Printf("%s %d: overflow\n", EDUKE32_FUNCTION, __LINE__);
+                sqrtNum = INT_MAX;
+            }
+
+            totalvel[nPlayer] = ksqrt(sqrtNum);
+
+            int nViewSect = sprite[nPlayerSprite].sectnum;
+
+            int EyeZ = eyelevel[nPlayer] + sprite[nPlayerSprite].z + nQuake[nPlayer];
+
+            while (1)
+            {
+                int nCeilZ = sector[nViewSect].ceilingz;
+
+                if (EyeZ >= nCeilZ)
+                    break;
+
+                if (SectAbove[nViewSect] <= -1)
+                    break;
+
+                nViewSect = SectAbove[nViewSect];
+            }
+
+            // Do underwater sector check
+            if (bUnderwater)
+            {
+                if (nViewSect != sprite[nPlayerSprite].sectnum)
+                {
+                    if ((nMove & 0xC000) == 0x8000)
+                    {
+                        int prevX = sprite[nPlayerSprite].x;
+                        int prevY = sprite[nPlayerSprite].y;
+                        int prevZ = sprite[nPlayerSprite].z;
+                        int prevSect = sprite[nPlayerSprite].sectnum;
+
+                        mychangespritesect(nPlayerSprite, nViewSect);
+
+                        sprite[nPlayerSprite].x = spr_x;
+                        sprite[nPlayerSprite].y = spr_y;
+
+                        int newZ = sector[nViewSect].floorz + (-5120);
+                        sprite[nPlayerSprite].z = newZ;
+
+                        if ((movesprite(nPlayerSprite, x, y, 0, 5120, 0, CLIPMASK0) & 0xC000) == 0x8000)
+                        {
+                            mychangespritesect(nPlayerSprite, prevSect);
+
+                            sprite[nPlayerSprite].x = prevX;
+                            sprite[nPlayerSprite].y = prevY;
+                            sprite[nPlayerSprite].z = prevZ;
+                        }
+                        else
+                        {
+                            sprite[nPlayerSprite].z = newZ - 256;
+                            D3PlayFX(StaticSound[kSoundJonWade], nPlayerSprite);
+                        }
+                    }
+                }
+            }
+
+            // loc_1ADAF
+            nPlayerViewSect[nPlayer] = nViewSect;
+
+            nPlayerDX[nPlayer] = sprite[nPlayerSprite].x - spr_x;
+            nPlayerDY[nPlayer] = sprite[nPlayerSprite].y - spr_y;
+
+            int var_5C = SectFlag[nViewSect] & kSectUnderwater;
+
+            uint16_t buttons = sPlayerInput[nPlayer].buttons;
+            if (nPlayer == nLocalPlayer && KexInv_TestFire())
+                buttons |= kButtonFire;         // the Manacle self-test holding the trigger
+
+            if (buttons & kButtonCheatGodMode) // LOBODEITY cheat
+            {
+                char strDeity[96]; // TODO - reduce in size?
+
+                const char *strDMode = NULL;
+
+                if (PlayerList[nPlayer].invincibility >= 0)
+                {
+                    PlayerList[nPlayer].invincibility = -1;
+                    strDMode = "ON";
+                }
+                else
+                {
+                    PlayerList[nPlayer].invincibility = 0;
+                    strDMode = "OFF";
+                }
+
+                sPlayerInput[nPlayer].buttons &= 0xBF;
+
+                sprintf(strDeity, "Deity mode %s for player", strDMode);
+                StatusMessage(150, strDeity);
+            }
+            else if (buttons & kButtonCheatGuns) // LOBOCOP cheat
+            {
+                FillWeapons(nPlayer);
+                StatusMessage(150, "All weapons loaded for player");
+            }
+            else if (buttons & kButtonCheatKeys) // LOBOPICK cheat
+            {
+                PlayerList[nPlayer].keys = 0xFFFF;
+                StatusMessage(150, "All keys loaded for player");
+                RefreshStatus();
+            }
+            else if (buttons & kButtonCheatItems) // LOBOSWAG cheat
+            {
+                FillItems(nPlayer);
+                StatusMessage(150, "All items loaded for player");
+            }
+
+            // loc_1AEF5:
+            if (PlayerList[nPlayer].nHealth > 0)
+            {
+                if (!g_kexMode && PlayerList[nPlayer].nMaskAmount > 0)
+                {
+                    PlayerList[nPlayer].nMaskAmount--;
+                    if (PlayerList[nPlayer].nMaskAmount == 150 && nPlayer == nLocalPlayer) {
+                        PlayAlert("MASK IS ABOUT TO EXPIRE");
+                    }
+                }
+
+                if (g_kexMode)
+                {
+                    KexAirSupply_Update(nPlayer, nPlayerSprite, var_5C);
+                    KexAirSupply_RunSelftest(nPlayer, nPlayerSprite);
+                }
+                else if (!PlayerList[nPlayer].invincibility)
+                {
+                    // Handle air
+                    nBreathTimer[nPlayer]--;
+
+                    if (nBreathTimer[nPlayer] <= 0)
+                    {
+                        nBreathTimer[nPlayer] = 90;
+
+                        // if underwater
+                        if (var_5C)
+                        {
+                            airpages = 1;
+                            if (PlayerList[nPlayer].nMaskAmount > 0
+                                || (g_kexMode && KexInv_HasArtifact(nPlayer, kKexArtiMask)))
+                            {
+                                if (nPlayer == nLocalPlayer) {
+                                    BuildStatusAnim(132, 0);
+                                }
+
+                                D3PlayFX(StaticSound[kSoundJonScuba], nPlayerSprite);
+
+                                PlayerList[nPlayer].nAir = 100;
+                            }
+                            else
+                            {
+                                PlayerList[nPlayer].nAir -= 25;
+                                if (PlayerList[nPlayer].nAir > 0)
+                                {
+                                    D3PlayFX(StaticSound[kSoundBubbleHigh], nPlayerSprite);
+                                }
+                                else
+                                {
+                                    PlayerList[nPlayer].nHealth += (PlayerList[nPlayer].nAir << 2);
+                                    if (PlayerList[nPlayer].nHealth <= 0)
+                                    {
+                                        PlayerList[nPlayer].nHealth = 0;
+                                        StartDeathSeq(nPlayer, 0);
+                                    }
+
+                                    if (nPlayer == nLocalPlayer)
+                                    {
+                                        SetHealthFrame(-1);
+                                    }
+
+                                    PlayerList[nPlayer].nAir = 0;
+
+                                    if (PlayerList[nPlayer].nHealth < 300)
+                                    {
+                                        D3PlayFX(StaticSound[kSoundJonAir2], nPlayerSprite);
+                                    }
+                                    else
+                                    {
+                                        D3PlayFX(StaticSound[kSoundJonAir1], nPlayerSprite);
+                                    }
+                                }
+                            }
+
+                            DoBubbles(nPlayer);
+                            SetAirFrame();
+                        }
+                        else
+                        {
+                            if (nPlayer == nLocalPlayer)
+                            {
+                                BuildStatusAnim(132, 0);
+                            }
+
+                            airpages = 0;
+                        }
+                    }
+                }
+
+                // loc_1B0B9
+                if (var_5C) // if underwater
+                {
+                    if (nPlayerTorch[nPlayer] > 0)
+                    {
+                        nPlayerTorch[nPlayer] = 0;
+                        SetTorch(nPlayer, 0);
+                    }
+                }
+                else
+                {
+                    int nTmpSectNum = sprite[nPlayerSprite].sectnum;
+
+                    if (totalvel[nPlayer] > 25 && sprite[nPlayerSprite].z > sector[nTmpSectNum].floorz)
+                    {
+                        if (SectDepth[nTmpSectNum] && !SectSpeed[nTmpSectNum] && !SectDamage[nTmpSectNum])
+                        {
+                            D3PlayFX(StaticSound[kSoundJonWade], nPlayerSprite);
+                        }
+                    }
+
+                    if (!g_kexMode)
+                    {
+                        // CHECKME - wrong place?
+                        if (nSectFlag & kSectUnderwater)
+                        {
+                            if (PlayerList[nPlayer].nAir < 50)
+                            {
+                                D3PlayFX(StaticSound[kSoundJonGasp], nPlayerSprite);
+                            }
+
+                            nBreathTimer[nPlayer] = 1;
+                        }
+
+                        airpages = 0;
+
+                        nBreathTimer[nPlayer]--;
+                        if (nBreathTimer[nPlayer] <= 0)
+                        {
+                            nBreathTimer[nPlayer] = 90;
+                            if (nPlayer == nLocalPlayer)
+                            {
+                                // animate lungs
+                                BuildStatusAnim(132, 0);
+                            }
+                        }
+
+                        if (PlayerList[nPlayer].nAir < 100)
+                        {
+                            PlayerList[nPlayer].nAir = 100;
+                            SetAirFrame();
+                        }
+                    }
+                }
+
+                // loc_1B1EB
+                if (nTotalPlayers > 1)
+                {
+                    int nFloorSprite = nPlayerFloorSprite[nPlayer];
+
+                    sprite[nFloorSprite].x = sprite[nPlayerSprite].x;
+                    sprite[nFloorSprite].y = sprite[nPlayerSprite].y;
+
+                    if (sprite[nFloorSprite].sectnum != sprite[nPlayerSprite].sectnum)
+                    {
+                        mychangespritesect(nFloorSprite, sprite[nPlayerSprite].sectnum);
+                    }
+
+                    sprite[nFloorSprite].z = sector[sprite[nPlayerSprite].sectnum].floorz;
+                }
+
+                int var_30 = 0;
+
+                if (PlayerList[nPlayer].nHealth >= KexInv_MaxHealth(nPlayer))
+                {
+                    var_30 = 2;
+                }
+
+                if (PlayerList[nPlayer].nMagic >= kMaxMagic)
+                {
+                    var_30 |= 1;
+                }
+
+                // code to handle item pickup?
+                short nearTagSector, nearTagWall, nearTagSprite;
+                int nearHitDist;
+
+                int nPickupSprite;
+
+                // kexPlayer::TryUse traces from the actor origin through its
+                // 95.25-unit radius plus 64 units: 159.25 * WORLD(6), rounded
+                // to 956 Build units. Keep DOS's native 1024-unit reach.
+                int const useRange = g_kexMode ? 956 : 1024;
+                // neartag finds the nearest sector, wall, and sprite which has its hitag and/or lotag set to a value.
+                neartag(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum, sprite[nPlayerSprite].ang,
+                    &nearTagSector, &nearTagWall, &nearTagSprite, (int32_t*)&nearHitDist, useRange, 2, NULL);
+
+                feebtag(sprite[nPlayerSprite].x, sprite[nPlayerSprite].y, sprite[nPlayerSprite].z, sprite[nPlayerSprite].sectnum,
+                    &nPickupSprite, var_30, 768);
+
+                PlayerCheckItemPickup(nPlayer, nPickupSprite, var_30);
+
+                // CORRECT ? // loc_1BAF9:
+                if (bTouchFloor)
+                {
+                    if (sector[sprite[nPlayerSprite].sectnum].lotag > 0)
+                    {
+                        runlist_SignalRun(sector[sprite[nPlayerSprite].sectnum].lotag - 1, nPlayer | 0x50000);
+                    }
+                }
+
+                if (nSector != sprite[nPlayerSprite].sectnum)
+                {
+                    if (sector[nSector].lotag > 0)
+                    {
+                        runlist_SignalRun(sector[nSector].lotag - 1, nPlayer | 0x70000);
+                    }
+
+                    if (sector[sprite[nPlayerSprite].sectnum].lotag > 0)
+                    {
+                        runlist_SignalRun(sector[sprite[nPlayerSprite].sectnum].lotag - 1, nPlayer | 0x60000);
+                    }
+                }
+
+                if (!PlayerList[nPlayer].bIsMummified)
+                {
+                    if (buttons & kButtonOpen)
+                    {
+                        ClearSpaceBar(nPlayer);
+
+                        if (nearTagWall >= 0 && wall[nearTagWall].lotag > 0
+                            && (!g_kexMode || KexUse_WallAllowed(nearTagWall)))
+                        {
+                            runlist_SignalRun(wall[nearTagWall].lotag - 1, nPlayer | 0x40000);
+                        }
+
+                        if (nearTagSector >= 0 && sector[nearTagSector].lotag > 0
+                            && (!g_kexMode || KexUse_SectorAllowed(nearTagSector)))
+                        {
+                            // Kex event type 7 is a channel-driven door, but
+                            // UseWallSpecial() leaves it shut on direct use
+                            // and prints "$str_92".  Its construction marker
+                            // is Kex-only, so classic maps retain this path.
+                            if (!KexSealedDoor_Use(nearTagSector))
+                                runlist_SignalRun(sector[nearTagSector].lotag - 1, nPlayer | 0x40000);
+                        }
+                    }
+
+                    // was int var_38 = buttons & 0x8
+                    if (buttons & kButtonFire)
+                    {
+                        FireWeapon(nPlayer);
+                    }
+                    else
+                    {
+                        StopFiringWeapon(nPlayer);
+                    }
+
+                    // loc_1BC57:
+
+                    // CHECKME - are we finished with 'nSector' variable at this point? if so, maybe set it to sprite[nPlayerSprite].sectnum so we can make this code a bit neater. Don't assume sprite[nPlayerSprite].sectnum == nSector here!!
+                    if (nStandHeight > (sector[sprite[nPlayerSprite].sectnum].floorz - sector[sprite[nPlayerSprite].sectnum].ceilingz)) {
+                        var_48 = 1;
+                    }
+
+                    // Jumping
+                    if (buttons & kButtonJump)
+                    {
+                        if (bUnderwater)
+                        {
+                            sprite[nPlayerSprite].zvel = -2048;
+                            nActionB = 10;
+                        }
+                        else if (bTouchFloor)
+                        {
+                            if (nAction < 6 || nAction > 8)
+                            {
+                                // The Sandals of Ikumptet: a quarter higher.
+                                sprite[nPlayerSprite].zvel =
+                                    (g_kexMode && KexInv_HasArtifact(nPlayer, kKexArtiSandals)) ? -4480 : -3584;
+                                nActionB = 3;
+                            }
+                        }
+                        else if (g_kexMode && KexInv_DollCount(nPlayer) >= KEX_DOLLS_VULTURE)
+                        {
+                            // The vulture: at twenty-eight team dolls, jump
+                            // held in the air is flight.
+                            sprite[nPlayerSprite].zvel = -1536;
+                        }
+                        else if (g_kexMode && sprite[nPlayerSprite].zvel > 0)
+                        {
+                            // Jump held while falling: the Feather of Horus
+                            // hovers, the Shawl of Isis floats down.
+                            if (KexInv_HasArtifact(nPlayer, kKexArtiFeather))
+                                sprite[nPlayerSprite].zvel = min<int>(sprite[nPlayerSprite].zvel, 128);
+                            else if (KexInv_HasArtifact(nPlayer, kKexArtiShawl))
+                                sprite[nPlayerSprite].zvel = min<int>(sprite[nPlayerSprite].zvel, 1024);
+                        }
+
+                        // goto loc_1BE70:
+                    }
+                    else if (buttons & kButtonCrouch)
+                    {
+                        if (bUnderwater)
+                        {
+                            sprite[nPlayerSprite].zvel = 2048;
+                            nActionB = 10;
+                        }
+                        else
+                        {
+                            if (eyelevel[nPlayer] < -8320) {
+                                eyelevel[nPlayer] += ((-8320 - eyelevel[nPlayer]) >> 1);
+                            }
+
+loc_1BD2E:
+                            if (totalvel[nPlayer] < 1) {
+                                nActionB = 6;
+                            }
+                            else {
+                                nActionB = 7;
+                            }
+                        }
+
+                        // goto loc_1BE70:
+                    }
+                    else
+                    {
+                        if (PlayerList[nPlayer].nHealth > 0)
+                        {
+                            int var_EC = nActionEyeLevel[nAction];
+                            eyelevel[nPlayer] += (var_EC - eyelevel[nPlayer]) >> 1;
+
+                            if (bUnderwater)
+                            {
+                                if (totalvel[nPlayer] <= 1)
+                                    nActionB = 9;
+                                else
+                                    nActionB = 10;
+                            }
+                            else
+                            {
+                                // CHECKME - confirm branching in this area is OK
+                                if (var_48)
+                                {
+                                    goto loc_1BD2E;
+                                }
+                                else
+                                {
+                                    if (totalvel[nPlayer] <= 1) {
+                                        nActionB = 0;//bUnderwater; // this is just setting to 0
+                                    }
+                                    else if (totalvel[nPlayer] <= 30) {
+                                        nActionB = 2;
+                                    }
+                                    else
+                                    {
+                                        nActionB = 1;
+                                    }
+                                }
+                            }
+                        }
+                        // loc_1BE30
+                        if (buttons & kButtonFire) // was var_38
+                        {
+                            if (bUnderwater)
+                            {
+                                nActionB = 11;
+                            }
+                            else
+                            {
+                                if (nActionB != 2 && nActionB != 1)
+                                {
+                                    nActionB = 5;
+                                }
+                            }
+                        }
+                    }
+
+                    // loc_1BE70:
+                    // Handle player pressing number keys to change weapon
+                    uint8_t var_90 = (buttons >> 13) & 0xF;
+
+                    if (var_90)
+                    {
+                        var_90--;
+
+                        if (nPlayerWeapons[nPlayer] & (1 << var_90))
+                        {
+                            SetNewWeapon(nPlayer, var_90);
+                        }
+                    }
+                }
+                else // player is mummified
+                {
+                    if (buttons & kButtonFire)
+                    {
+                        FireWeapon(nPlayer);
+                    }
+
+                    if (nAction != 15)
+                    {
+                        if (totalvel[nPlayer] <= 1)
+                        {
+                            nActionB = 13;
+                        }
+                        else
+                        {
+                            nActionB = 14;
+                        }
+                    }
+                }
+
+                // loc_1BF09
+                if (nActionB != nAction && nAction != 4)
+                {
+                    nAction = nActionB;
+                    PlayerList[nPlayer].nAction = nActionB;
+                    PlayerList[nPlayer].nFrame = 0;
+                }
+
+                if (nPlayer == nLocalPlayer)
+                {
+                    // TODO - tidy / consolidate repeating blocks of code here?
+                    if (BUTTON(gamefunc_Look_Up))
+                    {
+                        bLockPan = kFalse;
+                        if (nVertPan[nPlayer] < F16(180)) {
+                            nVertPan[nPlayer] += F16(4);
+                        }
+
+                        bPlayerPan = kTrue;
+                        nDestVertPan[nPlayer] = nVertPan[nPlayer];
+                    }
+                    else if (BUTTON(gamefunc_Look_Down))
+                    {
+                        bLockPan = kFalse;
+                        if (nVertPan[nPlayer] > F16(4)) {
+                            nVertPan[nPlayer] -= F16(4);
+                        }
+
+                        bPlayerPan = kTrue;
+                        nDestVertPan[nPlayer] = nVertPan[nPlayer];
+                    }
+                    else if (BUTTON(gamefunc_Look_Straight) || bLookCentre)
+                    {
+                        bLockPan = kFalse;
+                        bPlayerPan = kFalse;
+                        nVertPan[nPlayer] = F16(92);
+                        nDestVertPan[nPlayer] = F16(92);
+
+                        if (bLookCentre) {
+                            bLookCentre = false;
+                        }
+                    }
+                    else if (BUTTON(gamefunc_Aim_Up))
+                    {
+                        bLockPan = kTrue;
+                        if (nVertPan[nPlayer] < F16(180)) {
+                            nVertPan[nPlayer] += F16(4);
+                        }
+
+                        bPlayerPan = kTrue;
+                        nDestVertPan[nPlayer] = nVertPan[nPlayer];
+                    }
+                    else if (BUTTON(gamefunc_Aim_Down))
+                    {
+                        bLockPan = kTrue;
+                        if (nVertPan[nPlayer] > F16(4)) {
+                            nVertPan[nPlayer] -= F16(4);
+                        }
+
+                        bPlayerPan = kTrue;
+                        nDestVertPan[nPlayer] = nVertPan[nPlayer];
+                    }
+
+                    // loc_1C048:
+                    if (totalvel[nPlayer] > 20) {
+                        bPlayerPan = kFalse;
+                    }
+
+                    if (aimmode)
+                        bLockPan = kTrue;
+
+                    // loc_1C05E
+                    fix16_t ecx = nDestVertPan[nPlayer] - nVertPan[nPlayer];
+
+                    if (aimmode)
+                    {
+                        ecx = 0;
+                    }
+
+                    if (ecx)
+                    {
+                        if (ecx / 4 == 0)
+                        {
+                            if (ecx >= 0) {
+                                ecx = 1;
+                            }
+                            else
+                            {
+                                ecx = -1;
+                            }
+                        }
+                        else
+                        {
+                            ecx /= 4;
+
+                            if (ecx > F16(4))
+                            {
+                                ecx = F16(4);
+                            }
+                            else if (ecx < -F16(4))
+                            {
+                                ecx = -F16(4);
+                            }
+                        }
+
+                        nVertPan[nPlayer] += ecx;
+                    }
+                }
+            }
+            else // else, player's health is less than 0
+            {
+                // loc_1C0E9
+                if (g_kexMode && nTotalPlayers == 1)
+                {
+                    KexCheckpoint_DeathTick(nPlayer);
+                }
+                else if (buttons & kButtonOpen)
+                {
+                    ClearSpaceBar(nPlayer);
+
+                    if (nAction >= 16)
+                    {
+                        if (nPlayer == nLocalPlayer)
+                        {
+                            StopAllSounds();
+                            StopLocalSound();
+                            GrabPalette();
+                        }
+
+                        PlayerList[nPlayer].nCurrentWeapon = nPlayerOldWeapon[nPlayer];
+
+                        if (nPlayerLives[nPlayer] && nNetTime)
+                        {
+                            if (nAction != 20)
+                            {
+                                sprite[nPlayerSprite].picnum = seq_GetSeqPicnum(kSeqJoe, 120, 0);
+                                sprite[nPlayerSprite].cstat = 0;
+                                sprite[nPlayerSprite].z = sector[sprite[nPlayerSprite].sectnum].floorz;
+                            }
+
+                            // will invalidate nPlayerSprite
+                            RestartPlayer(nPlayer);
+
+                            nPlayerSprite = PlayerList[nPlayer].nSprite;
+                            nDopple = nDoppleSprite[nPlayer];
+                        }
+                        else
+                        {
+                            if (CDplaying()) {
+                                fadecdaudio();
+                            }
+
+                            if (levelnum == 20) {
+                                DoFailedFinalScene();
+                            }
+                            else {
+                                DoGameOverScene();
+                            }
+
+                            levelnew = 100;
+                        }
+                    }
+                }
+            }
+
+            // loc_1C201:
+            if (nLocalPlayer == nPlayer)
+            {
+                nLocalEyeSect = nPlayerViewSect[nLocalPlayer];
+                CheckAmbience(nLocalEyeSect);
+            }
+
+            int var_AC = SeqOffsets[PlayerList[nPlayer].nSeq] + ActionSeq[nAction].a;
+
+            seq_MoveSequence(nPlayerSprite, var_AC, PlayerList[nPlayer].nFrame);
+            PlayerList[nPlayer].nFrame++;
+
+            if (PlayerList[nPlayer].nFrame >= SeqSize[var_AC])
+            {
+                PlayerList[nPlayer].nFrame = 0;
+
+                switch (PlayerList[nPlayer].nAction)
+                {
+                    default:
+                        break;
+
+                    case 3:
+                        PlayerList[nPlayer].nFrame = SeqSize[var_AC] - 1;
+                        break;
+                    case 4:
+                        PlayerList[nPlayer].nAction = 0;
+                        break;
+                    case 16:
+                        PlayerList[nPlayer].nFrame = SeqSize[var_AC] - 1;
+
+                        if (sprite[nPlayerSprite].z < sector[sprite[nPlayerSprite].sectnum].floorz) {
+                            sprite[nPlayerSprite].z += 256;
+                        }
+
+                        if (!RandomSize(5))
+                        {
+                            int mouthX, mouthY, mouthZ;
+                            short mouthSect;
+                            WheresMyMouth(nPlayer, &mouthX, &mouthY, &mouthZ, &mouthSect);
+
+                            BuildAnim(-1, 71, 0, mouthX, mouthY, sprite[nPlayerSprite].z + 3840, mouthSect, 75, 128);
+                        }
+                        break;
+                    case 17:
+                        PlayerList[nPlayer].nAction = 18;
+                        break;
+                    case 19:
+                        sprite[nPlayerSprite].cstat |= 0x8000;
+                        PlayerList[nPlayer].nAction = 20;
+                        break;
+                }
+            }
+
+            // loc_1C3B4:
+            if (nPlayer == nLocalPlayer)
+            {
+                initx = sprite[nPlayerSprite].x;
+                inity = sprite[nPlayerSprite].y;
+                initz = sprite[nPlayerSprite].z;
+                initsect = sprite[nPlayerSprite].sectnum;
+                inita = sprite[nPlayerSprite].ang;
+            }
+
+            if (!PlayerList[nPlayer].nHealth)
+            {
+                nYDamage[nPlayer] = 0;
+                nXDamage[nPlayer] = 0;
+
+                if (eyelevel[nPlayer] >= -2816)
+                {
+                    eyelevel[nPlayer] = -2816;
+                    dVertPan[nPlayer] = 0;
+                }
+                else
+                {
+                    if (nVertPan[nPlayer] < F16(92))
+                    {
+                        nVertPan[nPlayer] = F16(91);
+                        eyelevel[nPlayer] -= (dVertPan[nPlayer] << 8);
+                    }
+                    else
+                    {
+                        nVertPan[nPlayer] += fix16_from_int(dVertPan[nPlayer]);
+                        if (nVertPan[nPlayer] >= F16(200))
+                        {
+                            nVertPan[nPlayer] = F16(199);
+                        }
+                        else if (nVertPan[nPlayer] <= F16(92))
+                        {
+                            if (!(SectFlag[sprite[nPlayerSprite].sectnum] & kSectUnderwater))
+                            {
+                                SetNewWeapon(nPlayer, nDeathType[nPlayer] + 8);
+                            }
+                        }
+
+                        dVertPan[nPlayer]--;
+                    }
+                }
+            }
+
+            // loc_1C4E1
+            sprite[nDopple].x = sprite[nPlayerSprite].x;
+            sprite[nDopple].y = sprite[nPlayerSprite].y;
+            sprite[nDopple].z = sprite[nPlayerSprite].z;
+
+            if (SectAbove[sprite[nPlayerSprite].sectnum] > -1)
+            {
+                sprite[nDopple].ang = sprite[nPlayerSprite].ang;
+                mychangespritesect(nDopple, SectAbove[sprite[nPlayerSprite].sectnum]);
+                sprite[nDopple].cstat = 0x101;
+            }
+            else
+            {
+                sprite[nDopple].cstat = 0x8000;
+            }
+
+            MoveWeapons(nPlayer);
+            return;
+        }
+    }
+}
+
+class PlayerLoadSave : public LoadSave
+{
+public:
+    virtual void Load();
+    virtual void Save();
+};
+
+void PlayerLoadSave::Load()
+{
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Read(nBreathTimer, sizeof(nBreathTimer));
+        Read(s_kexNeedGasp, sizeof(s_kexNeedGasp));
+        Read(nPlayerSwear, sizeof(nPlayerSwear));
+        Read(nPlayerPushSect, sizeof(nPlayerPushSect));
+        Read(nDeathType, sizeof(nDeathType));
+        Read(nPlayerScore, sizeof(nPlayerScore));
+        Read(nPlayerColor, sizeof(nPlayerColor));
+        Read(nPlayerDY, sizeof(nPlayerDY));
+        Read(nPlayerDX, sizeof(nPlayerDX));
+        Read(playerNames, sizeof(playerNames));
+        Read(nPistolClip, sizeof(nPistolClip));
+        Read(nXDamage, sizeof(nXDamage));
+        Read(nYDamage, sizeof(nYDamage));
+        Read(nDoppleSprite, sizeof(nDoppleSprite));
+        Read(namelen, sizeof(namelen));
+        Read(nPlayerOldWeapon, sizeof(nPlayerOldWeapon));
+        Read(nPlayerClip, sizeof(nPlayerClip));
+        Read(nPlayerPushSound, sizeof(nPlayerPushSound));
+        Read(nTauntTimer, sizeof(nTauntTimer));
+        Read(nPlayerTorch, sizeof(nPlayerTorch));
+        Read(nPlayerWeapons, sizeof(nPlayerWeapons));
+        Read(nPlayerLives, sizeof(nPlayerLives));
+        Read(nPlayerItem, sizeof(nPlayerItem));
+        Read(PlayerList, sizeof(PlayerList));
+        Read(nPlayerInvisible, sizeof(nPlayerInvisible));
+        Read(nPlayerDouble, sizeof(nPlayerDouble));
+        Read(nPlayerViewSect, sizeof(nPlayerViewSect));
+        Read(nPlayerFloorSprite, sizeof(nPlayerFloorSprite));
+        Read(sPlayerSave, sizeof(sPlayerSave));
+        Read(totalvel, sizeof(totalvel));
+        Read(eyelevel, sizeof(eyelevel));
+        Read(oeyelevel, sizeof(oeyelevel));
+        Read(nNetStartSprite, sizeof(nNetStartSprite));
+        Read(&nStandHeight, sizeof(nStandHeight));
+        Read(nPlayerGrenade, sizeof(nPlayerGrenade));
+        Read(nGrenadePlayer, sizeof(nGrenadePlayer));
+        Read(word_D282A, sizeof(word_D282A));
+        Read(&PlayerCount, sizeof(PlayerCount));
+        Read(&nNetStartSprites, sizeof(nNetStartSprites));
+        Read(&nCurStartSprite, sizeof(nCurStartSprite));
+        // This is a local presentation handle, not world state. The joiner
+        // keeps its assigned local player and derives the correct sprite from
+        // the restored all-player table instead of inheriting the host's.
+        nLocalSpr = PlayerList[nLocalPlayer].nSprite;
+        return;
+    }
+
+    Read(&nBreathTimer[nLocalPlayer], sizeof(nBreathTimer[nLocalPlayer]));
+    Read(&s_kexNeedGasp[nLocalPlayer], sizeof(s_kexNeedGasp[nLocalPlayer]));
+    Read(&nPlayerSwear[nLocalPlayer], sizeof(nPlayerSwear[nLocalPlayer]));
+    Read(&nPlayerPushSect[nLocalPlayer], sizeof(nPlayerPushSect[nLocalPlayer]));
+    Read(&nDeathType[nLocalPlayer], sizeof(nDeathType[nLocalPlayer]));
+    Read(&nPlayerScore[nLocalPlayer], sizeof(nPlayerScore[nLocalPlayer]));
+    Read(&nPlayerColor[nLocalPlayer], sizeof(nPlayerColor[nLocalPlayer]));
+    Read(&nPlayerDY[nLocalPlayer], sizeof(nPlayerDY[nLocalPlayer]));
+    Read(&nPlayerDX[nLocalPlayer], sizeof(nPlayerDX[nLocalPlayer]));
+    Read(&playerNames[nLocalPlayer], sizeof(playerNames[nLocalPlayer]));
+    Read(&nPistolClip[nLocalPlayer], sizeof(nPistolClip[nLocalPlayer]));
+    Read(&nXDamage[nLocalPlayer], sizeof(nXDamage[nLocalPlayer]));
+    Read(&nYDamage[nLocalPlayer], sizeof(nYDamage[nLocalPlayer]));
+    Read(&nDoppleSprite[nLocalPlayer], sizeof(nDoppleSprite[nLocalPlayer]));
+    Read(&namelen[nLocalPlayer], sizeof(namelen[nLocalPlayer]));
+    Read(&nPlayerOldWeapon[nLocalPlayer], sizeof(nPlayerOldWeapon[nLocalPlayer]));
+    Read(&nPlayerClip[nLocalPlayer], sizeof(nPlayerClip[nLocalPlayer]));
+    Read(&nPlayerPushSound[nLocalPlayer], sizeof(nPlayerPushSound[nLocalPlayer]));
+    Read(&nTauntTimer[nLocalPlayer], sizeof(nTauntTimer[nLocalPlayer]));
+    Read(&nPlayerTorch[nLocalPlayer], sizeof(nPlayerTorch[nLocalPlayer]));
+    Read(&nPlayerWeapons[nLocalPlayer], sizeof(nPlayerWeapons[nLocalPlayer]));
+    Read(&nPlayerLives[nLocalPlayer], sizeof(nPlayerLives[nLocalPlayer]));
+    Read(&nPlayerItem[nLocalPlayer], sizeof(nPlayerItem[nLocalPlayer]));
+    Read(&PlayerList[nLocalPlayer], sizeof(PlayerList[nLocalPlayer]));
+    Read(&nPlayerInvisible[nLocalPlayer], sizeof(nPlayerInvisible[nLocalPlayer]));
+    Read(&nPlayerDouble[nLocalPlayer], sizeof(nPlayerDouble[nLocalPlayer]));
+    Read(&nPlayerViewSect[nLocalPlayer], sizeof(nPlayerViewSect[nLocalPlayer]));
+    Read(&nPlayerFloorSprite[nLocalPlayer], sizeof(nPlayerFloorSprite[nLocalPlayer]));
+    Read(&sPlayerSave[nLocalPlayer], sizeof(nPlayerFloorSprite[nLocalPlayer]));
+    Read(&totalvel[nLocalPlayer], sizeof(totalvel[nLocalPlayer]));
+    Read(&eyelevel[nLocalPlayer], sizeof(eyelevel[nLocalPlayer]));
+    Read(&oeyelevel[nLocalPlayer], sizeof(oeyelevel[nLocalPlayer]));
+    Read(&nNetStartSprite[nLocalPlayer], sizeof(nNetStartSprite[nLocalPlayer]));
+
+    Read(&nStandHeight, sizeof(nStandHeight));
+
+    Read(&nPlayerGrenade[nLocalPlayer], sizeof(nPlayerGrenade[nLocalPlayer]));
+    Read(nGrenadePlayer, sizeof(nGrenadePlayer));
+
+    Read(word_D282A, sizeof(word_D282A));
+
+    Read(&PlayerCount, sizeof(PlayerCount));
+
+    Read(&nNetStartSprites, sizeof(nNetStartSprites));
+    Read(&nCurStartSprite, sizeof(nCurStartSprite));
+
+    Read(&nLocalSpr, sizeof(nLocalSpr));
+}
+
+void PlayerLoadSave::Save()
+{
+    if (LoadSave::IsNetworkSnapshot())
+    {
+        Write(nBreathTimer, sizeof(nBreathTimer));
+        Write(s_kexNeedGasp, sizeof(s_kexNeedGasp));
+        Write(nPlayerSwear, sizeof(nPlayerSwear));
+        Write(nPlayerPushSect, sizeof(nPlayerPushSect));
+        Write(nDeathType, sizeof(nDeathType));
+        Write(nPlayerScore, sizeof(nPlayerScore));
+        Write(nPlayerColor, sizeof(nPlayerColor));
+        Write(nPlayerDY, sizeof(nPlayerDY));
+        Write(nPlayerDX, sizeof(nPlayerDX));
+        Write(playerNames, sizeof(playerNames));
+        Write(nPistolClip, sizeof(nPistolClip));
+        Write(nXDamage, sizeof(nXDamage));
+        Write(nYDamage, sizeof(nYDamage));
+        Write(nDoppleSprite, sizeof(nDoppleSprite));
+        Write(namelen, sizeof(namelen));
+        Write(nPlayerOldWeapon, sizeof(nPlayerOldWeapon));
+        Write(nPlayerClip, sizeof(nPlayerClip));
+        Write(nPlayerPushSound, sizeof(nPlayerPushSound));
+        Write(nTauntTimer, sizeof(nTauntTimer));
+        Write(nPlayerTorch, sizeof(nPlayerTorch));
+        Write(nPlayerWeapons, sizeof(nPlayerWeapons));
+        Write(nPlayerLives, sizeof(nPlayerLives));
+        Write(nPlayerItem, sizeof(nPlayerItem));
+        Write(PlayerList, sizeof(PlayerList));
+        Write(nPlayerInvisible, sizeof(nPlayerInvisible));
+        Write(nPlayerDouble, sizeof(nPlayerDouble));
+        Write(nPlayerViewSect, sizeof(nPlayerViewSect));
+        Write(nPlayerFloorSprite, sizeof(nPlayerFloorSprite));
+        Write(sPlayerSave, sizeof(sPlayerSave));
+        Write(totalvel, sizeof(totalvel));
+        Write(eyelevel, sizeof(eyelevel));
+        Write(oeyelevel, sizeof(oeyelevel));
+        Write(nNetStartSprite, sizeof(nNetStartSprite));
+        Write(&nStandHeight, sizeof(nStandHeight));
+        Write(nPlayerGrenade, sizeof(nPlayerGrenade));
+        Write(nGrenadePlayer, sizeof(nGrenadePlayer));
+        Write(word_D282A, sizeof(word_D282A));
+        Write(&PlayerCount, sizeof(PlayerCount));
+        Write(&nNetStartSprites, sizeof(nNetStartSprites));
+        Write(&nCurStartSprite, sizeof(nCurStartSprite));
+        return;
+    }
+
+    Write(&nBreathTimer[nLocalPlayer], sizeof(nBreathTimer[nLocalPlayer]));
+    Write(&s_kexNeedGasp[nLocalPlayer], sizeof(s_kexNeedGasp[nLocalPlayer]));
+    Write(&nPlayerSwear[nLocalPlayer], sizeof(nPlayerSwear[nLocalPlayer]));
+    Write(&nPlayerPushSect[nLocalPlayer], sizeof(nPlayerPushSect[nLocalPlayer]));
+    Write(&nDeathType[nLocalPlayer], sizeof(nDeathType[nLocalPlayer]));
+    Write(&nPlayerScore[nLocalPlayer], sizeof(nPlayerScore[nLocalPlayer]));
+    Write(&nPlayerColor[nLocalPlayer], sizeof(nPlayerColor[nLocalPlayer]));
+    Write(&nPlayerDY[nLocalPlayer], sizeof(nPlayerDY[nLocalPlayer]));
+    Write(&nPlayerDX[nLocalPlayer], sizeof(nPlayerDX[nLocalPlayer]));
+    Write(&playerNames[nLocalPlayer], sizeof(playerNames[nLocalPlayer]));
+    Write(&nPistolClip[nLocalPlayer], sizeof(nPistolClip[nLocalPlayer]));
+    Write(&nXDamage[nLocalPlayer], sizeof(nXDamage[nLocalPlayer]));
+    Write(&nYDamage[nLocalPlayer], sizeof(nYDamage[nLocalPlayer]));
+    Write(&nDoppleSprite[nLocalPlayer], sizeof(nDoppleSprite[nLocalPlayer]));
+    Write(&namelen[nLocalPlayer], sizeof(namelen[nLocalPlayer]));
+    Write(&nPlayerOldWeapon[nLocalPlayer], sizeof(nPlayerOldWeapon[nLocalPlayer]));
+    Write(&nPlayerClip[nLocalPlayer], sizeof(nPlayerClip[nLocalPlayer]));
+    Write(&nPlayerPushSound[nLocalPlayer], sizeof(nPlayerPushSound[nLocalPlayer]));
+    Write(&nTauntTimer[nLocalPlayer], sizeof(nTauntTimer[nLocalPlayer]));
+    Write(&nPlayerTorch[nLocalPlayer], sizeof(nPlayerTorch[nLocalPlayer]));
+    Write(&nPlayerWeapons[nLocalPlayer], sizeof(nPlayerWeapons[nLocalPlayer]));
+    Write(&nPlayerLives[nLocalPlayer], sizeof(nPlayerLives[nLocalPlayer]));
+    Write(&nPlayerItem[nLocalPlayer], sizeof(nPlayerItem[nLocalPlayer]));
+    Write(&PlayerList[nLocalPlayer], sizeof(PlayerList[nLocalPlayer]));
+    Write(&nPlayerInvisible[nLocalPlayer], sizeof(nPlayerInvisible[nLocalPlayer]));
+    Write(&nPlayerDouble[nLocalPlayer], sizeof(nPlayerDouble[nLocalPlayer]));
+    Write(&nPlayerViewSect[nLocalPlayer], sizeof(nPlayerViewSect[nLocalPlayer]));
+    Write(&nPlayerFloorSprite[nLocalPlayer], sizeof(nPlayerFloorSprite[nLocalPlayer]));
+    Write(&sPlayerSave[nLocalPlayer], sizeof(nPlayerFloorSprite[nLocalPlayer]));
+    Write(&totalvel[nLocalPlayer], sizeof(totalvel[nLocalPlayer]));
+    Write(&eyelevel[nLocalPlayer], sizeof(eyelevel[nLocalPlayer]));
+    Write(&oeyelevel[nLocalPlayer], sizeof(oeyelevel[nLocalPlayer]));
+    Write(&nNetStartSprite[nLocalPlayer], sizeof(nNetStartSprite[nLocalPlayer]));
+
+    Write(&nStandHeight, sizeof(nStandHeight));
+
+    Write(&nPlayerGrenade[nLocalPlayer], sizeof(nPlayerGrenade[nLocalPlayer]));
+    Write(nGrenadePlayer, sizeof(nGrenadePlayer));
+
+    Write(word_D282A, sizeof(word_D282A));
+
+    Write(&PlayerCount, sizeof(PlayerCount));
+
+    Write(&nNetStartSprites, sizeof(nNetStartSprites));
+    Write(&nCurStartSprite, sizeof(nCurStartSprite));
+
+    Write(&nLocalSpr, sizeof(nLocalSpr));
+}
+
+static PlayerLoadSave* myLoadSave;
+
+void PlayerLoadSaveConstruct()
+{
+    myLoadSave = new PlayerLoadSave();
+}

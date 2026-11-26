@@ -237,6 +237,9 @@ static inline int CONTROL_KeyIsBound(int const key)
 void CONTROL_ProcessBinds(void);
 
 UserInput *CONTROL_GetUserInput(UserInput *);
+// Blood (NotBlood) compat: controller helpers (stubbed in our build).
+bool CONTROL_GetControllerAxisIsTwinAxisStick(int32_t whichaxis);
+void CONTROL_GetAxisHeatMap(int32_t nAxis, uint8_t *tilePtr, int32_t nWidth, int32_t nHeight, int32_t nPalBase, int32_t nPalRange, bool bDithering = false);
 void CONTROL_ClearUserInput(UserInput *);
 
 ////////////////////

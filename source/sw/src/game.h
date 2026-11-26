@@ -551,45 +551,7 @@ EDUKE32_STATIC_ASSERT(isPow2(MAXSECTORS));
 #define OVER_SPRITE_XFLIP       (BIT(3))
 #define OVER_SPRITE_YFLIP       (BIT(4))
 
-// rotatesprite flags
-#define ROTATE_SPRITE_TRANSLUCENT   (BIT(0))
-#define ROTATE_SPRITE_VIEW_CLIP     (BIT(1)) // clip to view
-#define ROTATE_SPRITE_YFLIP         (BIT(2))
-#define ROTATE_SPRITE_IGNORE_START_MOST (BIT(3)) // don't clip to startumost
-#define ROTATE_SPRITE_SCREEN_CLIP   (BIT(1)|BIT(3)) // use window
-#define ROTATE_SPRITE_CORNER        (BIT(4)) // place sprite from upper left corner
-#define ROTATE_SPRITE_TRANS_FLIP    (BIT(5))
-#define ROTATE_SPRITE_NON_MASK      (BIT(6)) // non masked sprites
-#define ROTATE_SPRITE_ALL_PAGES     (BIT(7)) // copies to all pages
-
-#define RS_SCALE                    BIT(16)
-
-// system defines for status bits
-#define CEILING_STAT_PLAX           BIT(0)
-#define CEILING_STAT_SLOPE          BIT(1)
-#define CEILING_STAT_SWAPXY         BIT(2)
-#define CEILING_STAT_SMOOSH         BIT(3)
-#define CEILING_STAT_XFLIP          BIT(4)
-#define CEILING_STAT_YFLIP          BIT(5)
-#define CEILING_STAT_RELATIVE       BIT(6)
-#define CEILING_STAT_TYPE_MASK     (BIT(7)|BIT(8))
-#define CEILING_STAT_MASKED         BIT(7)
-#define CEILING_STAT_TRANS          BIT(8)
-#define CEILING_STAT_TRANS_FLIP     (BIT(7)|BIT(8))
-#define CEILING_STAT_FAF_BLOCK_HITSCAN      BIT(15)
-
-#define FLOOR_STAT_PLAX           BIT(0)
-#define FLOOR_STAT_SLOPE          BIT(1)
-#define FLOOR_STAT_SWAPXY         BIT(2)
-#define FLOOR_STAT_SMOOSH         BIT(3)
-#define FLOOR_STAT_XFLIP          BIT(4)
-#define FLOOR_STAT_YFLIP          BIT(5)
-#define FLOOR_STAT_RELATIVE       BIT(6)
-#define FLOOR_STAT_TYPE_MASK     (BIT(7)|BIT(8))
-#define FLOOR_STAT_MASKED         BIT(7)
-#define FLOOR_STAT_TRANS          BIT(8)
-#define FLOOR_STAT_TRANS_FLIP     (BIT(7)|BIT(8))
-#define FLOOR_STAT_FAF_BLOCK_HITSCAN      BIT(15)
+#include "../../build/include/game_stat_flags_shared.h"
 
 #define CSTAT_WALL_BLOCK            BIT(0)
 #define CSTAT_WALL_BOTTOM_SWAP      BIT(1)
@@ -949,6 +911,11 @@ typedef struct
 #define MAX_LEVELS_SW 4
 #define MAX_LEVELS (SW_SHAREWARE ? MAX_LEVELS_SW : MAX_LEVELS_REG)
 
+// A Duke GRP holds up to four episodes of eleven, which does not fit Shadow
+// Warrior's own twenty-nine.  The table is sized for either.
+#define MAX_LEVELS_CROSSPLAY 72
+#define MAX_EPISODES_CROSSPLAY 8
+
 typedef struct
 {
     const char *LevelName;
@@ -958,13 +925,20 @@ typedef struct
     const char *ParTime;
 } LEVEL_INFO, *LEVEL_INFOp, * *LEVEL_INFOpp;
 
-extern LEVEL_INFO LevelInfo[MAX_LEVELS_REG+2];
+extern LEVEL_INFO LevelInfo[MAX_LEVELS_CROSSPLAY+2];
 
 #define MAX_EPISODE_NAME_LEN 24
-extern char EpisodeNames[2][MAX_EPISODE_NAME_LEN+2];    // +2 = leading '^' and trailing NULL
+extern char EpisodeNames[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_NAME_LEN+2];    // +2 = leading '^' and trailing NULL
 
 #define MAX_EPISODE_SUBTITLE_LEN 40
-extern char EpisodeSubtitles[2][MAX_EPISODE_SUBTITLE_LEN+1];
+extern char EpisodeSubtitles[MAX_EPISODES_CROSSPLAY][MAX_EPISODE_SUBTITLE_LEN+1];
+
+// Duke episodes and levels, discovered from whichever Duke GRP was handed over.
+void SW_CrossplayBuildDukeLevelTable(void);
+int  SW_CrossplayDukeEpisodeCount(void);
+int  SW_CrossplayDukeEpisodeFirstLevel(int episode);
+int  SW_CrossplayActiveMaxLevels(void);
+void SW_CrossplayEndDukeLevel(int secretExit);
 
 #define MAX_SKILL_NAME_LEN 24
 extern char SkillNames[4][MAX_SKILL_NAME_LEN+2];
@@ -2343,6 +2317,37 @@ void AnimateCacheCursor(void);  // game.c
 void MapSetAll2D(uint8_t fill);    // game.c
 void TerminateGame(void);   // game.c
 void TerminateLevel(void);  // game.c
+void SW_CrossplayMoveForeignMapEffectors(void); // game.c
+int SW_CrossplayOperateDukeMapEffectors(PLAYERp pp); // game.c
+int SW_CrossplayDukeCameraView(int32_t *x, int32_t *y, int32_t *z, fix16_t *q16ang, fix16_t *q16horiz,
+                               int16_t *sectnum); // game.c
+void SW_CrossplayDrawDukeViewscreens(PLAYERp pp); // game.c
+int SW_CrossplayDukeViewscreenTile(int spriteNum); // game.c
+void SW_CrossplayTickDukeCameras(PLAYERp pp); // game.c
+void SW_CrossplayTickDukeToilet(PLAYERp pp); // game.c
+void SW_CrossplayTickDukeNukeButton(PLAYERp pp); // game.c
+void SW_CrossplayKeepPlayerOutOfMirrors(PLAYERp pp); // game.c
+int  SW_CrossplayMirrorEjections(void);
+SWBOOL SW_CrossplaySetupConvertedDukePickup(int16_t SpriteNum); // sprite.c
+int  SW_CrossplayDukeDropsConverted(void);
+int  SW_CrossplaySkinCount(void);
+char const *SW_CrossplaySkinName(int index);
+int  SW_CrossplaySkinIsDuke(int index);
+int  SW_CrossplaySkinPalette(int index);
+int  SW_CrossplayPlayerSkinTile(int index, int state, int frame, int direction);
+void SW_CrossplayApplyPlayerSkin(tspriteptr_t tsp, USERp tu);
+int  SW_CrossplayDukeNukeButtonPresses(void);
+int  SW_CrossplayDukeNukeButtonRunning(void);
+int SW_CrossplayDukeMapBridgeActive(void); // game.c
+int SW_CrossplayDamageDukeMapWall(int spriteNum, int wallNum, vec3_t const *hitPos); // game.c
+int SW_CrossplayDukeSpriteExplosionDamage(int spriteNum); // game.c
+int SW_CrossplayDukeMapSpriteShade(int spriteNum, int *outShade); // game.c
+int SW_CrossplayDukeMapSpriteOldPos(int spriteNum, int32_t *x, int32_t *y, int32_t *z); // game.c
+int SW_CrossplayDukeMapSpriteDisplayTile(int spriteNum, int32_t camX, int32_t camY, int32_t camAng,
+                                         uint16_t *cstat); // game.c
+int SW_CrossplayExplodeDukeMapSprites(int blastSprite, int32_t x, int32_t y, int32_t z, int16_t sectnum,
+                                      int32_t radius, int32_t maxDamage); // game.c
+int SW_CrossplayDamageDukeMapSprite(int spriteNum, int targetSpriteNum, vec3_t const *hitPos); // game.c
 void ResetKeys(void);   // game.c
 SWBOOL KeyPressed(void);  // game.c
 void drawoverheadmap(int cposx,int cposy,int czoom,short cang); // game.c

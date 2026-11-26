@@ -682,6 +682,7 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
     static int ang = 0;
     PLAYERp pp = Player + screenpeek;
     short newshade=0;
+    int const crossplayForeignLevel = artCrossplayMapArtPrepared();
 
 
     ang = NORM_ANGLE(ang + 12);
@@ -694,6 +695,15 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
         SpriteNum = tsprite[tSpriteNum].owner;
         tspriteptr_t tsp = &tsprite[tSpriteNum];
         tu = User[SpriteNum];
+
+        // On Duke maps the player's world sprite keeps Duke's scale so Duke's
+        // enemies can aim at it; the drawn copy gets Lo Wang's own proportions.
+        if (crossplayForeignLevel && tu != NULL && tu->PlayerP != NULL &&
+            (unsigned)SpriteNum < MAXSPRITES && SpriteNum == tu->PlayerP->PlayerSprite)
+        {
+            SW_CrossplayScalePlayerTSprite(tsp);
+            SW_CrossplayApplyPlayerSkin(tsp, tu);
+        }
 
         //if(tsp->statnum == STAT_GENERIC_QUEUE)
         //    CON_ConMessage("tsp->pal = %d",tsp->pal);
@@ -731,6 +741,39 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
             {
                 ASSERT(aVoxelArray[tsp->picnum].Parental >= 0 && aVoxelArray[tsp->picnum].Parental < 6145);
                 tsp->picnum=aVoxelArray[tsp->picnum].Parental; // Change the pic
+            }
+        }
+
+        {
+            // Duke picks an actor's drawn frame from the viewer's angle, so it is
+            // resolved here rather than in the tic -- the viewpoint must not reach
+            // shared state, and this matches where Duke does it.
+            uint16_t dukeCstat = tsp->cstat;
+            int const dukeTile = SW_CrossplayDukeMapSpriteDisplayTile(SpriteNum, viewx, viewy,
+                                                                     fix16_to_int(pp->q16ang), &dukeCstat);
+            if (dukeTile >= 0)
+            {
+                tsp->picnum = (int16_t)dukeTile;
+                tsp->cstat = dukeCstat;
+            }
+
+            // ...and a security monitor showing a camera draws that camera's
+            // feed instead of the blank screen art.
+            int const camTile = SW_CrossplayDukeViewscreenTile(SpriteNum);
+            if (camTile >= 0)
+                tsp->picnum = (int16_t)camTile;
+        }
+
+        {
+            // Duke's sprites have no SW USER record, so SW's own interpolation
+            // below never applies to them; interpolate them from the position
+            // the bridge recorded last tic or they visibly step as they move.
+            int32_t dukeOldX, dukeOldY, dukeOldZ;
+            if (SW_CrossplayDukeMapSpriteOldPos(SpriteNum, &dukeOldX, &dukeOldY, &dukeOldZ))
+            {
+                tsp->x = dukeOldX + mulscale16(tsp->x - dukeOldX, smoothratio);
+                tsp->y = dukeOldY + mulscale16(tsp->y - dukeOldY, smoothratio);
+                tsp->z = dukeOldZ + mulscale16(tsp->z - dukeOldZ, smoothratio);
             }
         }
 
@@ -812,7 +855,7 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
             // set palette lookup correctly
             if (tsp->pal != sector[tsp->sectnum].floorpal)
             {
-                if (sector[tsp->sectnum].floorpal == PALETTE_DEFAULT)
+                if (sector[tsp->sectnum].floorpal == PALETTE_DEFAULT || crossplayForeignLevel)
                 {
                     // default pal for sprite is stored in tu->spal
                     // mostly for players and other monster types
@@ -933,6 +976,15 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
         // kens original sprite shade code he moved out of the engine
         //
 
+        // Duke's own sprites are lit by Duke's rule, not SW's; see
+        // SW_CrossplayDukeMapSpriteShade().
+        int dukeShade;
+        if (SW_CrossplayDukeMapSpriteShade(SpriteNum, &dukeShade))
+        {
+            tsp->shade = (int8_t)dukeShade;
+            goto crossplay_shade_done;
+        }
+
         switch (tsp->statnum)
         {
         case STAT_ENEMY:
@@ -962,6 +1014,8 @@ analyzesprites(int viewx, int viewy, int viewz, SWBOOL mirror)
             if (newshade < -128) newshade = -128;
             tsp->shade = newshade;
         }
+
+crossplay_shade_done:
 
         if (tsp->hitag == 9998)
             tsp->shade = 127; // Invisible enemy ninjas
@@ -1478,21 +1532,21 @@ void PrintSpriteInfo(PLAYERp pp)
     {
         short hit_sprite = DoPickTarget(pp->SpriteP, 32, 2);
 
+        if (hit_sprite < 0 || hit_sprite >= MAXSPRITES)
+        {
+            y += Y_STEP;
+            sprintf(buffer, "SPRITENUM: NONE TARGETED");
+            printext256(x, y, 1, -1, buffer, 1);
+            return;
+        }
+
         sp = &sprite[hit_sprite];
         u = User[hit_sprite];
 
         sp->hitag = 9997; // Special tag to make the actor glow red for one frame
 
         y += Y_STEP;
-
-        if (hit_sprite == -1)
-        {
-            sprintf(buffer, "SPRITENUM: NONE TARGETED");
-            printext256(x, y, 1, -1, buffer, 1);
-            return;
-        }
-        else
-            sprintf(buffer, "SPRITENUM:%d", hit_sprite);
+        sprintf(buffer, "SPRITENUM:%d", hit_sprite);
 
         printext256(x, y, 1, -1, buffer, 1);
         y += Y_STEP;
@@ -1697,6 +1751,31 @@ void ScreenCaptureKeys(void)
 {
     if (ConPanel)
         return;
+
+    // Debug aid for the crossplay bridge: VB_CP_CAPTURE=<frames> saves one
+    // screenshot that many frames in, so bridge visuals can be checked from an
+    // automated run.  See source/sw/DUKE_CROSSPLAY_BRIDGE.md.
+    {
+        static int32_t autoCaptureFrames = -1;
+
+        if (autoCaptureFrames < 0)
+        {
+            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            autoCaptureFrames = env != NULL ? Batoi(env) : 0;
+        }
+
+        if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
+            videoCaptureScreen("cpshot0000.png", 0);
+
+        // The bridge self-test asks for a shot of whatever it is currently
+        // looking at, so each checked actor can be inspected after the run.
+        extern int32_t g_swCrossplayCaptureRequest;
+        if (g_swCrossplayCaptureRequest)
+        {
+            g_swCrossplayCaptureRequest = 0;
+            videoCaptureScreen("cpshot0000.png", 0);
+        }
+    }
 
     // screen capture
     if (KEY_PRESSED(KEYSC_F12))
@@ -2403,6 +2482,23 @@ drawscreen(PLAYERp pp)
         tq16horiz = fix16_min(tq16horiz, fix16_from_int(PLAYER_HORIZ_MAX));
     }
 
+    // A Duke security camera replaces the viewpoint outright while the player is
+    // watching one, which is what Duke does through p->newowner.
+    {
+        int32_t camX, camY, camZ;
+        fix16_t camAng, camHoriz;
+        int16_t camSect;
+        if (SW_CrossplayDukeCameraView(&camX, &camY, &camZ, &camAng, &camHoriz, &camSect))
+        {
+            tx = camX;
+            ty = camY;
+            tz = camZ;
+            tq16ang = camAng;
+            tq16horiz = camHoriz;
+            tsectnum = camSect;
+        }
+    }
+
     if (r_usenewaspect)
     {
         newaspect_enable = 1;
@@ -2418,11 +2514,22 @@ drawscreen(PLAYERp pp)
     DrawOverlapRoom(tx, ty, tz, tq16ang, tq16horiz, tsectnum);
     OverlapDraw = FALSE;
 
+    // Foreign levels were excluded here while their mirror walls still carried
+    // raw Duke tiles, because SW's mirror scan would then have mistaken ordinary
+    // walls for mirrors.  Duke mirror walls are now retagged to SW's mirror tile
+    // and registered by JS_InitMirrors(), and coincidental matches are masked
+    // out, so the reflection pass must run for them too -- without it the wall
+    // just shows the flat mirror placeholder tile.
     if (dimensionmode != 6 && !ScreenSavePic)
     {
         // TEST this! Changed to camerapp
         //JS_DrawMirrors(camerapp, tx, ty, tz, tq16ang, tq16horiz);
         JS_DrawMirrors(pp, tx, ty, tz, tq16ang, tq16horiz);
+
+        // Duke's security monitors are rendered the same way and for the same
+        // reason: each is a view of the world from somewhere else, drawn into a
+        // tile before the frame that shows it.
+        SW_CrossplayDrawDukeViewscreens(pp);
     }
 
     // TODO: This call is redundant if the tiled overhead map is shown, but the

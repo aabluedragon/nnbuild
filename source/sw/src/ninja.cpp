@@ -2386,7 +2386,7 @@ InitPlayerSprite(PLAYERp pp)
 
     u->RotNum = 5;
 
-    u->Radius = 400;
+    u->Radius = SW_PlayerActorRadius();
     u->PlayerP = pp;
     //u->Health = pp->MaxHealth;
     SET(u->Flags, SPR_XFLIP_TOGGLE);
@@ -2394,7 +2394,7 @@ InitPlayerSprite(PLAYERp pp)
 
     sp->picnum = u->State->Pic;
     sp->shade = -60; // was 15
-    sp->clipdist = (char)(256L >> 2);
+    sp->clipdist = (char)SW_PlayerSpriteClipdist();
 
     sp->xrepeat = PLAYER_NINJA_XREPEAT;
     sp->yrepeat = PLAYER_NINJA_YREPEAT;

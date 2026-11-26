@@ -161,6 +161,58 @@ AMB_INFO ambarray[] =
 static SWBOOL OpenSound(VOC_INFOp vp, buildvfs_kfd * handle, int * length);
 int ReadSound(int handle, VOC_INFOp vp, int length);
 
+static int32_t SW_CrossplayDukeLikeLevelGame(void)
+{
+    int32_t const game = artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS);
+    return (game == ART_CROSSPLAY_GAME_DUKE || game == ART_CROSSPLAY_GAME_WORLDTOUR) ? game : ART_CROSSPLAY_GAME_UNKNOWN;
+}
+
+static SWBOOL SW_CrossplayReadForeignGameAudioEntry(int32_t game, char const *entryName, char **data, int32_t *size)
+{
+    if (game < 0 || entryName == NULL || entryName[0] == '\0' || data == NULL || size == NULL)
+        return FALSE;
+
+    if (artCrossplayReadForeignGameDataEntry(game, entryName, data, size, NULL, 0))
+        return TRUE;
+
+    // World Tour GRPs commonly do not contain every classic Duke VOC/MID.
+    if (game == ART_CROSSPLAY_GAME_WORLDTOUR)
+        return artCrossplayReadForeignGameDataEntry(ART_CROSSPLAY_GAME_DUKE, entryName, data, size, NULL, 0) ? TRUE : FALSE;
+
+    return FALSE;
+}
+
+char const *SW_CrossplayDukeSoundFileName(int32_t num);   // game.cpp
+
+static int32_t SW_CrossplayForeignGameForSoundSlot(int32_t num)
+{
+    // The hand-written Duke entries, and the reserved block the bridge fills in
+    // from a mod's own CON.  The reserved block was missing from this test, so
+    // every sound the bridge claimed a slot for was looked for in Shadow
+    // Warrior's data, where it does not exist, and none of them ever played.
+    if ((num >= DIGI_DUKE_PRED_RECOG && num <= DIGI_DUKE_RIPHEADNECK) ||
+        (num >= DIGI_DUKE_MAP_POOLBALLHIT && num <= DIGI_DUKE_SQUISHED) ||
+        (num >= DIGI_DUKE_MODSOUND0 && num <= DIGI_DUKE_MODSOUND511))
+        return SW_CrossplayDukeLikeLevelGame();
+
+    return ART_CROSSPLAY_GAME_UNKNOWN;
+}
+
+// A track a Duke-family level asks for.
+//
+// This used to be a hand-written list of stock Duke's forty-odd .mid names, and
+// nothing outside it was ever looked for in the Duke data: a mod GRP brings its
+// own music (vacation.grp ships IRIEPRTY.mid and five more) and every one of
+// those fell through to Shadow Warrior's own data, where it does not exist.  The
+// question the list was trying to answer is simply whether the Duke data has the
+// file, so it is asked directly instead.  A name the Duke data does not have
+// still falls through to the host's own search path, which is where Shadow
+// Warrior's own tracks come from.
+static int32_t SW_CrossplayIsDukeMusicFilename(char const *filename)
+{
+    return filename != NULL && filename[0] != '\0';
+}
+
 // 3d sound engine function prototype
 VOC3D_INFOp Insert3DSound(void);
 
@@ -789,8 +841,21 @@ SWBOOL CacheSound(int num, int /*type*/)
     {
         buildvfs_kfd handle;
         int length;
+        char *foreignData = NULL;
+        int32_t foreignLength = 0;
+        int const foreignGame = SW_CrossplayForeignGameForSoundSlot(num);
 
-        if (!OpenSound(vp, &handle, &length))
+        // A mod's sound is read by the name its CON gave, path and all; the
+        // record's own name field is too short to hold one.
+        char const *const crossplayName = SW_CrossplayDukeSoundFileName(num);
+        int const usingForeignData = SW_CrossplayReadForeignGameAudioEntry(
+            foreignGame, crossplayName != NULL ? crossplayName : vp->name, &foreignData, &foreignLength);
+
+        if (usingForeignData)
+        {
+            length = foreignLength;
+        }
+        else if (!OpenSound(vp, &handle, &length))
         {
             sprintf(ds,"Could not open sound %s, num %d, priority %d\n",vp->name,num,vp->priority);
             CON_ConMessage("%s", ds);
@@ -829,7 +894,16 @@ SWBOOL CacheSound(int num, int /*type*/)
             ///////
 
             ASSERT(vp->data);
-            ReadSound(handle, vp, length);
+            if (usingForeignData)
+            {
+                Bmemcpy(vp->data, foreignData, length);
+                vp->datalen = length;
+                Xfree(foreignData);
+            }
+            else
+            {
+                ReadSound(handle, vp, length);
+            }
 
 #if 0
             //DEBUG
@@ -1161,6 +1235,27 @@ LoadSong(const char *filename)
     buildvfs_kfd handle;
     int size;
     char *ptr;
+    int32_t const crossplayGame = SW_CrossplayDukeLikeLevelGame();
+    char *foreignData = NULL;
+    int32_t foreignSize = 0;
+
+    if (SW_CrossplayIsDukeMusicFilename(filename) &&
+        SW_CrossplayReadForeignGameAudioEntry(crossplayGame, filename, &foreignData, &foreignSize))
+    {
+        ptr = (char *) AllocMem(foreignSize);
+        if (ptr == NULL)
+        {
+            Xfree(foreignData);
+            return FALSE;
+        }
+
+        Bmemcpy(ptr, foreignData, foreignSize);
+        Xfree(foreignData);
+
+        SongPtr = ptr;
+        SongLength = foreignSize;
+        return TRUE;
+    }
 
     if ((handle = kopen4load(filename, 0)) == buildvfs_kfd_invalid)
     {

@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //-------------------------------------------------------------------------
 
 #include "duke3d.h"
+#include "gameexec.h"
 #include "md4.h"
 
 #define BITPTR_POINTER 1
@@ -223,6 +224,7 @@ static int different_user_map;
 
 int32_t G_LoadPlayer(int32_t spot)
 {
+    bool const lateJoinSnapshot = (spot == LATEJOIN_SAVE_SPOT);
     int32_t k;
     char fn[13];
     char mpfn[13];
@@ -273,7 +275,6 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(g_szBuf,bv,1,fil) != 1) goto corrupt;
     g_szBuf[bv]=0;
     //    AddLog(g_szBuf);
-
     if (kdfread(&bv,sizeof(bv),1,fil) != 1) goto corrupt;
     if (bv != BYTEVERSION)
     {
@@ -326,9 +327,20 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&ud.level_number,sizeof(ud.level_number),1,fil) != 1) goto corrupt;
     if (kdfread(&ud.player_skill,sizeof(ud.player_skill),1,fil) != 1) goto corrupt;
 
+    if (!lateJoinSnapshot)
+    {
+        Gv_SetVar(sysVarIDs.RETURN, ud.volume_number, g_player[myconnectindex].ps->i, myconnectindex);
+        ud.returnvar[0] = ud.level_number;
+        ud.volume_number = X_OnEventWithReturn(EVENT_VALIDATESTART, g_player[myconnectindex].ps->i, myconnectindex, ud.volume_number);
+        ud.level_number = ud.returnvar[0];
+    }
+
     ud.m_level_number = ud.level_number;
     ud.m_volume_number = ud.volume_number;
     ud.m_player_skill = ud.player_skill;
+
+    if (!lateJoinSnapshot)
+        X_OnEvent(EVENT_PRELOADGAME, g_player[screenpeek].ps->i, screenpeek, -1);
 
     char boardName[BMAX_PATH];
     if (kdfread(&boardName[0], BMAX_PATH, 1, fil) != 1) goto corrupt;
@@ -412,7 +424,10 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&g_numCyclers,sizeof(g_numCyclers),1,fil) != 1) goto corrupt;
     if (kdfread(&cyclers[0][0],sizeof(cyclers),1,fil) != 1) goto corrupt;
     for (i=0; i<nump; i++)
+    {
+        G_MaybeAllocPlayer(i);
         if (kdfread(g_player[i].ps,sizeof(DukePlayer_t),1,fil) != 1) goto corrupt;
+    }
     if (kdfread(&g_playerSpawnPoints,sizeof(g_playerSpawnPoints),1,fil) != 1) goto corrupt;
     if (kdfread(&g_numAnimWalls,sizeof(g_numAnimWalls),1,fil) != 1) goto corrupt;
     if (kdfread(&animwall,sizeof(animwall),1,fil) != 1) goto corrupt;
@@ -479,7 +494,9 @@ int32_t G_LoadPlayer(int32_t spot)
     if (kdfread(&savegame_projectiles[0],sizeof(savegame_projectiles),1,fil) != 1) goto corrupt;
     sv_preprojectileload();
     if (savegame_projectilecnt > 0)
+    {
         if (kdfread(&savegame_projectiledata[0],sizeof(savegame_projectiledata[0]),savegame_projectilecnt,fil) != savegame_projectilecnt) goto corrupt;
+    }
     // FIXME: g_tile as a whole is loaded from file, including stale
     // proj pointers. EDuke32 itself does not store the g_tile array.
     // More generally, EDuke32 does not support loading saved games
@@ -554,7 +571,7 @@ int32_t G_LoadPlayer(int32_t spot)
 
     if (kdfread(&g_dynTileList[0],sizeof(g_dynTileList[0]),g_dynTileListSize,fil) != g_dynTileListSize) goto corrupt;
 
-    if (Gv_ReadSave(fil)) goto corrupt;
+    if (Gv_ReadSave(fil, lateJoinSnapshot)) goto corrupt;
 
     kclose(fil);
 
@@ -680,6 +697,9 @@ int32_t G_LoadPlayer(int32_t spot)
         calc_sector_reachability();
     }
 
+    if (!lateJoinSnapshot)
+        X_OnEvent(EVENT_LOADGAME, g_player[screenpeek].ps->i, screenpeek, -1);
+
     return(0);
 corrupt:
     kclose(fil);
@@ -690,6 +710,7 @@ corrupt:
 
 int32_t G_SavePlayer(int32_t spot)
 {
+    bool const lateJoinSnapshot = (spot == LATEJOIN_SAVE_SPOT);
     int32_t i;
     intptr_t j;
     char fn[13];
@@ -746,6 +767,9 @@ int32_t G_SavePlayer(int32_t spot)
     }
 
     ready2send = 0;
+
+    if (!lateJoinSnapshot)
+        X_OnEvent(EVENT_SAVEGAME, g_player[myconnectindex].ps->i, myconnectindex, -1);
 
     Bsprintf(g_szBuf,"EDuke32");
     i=strlen(g_szBuf);
@@ -995,7 +1019,7 @@ int32_t G_SavePlayer(int32_t spot)
 
     dfwrite(&g_dynTileList[0],sizeof(g_dynTileList[0]),g_dynTileListSize,fil);
 
-    Gv_WriteSave(fil);
+    Gv_WriteSave(fil, lateJoinSnapshot);
 
     fclose(fil);
 

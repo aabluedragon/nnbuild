@@ -2582,6 +2582,24 @@ PlayerOperateEnv(PLAYERp pp)
     if (Prediction)
         return;
 
+    if (artCrossplayMapArtPrepared())
+    {
+        SW_CrossplayTickDukeCameras(pp);
+        SW_CrossplayTickDukeToilet(pp);
+        SW_CrossplayTickDukeNukeButton(pp);
+        SW_CrossplayKeepPlayerOutOfMirrors(pp);
+
+        if (TEST_SYNC_KEY(pp, SK_OPERATE))
+        {
+            if (FLAG_KEY_PRESSED(pp, SK_OPERATE) && SW_CrossplayOperateDukeMapEffectors(pp))
+                FLAG_KEY_RELEASE(pp, SK_OPERATE);
+        }
+        else
+            FLAG_KEY_RESET(pp, SK_OPERATE);
+
+        return;
+    }
+
     ////DSPRINTF(ds,"dist %d sectnum %d wallnum %d spritenum %d",nti[nt_ndx].dist, nti[nt_ndx].sectnum, nti[nt_ndx].wallnum, nti[nt_ndx].spritenum);
     //MONO_PRINT(ds);
 
@@ -3276,6 +3294,9 @@ DoSector(void)
     int min_dist,dist,a,b,c;
     PLAYERp pp;
 
+    if (artCrossplayMapArtPrepared())
+        return;
+
     if (DebugActorFreeze)
         return;
 
@@ -3474,5 +3495,3 @@ saveable_module saveable_sector =
     NULL,
     0
 };
-
-

@@ -12,11 +12,13 @@
 #include <ctype.h>
 #include <stdio.h>
 
+#include "compat.h"
+
 namespace {
 
 struct SB { char *p; size_t n, cap; };
-static void sb_init(SB *b) { b->cap = 4096; b->p = (char *)malloc(b->cap); b->n = 0; }
-static void sb_ensure(SB *b, size_t extra) { if (b->n + extra + 1 > b->cap) { while (b->n + extra + 1 > b->cap) b->cap *= 2; b->p = (char *)realloc(b->p, b->cap); } }
+static void sb_init(SB *b) { b->cap = 4096; b->p = (char *)Bmalloc(b->cap); b->n = 0; }
+static void sb_ensure(SB *b, size_t extra) { if (b->n + extra + 1 > b->cap) { while (b->n + extra + 1 > b->cap) b->cap *= 2; b->p = (char *)Brealloc(b->p, b->cap); } }
 static void sb_putc(SB *b, char c) { sb_ensure(b, 1); b->p[b->n++] = c; }
 static void sb_put(SB *b, const char *s, size_t k) { sb_ensure(b, k); memcpy(b->p + b->n, s, k); b->n += k; }
 
@@ -293,7 +295,20 @@ struct TS {
             if (ternary) { if (sp > 0) stk[sp-1].ternary--; else s_topTernary--; putc_(c); i++; prevValue = 0; return; }
             if (inObject) { putc_(c); i++; prevValue = 0; return; }     // object literal key
             // type annotation -> drop ':' and the type
-            i++; skipType(); return;
+            size_t const afterColon = i + 1;
+            size_t j = afterColon;
+            while (j < len && (s[j] == ' ' || s[j] == '\t' || s[j] == '\r' || s[j] == '\n')) j++;
+            // Do not silently turn invalid TypeScript such as `let x: = 1`
+            // into valid JavaScript. Keep the colon in the output so QuickJS
+            // reports a source-located syntax error to the modder.
+            if (j >= len || s[j] == '=' || s[j] == ',' || s[j] == ';' || s[j] == ')' || s[j] == '}' || s[j] == ']')
+            {
+                putc_(':');
+                i = afterColon;
+                prevValue = 0;
+                return;
+            }
+            i = afterColon; skipType(); return;
         }
         case '!':
             // non-null assertion: value '!' not followed by '=' -> drop

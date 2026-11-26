@@ -34,6 +34,7 @@ enum GamevarFlags_t {
     GAMEVAR_SPECIAL     = 0x00040000, // flag for structure member shortcut vars
     GAMEVAR_NOMULTI     = 0x00080000, // don't attach to multiplayer packets
     GAMEVAR_Q16PTR      = 0x00100000,
+    GAMEVAR_SERIALIZE   = 0x00200000, // write into permasaves
 
     GAMEVAR_RAWQ16PTR   = GAMEVAR_Q16PTR | GAMEVAR_SPECIAL,
     GAMEVAR_PTR_MASK    = GAMEVAR_INT32PTR | GAMEVAR_INT16PTR | GAMEVAR_INT8PTR | GAMEVAR_Q16PTR | GAMEVAR_RAWQ16PTR,
@@ -102,13 +103,14 @@ void Gv_NewVar(const char* pszLabel, intptr_t lValue, uint32_t dwFlags);
 void Gv_NewArray(const char* pszLabel, void* arrayptr, intptr_t asize, uint32_t flags);
 
 int Gv_GetVarByLabel(const char* szGameLabel, int lDefault, int iActor, int iPlayer);
+int Gv_SetVarByLabel(const char* szGameLabel, int lValue, int iActor, int iPlayer);
 void Gv_DumpValues(void);
 void Gv_ResetSystemDefaults(void);
 void Gv_InitWeaponPointers(void);
 void Gv_RefreshPointers(void);
 void Gv_Init(void);
-void Gv_WriteSave(FILE* fil);
-int Gv_ReadSave(int fil);
+void Gv_WriteSave(FILE* fil, bool skipMapStates = false);
+int Gv_ReadSave(int fil, bool lateJoinSnapshot = false);
 
 size_t __fastcall Gv_GetArrayAllocSizeForCount(int const arrayIdx, size_t const count);
 size_t __fastcall Gv_GetArrayCountForAllocSize(int const arrayIdx, size_t const filelength);
@@ -117,8 +119,22 @@ unsigned __fastcall Gv_GetArrayElementSize(int const arrayIdx);
 // Inline functions
 static FORCE_INLINE size_t Gv_GetArrayAllocSize(int const arrayIdx) { return Gv_GetArrayAllocSizeForCount(arrayIdx, aGameArrays[arrayIdx].size); }
 
+static FORCE_INLINE int __fastcall Gv_NormalizeArrayIndex(int const id, int const index)
+{
+    // Fury uses 65536-entry boolean arrays as tag bitsets. Build map tags are
+    // stored as signed 16-bit fields, so tags in the upper half of the valid
+    // range arrive in CON as negative values unless they are read through the
+    // newer unsigned tag labels.
+    if ((aGameArrays[id].flags & GAMEARRAY_BITMAP) && aGameArrays[id].size == 65536)
+        return (uint16_t)index;
+
+    return index;
+}
+
 static FORCE_INLINE int __fastcall Gv_GetArrayValue(int const id, int index)
 {
+    index = Gv_NormalizeArrayIndex(id, index);
+
     if (aGameArrays[id].flags & GAMEARRAY_STRIDE2)
         index <<= 1;
 

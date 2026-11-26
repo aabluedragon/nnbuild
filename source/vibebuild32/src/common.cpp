@@ -8,6 +8,7 @@
 #include "build.h"
 #include "common_game.h"
 #include "compat.h"
+#include "crc32.h"
 #include "grpscan.h"
 #include "editorproject.h"
 #include "netcontent.h"
@@ -28,218 +29,13 @@ extern int32_t g_netModFileCount;
 # include "osxbits.h"
 #endif
 
-struct grpfile_t const *g_selectedGrp;
-
-int32_t g_gameType = GAMEFLAG_DUKE;
-int     g_addonNum = 0;
-
-// g_gameNamePtr can point to one of: grpfiles[].name (string literal), string
-// literal, malloc'd block (XXX: possible leak)
-const char *g_gameNamePtr = NULL;
-
-// grp/con handling
-
-static const char *defaultconfilename                = "GAME.CON";
-#ifndef EDUKE32_STANDALONE
-static const char *defaultgamegrp[GAMECOUNT]         = { "DUKE3D.GRP", "NAM.GRP", "NAPALM.GRP", "WW2GI.GRP" };
-static const char *defaultdeffilename[GAMECOUNT]     = { "duke3d.def", "nam.def", "napalm.def", "ww2gi.def" };
-static const char *defaultgameconfilename[GAMECOUNT] = { "EDUKE.CON", "NAM.CON", "NAPALM.CON", "WW2GI.CON" };
-#endif
-
-// g_grpNamePtr can ONLY point to a Bmalloc'd block (length BMAX_PATH)
-char *g_grpNamePtr = NULL;
-// g_scriptNamePtr can ONLY point to a Bmalloc'd block (length BMAX_PATH)
-char *g_scriptNamePtr = NULL;
-// g_rtsNamePtr can ONLY point to a Bmalloc'd block (length BMAX_PATH)
-char *g_rtsNamePtr = NULL;
-
-void clearGrpNamePtr(void)
-{
-    Xfree(g_grpNamePtr);
-    // g_grpNamePtr assumed to be assigned to right after
-}
-
-void clearScriptNamePtr(void)
-{
-    Xfree(g_scriptNamePtr);
-    // g_scriptNamePtr assumed to be assigned to right after
-}
-
-const char *G_DefaultGrpFile(void)
-{
-#ifndef EDUKE32_STANDALONE
-    if (DUKE)
-        return defaultgamegrp[GAME_DUKE];
-    else if (NAPALM)
-        return defaultgamegrp[GAME_NAPALM];
-    else if (WW2GI)
-        return defaultgamegrp[GAME_WW2GI];
-    else if (NAM)
-        return defaultgamegrp[GAME_NAM];
-
-    return defaultgamegrp[0];
-#else
-    return "(none)";
-#endif
-}
-const char *G_DefaultDefFile(void)
-{
-#ifndef EDUKE32_STANDALONE
-    if (DUKE)
-        return defaultdeffilename[GAME_DUKE];
-    else if (WW2GI)
-        return defaultdeffilename[GAME_WW2GI];
-    else if (NAPALM)
-    {
-        if (!testkopen(defaultdeffilename[GAME_NAPALM],0) && testkopen(defaultdeffilename[GAME_NAM],0))
-            return defaultdeffilename[GAME_NAM]; // NAM/NAPALM Sharing
-        else
-            return defaultdeffilename[GAME_NAPALM];
-    }
-    else if (NAM)
-    {
-        if (!testkopen(defaultdeffilename[GAME_NAM],0) && testkopen(defaultdeffilename[GAME_NAPALM],0))
-            return defaultdeffilename[GAME_NAPALM]; // NAM/NAPALM Sharing
-        else
-            return defaultdeffilename[GAME_NAM];
-    }
-
-    return defaultdeffilename[0];
-#else
-    return "(none)";
-#endif
-}
-const char *G_DefaultConFile(void)
-{
-#ifndef EDUKE32_STANDALONE
-    int search = 0;
-#ifndef USE_PHYSFS
-    if (g_vfsPreferArchives)
-        search = 2; // Look for an alternate CON entry in the mounted game data.
-#endif
-    if (DUKE && testkopen(defaultgameconfilename[GAME_DUKE], search))
-        return defaultgameconfilename[GAME_DUKE];
-    else if (WW2GI && testkopen(defaultgameconfilename[GAME_WW2GI],0))
-        return defaultgameconfilename[GAME_WW2GI];
-    else if (NAPALM)
-    {
-        if (!testkopen(defaultgameconfilename[GAME_NAPALM],0))
-        {
-            if (testkopen(defaultgameconfilename[GAME_NAM],0))
-                return defaultgameconfilename[GAME_NAM]; // NAM/NAPALM Sharing
-        }
-        else
-            return defaultgameconfilename[GAME_NAPALM];
-    }
-    else if (NAM)
-    {
-        if (!testkopen(defaultgameconfilename[GAME_NAM],0))
-        {
-            if (testkopen(defaultgameconfilename[GAME_NAPALM],0))
-                return defaultgameconfilename[GAME_NAPALM]; // NAM/NAPALM Sharing
-        }
-        else
-            return defaultgameconfilename[GAME_NAM];
-    }
-#endif
-    return defaultconfilename;
-}
-
-const char *G_GrpFile(void)
-{
-    return (g_grpNamePtr == NULL) ? G_DefaultGrpFile() : g_grpNamePtr;
-}
-
-const char *G_DefFile(void)
-{
-    return (g_defNamePtr == NULL) ? G_DefaultDefFile() : g_defNamePtr;
-}
-
-const char *G_ConFile(void)
-{
-    return (g_scriptNamePtr == NULL) ? G_DefaultConFile() : g_scriptNamePtr;
-}
+#define DUKE_COMMON_DEFAULT_DEF_FILE_SYMBOL Duke_G_DefaultDefFile
+#include "../../build/include/duke_common_defaults_shared.cpp.inc"
+#undef DUKE_COMMON_DEFAULT_DEF_FILE_SYMBOL
 
 //////////
 
-// Set up new-style multi-psky handling.
-void G_InitMultiPsky(int CLOUDYOCEAN__DYN, int MOONSKY1__DYN, int BIGORBIT1__DYN, int LA__DYN)
-{
-    // When adding other multi-skies, take care that the tileofs[] values are
-    // <= PSKYOFF_MAX. (It can be increased up to MAXPSKYTILES, but should be
-    // set as tight as possible.)
-
-    // The default sky properties (all others are implicitly zero):
-    psky_t *sky      = tileSetupSky(DEFAULTPSKY);
-    sky->lognumtiles = 3;
-    sky->horizfrac   = 32768;
-
-    // CLOUDYOCEAN
-    // Aligns with the drawn scene horizon because it has one itself.
-    sky              = tileSetupSky(CLOUDYOCEAN__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac   = 65536;
-
-    // MOONSKY1
-    //        earth          mountain   mountain         sun
-    sky              = tileSetupSky(MOONSKY1__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac   = 32768;
-    sky->tileofs[6]  = 1;
-    sky->tileofs[1]  = 2;
-    sky->tileofs[4]  = 2;
-    sky->tileofs[2]  = 3;
-
-    // BIGORBIT1   // orbit
-    //       earth1         2           3           moon/sun
-    sky              = tileSetupSky(BIGORBIT1__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac   = 32768;
-    sky->tileofs[5]  = 1;
-    sky->tileofs[6]  = 2;
-    sky->tileofs[7]  = 3;
-    sky->tileofs[2]  = 4;
-
-    // LA // la city
-    //       earth1         2           3           moon/sun
-    sky              = tileSetupSky(LA__DYN);
-    sky->lognumtiles = 3;
-    sky->horizfrac   = 16384 + 1024;
-    sky->tileofs[0]  = 1;
-    sky->tileofs[1]  = 2;
-    sky->tileofs[2]  = 1;
-    sky->tileofs[3]  = 3;
-    sky->tileofs[4]  = 4;
-    sky->tileofs[5]  = 0;
-    sky->tileofs[6]  = 2;
-    sky->tileofs[7]  = 3;
-
-#if 0
-    // This assertion should hold. See note above.
-    for (bssize_t i=0; i<pskynummultis; ++i)
-        for (bssize_t j=0; j<(1<<multipsky[i].lognumtiles); ++j)
-            Bassert(multipsky[i].tileofs[j] <= PSKYOFF_MAX);
-#endif
-}
-
-void G_SetupGlobalPsky(void)
-{
-    int skyIdx = 0;
-
-    // NOTE: Loop must be running backwards for the same behavior as the game
-    // (greatest sector index with matching parallaxed sky takes precedence).
-    for (int i = numsectors - 1; i >= 0; i--)
-    {
-        if (sector[i].ceilingstat & 1)
-        {
-            skyIdx = getpskyidx(sector[i].ceilingpicnum);
-            if (skyIdx > 0)
-                break;
-        }
-    }
-
-    g_pskyidx = skyIdx;
-}
+#include "../../build/include/duke_common_psky_shared.cpp.inc"
 
 //////////
 
@@ -250,6 +46,108 @@ static void G_LoadAddon(void);
 int32_t g_groupFileHandle;
 
 static struct strllist *CommandPaths, *CommandGrps;
+
+static uint32_t G_GroupScannerCrc(const unsigned char *data, int32_t size)
+{
+    static int crcTableReady = 0;
+    if (!crcTableReady)
+    {
+        initcrc32table();
+        crcTableReady = 1;
+    }
+
+    return Bcrc32(data, size, 0);
+}
+
+static grpinfo_t const *G_KnownGameDataInfo(char const *name)
+{
+    FILE *fp = fopen(name, "rb");
+    if (!fp)
+        return NULL;
+
+    if (fseek(fp, 0, SEEK_END) != 0)
+    {
+        fclose(fp);
+        return NULL;
+    }
+
+    long const sizeLong = ftell(fp);
+    if (sizeLong <= 0 || sizeLong > INT32_MAX || fseek(fp, 0, SEEK_SET) != 0)
+    {
+        fclose(fp);
+        return NULL;
+    }
+
+    int32_t const size = (int32_t)sizeLong;
+    auto *data = (unsigned char *)Xmalloc(size);
+    bool const ok = fread(data, 1, size, fp) == (size_t)size;
+    fclose(fp);
+
+    if (!ok)
+    {
+        Xfree(data);
+        return NULL;
+    }
+
+    uint32_t const crc = G_GroupScannerCrc(data, size);
+    Xfree(data);
+
+    for (grpinfo_t const *info = listgrps; info; info = info->next)
+        if (info->size == size && (uint32_t)info->crcval == crc)
+            return info;
+
+    return NULL;
+}
+
+static void G_ResolveCrossplayGroupPath(char const *path, char *resolved, size_t resolvedSize)
+{
+    Bstrncpyz(resolved, path, resolvedSize);
+
+    FILE *fp = fopen(resolved, "rb");
+    if (fp)
+    {
+        fclose(fp);
+        return;
+    }
+
+    char *found = NULL;
+    if (findfrompath(path, &found) == 0 && found)
+    {
+        Bstrncpyz(resolved, found, resolvedSize);
+        Xfree(found);
+    }
+}
+
+static int32_t G_CrossplayGameFromGrpInfo(int32_t gameFlags)
+{
+    if (gameFlags & GAMEFLAG_FURY)
+        return ART_CROSSPLAY_GAME_IONFURY;
+    if (gameFlags & GAMEFLAG_WW2GI)
+        return ART_CROSSPLAY_GAME_WW2GI;
+    if (gameFlags & GAMEFLAG_NAPALM)
+        return ART_CROSSPLAY_GAME_NAPALM;
+    if (gameFlags & GAMEFLAG_NAM)
+        return ART_CROSSPLAY_GAME_NAM;
+
+    return ART_CROSSPLAY_GAME_DUKE;
+}
+
+static void G_MaybeTrackCrossplayGroup(char const *path)
+{
+    char resolved[BMAX_PATH];
+    G_ResolveCrossplayGroupPath(path, resolved, sizeof(resolved));
+
+    grpinfo_t const *info = G_KnownGameDataInfo(resolved);
+    if (!info)
+        return;
+
+    int32_t const runtimeMask = GAMEFLAG_DUKE | GAMEFLAG_NAM | GAMEFLAG_NAPALM | GAMEFLAG_WW2GI | GAMEFLAG_FURY;
+    if ((info->game & runtimeMask) == (g_gameType & runtimeMask))
+        return;
+
+    if (artCrossplayAddForeignGameData(resolved, G_CrossplayGameFromGrpInfo(info->game)))
+        LOG_F(INFO, "Crossplay: treating %s as foreign game data (%s).", resolved, info->name ? info->name : "known game data");
+}
 
 void G_ExtPreInit(int32_t argc,char const * const * argv)
 {
@@ -356,10 +254,18 @@ void G_ScanGroups(void)
     g_selectedGrp = NULL;
 
     char const * const currentGrp = G_GrpFile();
+    char const *currentBaseName = Bstrrchr(currentGrp, '/');
+#ifdef _WIN32
+    char const * const currentWinBaseName = Bstrrchr(currentGrp, '\\');
+    if (currentWinBaseName != NULL && (currentBaseName == NULL || currentWinBaseName > currentBaseName))
+        currentBaseName = currentWinBaseName;
+#endif
+    currentBaseName = currentBaseName ? currentBaseName + 1 : currentGrp;
 
     for (grpfile_t const *fg = foundgrps; fg; fg=fg->next)
     {
-        if (!Bstrcasecmp(fg->filename, currentGrp))
+        if (!Bstrcasecmp(fg->filename, currentGrp) ||
+            (currentBaseName && !Bstrcasecmp(fg->filename, currentBaseName)))
         {
             g_selectedGrp = fg;
             break;
@@ -370,195 +276,20 @@ void G_ScanGroups(void)
         g_selectedGrp = foundgrps;
 }
 
-static int32_t G_TryLoadingGrp(char const * const grpfile)
-{
-    int const previousMode = pathsearchmode;
-    pathsearchmode = 1;
-    int32_t const i = initgroupfile(grpfile);
-    pathsearchmode = previousMode;
-    if (i == -1)
-        LOG_F(WARNING, "Unable to open %s.", grpfile);
-    else
-        LOG_F(INFO, "Using %s as main data file.", grpfile);
-
-    return i;
-}
-
-static int32_t G_LoadGrpDependencyChain(grpfile_t const * const grp)
-{
-    if (!grp)
-        return -1;
-
-    if (grp->type->dependency && grp->type->dependency != grp->type->crcval)
-        G_LoadGrpDependencyChain(FindGroup(grp->type->dependency));
-
-    int32_t const i = G_TryLoadingGrp(grp->filename);
-
-    if (grp->type->postprocessing)
-        grp->type->postprocessing(i);
-
-    return i;
-}
-
-void G_LoadGroups(int32_t autoload)
-{
-    if (g_modDir[0] != '/')
-    {
-        char cwd[BMAX_PATH];
-
-        Bstrcat(g_rootDir, g_modDir);
-        addsearchpath(g_rootDir);
-        //        addsearchpath(mod_dir);
-
-        char path[BMAX_PATH];
-
-        if (buildvfs_getcwd(cwd, BMAX_PATH))
-        {
-            Bsnprintf(path, sizeof(path), "%s/%s", cwd, g_modDir);
-            if (!Bstrcmp(g_rootDir, path))
-            {
-                if (addsearchpath(path) == -2)
-                    if (buildvfs_mkdir(path, S_IRWXU) == 0)
-                        addsearchpath(path);
-            }
-        }
-
-#ifdef USE_OPENGL
-        Bsnprintf(path, sizeof(path), "%s/%s", g_modDir, TEXCACHEFILE);
-        Bstrcpy(TEXCACHEFILE, path);
-#endif
-    }
-
-    if (g_addonNum && !DukeEditor::ProjectStandalone())
-        G_LoadAddon();
-
-    const char *grpfile;
-    int32_t i;
-
-    if (DukeEditor::ProjectStandalone())
-    {
-        grpfile = "";
-        i = -1;
-        g_selectedGrp = nullptr;
-        g_gameType = GAMEFLAG_DUKE;
-    }
-    else if ((i = G_LoadGrpDependencyChain(g_selectedGrp)) != -1)
-    {
-        grpfile = g_selectedGrp->filename;
-
-        clearGrpNamePtr();
-        g_grpNamePtr = dup_filename(grpfile);
-
-        grpinfo_t const * const type = g_selectedGrp->type;
-
-        g_gameType = type->game;
-        g_gameNamePtr = type->name;
-
-        if (type->scriptname && g_scriptNamePtr == NULL)
-            g_scriptNamePtr = dup_filename(type->scriptname);
-
-        if (type->defname && g_defNamePtr == NULL)
-            g_defNamePtr = dup_filename(type->defname);
-
-        if (type->rtsname && g_rtsNamePtr == NULL)
-            g_rtsNamePtr = dup_filename(type->rtsname);
-    }
-    else
-    {
-        grpfile = G_GrpFile();
-        i = G_TryLoadingGrp(grpfile);
-    }
-
-    if (autoload)
-    {
-        G_LoadGroupsInDir("autoload");
-
-        if (i != -1)
-            G_DoAutoload(grpfile);
-    }
-
-    if (g_modDir[0] != '/')
-        G_LoadGroupsInDir(g_modDir);
-
-#ifndef EDUKE32_STANDALONE
-    if (g_defNamePtr == NULL)
-    {
-        const char *tmpptr = getenv("DUKE3DDEF");
-        if (tmpptr)
-        {
-            clearDefNamePtr();
-            g_defNamePtr = dup_filename(tmpptr);
-            LOG_F(INFO, "Using %s as definitions file (DUKE3DDEF env var override).", g_defNamePtr);
-        }
-    }
-#endif
-
-    loaddefinitions_game(G_DefFile(), TRUE);
-
-    struct strllist *s;
-
-    int const bakpathsearchmode = pathsearchmode;
-    pathsearchmode = 1;
-
-    while (CommandGrps)
-    {
-        int32_t j;
-
-        s = CommandGrps->next;
-
-        if ((j = initgroupfile(CommandGrps->str)) == -1)
-            LOG_F(ERROR, "Unable to load %s: file not found.", CommandGrps->str);
-        else
-        {
-            g_groupFileHandle = j;
-            LOG_F(INFO, "Loaded %s", CommandGrps->str);
-            if (autoload)
-                G_DoAutoload(CommandGrps->str);
-
-            // Remember command-line mod group files so a multiplayer host can
-            // stream them to clients automatically (see Net_SendGameFiles).
-            if (g_netModFileCount < MAXNETMODFILES)
-            {
-                std::string path;
-                Net_ResolveContentPath(CommandGrps->str, path);
-                Bstrncpyz(g_netModFiles[g_netModFileCount++],
-                          path.empty() ? CommandGrps->str : path.c_str(), BMAX_PATH);
-            }
-        }
-
-        Xfree(CommandGrps->str);
-        Xfree(CommandGrps);
-        CommandGrps = s;
-    }
-    pathsearchmode = bakpathsearchmode;
-}
-
-static void G_LoadAddon(void)
-{
-#ifndef EDUKE32_STANDALONE
-    uint32_t crc;
-
-    switch (g_addonNum)
-    {
-    case ADDON_DUKEDC:
-        crc = DUKEDC_CRC;
-        break;
-    case ADDON_NWINTER:
-        crc = DUKENW_CRC;
-        break;
-    case ADDON_CARIBBEAN:
-        crc = DUKECB_CRC;
-        break;
-    default:
-        return;
-    }
-
-    grpfile_t const * const grp = FindGroup(crc);
-
-    if (grp)
-        g_selectedGrp = grp;
-#endif
-}
+#define DUKE_COMMON_STANDALONE_PROJECT() DukeEditor::ProjectStandalone()
+#define DUKE_COMMON_AFTER_COMMAND_GRP_LOAD(path) do { \
+    if (g_netModFileCount < MAXNETMODFILES) \
+    { \
+        std::string resolvedPath; \
+        Net_ResolveContentPath((path), resolvedPath); \
+        Bstrncpyz(g_netModFiles[g_netModFileCount++], \
+                  resolvedPath.empty() ? (path) : resolvedPath.c_str(), BMAX_PATH); \
+    } \
+    G_MaybeTrackCrossplayGroup(path); \
+} while (0)
+#include "../../build/include/duke_common_grpload_shared.cpp.inc"
+#undef DUKE_COMMON_AFTER_COMMAND_GRP_LOAD
+#undef DUKE_COMMON_STANDALONE_PROJECT
 
 #ifndef EDUKE32_STANDALONE
 #ifndef EDUKE32_TOUCH_DEVICES
@@ -844,47 +575,13 @@ void G_AddSearchPaths(void)
 #endif
 }
 
-void G_CleanupSearchPaths(void)
-{
-    removesearchpaths_withuser(SEARCHPATH_REMOVE);
-
-    if (!NAM)
-        removesearchpaths_withuser(SEARCHPATH_NAM);
-
-    if (!WW2GI)
-        removesearchpaths_withuser(SEARCHPATH_WW2GI);
-
-    if (!FURY)
-        removesearchpaths_withuser(SEARCHPATH_FURY);
-}
+#include "../../build/include/duke_common_modules_shared.cpp.inc"
 
 //////////
 
-GrowArray<char *> g_scriptModules;
+#include "../../build/include/duke_common_loading_shared.cpp.inc"
 
-void G_AddGroup(const char *buffer)
-{
-    char buf[BMAX_PATH];
-
-    struct strllist *s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
-
-    Bstrcpy(buf, buffer);
-
-    if (Bstrchr(buf,'.') == 0)
-        Bstrcat(buf,".grp");
-
-    s->str = Xstrdup(buf);
-
-    if (CommandGrps)
-    {
-        struct strllist *t;
-        for (t = CommandGrps; t->next; t=t->next) ;
-        t->next = s;
-        return;
-    }
-    CommandGrps = s;
-}
-
+// Replace the queued command-line group files (used when a server changes pack).
 void G_ReplaceCommandGroups(std::vector<std::string> const &paths)
 {
     while (CommandGrps)
@@ -902,107 +599,6 @@ void G_ReplaceCommandGroups(std::vector<std::string> const &paths)
 bool G_HaveCommandGroups(void)
 {
     return CommandGrps != nullptr;
-}
-
-void G_AddPath(const char *buffer)
-{
-    struct strllist *s = (struct strllist *)Xcalloc(1,sizeof(struct strllist));
-    s->str = Xstrdup(buffer);
-
-    if (CommandPaths)
-    {
-        struct strllist *t;
-        for (t = CommandPaths; t->next; t=t->next) ;
-        t->next = s;
-        return;
-    }
-    CommandPaths = s;
-}
-
-void G_AddCon(const char *buffer)
-{
-    clearScriptNamePtr();
-    g_scriptNamePtr = dup_filename(buffer);
-    LOG_F(INFO, "Using CON file %s", g_scriptNamePtr);
-}
-
-void G_AddConModule(const char *buffer)
-{
-    g_scriptModules.append(Xstrdup(buffer));
-}
-
-//////////
-
-// loads all group (grp, zip, pk3/4) files in the given directory
-void G_LoadGroupsInDir(const char *dirname)
-{
-    static const char *extensions[] = { "*.grp", "*.zip", "*.ssi", "*.pk3", "*.pk4" };
-    char buf[BMAX_PATH];
-    fnlist_t fnlist = FNLIST_INITIALIZER;
-
-    for (auto & extension : extensions)
-    {
-        BUILDVFS_FIND_REC *rec;
-
-        fnlist_getnames(&fnlist, dirname, extension, -1, 0);
-
-        for (rec=fnlist.findfiles; rec; rec=rec->next)
-        {
-            Bsnprintf(buf, sizeof(buf), "%s/%s", dirname, rec->name);
-            LOG_F(INFO, "Using group file %s", buf);
-            initgroupfile(buf);
-        }
-
-        fnlist_clearnames(&fnlist);
-    }
-}
-
-void G_DoAutoload(const char *dirname)
-{
-    char buf[BMAX_PATH];
-
-    Bsnprintf(buf, sizeof(buf), "autoload/%s", dirname);
-    G_LoadGroupsInDir(buf);
-}
-
-//////////
-
-void G_LoadLookups(void)
-{
-    int32_t j;
-    buildvfs_kfd fp;
-
-    if ((fp=kopen4loadfrommod("lookup.dat",0)) == buildvfs_kfd_invalid)
-        if ((fp=kopen4loadfrommod("lookup.dat",1)) == buildvfs_kfd_invalid)
-            return;
-
-    j = paletteLoadLookupTable(fp);
-
-    if (j < 0)
-    {
-        if (j == -1)
-            LOG_F(ERROR, "Failed loading \"lookup.dat\": not enough data.");
-
-        return kclose(fp);
-    }
-
-    uint8_t paldata[768];
-
-    for (j=1; j<=5; j++)
-    {
-        // Account for TITLE and REALMS swap between basepal number and on-disk order.
-        int32_t basepalnum = (j == 3 || j == 4) ? 4+3-j : j;
-
-        if (kread_and_test(fp, paldata, 768))
-            return kclose(fp);
-
-        for (unsigned char & k : paldata)
-            k <<= 2;
-
-        paletteSetColorTable(basepalnum, paldata);
-    }
-
-    kclose(fp);
 }
 
 //////////
@@ -1066,6 +662,51 @@ static buildvfs_kfd S_TryExtensionReplacements(char * const testfn, char const s
     return buildvfs_kfd_invalid;
 }
 
+static buildvfs_kfd S_TryLegacySoundExtensions(char * const testfn, char const searchfirst)
+{
+    char * const extension = Bstrrchr(testfn, '.');
+
+    if (extension == NULL)
+        return buildvfs_kfd_invalid;
+
+    static char const * extensions[] = { ".voc", ".wav" };
+
+    for (char const * ext : extensions)
+    {
+        Bstrcpy(extension, ext);
+        buildvfs_kfd const fp = kopen4loadfrommod(testfn, searchfirst);
+        if (fp != buildvfs_kfd_invalid)
+            return fp;
+    }
+
+    return buildvfs_kfd_invalid;
+}
+
+static buildvfs_kfd S_TryLegacySoundFallbacks(char * const testfn, const char *fn, char const searchfirst)
+{
+    Bstrcpy(testfn, fn);
+
+    buildvfs_kfd fp = S_TryLegacySoundExtensions(testfn, searchfirst);
+    if (fp != buildvfs_kfd_invalid)
+        return fp;
+
+    char const *basename = Bstrrchr(fn, '/');
+    char const *winbase = Bstrrchr(fn, '\\');
+
+    if (winbase != NULL && (basename == NULL || winbase > basename))
+        basename = winbase;
+
+    if (basename == NULL)
+        return buildvfs_kfd_invalid;
+
+    Bstrcpy(testfn, basename + 1);
+    fp = kopen4loadfrommod(testfn, searchfirst);
+    if (fp != buildvfs_kfd_invalid)
+        return fp;
+
+    return S_TryLegacySoundExtensions(testfn, searchfirst);
+}
+
 buildvfs_kfd S_OpenAudio(const char *fn, char searchfirst, uint8_t const ismusic)
 {
     buildvfs_kfd const origfp      = kopen4loadfrommod(fn, searchfirst);
@@ -1084,6 +725,15 @@ buildvfs_kfd S_OpenAudio(const char *fn, char searchfirst, uint8_t const ismusic
     buildvfs_kfd fp = S_TryExtensionReplacements(testfn, searchfirst, ismusic);
     if (fp != buildvfs_kfd_invalid)
         goto success;
+
+    // Some WT/compatible definitions reference upgraded assets as
+    // sound/<name>.ogg while older groups or add-ons keep root <name>.voc/.wav.
+    if (!ismusic)
+    {
+        fp = S_TryLegacySoundFallbacks(testfn, fn, searchfirst);
+        if (fp != buildvfs_kfd_invalid)
+            goto success;
+    }
 
 #ifndef USE_PHYSFS
     // look in ./music/<file's parent GRP name>/

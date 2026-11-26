@@ -119,6 +119,24 @@ static GLsync drawpolyVertsSync[3] = { 0 };
 static float defaultDrawpolyVertsArray[MAX_DRAWPOLY_VERTS*5];
 static float* drawpolyVerts = defaultDrawpolyVertsArray;
 
+// VibeBuild32 -- per-vertex shading from a light field (PowerSlave's Kex
+// levels). The game installs a shade-at-a-point callback; polymost_drawalls
+// and polymost_drawmaskwall describe the surface each polygon lies on, and
+// polymost_drawpoly recovers every screen vertex's world position from that
+// surface, asks for its shade and colours the vertex with it. The colours
+// ride in a second VBO bound to the fixed-function colour attribute, which
+// polymost1Vert.glsl already reads as v_color = gl_Color.
+int32_t polymost_kexVertexLight = 0;
+int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback) = NULL;
+int32_t (*polymost_kexColorAt)(float x, float y, float z, float color[3]) = NULL;
+int32_t (*polymost_kexTriangles)(polymost_kextriangle_t *out, int32_t max) = NULL;
+int32_t polymost_kexLightTriangle = -1;
+polymost_kexsurf_t polymost_kexsurf = { 0, {0.f,0.f}, {0.f,0.f}, 0.f, 0.f, 0.f, 0.f, -1, -1, 0 };
+static float  kexColors[30000 * 4];
+static float  kexCurColor[4] = { 1.f, 1.f, 1.f, 1.f };
+static int    kexColorsEnabled = 0;
+static GLuint kexColorVBO = 0;
+
 struct glfiltermodes glfiltermodes[NUMGLFILTERMODES] = { { "GL_NEAREST",                GL_NEAREST,                GL_NEAREST },
                                                          { "GL_LINEAR",                 GL_LINEAR,                 GL_LINEAR  },
                                                          { "GL_NEAREST_MIPMAP_NEAREST", GL_NEAREST_MIPMAP_NEAREST, GL_NEAREST },
@@ -2815,6 +2833,25 @@ int32_t polymost_spriteIsModelOrVoxel(tspritetype const * const tspr)
 }
 
 #ifdef POLYMOST2
+static void polymost2_restoreLegacyDrawState(void)
+{
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+
+    buildgl_bindBuffer(GL_ARRAY_BUFFER, 0);
+    buildgl_bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    buildgl_setDisabled(GL_CULL_FACE);
+
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+
+    // Polymost's legacy draw path uses client-state pointers into the shared
+    // drawpoly VBO. Polymost2 uses generic vertex attributes and arbitrary VBOs,
+    // so restore the legacy pointers before returning to regular Polymost draws.
+    polymost_resetVertexPointers();
+}
+
 static void polymost2_drawVBO(GLenum mode,
                               int32_t vertexBufferID,
                               int32_t indexBufferID,
@@ -2858,6 +2895,8 @@ static void polymost2_drawVBO(GLenum mode,
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(float) * 5, 0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(float) * 5, (GLvoid *)(sizeof(float) * 3));
 
     if (palookup[globalpal] == NULL)
     {
@@ -2880,6 +2919,7 @@ static void polymost2_drawVBO(GLenum mode,
             Bsprintf(ptempbuf, "pth==NULL! (bad pal?) pic=%d pal=%d", globalpicnum, globalpal);
             polymost_printtext256(8,8, editorcolors[15],editorcolors[5], ptempbuf, 0);
         }
+        polymost2_restoreLegacyDrawState();
         return;
     }
 
@@ -2966,19 +3006,8 @@ static void polymost2_drawVBO(GLenum mode,
                        0);
     }
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-
     //POGOTODO: again, these state changes should be batched in the future, rather than on each VBO rendered
-    buildgl_bindBuffer(GL_ARRAY_BUFFER, 0);
-    buildgl_bindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    buildgl_setDisabled(GL_CULL_FACE);
-
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-
-    //polymost_resetVertexPointers();
+    polymost2_restoreLegacyDrawState();
 }
 #endif // POLYMOST2
 
@@ -3153,6 +3182,7 @@ void polymost_startBufferedDrawing(int nn)
         }
         else
         {
+            polymost_resetVertexPointers();
             glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 5 * drawpolyVertsBufferLength, NULL, GL_STREAM_DRAW);
             drawpolyVertsOffset = 0;
         }
@@ -3164,16 +3194,628 @@ void polymost_bufferVert(vec3f_t const v, vec2f_t const t)
     uint32_t const off = (persistentStreamBuffer * drawpolyVertsOffset + drawpolyVertsCnt++) * 5;
     *(vec3f_t *)(&drawpolyVerts[off]) = v;
     *(vec2f_t*)(&drawpolyVerts[off+3]) = t;
+    if (kexColorsEnabled && drawpolyVertsCnt <= 30000)
+        Bmemcpy(&kexColors[(drawpolyVertsCnt - 1) * 4], kexCurColor, sizeof(kexCurColor));
 }
 
 void polymost_finishBufferedDrawing(int mode)
 {
+    polymost_resetVertexPointers();
+
     if (!persistentStreamBuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, drawpolyVertsOffset * sizeof(float) * 5, drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts);
+    {
+        // Orphan-and-upload: replace the whole VBO with just this batch via glBufferData
+        // (a fresh backing store), so the driver never has to sync against pending GPU
+        // reads. glBufferSubData into an in-use buffer forces a full GPU sync (semaphore
+        // wait) on Apple's legacy GL-over-Metal - where glMapBufferRange(UNSYNCHRONIZED)
+        // isn't available - and profiling showed ~95% of frame time lost to that stall.
+        // glBufferData is core GL 1.5, so this works on every path. (VibeBuild32 perf.)
+        glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts, GL_STREAM_DRAW);
+        if (kexColorsEnabled)
+        {
+            if (!kexColorVBO) glGenBuffers(1, &kexColorVBO);
+            buildgl_bindBuffer(GL_ARRAY_BUFFER, kexColorVBO);
+            glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 4, kexColors, GL_STREAM_DRAW);
+            glColorPointer(4, GL_FLOAT, 0, 0);
+            glEnableClientState(GL_COLOR_ARRAY);
+            buildgl_bindBuffer(GL_ARRAY_BUFFER, drawpolyVertsID);
+        }
+        glDrawArrays(mode, 0, drawpolyVertsCnt);
+        if (kexColorsEnabled)
+        {
+            glDisableClientState(GL_COLOR_ARRAY);
+            glColor4f(kexCurColor[0], kexCurColor[1], kexCurColor[2], kexCurColor[3]);
+            kexColorsEnabled = 0;
+        }
+        drawpolyVertsOffset = 0;
+        drawpolyVertsCnt = 0;
+        return;
+    }
 
     glDrawArrays(mode, drawpolyVertsOffset, drawpolyVertsCnt);
     drawpolyVertsOffset += drawpolyVertsCnt;
     drawpolyVertsCnt = 0;
+}
+
+// A screen vertex back to the world, on the surface polymost_kexsurf names.
+// A wall: 1/depth is linear in screen x between its projected ends, so the
+// parameter along the wall follows from it, and screen y gives z through the
+// same 1/depth (calc_ypanning's t0 = (z - posz) * ryp + ghoriz). A flat: its
+// plane gives z, z and screen y give the depth, depth and screen x the camera
+// point, and the view rotation undone puts it in the world.  A Build slope is
+// still a plane, so intersect its exact equation with that ray directly.
+static int32_t polymost_kexVertexShade(float sx, float sy);
+static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_t method);
+// Defined with the other slope helpers below; the light-field unprojection
+// needs their unrounded plane equation here.
+float fgetceilzofslope(usectorptr_t sec, float dax, float day);
+float fgetflorzofslope(usectorptr_t sec, float dax, float day);
+
+// The world position of a screen point on the current surface (see above).
+static int polymost_kexUnproject(float sx, float sy, float *wx, float *wy, float *wz)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    if (s.kind == 1)
+    {
+        float const dx = s.x1 - s.x0;
+        float const f = (dx != 0.f) ? clamp((sx - s.x0) / dx, 0.f, 1.f) : 0.f;
+        float const r = s.ryp0 + (s.ryp1 - s.ryp0) * f;
+        if (r <= 1e-7f) return 0;
+        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
+        float const t = (Bfabsf(b - a) < 1e-6f) ? f : clamp(((1.f / r) - a) / (b - a), 0.f, 1.f);
+        *wx = s.n0.x + t * (s.n1.x - s.n0.x);
+        *wy = s.n0.y + t * (s.n1.y - s.n0.y);
+        *wz = (float)globalposz + (sy - ghoriz) / r;
+        return 1;
+    }
+    if (s.kind == 2 && (unsigned)s.sectnum < (unsigned)numsectors)
+    {
+        auto const sec = (usectorptr_t)&sector[s.sectnum];
+        int const sloped = (s.isceil ? sec->ceilingstat : sec->floorstat) & 2;
+        auto plane = [&](float x, float y) -> float
+        {
+            return s.isceil ? fgetceilzofslope(sec, x, y) : fgetflorzofslope(sec, x, y);
+        };
+
+        // The ray through this screen pixel has world form
+        // (x,y) = player + depth * (rx,ry).  Intersecting that ray with the
+        // slope's z = z0 + zx*x + zy*y plane is exact.  The former two-pass
+        // estimate shifted the sampled world point as the player advanced,
+        // which made an otherwise static KEX light field appear to crawl.
+        float const D = -gsinang * gsinang2 - gcosang * gcosang2;
+        if (Bfabsf(D) < 1e-12f || Bfabsf(ghalfx) < 1e-6f || Bfabsf(gyxscale) < 1e-12f)
+            return 0;
+        float const k = (sx - ghalfx) / ghalfx;
+        float const rx = (k * gsinang2 - gcosang) / D;
+        float const ry = (-gsinang - gcosang2 * k) / D;
+        float const z0 = plane((float)globalposx, (float)globalposy);
+        float zx = 0.f, zy = 0.f;
+        if (sloped)
+        {
+            zx = plane((float)globalposx + 1.f, (float)globalposy) - z0;
+            zy = plane((float)globalposx, (float)globalposy + 1.f) - z0;
+        }
+        float const v = (sy - ghoriz) / gyxscale;
+        float const denom = v - zx * rx - zy * ry;
+        if (Bfabsf(denom) < 1e-8f) return 0;
+        float const depth = (z0 - (float)globalposz) / denom;
+        if (depth <= 1e-4f) return 0;
+        float const ox = rx * depth, oy = ry * depth;
+        float const z = z0 + zx * ox + zy * oy;
+        *wx = (float)globalposx + ox; *wy = (float)globalposy + oy; *wz = z;
+        return 1;
+    }
+    return 0;
+}
+
+// A world point to the (untilted) screen, the way polymost_drawalls projects
+// a wall's ends: p = rotate(world - pos); x = ghalfx*p.x/p.y + ghalfx;
+// y = ghoriz + (z - posz) * gyxscale/p.y.
+static void polymost_kexProject(float wx, float wy, float wz, float *sx, float *sy)
+{
+    float const dx = wx - (float)globalposx, dy = wy - (float)globalposy;
+    float const px = dy * gcosang - dx * gsinang;
+    float py = dx * gcosang2 + dy * gsinang2;
+    if (py < 1.f) py = 1.f;
+    *sx = ghalfx * px / py + ghalfx;
+    *sy = ghoriz + (wz - (float)globalposz) * gyxscale / py;
+}
+
+// Cut the polygon along the world's 128-unit cell grid, so the per-vertex
+// shade has a vertex wherever the field has a sample: without it a wall or
+// floor piece hundreds of units across is shaded from its corners alone and
+// the fire pot's halo in the middle of the wall behind it averages away.
+// World grid lines project to straight screen lines, so the pieces are the
+// convex polygon split by lines; a quad cut by two families of parallel
+// lines yields pieces of at most eight vertices. Recursion draws them.
+#define KEX_TESS_CELL   (128.f * 6.f)         // one Kex cell, world units
+#define KEX_TESS_CELLZ  (128.f * 6.f * 16.f)  // in z units
+#define KEX_TESS_MAXCUT 8
+#define KEX_SLOPE_TILE_CUTS KEX_TESS_MAXCUT
+#define KEX_TESS_MAXPOLY 96
+// Most authored floor faces are tiny, but several ordinary TOMB rooms use
+// 452 or 718 light triangles.  Its two long low-wall strips, however, share
+// one 3,772-triangle source face.  The strips only expose a small fraction of
+// that mesh at once, and must retain its authored vertices to avoid a light
+// band that changes as the player looks up and down.  Keep the wider budget
+// wall-only so expansive floor terrain still uses the bounded grid.
+#define KEX_SOURCE_MESH_MAX       4096
+#define KEX_SOURCE_MESH_FLOOR_MAX 768
+#define KEX_SOURCE_CLIP_MAX 16
+static int s_kexTess = 0;
+
+// KEXLIT4 keeps the remaster's original light triangles.  For a reasonably
+// small flat or wall we can use that exact mesh instead of inventing vertices
+// from the current screen polygon.  In particular, a raised platform or wall
+// strip that fits between two regular grid lines then has the same vertex
+// colours no matter where the camera happens to clip it.
+static int polymost_kexSourceMesh(vec2f_t const *dpxy, int32_t n, int32_t method)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    if (!polymost_kexTriangles || (s.kind != 1 && s.kind != 2))
+        return 0;
+
+    usectorptr_t sec = NULL;
+    if (s.kind == 2)
+    {
+        if ((unsigned)s.sectnum >= (unsigned)numsectors)
+            return 0;
+        sec = (usectorptr_t)&sector[s.sectnum];
+    }
+
+    // KEX and Build can disagree by a few units about a converted wall's
+    // position.  Keep the source mesh's distance along the wall, but put it
+    // on the live Build wall line before screen clipping.  Otherwise a small
+    // perpendicular offset makes source coverage depend on the view pitch
+    // and can switch between the authored mesh and the fallback tessellation.
+    float wallDx = 0.f, wallDy = 0.f, wallInvLen2 = 0.f;
+    if (s.kind == 1)
+    {
+        wallDx = s.n1.x - s.n0.x;
+        wallDy = s.n1.y - s.n0.y;
+        float const wallLen2 = wallDx * wallDx + wallDy * wallDy;
+        if (wallLen2 < 1e-6f)
+            return 0;
+        wallInvLen2 = 1.f / wallLen2;
+    }
+
+    static polymost_kextriangle_t source[KEX_SOURCE_MESH_MAX];
+    int const sourceLimit = sec ? KEX_SOURCE_MESH_FLOOR_MAX : KEX_SOURCE_MESH_MAX;
+    int const ntri = polymost_kexTriangles(source, sourceLimit);
+    if (ntri <= 0)
+        return 0;
+
+    int const sloped = sec && ((s.isceil ? sec->ceilingstat : sec->floorstat) & 2);
+    auto planez = [&](float x, float y) -> float
+    {
+        if (!sloped)
+            return (float)(s.isceil ? sec->ceilingz : sec->floorz);
+        return s.isceil ? fgetceilzofslope(sec, x, y) : fgetflorzofslope(sec, x, y);
+    };
+    // The converter may round a source plane by a few Build units.  Project
+    // on the live Build plane so the exact light mesh never changes the
+    // collision/render geometry, but reject a mismatched source face.
+    if (sec)
+        for (int i = 0; i < ntri; i++)
+            for (int j = 0; j < 3; j++)
+                if (Bfabsf(source[i].p[j].z - planez(source[i].p[j].x, source[i].p[j].y)) > 256.f)
+                    return 0;
+
+    auto depth = [](vec3f_t const &p) -> float
+    {
+        float const dx = p.x - (float)globalposx, dy = p.y - (float)globalposy;
+        return dx * gcosang2 + dy * gsinang2;
+    };
+    auto area = [](vec2f_t const *p, int count) -> float
+    {
+        float a = 0.f;
+        for (int i = 0; i < count; i++)
+        {
+            vec2f_t const &q = p[(i + 1) % count];
+            a += p[i].x * q.y - q.x * p[i].y;
+        }
+        return a;
+    };
+    float const targetArea = area(dpxy, n);
+    if (Bfabsf(targetArea) < 1e-4f)
+        return 0;
+    float const targetSign = targetArea < 0.f ? -1.f : 1.f;
+
+    // A slope's KEX tiles and its Build approximation can differ along a
+    // portal seam.  Do the complete screen clip first and require the source
+    // tiles to cover this Build polygon exactly before drawing any of them.
+    // This permits exact source lighting on compatible slopes while keeping
+    // the grid fallback for a converted face that would otherwise leave a
+    // dark wedge or overlap at its edge.
+    static vec2f_t clipped[KEX_SOURCE_MESH_MAX][KEX_SOURCE_CLIP_MAX];
+    static int clippedN[KEX_SOURCE_MESH_MAX];
+    float covered = 0.f;
+    s_kexTess = 1;
+    for (int t = 0; t < ntri; t++)
+    {
+        clippedN[t] = 0;
+        vec3f_t nearpoly[5], front[KEX_SOURCE_CLIP_MAX];
+        for (int i = 0; i < 3; i++)
+        {
+            nearpoly[i] = source[t].p[i];
+            if (sec)
+                nearpoly[i].z = planez(nearpoly[i].x, nearpoly[i].y);
+            else
+            {
+                float const along = ((nearpoly[i].x - s.n0.x) * wallDx +
+                                     (nearpoly[i].y - s.n0.y) * wallDy) * wallInvLen2;
+                nearpoly[i].x = s.n0.x + wallDx * along;
+                nearpoly[i].y = s.n0.y + wallDy * along;
+            }
+        }
+
+        // Clip the authored triangle to polymost's near plane before
+        // projecting it.  This is the same geometric clip that prevents a
+        // world triangle behind the player from wrapping across the screen.
+        int nfront = 0;
+        for (int i = 0; i < 3; i++)
+        {
+            vec3f_t const &p = nearpoly[i], &q = nearpoly[(i + 1) % 3];
+            float const dp = depth(p), dq = depth(q);
+            int const pin = dp >= SCISDIST, qin = dq >= SCISDIST;
+            if (pin && nfront < KEX_SOURCE_CLIP_MAX)
+                front[nfront++] = p;
+            if (pin != qin && nfront < KEX_SOURCE_CLIP_MAX)
+            {
+                float const u = (SCISDIST - dp) / (dq - dp);
+                front[nfront++] = { p.x + (q.x - p.x) * u,
+                                    p.y + (q.y - p.y) * u,
+                                    p.z + (q.z - p.z) * u };
+            }
+        }
+        if (nfront < 3)
+            continue;
+
+        vec2f_t clipa[KEX_SOURCE_CLIP_MAX], clipb[KEX_SOURCE_CLIP_MAX];
+        int nclip = nfront;
+        for (int i = 0; i < nfront; i++)
+            polymost_kexProject(front[i].x, front[i].y, front[i].z, &clipa[i].x, &clipa[i].y);
+
+        // Intersect that triangle with this exact Build polygon.  The source
+        // face can be larger than a converted sector split, so drawing the
+        // raw source triangles without this clip would leak light geometry
+        // through adjacent floors.
+        for (int e = 0; e < n && nclip >= 3; e++)
+        {
+            vec2f_t const &a = dpxy[e], &b = dpxy[(e + 1) % n];
+            int nnext = 0;
+            for (int i = 0; i < nclip; i++)
+            {
+                vec2f_t const &p = clipa[i], &q = clipa[(i + 1) % nclip];
+                float const dp = targetSign * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x));
+                float const dq = targetSign * ((b.x - a.x) * (q.y - a.y) - (b.y - a.y) * (q.x - a.x));
+                int const pin = dp >= -0.001f, qin = dq >= -0.001f;
+                if (pin && nnext < KEX_SOURCE_CLIP_MAX)
+                    clipb[nnext++] = p;
+                if (pin != qin && nnext < KEX_SOURCE_CLIP_MAX)
+                {
+                    float const u = dp / (dp - dq);
+                    clipb[nnext++] = { p.x + (q.x - p.x) * u, p.y + (q.y - p.y) * u };
+                }
+            }
+            for (int i = 0; i < nnext; i++) clipa[i] = clipb[i];
+            nclip = nnext;
+        }
+        if (nclip < 3)
+            continue;
+
+        // The source mesh and Build surface can use opposite windings (most
+        // notably ceilings).  Keep polymost's established winding so its
+        // ordinary cull test treats these sub-triangles exactly like dpxy.
+        if (area(clipa, nclip) * targetArea < 0.f)
+            for (int i = 0, j = nclip - 1; i < j; i++, j--)
+            {
+                vec2f_t const swap = clipa[i]; clipa[i] = clipa[j]; clipa[j] = swap;
+            }
+
+        for (int i = 0; i < nclip; i++) clipped[t][i] = clipa[i];
+        clippedN[t] = nclip;
+        covered += Bfabsf(area(clipa, nclip));
+    }
+
+    float const targetCoverage = Bfabsf(targetArea);
+    if (covered <= 0.f || Bfabsf(covered - targetCoverage) > max(1.f, targetCoverage * .002f))
+    {
+        polymost_kexLightTriangle = -1;
+        s_kexTess = 0;
+        return 0;
+    }
+
+    int drawn = 0;
+    for (int t = 0; t < ntri; t++)
+        for (int i = 1; i + 1 < clippedN[t]; i++)
+        {
+            vec2f_t const triangle[3] = { clipped[t][0], clipped[t][i], clipped[t][i + 1] };
+            // Clipped edge vertices remain part of this exact source
+            // triangle.  Do not let the colour lookup select a neighboring
+            // triangle merely because the two share an almost-identical edge.
+            polymost_kexLightTriangle = t;
+            polymost_drawpoly(triangle, 3, method);
+            drawn = 1;
+        }
+    polymost_kexLightTriangle = -1;
+    s_kexTess = 0;
+    return drawn;
+}
+
+static int polymost_kexTessellate(vec2f_t const *dpxy, int32_t n, int32_t method)
+{
+    polymost_kexsurf_t const &s = polymost_kexsurf;
+    struct kexline { float a, b, c; } cuts[2 * KEX_TESS_MAXCUT]; int ncuts = 0;
+    auto addline = [&](float x0, float y0, float x1, float y1)
+    {
+        if (ncuts >= 2 * KEX_TESS_MAXCUT) return;
+        float a = y1 - y0, b = -(x1 - x0);
+        float const length = sqrtf(a * a + b * b);
+        if (length < 1e-6f) return;
+        a /= length; b /= length;
+        float c = -(a * x0 + b * y0);
+        if (a < -1e-6f || (Bfabsf(a) <= 1e-6f && b < 0.f))
+        {
+            a = -a; b = -b; c = -c;
+        }
+        // Adjacent KEX tiles share their edges.  Keeping one copy prevents
+        // an exact source mesh from exhausting the bounded clip list.
+        for (int i = 0; i < ncuts; i++)
+            if (Bfabsf(cuts[i].a - a) < 1e-4f && Bfabsf(cuts[i].b - b) < 1e-4f
+                && Bfabsf(cuts[i].c - c) < 0.05f)
+                return;
+        cuts[ncuts++] = { a, b, c };
+    };
+    if (s.kind == 1)
+    {
+        // The cell boundaries are where the world x or y crosses a multiple
+        // of the baked-field cell: the samples sit on that grid, so the cuts
+        // must too. This keeps the renderer's interpolation boundaries in
+        // the same places as the remaster's light-field samples.
+        float ts[2 * KEX_TESS_MAXCUT]; int nts = 0;
+        for (int axis = 0; axis < 2; axis++)
+        {
+            float const p0 = axis ? s.n0.y : s.n0.x, p1 = axis ? s.n1.y : s.n1.x;
+            if (Bfabsf(p1 - p0) < 1.f) continue;
+            float const lo = min(p0, p1), hi = max(p0, p1);
+            for (float g = ceilf(lo / KEX_TESS_CELL) * KEX_TESS_CELL; g < hi && nts < 2 * KEX_TESS_MAXCUT; g += KEX_TESS_CELL)
+            {
+                float const t = (g - p0) / (p1 - p0);
+                if (t > 0.001f && t < 0.999f) ts[nts++] = t;
+            }
+        }
+        float const a = 1.f / s.ryp0, b = 1.f / s.ryp1;
+        for (int k = 0; k < nts; k++)
+        {
+            float const t = ts[k];
+            float const r = 1.f / ((1.f - t) * a + t * b);
+            float const f = (Bfabsf(s.ryp1 - s.ryp0) < 1e-9f) ? t : (r - s.ryp0) / (s.ryp1 - s.ryp0);
+            float const x = s.x0 + f * (s.x1 - s.x0);
+            addline(x, 0.f, x, 1.f);
+        }
+        // Choose the vertical stride from the complete authored face, not
+        // from this frame's portal/near-plane clipped fragment.  Otherwise a
+        // tall wall could switch from (say) every second baked row to every
+        // row as the player stepped through a doorway, visibly moving its
+        // gradient.  The source face is in Build coordinates; unavailable or
+        // oversized source meshes retain the conservative legacy fallback.
+        float zmin = 1e30f, zmax = -1e30f;
+        int haveSourceRange = 0;
+        if (polymost_kexTriangles)
+        {
+            static polymost_kextriangle_t source[KEX_SOURCE_MESH_MAX];
+            int const ntri = polymost_kexTriangles(source, KEX_SOURCE_MESH_MAX);
+            for (int t = 0; t < ntri; t++)
+                for (int v = 0; v < 3; v++)
+                {
+                    zmin = min(zmin, source[t].p[v].z);
+                    zmax = max(zmax, source[t].p[v].z);
+                    haveSourceRange = 1;
+                }
+        }
+        if (!haveSourceRange)
+            for (int i = 0; i < n; i++)
+            {
+                float wx, wy, wz;
+                if (polymost_kexUnproject(dpxy[i].x, dpxy[i].y, &wx, &wy, &wz))
+                {
+                    zmin = min(zmin, wz); zmax = max(zmax, wz);
+                }
+            }
+        if (zmin < zmax)
+        {
+            float const zstart = ceilf(zmin / KEX_TESS_CELLZ) * KEX_TESS_CELLZ;
+            int nrow = 0;
+            for (float z = zstart; z < zmax; z += KEX_TESS_CELLZ) nrow++;
+            // A reduced mesh must still use the baked field's fixed world
+            // coordinates.  Re-spacing the cuts to fill the visible polygon
+            // made the light samples slide whenever the camera moved.
+            int const stride = max(1, (nrow + KEX_TESS_MAXCUT - 1) / KEX_TESS_MAXCUT);
+            float const stepz = KEX_TESS_CELLZ * stride;
+            for (float z = ceilf(zmin / stepz) * stepz; z < zmax; z += stepz)
+            {
+                if (z <= zmin || z >= zmax) continue;
+                addline(s.x0, ghoriz + (z - (float)globalposz) * s.ryp0, s.x1, ghoriz + (z - (float)globalposz) * s.ryp1);
+            }
+        }
+    }
+    else if (s.kind == 2)
+    {
+        float xmin = 1e30f, xmax = -1e30f, ymin = 1e30f, ymax = -1e30f, zmid = 0.f; int got = 0;
+        for (int i = 0; i < n; i++)
+        {
+            float wx, wy, wz;
+            if (!polymost_kexUnproject(dpxy[i].x, dpxy[i].y, &wx, &wy, &wz)) continue;
+            xmin = min(xmin, wx); xmax = max(xmax, wx); ymin = min(ymin, wy); ymax = max(ymax, wy); zmid += wz; got++;
+        }
+        if (got < 3) return 0;
+        zmid /= got;
+        auto const sec = (usectorptr_t)&sector[s.sectnum];
+        int const sloped = (s.isceil ? sec->ceilingstat : sec->floorstat) & 2;
+        auto zat = [&](float wx, float wy) -> float
+        {
+            if (!sloped) return zmid;
+            return s.isceil ? fgetceilzofslope(sec, wx, wy) : fgetflorzofslope(sec, wx, wy);
+        };
+        // Preserve the source tile boundaries on a small slope, but choose
+        // that layout from the WHOLE Build sector rather than from dpxy (the
+        // current portal-clipped screen polygon).  The former is immutable;
+        // the latter made the tessellator switch schemes as the player moved
+        // through a doorway.  Faces with more than the fixed safe budget use
+        // the same map-anchored grid as before.
+        bool sourceTileCuts = false;
+        if (sloped && polymost_kexTriangles)
+        {
+            struct worldline { float a, b, c, x0, y0, x1, y1; } sourceCuts[KEX_SLOPE_TILE_CUTS];
+            int nsource = 0, overflow = 0;
+            auto addSourceLine = [&](float x0, float y0, float x1, float y1)
+            {
+                float a = y1 - y0, b = x0 - x1;
+                float const length = sqrtf(a * a + b * b);
+                if (length < 1e-6f) return;
+                a /= length; b /= length;
+                float c = -(a * x0 + b * y0);
+                if (a < -1e-6f || (Bfabsf(a) <= 1e-6f && b < 0.f))
+                {
+                    a = -a; b = -b; c = -c;
+                }
+                for (int i = 0; i < nsource; i++)
+                    if (Bfabsf(sourceCuts[i].a - a) < 1e-4f && Bfabsf(sourceCuts[i].b - b) < 1e-4f
+                        && Bfabsf(sourceCuts[i].c - c) < 0.05f)
+                        return;
+                if (nsource >= KEX_SLOPE_TILE_CUTS) { overflow = 1; return; }
+                sourceCuts[nsource++] = { a, b, c, x0, y0, x1, y1 };
+            };
+
+            static polymost_kextriangle_t source[KEX_SOURCE_MESH_MAX];
+            int const ntri = polymost_kexTriangles(source, KEX_SOURCE_MESH_FLOOR_MAX);
+            for (int t = 0; t < ntri && !overflow; t++)
+                for (int e = 0; e < 3 && !overflow; e++)
+                {
+                    vec3f_t const &p = source[t].p[e], &q = source[t].p[(e + 1) % 3];
+                    float const a = q.y - p.y, b = p.x - q.x, c = -(a * p.x + b * p.y);
+                    int pos = 0, neg = 0;
+                    for (int w = sec->wallptr, end = w + sec->wallnum; w < end; w++)
+                    {
+                        float const d = a * wall[w].x + b * wall[w].y + c;
+                        pos |= d > 0.01f; neg |= d < -0.01f;
+                    }
+                    if (pos && neg)
+                        addSourceLine(p.x, p.y, q.x, q.y);
+                }
+            if (!overflow && nsource)
+            {
+                for (int i = 0; i < nsource; i++)
+                {
+                    float sx0, sy0, sx1, sy1;
+                    polymost_kexProject(sourceCuts[i].x0, sourceCuts[i].y0, zat(sourceCuts[i].x0, sourceCuts[i].y0), &sx0, &sy0);
+                    polymost_kexProject(sourceCuts[i].x1, sourceCuts[i].y1, zat(sourceCuts[i].x1, sourceCuts[i].y1), &sx1, &sy1);
+                    addline(sx0, sy0, sx1, sy1);
+                }
+                sourceTileCuts = ncuts == nsource;
+            }
+            if (!sourceTileCuts)
+                ncuts = 0;
+        }
+        if (!sourceTileCuts) for (int axis = 0; axis < 2; axis++)
+        {
+            float const lo = axis ? ymin : xmin, hi = axis ? ymax : xmax;
+            // Pick the decimation from the whole sector, rather than the
+            // visible portion of its floor.  Apart from changing the stride
+            // at the screen edge, anchoring the first cut to the visible
+            // cell changed which "every Nth" source cell survived as the
+            // player crossed a cell boundary.  Both made lighting crawl.
+            float meshlow = 1e30f, meshhigh = -1e30f;
+            for (int w = sec->wallptr, end = w + sec->wallnum; w < end; w++)
+            {
+                float const v = axis ? (float)wall[w].y : (float)wall[w].x;
+                meshlow = min(meshlow, v);
+                meshhigh = max(meshhigh, v);
+            }
+            if (meshlow >= meshhigh) { meshlow = lo; meshhigh = hi; }
+
+            int ncut = 0;
+            for (float g = ceilf(meshlow / KEX_TESS_CELL) * KEX_TESS_CELL; g < meshhigh; g += KEX_TESS_CELL) ncut++;
+            int const stride = max(1, (ncut + KEX_TESS_MAXCUT - 1) / KEX_TESS_MAXCUT);
+            float const step = KEX_TESS_CELL * stride;
+            // The origin is the map origin, never the clipped polygon's edge.
+            for (float g = ceilf(lo / step) * step; g < hi; g += step)
+            {
+                if (g <= lo || g >= hi) continue;
+                float ax, ay, bx, by;
+                if (axis) { ax = xmin; ay = g; bx = xmax; by = g; } else { ax = g; ay = ymin; bx = g; by = ymax; }
+                float sx0, sy0, sx1, sy1;
+                polymost_kexProject(ax, ay, zat(ax, ay), &sx0, &sy0);
+                polymost_kexProject(bx, by, zat(bx, by), &sx1, &sy1);
+                addline(sx0, sy0, sx1, sy1);
+            }
+        }
+    }
+    if (!ncuts) return 0;
+
+    static vec2f_t polys[KEX_TESS_MAXPOLY][MAX_DRAWPOLY_VERTS + 2];
+    static int     pn[KEX_TESS_MAXPOLY];
+    int npolys = 1;
+    for (int i = 0; i < n; i++) polys[0][i] = dpxy[i];
+    pn[0] = n;
+    for (int c = 0; c < ncuts; c++)
+    {
+        int const cur = npolys;
+        for (int p = 0; p < cur; p++)
+        {
+            if (npolys >= KEX_TESS_MAXPOLY) break;
+            int const m = pn[p];
+            float d[MAX_DRAWPOLY_VERTS + 2]; int pos = 0, neg = 0;
+            for (int i = 0; i < m; i++)
+            {
+                d[i] = cuts[c].a * polys[p][i].x + cuts[c].b * polys[p][i].y + cuts[c].c;
+                if (d[i] > 0.01f) pos++; else if (d[i] < -0.01f) neg++;
+            }
+            if (!pos || !neg) continue;
+            vec2f_t A[MAX_DRAWPOLY_VERTS + 2], B[MAX_DRAWPOLY_VERTS + 2]; int na = 0, nb = 0;
+            for (int i = 0; i < m; i++)
+            {
+                int const j = (i + 1) % m;
+                vec2f_t const &P = polys[p][i], &Q = polys[p][j];
+                if (d[i] >= 0.f) { if (na < MAX_DRAWPOLY_VERTS + 2) A[na++] = P; }
+                if (d[i] <= 0.f) { if (nb < MAX_DRAWPOLY_VERTS + 2) B[nb++] = P; }
+                if ((d[i] > 0.f && d[j] < 0.f) || (d[i] < 0.f && d[j] > 0.f))
+                {
+                    float const t = d[i] / (d[i] - d[j]);
+                    vec2f_t const X = { P.x + (Q.x - P.x) * t, P.y + (Q.y - P.y) * t };
+                    if (na < MAX_DRAWPOLY_VERTS + 2) A[na++] = X;
+                    if (nb < MAX_DRAWPOLY_VERTS + 2) B[nb++] = X;
+                }
+            }
+            if (na < 3 || nb < 3 || na > MAX_DRAWPOLY_VERTS || nb > MAX_DRAWPOLY_VERTS) continue;
+            for (int i = 0; i < na; i++) polys[p][i] = A[i];
+            pn[p] = na;
+            for (int i = 0; i < nb; i++) polys[npolys][i] = B[i];
+            pn[npolys++] = nb;
+        }
+    }
+    if (npolys < 2) return 0;
+    s_kexTess = 1;
+    for (int p = 0; p < npolys; p++)
+        polymost_drawpoly(polys[p], pn[p], method);
+    s_kexTess = 0;
+    return 1;
+}
+
+static int32_t polymost_kexVertexShade(float sx, float sy)
+{
+    float wx, wy, wz;
+    if (!polymost_kexShadeAt || !polymost_kexUnproject(sx, sy, &wx, &wy, &wz))
+        return globalshade;
+    return polymost_kexShadeAt(wx, wy, wz, globalshade);
+}
+
+static int polymost_kexVertexColor(float sx, float sy, float color[3])
+{
+    float wx, wy, wz;
+    return polymost_kexColorAt && polymost_kexUnproject(sx, sy, &wx, &wy, &wz)
+        && polymost_kexColorAt(wx, wy, wz, color);
 }
 
 static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_t method)
@@ -3228,6 +3870,13 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
     }
 
     Bassert(n <= MAX_DRAWPOLY_VERTS);
+
+    // VibeBuild32: small KEX floors use their authored light mesh; every
+    // other surface falls back to a bounded world-anchored vertex grid.
+    if (!s_kexTess && polymost_kexVertexLight && polymost_kexShadeAt && polymost_kexsurf.kind && !persistentStreamBuffer
+        && videoGetRenderMode() == REND_POLYMOST && getpskyidx(globalpicnum) == 0 && n <= MAX_DRAWPOLY_VERTS
+        && (polymost_kexSourceMesh(dpxy, n, method) || polymost_kexTessellate(dpxy, n, method)))
+        return;
 
     int j = 0;
     float px[8], py[8], dd[8], uu[8], vv[8];
@@ -3492,6 +4141,31 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
         pc[3] = 0.01f;
 
     glColor4f(pc[0], pc[1], pc[2], pc[3]);
+    Bmemcpy(kexCurColor, pc, sizeof(pc));
+    // VibeBuild32: per-vertex shade from the light field, on walls and flats
+    // of a level that has one; skies, sprites, models and 8-bit tiles keep
+    // the polygon colour.
+    int const kexvl = polymost_kexVertexLight && (polymost_kexShadeAt || polymost_kexColorAt) && polymost_kexsurf.kind && !persistentStreamBuffer
+                      && !(pth->flags & PTH_INDEXED) && videoGetRenderMode() == REND_POLYMOST
+                      && getpskyidx(globalpicnum) == 0;
+    float kextint[3] = { 0.f, 0.f, 0.f };
+    if (kexvl)
+    {
+        polytint_t const & tint = hictinting[globalpal];
+        kextint[0] = tint.sr * (1.f/255.f); kextint[1] = tint.sg * (1.f/255.f); kextint[2] = tint.sb * (1.f/255.f);
+        kexColorsEnabled = 1;
+    }
+    auto kexvertex = [&](float sx, float sy)
+    {
+        if (!kexvl) return;
+        float color[3];
+        if (!polymost_kexVertexColor(sx, sy, color))
+            color[0] = color[1] = color[2] = getshadefactor(polymost_kexVertexShade(sx, sy));
+        kexCurColor[0] = (1.f - kextint[0]) * color[0] + kextint[0];
+        kexCurColor[1] = (1.f - kextint[1]) * color[1] + kextint[1];
+        kexCurColor[2] = (1.f - kextint[2]) * color[2] + kextint[2];
+        kexCurColor[3] = pc[3];
+    };
 
     //POGOTODO: remove this, replace it with a shader implementation
     //Hack for walls&masked walls which use textures that are not a power of 2
@@ -3606,6 +4280,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
                                     o.x * ngx.v + o.y * ngy.v + ngo.v };
                 float const r = 1.f / p.d;
 
+                kexvertex(o.x, o.y);
                 polymost_bufferVert({ (o.x - ghalfx) * r * grhalfxdown10x, (ghalfy - o.y) * r * grhalfxdown10, r * (1.f / 1024.f) },
                                     { (p.u * r - du0 + uoffs) * invtsiz2.x, p.v * r * invtsiz2.y });
             }
@@ -3622,6 +4297,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
         {
             float const r = 1.f / dd[i];
 
+            kexvertex(px[i], py[i]);
             polymost_bufferVert({ (px[i] - ghalfx) * r * grhalfxdown10x, (ghalfy - py[i]) * r * grhalfxdown10, r * (1.f / 1024.f) },
                 { uu[i] * r * scale.x, vv[i] * r * scale.y });
         }
@@ -4825,6 +5501,8 @@ static void polymost_internal_nonparallaxed(vec2f_t n0, vec2f_t n1, float ryp0, 
             //(                  0*(sx-ghalfx) + 1*(sy-ghoriz) + (                             0)*ghalfx)*d + globalposz/16 = (sec->floorz/16)
 
     float ft[4] = { fglobalposx, fglobalposy, fcosglobalang, fsinglobalang };
+    polymost_kexsurf_t const kexsurf_wall = polymost_kexsurf;
+    polymost_kexsurf = { 2, n0, n1, x0, x1, ryp0, ryp1, sectnum, -1, !have_floor };
 
     buildgl_outputDebugMessage(3, "polymost_internal_nonparallaxed(n0:{x:%f, y:%f}, n1:{x:%f, y:%f}, ryp0:%f, ryp1:%f, x0:%f, x1:%f, y0:%f, y1:%f, sectnum:%d)",
                                   n0.x, n0.y, n1.x, n1.y, ryp0, ryp1, x0, x1, y0, y1, sectnum);
@@ -5017,6 +5695,7 @@ static void polymost_internal_nonparallaxed(vec2f_t n0, vec2f_t n1, float ryp0, 
         buildgl_setDisabled(GL_BLEND);
 
     domostpolymethod = DAMETH_NOMASK;
+    polymost_kexsurf = kexsurf_wall;
 }
 
 static void calc_ypanning(int32_t refposz, float ryp0, float ryp1,
@@ -5428,6 +6107,7 @@ static void polymost_drawalls(int32_t const bunch)
         bitmap_set(didwall, wallnum);
 
         ryp0 *= gyxscale; ryp1 *= gyxscale;
+        polymost_kexsurf = { 1, n0, n1, x0, x1, ryp0, ryp1, sectnum, wallnum, 0 };
 
         float cz, fz;
 
@@ -7251,6 +7931,9 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
     if (x1 <= x0) return;
 
     ryp0 *= gyxscale; ryp1 *= gyxscale;
+    polymost_kexsurf = { 1, { (wal2->x - wal->x) * t0 + wal->x, (wal2->y - wal->y) * t0 + wal->y },
+                            { (wal2->x - wal->x) * t1 + wal->x, (wal2->y - wal->y) * t1 + wal->y },
+                         x0, x1, ryp0, ryp1, sectnum, wallIndex, 0 };
 
     xtex.d = (ryp0-ryp1)*gxyaspect / (x0-x1);
     ytex.d = 0;
@@ -7388,6 +8071,7 @@ static void polymost_drawmaskwallinternal(int32_t wallIndex)
         doeditorcheck = 1;
     }
     polymost_drawpoly(dpxy, n, method);
+    polymost_kexsurf.kind = 0;
     doeditorcheck = 0;
     polymost_identityrotmat();
 }
@@ -8137,6 +8821,7 @@ void polymost_checkornamentedsprite(tspriteptr_t tspr, int16_t *wallnum, wallspr
 
 void polymost_drawsprite(int32_t snum)
 {
+    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
 #ifdef POLYMOST2
     if (r_enablepolymost2)
     {
@@ -9135,6 +9820,7 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
                              int8_t dashade, char dapalnum, int32_t dastat, uint8_t daalpha, uint8_t dablend,
                              int32_t cx1, int32_t cy1, int32_t cx2, int32_t cy2, int32_t uniqid)
 {
+    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
     if (usemodels && tile2model[picnum].hudmem[(dastat&4)>>2])
     {
         polymost_dorotatespritemodel(sx, sy, z, a, picnum, dashade, dapalnum, dastat, daalpha, dablend, uniqid);

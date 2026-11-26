@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "gamedef.h"
 #include "osd.h"
 #include "gamestructures.h"
+#include "screens.h"
 
 #define LABEL(struct, memb, name, idx)                                                              \
     {                                                                                                               \
@@ -61,6 +62,7 @@ const memberlabel_t SectorLabels[] =
     { "floorypanning",      SECTOR_FLOORYPANNING,   0, 0, -1 },
     { "visibility",         SECTOR_VISIBILITY,      0, 0, -1 },
     //{ "filler",             SECTOR_ALIGNTO,         0, 0, -1 },
+    { "fogpal",             SECTOR_ALIGNTO,         0, 0, -1 },
     { "alignto",            SECTOR_ALIGNTO,         0, 0, -1 }, // aka filler, not used
     { "lotag",              SECTOR_LOTAG,           0, 0, -1 },
     { "hitag",              SECTOR_HITAG,           0, 0, -1 },
@@ -89,6 +91,8 @@ const memberlabel_t WallLabels[] =
     { "lotag",      WALL_LOTAG,         0, 0, -1 },
     { "hitag",      WALL_HITAG,         0, 0, -1 },
     { "extra",      WALL_EXTRA,         0, 0, -1 },
+    { "blend",      WALL_BLEND,         0, 0, -1 },
+    { "ang",        WALL_ANG,           0, 0, -1 },
     { "",           -1,                 0, 0, -1 }     // END OF LIST
 };
 
@@ -126,8 +130,11 @@ const memberlabel_t ActorLabels[] =
     { "htextra",        ACTOR_HTEXTRA, 0, 0, -1 },
     { "htowner",        ACTOR_HTOWNER, 0, 0, -1 },
     { "htmovflag",      ACTOR_HTMOVFLAG, 0, 0, -1 },
+    { "htumovflag",     ACTOR_HTUMOVFLAG, 0, 0, -1 },
     { "httempang",      ACTOR_HTTEMPANG, 0, 0, -1 },
     { "htactorstayput", ACTOR_HTSTAYPUT, 0, 0, -1 },
+    { "htfloorzoffset", ACTOR_HTFLOORZOFFSET, 0, 0, -1 },
+    { "htwaterzoffset", ACTOR_HTWATERZOFFSET, 0, 0, -1 },
     { "htdispicnum",    ACTOR_HTDISPICNUM, 0, 0, -1 },
     { "httimetosleep",  ACTOR_HTTIMETOSLEEP, 0, 0, -1 },
     { "htfloorz",       ACTOR_HTFLOORZ, 0, 0, -1 },
@@ -201,6 +208,10 @@ const memberlabel_t PlayerLabels[] =
     { "horiz",                  PLAYER_HORIZ, 0, 0, -1 },
     { "ohoriz",                 PLAYER_OHORIZ, 0, 0, -1 },
     { "ohorizoff",              PLAYER_OHORIZOFF, 0, 0, -1 },
+    { "q16horiz",               PLAYER_Q16HORIZ, 0, 0, -1 },
+    { "oq16horiz",              PLAYER_OQ16HORIZ, 0, 0, -1 },
+    { "q16horizoff",            PLAYER_Q16HORIZOFF, 0, 0, -1 },
+    { "oq16horizoff",           PLAYER_OQ16HORIZOFF, 0, 0, -1 },
     { "invdisptime",            PLAYER_INVDISPTIME, 0, 0, -1 },
     { "bobposx",                PLAYER_BOBPOSX, 0, 0, -1 },
     { "bobposy",                PLAYER_BOBPOSY, 0, 0, -1 },
@@ -225,7 +236,10 @@ const memberlabel_t PlayerLabels[] =
     { "aim_mode",               PLAYER_AIM_MODE, 0, 0, -1 },
     { "ang",                    PLAYER_ANG, 0, 0, -1 },
     { "oang",                   PLAYER_OANG, 0, 0, -1 },
+    { "q16ang",                 PLAYER_Q16ANG, 0, 0, -1 },
+    { "oq16ang",                PLAYER_OQ16ANG, 0, 0, -1 },
     { "angvel",                 PLAYER_ANGVEL, 0, 0, -1 },
+    { "q16angvel",              PLAYER_Q16ANGVEL, 0, 0, -1 },
     { "cursectnum",             PLAYER_CURSECTNUM, 0, 0, -1 },
     { "look_ang",               PLAYER_LOOK_ANG, 0, 0, -1 },
     { "last_extra",             PLAYER_LAST_EXTRA, 0, 0, -1 },
@@ -287,6 +301,9 @@ const memberlabel_t PlayerLabels[] =
     { "weapon_pos",             PLAYER_WEAPON_POS, 0, 0, -1 },
     { "frag_ps",                PLAYER_FRAG_PS, 0, 0, -1 },
     { "transporter_hold",       PLAYER_TRANSPORTER_HOLD, 0, 0, -1 },
+    { "clipdist",               PLAYER_CLIPDIST, 0, 0, -1 },
+    { "autostep",               PLAYER_AUTOSTEP, 0, 0, -1 },
+    { "autostep_sbw",           PLAYER_AUTOSTEP_SBW, 0, 0, -1 },
     { "last_full_weapon",       PLAYER_LAST_FULL_WEAPON, 0, 0, -1 },
     { "footprintshade",         PLAYER_FOOTPRINTSHADE, 0, 0, -1 },
     { "boot_amount",            PLAYER_BOOT_AMOUNT, 0, 0, -1 },
@@ -337,6 +354,16 @@ const memberlabel_t PlayerLabels[] =
     { "connected",              PLAYER_CONNECTED, 0, 0, -1 },
     { "lowsprite",              PLAYER_LOWSPRITE, 0, 0, -1 },
     { "highsprite",             PLAYER_HIGHSPRITE, 0, 0, -1 },
+    { "olook_ang",              PLAYER_OLOOK_ANG, 0, 0, -1 },
+    { "floorzrebound",          PLAYER_FLOORZREBOUND, 0, 0, -1 },
+    { "floorzcutoff",           PLAYER_FLOORZCUTOFF, 0, 0, -1 },
+    { "floorzoffset",           PLAYER_FLOORZOFFSET_MEMBER, 0, 0, -1 },
+    { "spritezoffset",          PLAYER_SPRITEZOFFSET_MEMBER, 0, 0, -1 },
+    { "minwaterzdist",          PLAYER_MINWATERZDIST_MEMBER, 0, 0, -1 },
+    { "waterzoffset",           PLAYER_WATERZOFFSET_MEMBER, 0, 0, -1 },
+    { "shrunkzoffset",          PLAYER_SHRUNKZOFFSET_MEMBER, 0, 0, -1 },
+    { "crouchzincrement",       PLAYER_CROUCHZINCREMENT_MEMBER, 0, 0, -1 },
+    { "gravity",                PLAYER_GRAVITY, 0, 0, -1 },
     { "",                       -1, 0, 0, -1 } // END OF LIST
 };
 
@@ -371,6 +398,7 @@ const memberlabel_t ProjectileLabels[] =
     { "bsound",     PROJ_BSOUND,        0, 0, -1 },
     { "range",      PROJ_RANGE,         0, 0, -1 },
     { "flashcolor", PROJ_FLASH_COLOR,   0, 0, -1 },
+    { "userdata",   PROJ_USERDATA,      0, 0, -1 },
     { "",           -1,                 0, 0, -1 } // END OF LIST
 };
 
@@ -459,6 +487,11 @@ const memberlabel_t UserdefsLabels[] =
     { "color",                  USERDEFS_COLOR,                 0, 0, -1 },
     { "msgdisptime",            USERDEFS_MSGDISPTIME,           0, 0, -1 },
     { "statusbarmode",          USERDEFS_STATUSBARMODE,         0, 0, -1 },
+    { "statusbarflags",         USERDEFS_STATUSBARFLAGS,        0, 0, -1 },
+    { "userbyteversion",        USERDEFS_USERBYTEVERSION,       0, 0, -1 },
+    { "global_r",               USERDEFS_GLOBAL_R,              0, 0, -1 },
+    { "global_g",               USERDEFS_GLOBAL_G,              0, 0, -1 },
+    { "global_b",               USERDEFS_GLOBAL_B,              0, 0, -1 },
     { "m_noexits",              USERDEFS_M_NOEXITS,             0, 0, -1 },
     { "noexits",                USERDEFS_NOEXITS,               0, 0, -1 },
     { "autovote",               USERDEFS_AUTOVOTE,              0, 0, -1 },
@@ -476,6 +509,9 @@ const memberlabel_t UserdefsLabels[] =
     { "show_level_text",        USERDEFS_SHOW_LEVEL_TEXT,       0, 0, -1 },
     { "weaponscale",            USERDEFS_WEAPONSCALE,           0, 0, -1 },
     { "textscale",              USERDEFS_TEXTSCALE,             0, 0, -1 },
+    { "m_newgamecustom",        USERDEFS_M_NEWGAMECUSTOM,       0, 0, -1 },
+    { "m_newgamecustomsub",     USERDEFS_M_NEWGAMECUSTOMSUB,    0, 0, -1 },
+    { "m_newgamecustoml3",      USERDEFS_M_NEWGAMECUSTOML3,     0, 0, -1 },
 
     { "return",                 USERDEFS_RETURN,                LABEL_HASPARM2, MAX_RETURN_VALUES, -1 },
     { "vm_player",              USERDEFS_VM_PLAYER,             0, 0, -1 },
@@ -487,17 +523,71 @@ const memberlabel_t UserdefsLabels[] =
     { "teamsuicides",           USERDEFS_TEAMSUICIDES,          LABEL_HASPARM2, MAXPLAYERS, -1 },
     { "dmflags",                USERDEFS_DMFLAGS,               0, 0, -1 },
     { "m_dmflags",              USERDEFS_M_DMFLAGS,             0, 0, -1 },
+    { "autosave",               USERDEFS_AUTOSAVE,              0, 0, -1 },
+    { "autosavedeletion",       USERDEFS_AUTOSAVEDELETION,      0, 0, -1 },
+    { "maxautosaves",           USERDEFS_MAXAUTOSAVES,          0, 0, -1 },
+    { "maxspritesonscreen",     USERDEFS_MAXSPRITESONSCREEN,    0, 0, -1 },
+    { "screenfade",             USERDEFS_SCREENFADE,            0, 0, -1 },
+    { "menu_shadedeselected",   USERDEFS_MENU_SHADEDESELECTED,  0, 0, -1 },
+    { "menu_shadedisabled",     USERDEFS_MENU_SHADEDISABLED,    0, 0, -1 },
+    { "menutext_zoom",          USERDEFS_MENUTEXT_ZOOM,         0, 0, -1 },
+    { "menutext_xspace",        USERDEFS_MENUTEXT_XSPACE,       0, 0, -1 },
+    { "menutext_tracking",      USERDEFS_MENUTEXT_TRACKING,     0, 0, -1 },
+    { "menutext_pal",           USERDEFS_MENUTEXT_PAL,          0, 0, -1 },
+    { "menutext_palselected",   USERDEFS_MENUTEXT_PALSELECTED,  0, 0, -1 },
+    { "menutext_paldeselected", USERDEFS_MENUTEXT_PALDESELECTED, 0, 0, -1 },
+    { "menutext_paldisabled",   USERDEFS_MENUTEXT_PALDISABLED,  0, 0, -1 },
+    { "menutext_palselected_right",   USERDEFS_MENUTEXT_PALSELECTED_RIGHT, 0, 0, -1 },
+    { "menutext_paldeselected_right", USERDEFS_MENUTEXT_PALDESELECTED_RIGHT, 0, 0, -1 },
+    { "menutext_paldisabled_right",   USERDEFS_MENUTEXT_PALDISABLED_RIGHT, 0, 0, -1 },
+    { "gametext_zoom",          USERDEFS_GAMETEXT_ZOOM,         0, 0, -1 },
+    { "gametext_xspace",        USERDEFS_GAMETEXT_XSPACE,       0, 0, -1 },
+    { "gametext_tracking",      USERDEFS_GAMETEXT_TRACKING,     0, 0, -1 },
+    { "gametext_pal",           USERDEFS_GAMETEXT_PAL,          0, 0, -1 },
+    { "gametext_palselected",   USERDEFS_GAMETEXT_PALSELECTED,  0, 0, -1 },
+    { "gametext_paldeselected", USERDEFS_GAMETEXT_PALDESELECTED, 0, 0, -1 },
+    { "gametext_paldisabled",   USERDEFS_GAMETEXT_PALDISABLED,  0, 0, -1 },
+    { "gametext_palselected_right",   USERDEFS_GAMETEXT_PALSELECTED_RIGHT, 0, 0, -1 },
+    { "gametext_paldeselected_right", USERDEFS_GAMETEXT_PALDESELECTED_RIGHT, 0, 0, -1 },
+    { "gametext_paldisabled_right",   USERDEFS_GAMETEXT_PALDISABLED_RIGHT, 0, 0, -1 },
+    { "minitext_zoom",          USERDEFS_MINITEXT_ZOOM,         0, 0, -1 },
+    { "minitext_xspace",        USERDEFS_MINITEXT_XSPACE,       0, 0, -1 },
+    { "minitext_tracking",      USERDEFS_MINITEXT_TRACKING,     0, 0, -1 },
+    { "minitext_pal",           USERDEFS_MINITEXT_PAL,          0, 0, -1 },
+    { "minitext_palselected",   USERDEFS_MINITEXT_PALSELECTED,  0, 0, -1 },
+    { "minitext_paldeselected", USERDEFS_MINITEXT_PALDESELECTED, 0, 0, -1 },
+    { "minitext_paldisabled",   USERDEFS_MINITEXT_PALDISABLED,  0, 0, -1 },
+    { "minitext_palselected_right",   USERDEFS_MINITEXT_PALSELECTED_RIGHT, 0, 0, -1 },
+    { "minitext_paldeselected_right", USERDEFS_MINITEXT_PALDESELECTED_RIGHT, 0, 0, -1 },
+    { "minitext_paldisabled_right",   USERDEFS_MINITEXT_PALDISABLED_RIGHT, 0, 0, -1 },
+    { "menutitle_pal",          USERDEFS_MENUTITLE_PAL,         0, 0, -1 },
+    { "menu_slidebarz",         USERDEFS_MENU_SLIDEBARZ,        0, 0, -1 },
+    { "menu_slidecursorz",      USERDEFS_MENU_SLIDECURSORZ,     0, 0, -1 },
+    { "menu_slidebarmargin",    USERDEFS_MENU_SLIDEBARMARGIN,   0, 0, -1 },
+    { "slidebar_palselected",   USERDEFS_SLIDEBAR_PALSELECTED,  0, 0, -1 },
+    { "slidebar_paldisabled",   USERDEFS_SLIDEBAR_PALDISABLED,  0, 0, -1 },
+    { "menu_scrollbartilenum",  USERDEFS_MENU_SCROLLBARTILENUM, 0, 0, -1 },
+    { "menu_scrollbarz",        USERDEFS_MENU_SCROLLBARZ,       0, 0, -1 },
+    { "menu_scrollcursorz",     USERDEFS_MENU_SCROLLCURSORZ,    0, 0, -1 },
+    { "shadow_pal",             USERDEFS_SHADOW_PAL,            0, 0, -1 },
+    { "gamepadactive",          USERDEFS_GAMEPADACTIVE,         0, 0, -1 },
+    { "draw_y",                 USERDEFS_DRAW_Y,                0, 0, -1 },
     { "draw_yxaspect",          USERDEFS_DRAW_YXASPECT,         0, 0, -1 },
+    { "music_episode",          USERDEFS_MUSIC_EPISODE,         0, 0, -1 },
+    { "music_level",            USERDEFS_MUSIC_LEVEL,           0, 0, -1 },
     { "monsters_killed",        USERDEFS_MONSTERS_KILLED,       0, 0, -1 },
     { "limit_hit",              USERDEFS_LIMIT_HIT,             0, 0, -1 },
     { "winner",                 USERDEFS_WINNER,                0, 0, -1 },
+    { "fov",                    USERDEFS_FOV,                   0, 0, -1 },
     { "",                       -1,                             0, 0, -1 } // END OF LIST
 };
 
 const memberlabel_t InputLabels[] =
 {
     { "avel",       INPUT_AVEL,     0, 0, -1 },
+    { "q16avel",    INPUT_Q16AVEL,  0, 0, -1 },
     { "horz",       INPUT_HORZ,     0, 0, -1 },
+    { "q16horz",    INPUT_Q16HORZ,  0, 0, -1 },
     { "fvel",       INPUT_FVEL,     0, 0, -1 },
     { "svel",       INPUT_SVEL,     0, 0, -1 },
     { "bits",       INPUT_BITS,     0, 0, -1 },
@@ -522,12 +612,17 @@ const memberlabel_t TileDataLabels[] =
     { "gameflags",  TILEDATA_GAMEFLAGS,  0, 0, -1 },
     { "",           -1,                  0, 0, -1 } // END OF LIST
 };
+
+const memberlabel_t PalDataLabels[] =
+{
+    { "nofloorpal", PALDATA_NOFLOORPAL, 0, 0, -1 },
+};
 #undef MEMBER
 #undef LABEL
 
 hashtable_t h_actor         = { ACTOR_END >> 1, NULL };
 hashtable_t h_input         = { INPUT_END >> 1, NULL };
-//hashtable_t h_paldata    = { PALDATA_END>>1, NULL };
+hashtable_t h_paldata       = { PALDATA_END >> 1, NULL };
 hashtable_t h_player        = { PLAYER_END >> 1, NULL };
 hashtable_t h_projectile    = { PROJ_END >> 1, NULL };
 hashtable_t h_sector        = { SECTOR_END >> 1, NULL };
@@ -553,7 +648,7 @@ void VM_InitHashTables(void)
 
     STRUCT_HASH_SETUP(h_actor, ActorLabels);
     STRUCT_HASH_SETUP(h_input, InputLabels);
-    //STRUCT_HASH_SETUP(h_paldata, PalDataLabels);
+    STRUCT_HASH_SETUP(h_paldata, PalDataLabels);
     STRUCT_HASH_SETUP(h_player, PlayerLabels);
     STRUCT_HASH_SETUP(h_projectile, ProjectileLabels);
     STRUCT_HASH_SETUP(h_sector, SectorLabels);
@@ -621,6 +716,21 @@ void __fastcall VM_SetTileData(int const tileNum, int const labelNum, int32_t ne
         case TILEDATA_ANIMSPEED: p.sf = (p.sf & ~PICANM_ANIMSPEED_MASK) | (newValue & PICANM_ANIMSPEED_MASK); return;
         case TILEDATA_ANIMTYPE:  p.sf = (p.sf & ~PICANM_ANIMTYPE_MASK) | ((newValue << PICANM_ANIMTYPE_SHIFT) & PICANM_ANIMTYPE_MASK); return;
         default: return;
+    }
+}
+
+int32_t __fastcall VM_GetPalData(int const palNum, int32_t labelNum)
+{
+    if (EDUKE32_PREDICT_FALSE((unsigned)palNum >= MAXPALOOKUPS))
+    {
+        CON_ERRPRINTF("invalid palette %d\n", palNum);
+        return -1;
+    }
+
+    switch (labelNum)
+    {
+        case PALDATA_NOFLOORPAL: return g_noFloorPal[palNum];
+        default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
 
@@ -722,6 +832,11 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_COLOR:                return ud.color;
         case USERDEFS_MSGDISPTIME:          return ud.msgdisptime;
         case USERDEFS_STATUSBARMODE:        return ud.statusbarmode;
+        case USERDEFS_STATUSBARFLAGS:       return ud.statusbarflags;
+        case USERDEFS_USERBYTEVERSION:      return ud.userbytever;
+        case USERDEFS_GLOBAL_R:             return globalr;
+        case USERDEFS_GLOBAL_G:             return globalg;
+        case USERDEFS_GLOBAL_B:             return globalb;
 
         case USERDEFS_M_NOEXITS:            return M_DMFLAGS_TEST(DMFLAG_NOEXITS);
         case USERDEFS_NOEXITS:              return DMFLAGS_TEST(DMFLAG_NOEXITS);
@@ -741,6 +856,9 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_SHOW_LEVEL_TEXT:      return ud.show_level_text;
         case USERDEFS_WEAPONSCALE:          return ud.weaponscale;
         case USERDEFS_TEXTSCALE:            return ud.textscale;
+        case USERDEFS_M_NEWGAMECUSTOM:      return ud.m_newgamecustom;
+        case USERDEFS_M_NEWGAMECUSTOMSUB:   return ud.m_newgamecustomsub;
+        case USERDEFS_M_NEWGAMECUSTOML3:    return ud.m_newgamecustoml3;
 
         case USERDEFS_RETURN:
         {
@@ -758,10 +876,62 @@ int32_t __fastcall VM_GetUserdef(int32_t labelNum, int const lParm2)
         case USERDEFS_TEAMSUICIDES:         return teams[lParm2].suicides;
         case USERDEFS_DMFLAGS:              return ud.dmflags;
         case USERDEFS_M_DMFLAGS:            return ud.m_dmflags;
+        case USERDEFS_AUTOSAVE:             return ud.autosave;
+        case USERDEFS_AUTOSAVEDELETION:     return ud.autosavedeletion;
+        case USERDEFS_MAXAUTOSAVES:         return ud.maxautosaves;
+        case USERDEFS_MAXSPRITESONSCREEN:   return maxspritesonscreen;
+        case USERDEFS_SCREENFADE:           return ud.screenfade;
+        case USERDEFS_MENU_SHADEDESELECTED: return ud.menu_shadedeselected;
+        case USERDEFS_MENU_SHADEDISABLED:   return ud.menu_shadedisabled;
+        case USERDEFS_MENUTEXT_ZOOM:        return ud.menutext_zoom;
+        case USERDEFS_MENUTEXT_XSPACE:      return ud.menutext_xspace;
+        case USERDEFS_MENUTEXT_TRACKING:    return ud.menutext_tracking;
+        case USERDEFS_MENUTEXT_PAL:         return ud.menutext_pal;
+        case USERDEFS_MENUTEXT_PALSELECTED: return ud.menutext_palselected;
+        case USERDEFS_MENUTEXT_PALDESELECTED: return ud.menutext_paldeselected;
+        case USERDEFS_MENUTEXT_PALDISABLED: return ud.menutext_paldisabled;
+        case USERDEFS_MENUTEXT_PALSELECTED_RIGHT: return ud.menutext_palselected_right;
+        case USERDEFS_MENUTEXT_PALDESELECTED_RIGHT: return ud.menutext_paldeselected_right;
+        case USERDEFS_MENUTEXT_PALDISABLED_RIGHT: return ud.menutext_paldisabled_right;
+        case USERDEFS_GAMETEXT_ZOOM:        return ud.gametext_zoom;
+        case USERDEFS_GAMETEXT_XSPACE:      return ud.gametext_xspace;
+        case USERDEFS_GAMETEXT_TRACKING:    return ud.gametext_tracking;
+        case USERDEFS_GAMETEXT_PAL:         return ud.gametext_pal;
+        case USERDEFS_GAMETEXT_PALSELECTED: return ud.gametext_palselected;
+        case USERDEFS_GAMETEXT_PALDESELECTED: return ud.gametext_paldeselected;
+        case USERDEFS_GAMETEXT_PALDISABLED: return ud.gametext_paldisabled;
+        case USERDEFS_GAMETEXT_PALSELECTED_RIGHT: return ud.gametext_palselected_right;
+        case USERDEFS_GAMETEXT_PALDESELECTED_RIGHT: return ud.gametext_paldeselected_right;
+        case USERDEFS_GAMETEXT_PALDISABLED_RIGHT: return ud.gametext_paldisabled_right;
+        case USERDEFS_MINITEXT_ZOOM:        return ud.minitext_zoom;
+        case USERDEFS_MINITEXT_XSPACE:      return ud.minitext_xspace;
+        case USERDEFS_MINITEXT_TRACKING:    return ud.minitext_tracking;
+        case USERDEFS_MINITEXT_PAL:         return ud.minitext_pal;
+        case USERDEFS_MINITEXT_PALSELECTED: return ud.minitext_palselected;
+        case USERDEFS_MINITEXT_PALDESELECTED: return ud.minitext_paldeselected;
+        case USERDEFS_MINITEXT_PALDISABLED: return ud.minitext_paldisabled;
+        case USERDEFS_MINITEXT_PALSELECTED_RIGHT: return ud.minitext_palselected_right;
+        case USERDEFS_MINITEXT_PALDESELECTED_RIGHT: return ud.minitext_paldeselected_right;
+        case USERDEFS_MINITEXT_PALDISABLED_RIGHT: return ud.minitext_paldisabled_right;
+        case USERDEFS_MENUTITLE_PAL:        return ud.menutitle_pal;
+        case USERDEFS_MENU_SLIDEBARZ:       return ud.menu_slidebarz;
+        case USERDEFS_MENU_SLIDECURSORZ:    return ud.menu_slidecursorz;
+        case USERDEFS_MENU_SLIDEBARMARGIN:  return ud.menu_slidebarmargin;
+        case USERDEFS_SLIDEBAR_PALSELECTED: return ud.slidebar_palselected;
+        case USERDEFS_SLIDEBAR_PALDISABLED: return ud.slidebar_paldisabled;
+        case USERDEFS_MENU_SCROLLBARTILENUM: return ud.menu_scrollbartilenum;
+        case USERDEFS_MENU_SCROLLBARZ:      return ud.menu_scrollbarz;
+        case USERDEFS_MENU_SCROLLCURSORZ:   return ud.menu_scrollcursorz;
+        case USERDEFS_SHADOW_PAL:           return ud.shadow_pal;
+        case USERDEFS_GAMEPADACTIVE:        return ud.gamepadactive;
+        case USERDEFS_DRAW_Y:               return rotatesprite_y_offset;
         case USERDEFS_DRAW_YXASPECT:        return rotatesprite_yxaspect;
+        case USERDEFS_MUSIC_EPISODE:        return ud.music_episode;
+        case USERDEFS_MUSIC_LEVEL:          return ud.music_level;
         case USERDEFS_MONSTERS_KILLED:      return ud.monsters_killed;
         case USERDEFS_LIMIT_HIT:            return ud.limit_hit;
         case USERDEFS_WINNER:               return ud.winner;
+        case USERDEFS_FOV:                  return ud.fov;
 
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
@@ -876,6 +1046,11 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_COLOR:                ud.color            = newValue; return;
         case USERDEFS_MSGDISPTIME:          ud.msgdisptime      = newValue; return;
         case USERDEFS_STATUSBARMODE:        ud.statusbarmode    = newValue; return;
+        case USERDEFS_STATUSBARFLAGS:       ud.statusbarflags   = newValue; return;
+        case USERDEFS_USERBYTEVERSION:      ud.userbytever      = newValue; return;
+        case USERDEFS_GLOBAL_R:             globalr             = clamp(newValue, 0, 255); return;
+        case USERDEFS_GLOBAL_G:             globalg             = clamp(newValue, 0, 255); return;
+        case USERDEFS_GLOBAL_B:             globalb             = clamp(newValue, 0, 255); return;
 
         case USERDEFS_M_NOEXITS:            M_DMFLAGS_SET(DMFLAG_NOEXITS, newValue); return;
         case USERDEFS_NOEXITS:              DMFLAGS_SET(DMFLAG_NOEXITS, newValue); return;
@@ -895,6 +1070,9 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_SHOW_LEVEL_TEXT:      ud.show_level_text      = newValue; return;
         case USERDEFS_WEAPONSCALE:          ud.weaponscale          = newValue; return;
         case USERDEFS_TEXTSCALE:            ud.textscale            = newValue; return;
+        case USERDEFS_M_NEWGAMECUSTOM:      ud.m_newgamecustom      = newValue; return;
+        case USERDEFS_M_NEWGAMECUSTOMSUB:   ud.m_newgamecustomsub   = newValue; return;
+        case USERDEFS_M_NEWGAMECUSTOML3:    ud.m_newgamecustoml3    = newValue; return;
 
         case USERDEFS_RETURN:
         {
@@ -904,8 +1082,22 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
                 ud.returnvar[lParm2 - 1] = newValue;
             return;
         }
-        case USERDEFS_VM_PLAYER:            vm.playerNum = newValue; return; //vm.playerNum;
-        case USERDEFS_VM_SPRITE:            vm.spriteNum = newValue; return; //vm.spriteNum;
+        case USERDEFS_VM_PLAYER:
+            if ((unsigned)newValue < MAXPLAYERS)
+            {
+                vm.playerNum = newValue;
+                vm.pPlayer = g_player[newValue].ps;
+            }
+            return;
+        case USERDEFS_VM_SPRITE:
+            if ((unsigned)newValue < MAXSPRITES)
+            {
+                vm.spriteNum = newValue;
+                vm.pSprite = &sprite[newValue];
+                vm.pActor = &actor[newValue];
+                vm.pData = &actor[newValue].t_data[0];
+            }
+            return;
         case USERDEFS_VM_DISTANCE:          vm.playerDist = newValue; return; //vm.playerDist;
 
         case USERDEFS_TEAMPAL:          teams[lParm2].palnum    = newValue; return;
@@ -913,10 +1105,64 @@ void __fastcall VM_SetUserdef(int const labelNum, int const lParm2, int32_t cons
         case USERDEFS_TEAMSUICIDES:     teams[lParm2].suicides  = newValue; return;
         case USERDEFS_DMFLAGS:          ud.dmflags              = newValue; return;
         case USERDEFS_M_DMFLAGS:        ud.m_dmflags            = newValue; return;
+        case USERDEFS_AUTOSAVE:         ud.autosave             = newValue; return;
+        case USERDEFS_AUTOSAVEDELETION: ud.autosavedeletion     = newValue; return;
+        case USERDEFS_MAXAUTOSAVES:     ud.maxautosaves         = newValue; return;
+        case USERDEFS_MAXSPRITESONSCREEN:
+            maxspritesonscreen = clamp(newValue, MAXSPRITESONSCREEN >> 2, MAXSPRITESONSCREEN);
+            return;
+        case USERDEFS_SCREENFADE:       ud.screenfade           = newValue; return;
+        case USERDEFS_MENU_SHADEDESELECTED: ud.menu_shadedeselected = newValue; return;
+        case USERDEFS_MENU_SHADEDISABLED:   ud.menu_shadedisabled   = newValue; return;
+        case USERDEFS_MENUTEXT_ZOOM:        ud.menutext_zoom        = newValue; return;
+        case USERDEFS_MENUTEXT_XSPACE:      ud.menutext_xspace      = newValue; return;
+        case USERDEFS_MENUTEXT_TRACKING:    ud.menutext_tracking    = newValue; return;
+        case USERDEFS_MENUTEXT_PAL:         ud.menutext_pal         = newValue; return;
+        case USERDEFS_MENUTEXT_PALSELECTED: ud.menutext_palselected = newValue; return;
+        case USERDEFS_MENUTEXT_PALDESELECTED: ud.menutext_paldeselected = newValue; return;
+        case USERDEFS_MENUTEXT_PALDISABLED: ud.menutext_paldisabled = newValue; return;
+        case USERDEFS_MENUTEXT_PALSELECTED_RIGHT: ud.menutext_palselected_right = newValue; return;
+        case USERDEFS_MENUTEXT_PALDESELECTED_RIGHT: ud.menutext_paldeselected_right = newValue; return;
+        case USERDEFS_MENUTEXT_PALDISABLED_RIGHT: ud.menutext_paldisabled_right = newValue; return;
+        case USERDEFS_GAMETEXT_ZOOM:        ud.gametext_zoom        = newValue; return;
+        case USERDEFS_GAMETEXT_XSPACE:      ud.gametext_xspace      = newValue; return;
+        case USERDEFS_GAMETEXT_TRACKING:    ud.gametext_tracking    = newValue; return;
+        case USERDEFS_GAMETEXT_PAL:         ud.gametext_pal         = newValue; return;
+        case USERDEFS_GAMETEXT_PALSELECTED: ud.gametext_palselected = newValue; return;
+        case USERDEFS_GAMETEXT_PALDESELECTED: ud.gametext_paldeselected = newValue; return;
+        case USERDEFS_GAMETEXT_PALDISABLED: ud.gametext_paldisabled = newValue; return;
+        case USERDEFS_GAMETEXT_PALSELECTED_RIGHT: ud.gametext_palselected_right = newValue; return;
+        case USERDEFS_GAMETEXT_PALDESELECTED_RIGHT: ud.gametext_paldeselected_right = newValue; return;
+        case USERDEFS_GAMETEXT_PALDISABLED_RIGHT: ud.gametext_paldisabled_right = newValue; return;
+        case USERDEFS_MINITEXT_ZOOM:        ud.minitext_zoom        = newValue; return;
+        case USERDEFS_MINITEXT_XSPACE:      ud.minitext_xspace      = newValue; return;
+        case USERDEFS_MINITEXT_TRACKING:    ud.minitext_tracking    = newValue; return;
+        case USERDEFS_MINITEXT_PAL:         ud.minitext_pal         = newValue; return;
+        case USERDEFS_MINITEXT_PALSELECTED: ud.minitext_palselected = newValue; return;
+        case USERDEFS_MINITEXT_PALDESELECTED: ud.minitext_paldeselected = newValue; return;
+        case USERDEFS_MINITEXT_PALDISABLED: ud.minitext_paldisabled = newValue; return;
+        case USERDEFS_MINITEXT_PALSELECTED_RIGHT: ud.minitext_palselected_right = newValue; return;
+        case USERDEFS_MINITEXT_PALDESELECTED_RIGHT: ud.minitext_paldeselected_right = newValue; return;
+        case USERDEFS_MINITEXT_PALDISABLED_RIGHT: ud.minitext_paldisabled_right = newValue; return;
+        case USERDEFS_MENUTITLE_PAL:        ud.menutitle_pal        = newValue; return;
+        case USERDEFS_MENU_SLIDEBARZ:       ud.menu_slidebarz       = newValue; return;
+        case USERDEFS_MENU_SLIDECURSORZ:    ud.menu_slidecursorz    = newValue; return;
+        case USERDEFS_MENU_SLIDEBARMARGIN:  ud.menu_slidebarmargin  = newValue; return;
+        case USERDEFS_SLIDEBAR_PALSELECTED: ud.slidebar_palselected = newValue; return;
+        case USERDEFS_SLIDEBAR_PALDISABLED: ud.slidebar_paldisabled = newValue; return;
+        case USERDEFS_MENU_SCROLLBARTILENUM: ud.menu_scrollbartilenum = newValue; return;
+        case USERDEFS_MENU_SCROLLBARZ:      ud.menu_scrollbarz      = newValue; return;
+        case USERDEFS_MENU_SCROLLCURSORZ:   ud.menu_scrollcursorz   = newValue; return;
+        case USERDEFS_SHADOW_PAL:           ud.shadow_pal           = newValue; return;
+        case USERDEFS_GAMEPADACTIVE:        ud.gamepadactive        = newValue; return;
+        case USERDEFS_DRAW_Y:           rotatesprite_y_offset   = newValue; return;
         case USERDEFS_DRAW_YXASPECT:    rotatesprite_yxaspect   = newValue; return;
+        case USERDEFS_MUSIC_EPISODE:    ud.music_episode        = newValue; return;
+        case USERDEFS_MUSIC_LEVEL:      ud.music_level          = newValue; return;
         case USERDEFS_MONSTERS_KILLED:  ud.monsters_killed      = newValue; return;
         case USERDEFS_LIMIT_HIT:        ud.limit_hit            = newValue; return;
         case USERDEFS_WINNER:           ud.winner               = newValue; return;
+        case USERDEFS_FOV:              ud.fov                  = newValue; return;
 
         default: return;
     }
@@ -963,6 +1209,7 @@ int32_t __fastcall VM_GetActiveProjectile(int const spriteNum, int32_t labelNum)
         case PROJ_BOUNCES:      return proj.bounces;
         case PROJ_BSOUND:       return proj.bsound;
         case PROJ_RANGE:        return proj.range;
+        case PROJ_USERDATA:     return proj.userdata;
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
@@ -1008,6 +1255,7 @@ void __fastcall VM_SetActiveProjectile(int const spriteNum, int const labelNum, 
         case PROJ_BOUNCES:      proj.bounces    = newValue; return;
         case PROJ_BSOUND:       proj.bsound     = newValue; return;
         case PROJ_RANGE:        proj.range      = newValue; return;
+        case PROJ_USERDATA:     proj.userdata   = newValue; return;
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }
@@ -1043,6 +1291,10 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_HORIZ:              return fix16_to_int(ps.q16horiz);
         case PLAYER_OHORIZ:             return fix16_to_int(ps.oq16horiz);
         case PLAYER_OHORIZOFF:          return fix16_to_int(ps.oq16horizoff);
+        case PLAYER_Q16HORIZ:           return ps.q16horiz;
+        case PLAYER_OQ16HORIZ:          return ps.oq16horiz;
+        case PLAYER_Q16HORIZOFF:        return ps.q16horizoff;
+        case PLAYER_OQ16HORIZOFF:       return ps.oq16horizoff;
 
         case PLAYER_INVDISPTIME:        return ps.invdisptime;
 
@@ -1076,7 +1328,10 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
 
         case PLAYER_ANG:                return fix16_to_int(ps.q16ang);
         case PLAYER_OANG:               return fix16_to_int(ps.oq16ang);
+        case PLAYER_Q16ANG:             return ps.q16ang;
+        case PLAYER_OQ16ANG:            return ps.oq16ang;
         case PLAYER_ANGVEL:             return fix16_to_int(ps.q16angvel);
+        case PLAYER_Q16ANGVEL:          return ps.q16angvel;
 
         case PLAYER_CURSECTNUM:         return ps.cursectnum;
         case PLAYER_LOOK_ANG:           return ps.look_ang;
@@ -1143,6 +1398,9 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_WEAPON_POS:             return ps.weapon_pos;
         case PLAYER_FRAG_PS:                return ps.frag_ps;
         case PLAYER_TRANSPORTER_HOLD:       return ps.transporter_hold;
+        case PLAYER_CLIPDIST:               return ps.clipdist;
+        case PLAYER_AUTOSTEP:               return ps.autostep;
+        case PLAYER_AUTOSTEP_SBW:           return ps.autostep_sbw;
         case PLAYER_LAST_FULL_WEAPON:       return ps.last_full_weapon;
         case PLAYER_FOOTPRINTSHADE:         return ps.footprintshade;
         case PLAYER_BOOT_AMOUNT:            return ps.inv_amount[GET_BOOTS];
@@ -1167,6 +1425,7 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
         case PLAYER_HOLSTER_WEAPON:         return ps.holster_weapon;
         case PLAYER_FALLING_COUNTER:        return ps.falling_counter;
         case PLAYER_GOTWEAPON:              return ps.gotweapon[lParm2];
+        case PLAYER_PALETTE:                return ps.palette;
         case PLAYER_TOGGLE_KEY_FLAG:        return ps.toggle_key_flag;
         case PLAYER_KNUCKLE_INCS:           return ps.knuckle_incs;
         case PLAYER_WALKING_SND_TOGGLE:     return ps.walking_snd_toggle;
@@ -1209,6 +1468,16 @@ int32_t __fastcall VM_GetPlayer(int const playerNum, int32_t labelNum, int const
 
         case PLAYER_LOWSPRITE:              return ps.lowsprite; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return ps.highsprite; // [JM] Lowest sprite touching. // Read-only.
+        case PLAYER_OLOOK_ANG:              return ps.olook_ang;
+        case PLAYER_FLOORZREBOUND:          return ps.floorzrebound;
+        case PLAYER_FLOORZCUTOFF:           return ps.floorzcutoff;
+        case PLAYER_FLOORZOFFSET_MEMBER:    return ps.floorzoffset;
+        case PLAYER_SPRITEZOFFSET_MEMBER:   return ps.spritezoffset;
+        case PLAYER_MINWATERZDIST_MEMBER:   return ps.minwaterzdist;
+        case PLAYER_WATERZOFFSET_MEMBER:    return ps.waterzoffset;
+        case PLAYER_SHRUNKZOFFSET_MEMBER:   return ps.shrunkzoffset;
+        case PLAYER_CROUCHZINCREMENT_MEMBER:return ps.crouchzincrement;
+        case PLAYER_GRAVITY:                return ps.gravity;
 
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
@@ -1246,6 +1515,10 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_HORIZ:              ps.q16horiz             = fix16_from_int(newValue); return;
         case PLAYER_OHORIZ:             ps.oq16horiz            = fix16_from_int(newValue); return;
         case PLAYER_OHORIZOFF:          ps.oq16horizoff         = fix16_from_int(newValue); return;
+        case PLAYER_Q16HORIZ:           ps.q16horiz             = newValue; return;
+        case PLAYER_OQ16HORIZ:          ps.oq16horiz            = newValue; return;
+        case PLAYER_Q16HORIZOFF:        ps.q16horizoff          = newValue; return;
+        case PLAYER_OQ16HORIZOFF:       ps.oq16horizoff         = newValue; return;
 
         case PLAYER_INVDISPTIME:        ps.invdisptime          = newValue; return;
 
@@ -1279,7 +1552,10 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
 
         case PLAYER_ANG:                ps.q16ang               = fix16_from_int(newValue); return;
         case PLAYER_OANG:               ps.oq16ang              = fix16_from_int(newValue); return;
+        case PLAYER_Q16ANG:             ps.q16ang               = newValue; return;
+        case PLAYER_OQ16ANG:            ps.oq16ang              = newValue; return;
         case PLAYER_ANGVEL:             ps.q16angvel            = fix16_from_int(newValue); return;
+        case PLAYER_Q16ANGVEL:          ps.q16angvel            = newValue; return;
 
         case PLAYER_CURSECTNUM:         ps.cursectnum           = newValue; return;
         case PLAYER_LOOK_ANG:           ps.look_ang             = newValue; return;
@@ -1350,6 +1626,9 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_WEAPON_POS:             ps.weapon_pos               = newValue; return;
         case PLAYER_FRAG_PS:                ps.frag_ps                  = newValue; return;
         case PLAYER_TRANSPORTER_HOLD:       ps.transporter_hold         = newValue; return;
+        case PLAYER_CLIPDIST:               ps.clipdist                 = newValue; return;
+        case PLAYER_AUTOSTEP:               ps.autostep                 = newValue; return;
+        case PLAYER_AUTOSTEP_SBW:           ps.autostep_sbw             = newValue; return;
         case PLAYER_LAST_FULL_WEAPON:       ps.last_full_weapon         = newValue; return;
         case PLAYER_FOOTPRINTSHADE:         ps.footprintshade           = newValue; return;
         case PLAYER_BOOT_AMOUNT:            ps.inv_amount[GET_BOOTS]    = newValue; return;
@@ -1382,6 +1661,7 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
         case PLAYER_HOLSTER_WEAPON:         ps.holster_weapon           = newValue; return;
         case PLAYER_FALLING_COUNTER:        ps.falling_counter          = newValue; return;
         case PLAYER_GOTWEAPON:              ps.gotweapon[lParm2]        = newValue; return;
+        case PLAYER_PALETTE:                P_SetGamePalette(&ps, newValue, 2 + 16); return;
         case PLAYER_TOGGLE_KEY_FLAG:        ps.toggle_key_flag          = newValue; return;
         case PLAYER_KNUCKLE_INCS:           ps.knuckle_incs             = newValue; return;
         case PLAYER_WALKING_SND_TOGGLE:     ps.walking_snd_toggle       = newValue; return;
@@ -1428,6 +1708,16 @@ void __fastcall VM_SetPlayer(int const playerNum, int const labelNum, int const 
 
         case PLAYER_LOWSPRITE:              return; // [JM] Lowest sprite touching. Read-only.
         case PLAYER_HIGHSPRITE:             return; // [JM] Lowest sprite touching. // Read-only.
+        case PLAYER_OLOOK_ANG:              ps.olook_ang             = newValue; return;
+        case PLAYER_FLOORZREBOUND:          ps.floorzrebound         = newValue; return;
+        case PLAYER_FLOORZCUTOFF:           ps.floorzcutoff          = newValue; return;
+        case PLAYER_FLOORZOFFSET_MEMBER:    ps.floorzoffset           = newValue; return;
+        case PLAYER_SPRITEZOFFSET_MEMBER:   ps.spritezoffset          = newValue; return;
+        case PLAYER_MINWATERZDIST_MEMBER:   ps.minwaterzdist          = newValue; return;
+        case PLAYER_WATERZOFFSET_MEMBER:    ps.waterzoffset           = newValue; return;
+        case PLAYER_SHRUNKZOFFSET_MEMBER:   ps.shrunkzoffset          = newValue; return;
+        case PLAYER_CROUCHZINCREMENT_MEMBER:ps.crouchzincrement       = newValue; return;
+        case PLAYER_GRAVITY:                ps.gravity                = newValue; return;
 
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
@@ -1447,7 +1737,9 @@ int32_t __fastcall VM_GetPlayerInput(int const playerNum, int32_t labelNum)
     switch (inputLabel.lId)
     {
         case INPUT_AVEL:    return fix16_to_int(i.q16avel);
+        case INPUT_Q16AVEL: return i.q16avel;
         case INPUT_HORZ:    return fix16_to_int(i.q16horz);
+        case INPUT_Q16HORZ: return i.q16horz;
         case INPUT_FVEL:    return i.fvel;
         case INPUT_SVEL:    return i.svel;
         case INPUT_BITS:    return i.bits;
@@ -1470,7 +1762,9 @@ void __fastcall VM_SetPlayerInput(int const playerNum, int const labelNum, int32
     switch (inputLabel.lId)
     {
         case INPUT_AVEL:    i.q16avel   = fix16_from_int(newValue); return;
+        case INPUT_Q16AVEL: i.q16avel   = newValue; return;
         case INPUT_HORZ:    i.q16horz   = fix16_from_int(newValue); return;
+        case INPUT_Q16HORZ: i.q16horz   = newValue; return;
         case INPUT_FVEL:    i.fvel      = newValue; return;
         case INPUT_SVEL:    i.svel      = newValue; return;
         case INPUT_BITS:    i.bits      = newValue; return;
@@ -1504,6 +1798,8 @@ int32_t __fastcall VM_GetWall(int const wallNum, int32_t labelNum)
         case WALL_LOTAG:        return w.lotag;
         case WALL_HITAG:        return w.hitag;
         case WALL_EXTRA:        return w.extra;
+        case WALL_BLEND:        return wallext[wallNum].blend;
+        case WALL_ANG:          return (getangle(wall[w.point2].x - w.x, wall[w.point2].y - w.y) + 512) & 2047;
 
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
@@ -1534,6 +1830,8 @@ void __fastcall VM_SetWall(int const wallNum, int const labelNum, int32_t const 
         case WALL_LOTAG:        w.lotag         = newValue; return;
         case WALL_HITAG:        w.hitag         = newValue; return;
         case WALL_EXTRA:        w.extra         = newValue; return;
+        case WALL_BLEND:        wallext[wallNum].blend = newValue; return;
+        case WALL_ANG:          return;
 
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
@@ -1705,8 +2003,11 @@ int32_t __fastcall VM_GetSprite(int const spriteNum, int32_t labelNum, int const
         case ACTOR_HTEXTRA:         return act.htextra;
         case ACTOR_HTOWNER:         return act.htowner;
         case ACTOR_HTMOVFLAG:       return act.movflag;
+        case ACTOR_HTUMOVFLAG:      return (uint16_t)act.movflag;
         case ACTOR_HTTEMPANG:       return act.tempang;
         case ACTOR_HTSTAYPUT:       return act.actorstayput;
+        case ACTOR_HTFLOORZOFFSET:  return act.floorzoffset;
+        case ACTOR_HTWATERZOFFSET:  return act.waterzoffset;
         case ACTOR_HTDISPICNUM:     return act.dispicnum;
         case ACTOR_HTTIMETOSLEEP:   return act.timetosleep;
         case ACTOR_HTFLOORZ:        return act.floorz;
@@ -1782,8 +2083,11 @@ void __fastcall VM_SetSprite(int const spriteNum, int const labelNum, int const 
         case ACTOR_HTEXTRA:         act.htextra             = newValue; return;
         case ACTOR_HTOWNER:         act.htowner             = newValue; return;
         case ACTOR_HTMOVFLAG:       act.movflag             = newValue; return;
+        case ACTOR_HTUMOVFLAG:      act.movflag             = newValue; return;
         case ACTOR_HTTEMPANG:       act.tempang             = newValue; return;
         case ACTOR_HTSTAYPUT:       act.actorstayput        = newValue; return;
+        case ACTOR_HTFLOORZOFFSET:  act.floorzoffset        = newValue; return;
+        case ACTOR_HTWATERZOFFSET:  act.waterzoffset        = newValue; return;
         case ACTOR_HTDISPICNUM:     act.dispicnum           = newValue; return;
         case ACTOR_HTTIMETOSLEEP:   act.timetosleep         = newValue; return;
         case ACTOR_HTFLOORZ:        act.floorz              = newValue; return;
@@ -1853,6 +2157,7 @@ int32_t __fastcall VM_GetProjectile(int const tileNum, int32_t labelNum)
         case PROJ_BSOUND:       return proj.bsound;
         case PROJ_RANGE:        return proj.range;
         case PROJ_FLASH_COLOR:  return proj.flashcolor;
+        case PROJ_USERDATA:     return proj.userdata;
         default: EDUKE32_UNREACHABLE_SECTION(return -1);
     }
 }
@@ -1899,6 +2204,7 @@ void __fastcall VM_SetProjectile(int const tileNum, int const labelNum, int32_t 
         case PROJ_BSOUND:       proj.bsound     = newValue; return;
         case PROJ_RANGE:        proj.range      = newValue; return;
         case PROJ_FLASH_COLOR:  proj.flashcolor = newValue; return;
+        case PROJ_USERDATA:     proj.userdata   = newValue; return;
         default: EDUKE32_UNREACHABLE_SECTION(return);
     }
 }

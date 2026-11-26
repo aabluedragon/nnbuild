@@ -920,7 +920,7 @@ osdcvardata_t cvar[] =
     // Player Colors
     { "team", "team: player's team number", (void*)&ud.team, CVAR_INT | CVAR_MULTI, 0, 3 },
     { "color", "player palette", (void*)&ud.m_color, CVAR_INT | CVAR_MULTI, 0, MAXPALOOKUPS - 1 },
-    { "skin", "player skin: 0=Duke 1=Assault Trooper 2=Assault Captain 3=Octabrain 4=Assault Commander 5=Enforcer 6=Pig Cop 7=Alien Beast (unavailable skins fall back to Duke)", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
+    { "skin", "player skin: 0=Duke 1=Assault Trooper 2=Assault Captain 3=Octabrain 4=Assault Commander 5=Enforcer 6=Pig Cop 7=Alien Beast 8=Lo Wang 9=Shelly (unavailable skins fall back to Duke)", (void*)&ud.skin, CVAR_INT | CVAR_MULTI, 0, MAXPLAYERSKINS - 1 },
     { "sv_maprotation", "map rotation: 0 off, 1 sequential, 2 random", (void*)&g_mapRotationMode, CVAR_INT | CVAR_FUNCPTR, 0, 2 },
 
     // Mouse
@@ -967,6 +967,7 @@ osdcvardata_t cvar[] =
     { "snd_numchannels", "snd_numchannels: the number of sound channels", (void*)&ud.config.NumChannels, CVAR_INT, 0, 2 },
     { "snd_numvoices", "snd_numvoices: the number of concurrent sounds", (void*)&ud.config.NumVoices, CVAR_INT | CVAR_FUNCPTR, 0, 32 },
     //{ "snd_reversestereo", "snd_reversestereo: reverses the stereo channels", (void*)&ud.config.ReverseStereo, CVAR_BOOL, 0, 16 },
+    { "wt_commentary", "wt_commentary: show and enable World Tour developer commentary markers", (void*)&g_worldTourCommentary, CVAR_BOOL, 0, 1 },
 
     { "vid_gamma","gamma component of gamma ramp",(void*)&g_videoGamma, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
     { "vid_contrast","contrast component of gamma ramp",(void*)&g_videoContrast, CVAR_FLOAT | CVAR_FUNCPTR, 0, 10 },
@@ -1264,9 +1265,11 @@ static int osdcmd_button(osdcmdptr_t parm)
     int constexpr strlen_gamefunc_ = ARRAY_SIZE(s_gamefunc_) - 1;
 
     char const* p = parm->name + strlen_gamefunc_;
+    int const gameFunc = CONFIG_FunctionNameToNum(p);
 
     //    if (ud.gm == MODE_GAME) // only trigger these if in game
-    CONTROL_ButtonFlags[CONFIG_FunctionNameToNum(p)] = 1; // FIXME
+    if ((unsigned)gameFunc < NUMGAMEFUNCTIONS)
+        CONTROL_ButtonFlags[gameFunc] = 1;
 
     return OSDCMD_OK;
 }
@@ -1718,7 +1721,6 @@ int registerosdcommands(void)
     {
         OSD_RegisterFunction("changelevel","changelevel <volume> <level>: warps to the given level", osdcmd_changelevel);
         OSD_RegisterFunction("map","map <E#L#|map path> [pack|base]", osdcmd_map);
-    if (!VOLUMEONE)
         OSD_RegisterFunction("changemap","changemap <E#L#|map path> [pack|base]", osdcmd_map);
     }
 
@@ -1747,19 +1749,28 @@ int registerosdcommands(void)
 
     OSD_RegisterFunction("fileinfo","fileinfo <file>: gets a file's information", osdcmd_fileinfo);
 
+    auto registerGameFuncCommand = [](char const* commandName)
+    {
+        if (!commandName || commandName[0] == '\0')
+            return;
+
+        char *t = Xstrdup(commandName);
+        for (int j = Bstrlen(t); j >= 0; --j)
+            t[j] = Btolower(t[j]);
+
+        char help[2 * MAXGAMEFUNCLEN + 16];
+        Bsprintf(help, "%s: game button", commandName);
+        OSD_RegisterFunction(t, Xstrdup(help), osdcmd_button);
+    };
+
     for (i=0;i<NUMGAMEFUNCTIONS;i++)
     {
-        char *t;
-        int j;
+        registerGameFuncCommand(gamefunc_symbol_names[i]);
 
         if (!Bstrcmp(gamefunctions[i],"Show_Console")) continue;
 
         Bsprintf(tempbuf,"gamefunc_%s",gamefunctions[i]);
-        t = Xstrdup(tempbuf);
-        for (j=Bstrlen(t);j>=0;j--)
-            t[j] = Btolower(t[j]);
-        Bstrcat(tempbuf,": game button");
-        OSD_RegisterFunction(t,Xstrdup(tempbuf),osdcmd_button);
+        registerGameFuncCommand(tempbuf);
     }
 
 //    OSD_RegisterFunction("setbrightness","setbrightness <value>: changes brightness (obsolete)", osdcmd_setbrightness);
@@ -1803,4 +1814,3 @@ int registerosdcommands(void)
 
     return 0;
 }
-

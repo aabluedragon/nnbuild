@@ -365,8 +365,17 @@ MenuItem inputsetup_i[] =
 };
 MenuGroup inputsetupgroup = {65, 5, "^Input Setup", inputsetup_i, pic_newgametitl, 0, m_defshade, NULL,NULL, 0};
 
+MenuItem playersetup_i[] =
+{
+    {DefSlider(sldr_playerskin, 0, "Skin"), OPT_XS, OPT_LINE(0), 1, m_defshade, 0, NULL, NULL, NULL},
+    {DefNone}
+};
+
+MenuGroup playersetupgroup = {65, 5, "^Player Setup", playersetup_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 0};
+
 MenuItem options_i[] =
 {
+    {DefLayer(0, "Player Setup", &playersetupgroup),OPT_XS,      OPT_LINE(15), 1, m_defshade,0,NULL, NULL, NULL},
     {DefLayer(0, "Screen Menu", &screengroup),OPT_XS,            OPT_LINE(0), 1, m_defshade,0,NULL, NULL, NULL},
     {DefLayer(0, "Mouse Menu", &mousegroup),OPT_XS,              OPT_LINE(1), 1, m_defshade,0,NULL, MNU_MouseCheck, NULL},
     {DefLayer(0, "Sound Menu", &soundgroup),OPT_XS,              OPT_LINE(2), 1, m_defshade,0,MNU_TryMusicInit, MNU_MusicFxCheck, NULL},
@@ -401,15 +410,43 @@ MenuItem skill_i[] =
 
 MenuGroup skillgroup = {100, 5, "^Skill", skill_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 2};
 
-MenuItem episode_i[] =
+MenuItem episode_i[MAX_EPISODES_CROSSPLAY + 1] =
 {
     {DefLayer(KEYSC_S, &EpisodeNames[0][0], &skillgroup), 30, 46, pic_episode1, m_defshade, 0, MNU_EpisodeCustom, NULL, NULL},
     {DefLayer(KEYSC_F, &EpisodeNames[1][0], &skillgroup), 30, 78, pic_episode2, m_defshade, 0, MNU_EpisodeCustom, MNU_ShareWareCheck, MNU_ShareWareMessage},
-    //{DefLayer(KEYSC_S, NULL, &skillgroup), 60, 30, pic_episode1, m_defshade, 0, MNU_EpisodeCustom},
-    //{DefLayer(KEYSC_F, NULL, &skillgroup), 60, 46, pic_episode2, m_defshade, 0, MNU_EpisodeCustom},
-    //{DefLayer(KEYSC_T, NULL, &skillgroup), 60, 62, pic_episode3, m_defshade, 0, MNU_EpisodeCustom},
     {DefNone}
 };
+
+// Shadow Warrior ships two episodes and lays them out by hand.  A Duke GRP can
+// carry four, so when one is in play the list is rebuilt from what the GRP turned
+// out to hold -- and the shareware gate comes off, because whether an episode is
+// there at all has already been decided by whether its first map exists.
+void MNU_BuildCrossplayEpisodeMenu(void)
+{
+    int const episodes = SW_CrossplayDukeEpisodeCount();
+
+    if (episodes <= 0)
+        return;
+
+    int const spacing = episodes > 4 ? 20 : 32;
+    int const top = 46 - ((episodes - 2) * spacing) / 2;
+
+    for (int i = 0; i < episodes && i < MAX_EPISODES_CROSSPLAY; ++i)
+    {
+        MenuItem item = {DefLayer(KEYSC_S, &EpisodeNames[0][0], &skillgroup),
+                         30, 46, pic_episode1, m_defshade, 0, MNU_EpisodeCustom, NULL, NULL};
+
+        item.text = &EpisodeNames[i][0];
+        item.hotkey = (unsigned char)('1' + i);
+        item.y = max(20, top + i * spacing);
+        item.pic = (short)(i == 0 ? pic_episode1 : pic_episode2);
+
+        episode_i[i] = item;
+    }
+
+    MenuItem const terminator = {DefNone};
+    episode_i[min(episodes, MAX_EPISODES_CROSSPLAY)] = terminator;
+}
 
 MenuGroup episodegroup = {100, 5, "^Episode", episode_i, pic_newgametitl, 0, m_defshade, MNU_DoEpisodeSelect, NULL, 0};
 
@@ -427,6 +464,63 @@ MenuItem network_extra_i[] =
 };
 
 MenuGroup networkextragroup = {50, 5, "^Net Options", network_extra_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 0};
+
+// --- In-menu server browser (VibeBuild32) -----------------------------------
+// A custom-draw menu group that lists servers advertised to the masterserver and
+// lets the player pick one; selecting relaunches into that server (SW connects at
+// startup, so joining is a re-exec with -net <server>). Backend in network.cpp.
+static sw_lobby_server s_sbList[16];
+static int s_sbCount = -2;   // -2 = not queried yet, -1 = query failed, >=0 = server count
+static int s_sbSel = 0;
+
+SWBOOL MNU_ServerBrowserDraw(UserCall UNUSED(call), MenuItem *UNUSED(item))
+{
+    char line[96];
+    if (s_sbCount == -2)   // query once on entry
+    {
+        s_sbSel = 0;
+        s_sbCount = Net_QueryLobbyList(Net_GetMasterAddr(), s_sbList, 16);
+    }
+    Bsnprintf(line, sizeof(line), "Masterserver: %s", Net_GetMasterAddr());
+    MNU_DrawString(20, 40, line, 1, 16);
+    if (s_sbCount <= 0)
+    {
+        MNU_DrawString(20, 58, s_sbCount == 0 ? "No servers found." : "Masterserver unavailable.", 1, 16);
+        MNU_DrawString(20, 72, "R = refresh    ESC = back", 1, 16);
+        return TRUE;
+    }
+    Bsnprintf(line, sizeof(line), "%d server(s):", s_sbCount);
+    MNU_DrawString(20, 54, line, 1, 16);
+    for (int i = 0; i < s_sbCount; i++)
+    {
+        Bsnprintf(line, sizeof(line), "%c %-16s %-8s %d/%d",
+                  i == s_sbSel ? '>' : ' ', s_sbList[i].name, s_sbList[i].map,
+                  s_sbList[i].players, s_sbList[i].maxplayers);
+        MNU_DrawString(20, 68 + i * 9, line, i == s_sbSel ? 0 : 12, 16);
+    }
+    MNU_DrawString(20, 68 + s_sbCount * 9 + 8, "ENTER = join   R = refresh   ESC = back", 1, 16);
+    return TRUE;
+}
+
+SWBOOL MNU_ServerBrowserMove(UserCall UNUSED(call), MenuItem *UNUSED(item))
+{
+    if (KB_KeyPressed(sc_UpArrow))   { KB_ClearKeyDown(sc_UpArrow);   if (s_sbSel > 0) s_sbSel--; }
+    if (KB_KeyPressed(sc_DownArrow)) { KB_ClearKeyDown(sc_DownArrow); if (s_sbSel < s_sbCount - 1) s_sbSel++; }
+    if (KB_KeyPressed(sc_R))         { KB_ClearKeyDown(sc_R); s_sbCount = -2; }  // refresh
+    if (KB_KeyPressed(sc_Enter) && s_sbCount > 0)
+    {
+        KB_ClearKeyDown(sc_Enter);
+        Net_JoinServerBrowser(s_sbList[s_sbSel].addr);
+    }
+    return TRUE;
+}
+
+MenuItem serverbrowser_i[] =
+{
+    {DefInert(0, " "), OPT_XS, OPT_LINE(0), 0, m_defshade, 0, NULL, NULL, NULL},
+    {DefNone}
+};
+MenuGroup serverbrowsergroup = {20, 5, "^Server Browser", serverbrowser_i, pic_newgametitl, 0, m_defshade, MNU_ServerBrowserDraw, MNU_ServerBrowserMove, 0};
 
 MenuItem network_i[] =
 {
@@ -452,6 +546,8 @@ MenuItem network_i[] =
 
     {DefInert(0, UserMapName),         OPT_XSIDE,                OPT_LINE(8), pic_episode1, m_defshade, 0, NULL, NULL, NULL},
     {DefOption(KEYSC_S, "Start Game"),   OPT_XS,                    OPT_LINE(8), pic_episode1, m_defshade, 0, MNU_StartNetGame, NULL, NULL},
+
+    {DefLayer(KEYSC_B, "Browse Servers", &serverbrowsergroup), OPT_XS, OPT_LINE(9), 1, m_defshade, 0, NULL, NULL, NULL},  // VibeBuild32: in-menu server browser
 
     {DefNone}
 
@@ -583,6 +679,22 @@ MNU_DoEpisodeSelect(UserCall UNUSED(call), MenuItem *UNUSED(item))
 {
     short w,h;
     char *extra_text;
+
+    int const crossplayEpisodes = SW_CrossplayDukeEpisodeCount();
+
+    if (crossplayEpisodes > 0)
+    {
+        // One subtitle under each episode the GRP turned out to hold, at whatever
+        // spacing MNU_BuildCrossplayEpisodeMenu() laid them out with.
+        for (int i = 0; i < crossplayEpisodes && i < MAX_EPISODES_CROSSPLAY; ++i)
+        {
+            extra_text = EpisodeSubtitles[i];
+            MNU_MeasureString(extra_text, &w, &h);
+            MNU_DrawString(30, episode_i[i].y + 17, extra_text, 1, 16);
+        }
+
+        return TRUE;
+    }
 
     extra_text = EpisodeSubtitles[0];
     MNU_MeasureString(extra_text, &w, &h);
@@ -1794,7 +1906,9 @@ MNU_StartGame(void)
     ready2send = 0;
     Skill = currentmenu->cursor;
 
-    if (EpisodeMenuSelection >= 1)
+    if (SW_CrossplayDukeEpisodeCount() > 0)
+        Level = SW_CrossplayDukeEpisodeFirstLevel(EpisodeMenuSelection);
+    else if (EpisodeMenuSelection >= 1)
         Level = 5;
     else
         Level = 1;
@@ -2064,6 +2178,8 @@ MNU_InitMenus(void)
 {
     pClearTextLine(Player + myconnectindex, TEXT_INFO_LINE(0));
 
+    MNU_BuildCrossplayEpisodeMenu();
+
     slidersettings[sldr_mouse] = gs.MouseSpeed/(MOUSE_SENS_MAX_VALUE/SLDR_MOUSESENSEMAX);
 
     slidersettings[sldr_sndfxvolume] = gs.SoundVolume / (FX_VOL_MAX_VALUE/SLDR_SNDFXVOLMAX);
@@ -2119,6 +2235,7 @@ MNU_InitMenus(void)
     slidersettings[sldr_killlimit] = gs.NetKillLimit;
     slidersettings[sldr_timelimit] = gs.NetTimeLimit;
     slidersettings[sldr_playercolor] = gs.NetColor;
+    slidersettings[sldr_playerskin] = gs.PlayerSkin;
 
     buttonsettings[btn_nuke] = gs.NetNuke;
     buttonsettings[btn_markers] = gs.NetSpawnMarkers;
@@ -3716,6 +3833,27 @@ MNU_DoSlider(short dir, MenuItem_p item, SWBOOL draw)
         MNU_DrawString(OPT_XSIDE+86, item->y, tmp_text, 1, 16);
         gs.NetTimeLimit = offset;
         break;
+
+    case sldr_playerskin:
+    {
+        int const skins = SW_CrossplaySkinCount();
+
+        barwidth = skins;
+        offset = slidersettings[sldr_playerskin] += dir;
+
+        if (TEST(item->flags, mf_disabled))
+            break;
+
+        offset = max(offset, short(0));
+        offset = min(offset, short(skins - 1));
+        slidersettings[sldr_playerskin] = offset;
+
+        extra_text = (char *)SW_CrossplaySkinName(offset);
+        MNU_DrawString(OPT_XSIDE + 40, item->y, extra_text, 1,
+                       SW_CrossplaySkinIsDuke(offset) ? 16 : PALETTE_PLAYER0 + SW_CrossplaySkinPalette(offset));
+        gs.PlayerSkin = (uint8_t)offset;
+        break;
+    }
 
     case sldr_playercolor:
         barwidth = SLDR_PLAYERCOLORMAX;

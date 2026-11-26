@@ -49,6 +49,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "serverlevel.h"
 #include "vbjs.h"
 #include "kplib.h"
+#include "vbjs.h"
 //#include "crc32.h"
 //#include "util_lib.h"
 #include "hightile.h"
@@ -98,6 +99,8 @@ int user_quote_time[MAXUSERQUOTES];
 char user_quote[MAXUSERQUOTES][MAXUSERQUOTELEN];
 // char typebuflen,typebuf[41];
 
+int g_worldTourCommentary = 0;
+
 int32_t MAXCACHE1DSIZE = (96*1024*1024);
 
 int tempwallptr;
@@ -108,6 +111,297 @@ static void G_DrawCameraText(short i);
 static int G_MoveLoop(void);
 static int G_DoMoveThings(void);
 static int G_PlaybackDemo(void);
+
+enum
+{
+    WT_COMMENTARY_MAX = 511,
+    WT_COMMENTARY_SOUND_BASE = MAXSOUNDS - 512,
+    WT_COMMENTARY_USE_DISTANCE = 2048,
+    WT_COMMENTARY_USE_ANGLE = 512,
+};
+
+static char *g_wtCommentaryPaths[WT_COMMENTARY_MAX + 1];
+static uint8_t g_wtCommentaryLoadedDefinitions;
+
+static int G_WorldTourIsCommentaryMarker(int const spriteNum)
+{
+    return (unsigned)spriteNum < MAXSPRITES && sprite[spriteNum].picnum == WORLDTOUR_COMMENTARY_MARKER;
+}
+
+static void G_WorldTourNormalizePath(char *path)
+{
+    for (; *path; ++path)
+        if (*path == '\\')
+            *path = '/';
+}
+
+static void G_WorldTourSetCommentaryPath(int const num, char const *path)
+{
+    if ((unsigned)num > WT_COMMENTARY_MAX || num <= 0 || !path || !path[0])
+        return;
+
+    DO_FREE_AND_NULL(g_wtCommentaryPaths[num]);
+    g_wtCommentaryPaths[num] = Xstrdup(path);
+    G_WorldTourNormalizePath(g_wtCommentaryPaths[num]);
+}
+
+static char *G_WorldTourFindChar(char *start, char const * const end, char const needle)
+{
+    for (; start < end; ++start)
+        if (*start == needle)
+            return start;
+
+    return nullptr;
+}
+
+static char *G_WorldTourFindQuotedValue(char *start, char *end)
+{
+    char *quote = G_WorldTourFindChar(start, end, '"');
+
+    return quote ? quote + 1 : nullptr;
+}
+
+void G_WorldTourLoadDeveloperCommentary(void)
+{
+    if (g_wtCommentaryLoadedDefinitions || !WORLDTOUR)
+        return;
+
+    g_wtCommentaryLoadedDefinitions = 1;
+
+    buildvfs_kfd const fp = kopen4loadfrommod("def/developer_commentary.def", 0);
+
+    if (fp == buildvfs_kfd_invalid)
+        return;
+
+    int32_t const fileLen = kfilelength(fp);
+
+    if (fileLen <= 0)
+    {
+        kclose(fp);
+        return;
+    }
+
+    char * const data = (char *)Xmalloc(fileLen + 1);
+
+    if (kread(fp, data, fileLen) != fileLen)
+    {
+        kclose(fp);
+        Xfree(data);
+        return;
+    }
+
+    kclose(fp);
+    data[fileLen] = '\0';
+
+    char *cursor = data;
+    int count = 0;
+
+    while ((cursor = Bstrstr(cursor, "def sound")) != nullptr)
+    {
+        char * const blockStart = Bstrchr(cursor, '{');
+        if (!blockStart)
+            break;
+
+        char * const blockEnd = Bstrchr(blockStart, '}');
+        if (!blockEnd)
+            break;
+
+        char *pathToken = Bstrstr(blockStart, "path");
+        char *numToken = Bstrstr(blockStart, "num");
+
+        if (pathToken && pathToken < blockEnd && numToken && numToken < blockEnd)
+        {
+            char *pathStart = G_WorldTourFindQuotedValue(pathToken, blockEnd);
+
+            if (pathStart)
+            {
+                char *pathEnd = G_WorldTourFindChar(pathStart, blockEnd, '"');
+
+                if (pathEnd)
+                {
+                    char savedPathEnd = *pathEnd;
+                    *pathEnd = '\0';
+
+                    char *colon = Bstrchr(numToken, ':');
+                    if (colon && colon < blockEnd)
+                    {
+                        int const num = Batol(colon + 1);
+                        if ((unsigned)num <= WT_COMMENTARY_MAX && num > 0)
+                        {
+                            G_WorldTourSetCommentaryPath(num, pathStart);
+                            count++;
+                        }
+                    }
+
+                    *pathEnd = savedPathEnd;
+                }
+            }
+        }
+
+        cursor = blockEnd + 1;
+    }
+
+    LOG_F(INFO, "World Tour developer commentary: loaded %d entries; wt_commentary is off by default.", count);
+    Xfree(data);
+}
+
+static int G_WorldTourCommentarySoundForMarker(int const markerSprite)
+{
+    if (!G_WorldTourIsCommentaryMarker(markerSprite))
+        return -1;
+
+    int const commentaryNum = sprite[markerSprite].lotag;
+
+    if ((unsigned)commentaryNum > WT_COMMENTARY_MAX || commentaryNum <= 0)
+        return -1;
+
+    char const * const path = g_wtCommentaryPaths[commentaryNum];
+
+    if (!path)
+        return -1;
+
+    int const soundNum = WT_COMMENTARY_SOUND_BASE + commentaryNum;
+
+    if (!S_SoundIsValid(soundNum))
+    {
+        S_DefineSound(soundNum, path, 0, 0, 255, SF_GLOBAL, 0, 1.0f);
+        S_LoadSound(soundNum);
+    }
+
+    return S_SoundIsValid(soundNum) ? soundNum : -1;
+}
+
+// Which marker is talking.  World Tour lets a second press shut a line off, and
+// lights the marker while it is speaking, so both need to know what is playing;
+// only one line runs at a time.
+static int16_t g_wtCommentaryActiveMarker = -1;
+static int16_t g_wtCommentaryActiveSound = -1;
+
+static void G_WorldTourStopCommentary(void)
+{
+    if (g_wtCommentaryActiveMarker < 0)
+        return;
+
+    if (g_wtCommentaryActiveSound >= 0)
+        S_StopEnvSound(g_wtCommentaryActiveSound, g_wtCommentaryActiveMarker);
+
+    g_wtCommentaryActiveMarker = -1;
+    g_wtCommentaryActiveSound = -1;
+}
+
+void G_WorldTourResetCommentary(void)
+{
+    g_wtCommentaryActiveMarker = -1;
+    g_wtCommentaryActiveSound = -1;
+}
+
+// Whether this marker should be drawn lit.  Asked of the sound itself rather
+// than of a timer, so a line that runs to its end puts the marker back to white
+// on its own.
+static int G_WorldTourCommentaryIsSpeaking(int const spriteNum)
+{
+    if (g_wtCommentaryActiveMarker < 0 || spriteNum != g_wtCommentaryActiveMarker)
+        return 0;
+
+    if (g_wtCommentaryActiveSound < 0 ||
+        !A_CheckSoundPlaying(g_wtCommentaryActiveMarker, g_wtCommentaryActiveSound))
+    {
+        g_wtCommentaryActiveMarker = -1;
+        g_wtCommentaryActiveSound = -1;
+        return 0;
+    }
+
+    return 1;
+}
+
+static int G_WorldTourFindCommentaryMarker(DukePlayer_t const * const p, int const nearSprite)
+{
+    if (G_WorldTourIsCommentaryMarker(nearSprite))
+        return nearSprite;
+
+    int bestSprite = -1;
+    int bestDist = WT_COMMENTARY_USE_DISTANCE;
+    int const playerAng = fix16_to_int(p->q16ang);
+
+    for (int spriteNum = headspritestat[STAT_DEFAULT]; spriteNum >= 0; spriteNum = nextspritestat[spriteNum])
+    {
+        spritetype const * const marker = &sprite[spriteNum];
+
+        if (marker->picnum != WORLDTOUR_COMMENTARY_MARKER)
+            continue;
+
+        int const spriteDist = ldist(&sprite[p->i], marker);
+
+        if (spriteDist >= bestDist)
+            continue;
+
+        int const angleDelta = klabs(G_GetAngleDelta(playerAng, getangle(marker->x - p->pos.x, marker->y - p->pos.y)));
+
+        if (angleDelta > WT_COMMENTARY_USE_ANGLE && spriteDist > 512)
+            continue;
+
+        if (!cansee(p->pos.x, p->pos.y, p->pos.z - (24 << 8), p->cursectnum,
+                    marker->x, marker->y, marker->z - (8 << 8), marker->sectnum))
+            continue;
+
+        bestSprite = spriteNum;
+        bestDist = spriteDist;
+    }
+
+    return bestSprite;
+}
+
+int G_WorldTourMaybeActivateCommentary(int const playerNum, int const nearSprite)
+{
+    if (!WORLDTOUR || !g_worldTourCommentary || (unsigned)playerNum >= MAXPLAYERS)
+        return 0;
+
+    G_WorldTourLoadDeveloperCommentary();
+
+    DukePlayer_t * const p = g_player[playerNum].ps;
+
+    if (!p)
+        return 0;
+
+    int const markerSprite = G_WorldTourFindCommentaryMarker(p, nearSprite);
+
+    if (markerSprite < 0)
+        return 0;
+
+    int const commentaryNum = sprite[markerSprite].lotag;
+    int const soundNum = G_WorldTourCommentarySoundForMarker(markerSprite);
+
+    if (soundNum < 0)
+    {
+        LOG_F(WARNING, "World Tour commentary %d has no playable sound.", commentaryNum);
+        return 1;
+    }
+
+    // Pressing use on a marker that is already talking shuts it up, which is what
+    // World Tour does with it -- the press used to be swallowed and the line ran
+    // to its end whatever the player did.
+    if (A_CheckSoundPlaying(markerSprite, soundNum))
+    {
+        LOG_F(INFO, "Stopping World Tour commentary %d", commentaryNum);
+        S_StopEnvSound(soundNum, markerSprite);
+
+        if (g_wtCommentaryActiveMarker == markerSprite)
+            G_WorldTourResetCommentary();
+
+        return 1;
+    }
+
+    // One line at a time: starting another marker cuts the one still speaking.
+    G_WorldTourStopCommentary();
+
+    LOG_F(INFO, "Playing World Tour commentary %d: %s", commentaryNum, g_wtCommentaryPaths[commentaryNum]);
+    S_PlaySound3D(soundNum, markerSprite, sprite[markerSprite].xyz);
+
+    g_wtCommentaryActiveMarker = (int16_t)markerSprite;
+    g_wtCommentaryActiveSound = (int16_t)soundNum;
+
+    return 1;
+}
 
 enum gametokens
 {
@@ -131,12 +425,88 @@ enum gametokens
     T_TYPE,
     T_DISTANCE,
     T_VOLUME,
+    T_NEWGAMECHOICES,
+    T_CHOICE,
+    T_NAME,
+    T_LOCKED,
+    T_HIDDEN,
+    T_USERCONTENT,
+    T_KEYCONFIG,
 };
+
+static const char *G_GamefuncSymbolName(int const gameFunc)
+{
+    switch (gameFunc)
+    {
+        case gamefunc_Holo_Duke:     return "gamefunc_Holo_Duke";
+        case gamefunc_Jetpack:       return "gamefunc_Jetpack";
+        case gamefunc_NightVision:   return "gamefunc_NightVision";
+        case gamefunc_MedKit:        return "gamefunc_MedKit";
+        case gamefunc_Steroids:      return "gamefunc_Steroids";
+        case gamefunc_Quick_Kick:    return "gamefunc_Quick_Kick";
+        default:                     return gamefunc_symbol_names[gameFunc];
+    }
+}
 
 void SetIfGreater(int32_t *variable, int32_t potentialValue)
 {
     if (potentialValue > *variable)
         *variable = potentialValue;
+}
+
+MenuGameplayEntry g_MenuGameplayEntries[MAXMENUGAMEPLAYENTRIES];
+
+static void G_ClearNewGameChoice(MenuGameplayEntry *entry)
+{
+    if (!entry)
+        return;
+
+    if (entry->subentries)
+    {
+        for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+            G_ClearNewGameChoice(&entry->subentries[i]);
+
+        DO_FREE_AND_NULL(entry->subentries);
+    }
+
+    *entry = {};
+}
+
+void G_ClearNewGameChoices(void)
+{
+    for (int i = 0; i < MAXMENUGAMEPLAYENTRIES; ++i)
+        G_ClearNewGameChoice(&g_MenuGameplayEntries[i]);
+}
+
+bool G_HasNewGameCustomChoices(void)
+{
+    return g_MenuGameplayEntries[0].isValid();
+}
+
+MenuGameplayEntry *G_GetNewGameCustomEntry(int const *indexes, int count)
+{
+    if (!indexes || count < 1 || count > MAXMENUGAMEPLAYLAYERS)
+        return nullptr;
+
+    if ((unsigned)indexes[0] >= MAXMENUGAMEPLAYENTRIES)
+        return nullptr;
+
+    MenuGameplayEntry *entry = &g_MenuGameplayEntries[indexes[0]];
+
+    if (!entry->isValid())
+        return nullptr;
+
+    for (int i = 1; i < count; ++i)
+    {
+        if (!entry->subentries || (unsigned)indexes[i] >= MAXMENUGAMEPLAYENTRIES)
+            return nullptr;
+
+        entry = &entry->subentries[indexes[i]];
+        if (!entry->isValid())
+            return nullptr;
+    }
+
+    return entry;
 }
 
 // get the string length until the next '\n'
@@ -621,6 +991,9 @@ vec2_t G_ScreenText(const int32_t font,
     {
         int32_t lines = G_GetStringNumLines(text, end, iter);
 
+        if ((f & TEXT_VARHEIGHT) && !(o & RS_TOPLEFT))
+            origin.y = scale((tilesiz[font].y >> 1) << 16, z, 65536);
+
         if ((f & TEXT_XJUSTIFY) || (f & TEXT_XRIGHT) || (f & TEXT_XCENTER))
         {
             const int32_t length = G_GetStringLineLength(text, end, iter);
@@ -733,6 +1106,9 @@ vec2_t G_ScreenText(const int32_t font,
 
             G_AddCoordsFromRotation(&location, &Xdirection, pos.x);
             G_AddCoordsFromRotation(&location, &Ydirection, pos.y);
+
+            if ((f & TEXT_VARHEIGHT) && !(orientation & RS_TOPLEFT))
+                G_AddCoordsFromRotation(&location, &Xdirection, (tilesiz[tile].x * z) >> 1);
 
             rotatesprite_(location.x, location.y, z, angle, tile, shade, pal, 2 | orientation, alpha, 0, x1, y1, x2, y2);
 
@@ -1161,6 +1537,15 @@ int minitext_(int x, int y, const char* t, int s, int p, int sb)
     cmode = (sb & ROTATESPRITE_MAX) != 0;
     sb &= (ROTATESPRITE_MAX-1);
 
+    if (FURY && !cmode)
+    {
+        vec2_t const dim = G_ScreenText(STARTALPHANUM, x, y, 16384, 0, 0, t, s, p,
+                                        (sb & ~RS_TOPLEFT) | RS_AUTO | RS_NOCLIP, 0,
+                                        5, 7, 0, 0, TEXT_VARHEIGHT | TEXT_UPPERCASE,
+                                        0, 0, xdim - 1, ydim - 1);
+        return x + dim.x;
+    }
+
     //    usehightile = (ht && !r_downsize);
     do
     {
@@ -1205,6 +1590,8 @@ void G_AddUserQuote(const char *daquote)
     if (Bstrlen(daquote) > MAXUSERQUOTELEN)
         return;
 
+    VBJS_FireChat("chatMessage", -1, daquote);   // VibeBuild32: user quotes / MP chat -> JS
+
     for (i=MAXUSERQUOTES-1;i>0;i--)
     {
         Bstrcpy(user_quote[i],user_quote[i-1]);
@@ -1237,6 +1624,22 @@ void G_HandleSpecialKeys(void)
         KB_ClearKeyDown(sc_Enter);
         g_restorePalette = 1;
         G_UpdateScreenArea();
+    }
+
+    // Same debug aid the SW crossplay bridge uses: VB_CP_CAPTURE=<frames> saves
+    // one screenshot that many frames in, so a Duke level under the Duke runtime
+    // can be compared against the same level under a foreign runtime.
+    {
+        static int32_t autoCaptureFrames = -1;
+
+        if (autoCaptureFrames < 0)
+        {
+            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            autoCaptureFrames = env != NULL ? Batoi(env) : 0;
+        }
+
+        if (autoCaptureFrames > 0 && --autoCaptureFrames == 0)
+            videoCaptureScreen("cpshot0000.png", 0);
     }
 
     if (KB_UnBoundKeyPressed(sc_F12))
@@ -1664,7 +2067,9 @@ void G_GameExit(const char *t)
     // Disconnect pumps events, including the network quit timeout.
     g_gameQuit = 0;
     MapEditor_Shutdown();
-    VBJS_Shutdown();
+    VBJS_FireSimple("beforeQuit");
+    VBJS_Shutdown();   // VibeBuild32: fire "shutdown" and tear down the JS runtime
+
     // If we're an advertised host, tell the masterserver we're going away so our
     // listing is removed immediately instead of lingering until its TTL expires.
     // Self-gates on whether we're actually advertising, so it's a no-op for
@@ -2307,10 +2712,15 @@ void G_DisplayRest(int smoothratio)
 
             if (ud.overhead_on == 2)
             {
-                if (ud.screen_size > 0) a = 147;
-                else a = 179;
-                minitext(5,a+6,EpisodeNames[ud.volume_number],0,2+8+16);
-                minitext(5,a+6+6,g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
+                int32_t const textret = X_OnEventWithReturn(EVENT_DISPLAYOVERHEADMAPTEXT, g_player[screenpeek].ps->i, screenpeek, 0);
+
+                if (textret == 0)
+                {
+                    if (ud.screen_size > 0) a = 147;
+                    else a = 179;
+                    minitext(5,a+6,EpisodeNames[ud.volume_number],0,2+8+16);
+                    minitext(5,a+6+6,g_mapInfo[ud.volume_number*MAXLEVELS + ud.level_number].name,0,2+8+16);
+                }
             }
         }
     }
@@ -2328,6 +2738,8 @@ void G_DisplayRest(int smoothratio)
     G_PrintGameQuotes();
     G_PrintLevelName();
     VBJS_DrawHUD();
+
+    VBJS_DrawHUD();   // VibeBuild32: script-registered HUD text
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
             && ud.show_help == 0
@@ -2367,6 +2779,7 @@ void G_DisplayRest(int smoothratio)
             else
                 ChangeToMenu(0);
 
+            VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
             screenpeek = myconnectindex;
         }
     }
@@ -2424,6 +2837,8 @@ void G_DisplayRest(int smoothratio)
             applied = 0;
         }
     }
+
+    X_OnEvent(EVENT_DISPLAYEND, g_player[screenpeek].ps->i, screenpeek, -1);
 }
 
 static void G_DoThirdPerson(DukePlayer_t *pp, vec3_t *vect, short *vsectnum, int16_t ang, int16_t horiz)
@@ -2508,12 +2923,6 @@ void G_DrawBackground(void)
         break;
     }
 
-    if (tilesiz[dapicnum].x == 0 || tilesiz[dapicnum].y == 0)
-    {
-        pus = pub = NUMPAGES;
-        return;
-    }
-
     y1 = 0;
     y2 = ydim;
     if (ud.gm & MODE_GAME || ud.recstat == 2)
@@ -2531,15 +2940,38 @@ void G_DrawBackground(void)
     {
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
-        Gv_SetVar(sysVarIDs.RETURN, tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE, -1, -1);
-        X_OnEvent(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, -1);
+        int const vbjsMenuTile = VBJS_MenuBackground();
+        int const defaultMenuTile = tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE;
+        int const selectedMenuTile = vbjsMenuTile >= 0 && tilesiz[vbjsMenuTile].x > 0 && tilesiz[vbjsMenuTile].y > 0 ? vbjsMenuTile : defaultMenuTile;
+
+        videoClearScreen(0);
+
+        int const menuTile = X_OnEventWithReturn(EVENT_GETMENUTILE, g_player[screenpeek].ps->i, screenpeek, selectedMenuTile);
+        if ((unsigned)menuTile >= MAXTILES || tilesiz[menuTile].x <= 0 || tilesiz[menuTile].y <= 0)
+        {
+            if (FURY)
+            {
+                int const furyMenuTile = Gv_GetVarByLabel("exp_aftershock", 0, -1, -1) && tilesiz[17500].x > 0 && tilesiz[17500].y > 0
+                                      ? 17500 : 5463;
+                if (tilesiz[furyMenuTile].x > 0 && tilesiz[furyMenuTile].y > 0)
+                    rotatesprite_fs(320<<15, 240<<15, 32768L, 0, furyMenuTile, 0, 0, 2+8+ROTATESPRITE_FULL16+RS_STRETCH);
+            }
+            return;
+        }
+
         if (Gv_GetVarByLabel("MENU_TILE", tilesiz[MENUTILE].x==320&&tilesiz[MENUTILE].y==200?0:1, -1, -1))
         {
-            for (y=y1;y<y2;y+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].y)
-                for (x=0;x<xdim;x+=tilesiz[Gv_GetVar(sysVarIDs.RETURN, -1, -1)].x)
-                    rotatesprite(x<<16,y<<16,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,8+16+64,0,0,xdim-1,ydim-1);
+            for (y=y1;y<y2;y+=tilesiz[menuTile].y)
+                for (x=0;x<xdim;x+=tilesiz[menuTile].x)
+                    rotatesprite_fs(x<<16,y<<16,65536L,0,menuTile,bpp==8?16:8,0,8+16+64);
         }
-        else rotatesprite(320<<15,200<<15,65536L,0,Gv_GetVar(sysVarIDs.RETURN, -1, -1),bpp==8?16:8,0,2+8+64,0,0,xdim-1,ydim-1);
+        else rotatesprite_fs(160<<16,100<<16,65536L,0,menuTile,bpp==8?16:8,0,2+8+64+RS_STRETCH);
+        return;
+    }
+
+    if (tilesiz[dapicnum].x == 0 || tilesiz[dapicnum].y == 0)
+    {
+        pus = pub = NUMPAGES;
         return;
     }
 
@@ -3208,31 +3640,34 @@ void G_DrawRooms(int snum,int smoothratio)
             break;
         }
 
-        X_OnEvent(EVENT_DISPLAYROOMS, g_player[screenpeek].ps->i, screenpeek, -1);
+        int const noDraw = X_OnEventWithReturn(EVENT_DISPLAYROOMS, p->i, snum, 0);
 
         ud.cameraq16horiz = fix16_clamp(ud.cameraq16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
 
-        G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
-        G_ClearGotMirror();
+        if (noDraw != 1)
+        {
+            G_HandleMirror(ud.camerapos.x, ud.camerapos.y, ud.camerapos.z, ud.cameraq16ang, ud.cameraq16horiz, smoothratio);
+            G_ClearGotMirror();
 
-        G_SE40(smoothratio);
+            G_SE40(smoothratio);
 
 #ifdef POLYMER
-        if (videoGetRenderMode() == REND_POLYMER)
-            polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
+            if (videoGetRenderMode() == REND_POLYMER)
+                polymer_setanimatesprites(G_DoSpriteAnimations, CAMERA(pos.x), CAMERA(pos.y), CAMERA(pos.z), fix16_to_int(CAMERA(q16ang)), smoothratio);
 #endif
 
-        yax_preparedrawrooms();
-        renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
-        yax_drawrooms(G_DoSpriteAnimations, ud.camerasect, 0, smoothratio);
+            yax_preparedrawrooms();
+            renderDrawRoomsQ16(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,ud.cameraq16ang,ud.cameraq16horiz,ud.camerasect);
+            yax_drawrooms(G_DoSpriteAnimations, ud.camerasect, 0, smoothratio);
 
-        // dupe the sprites touching the portal to the other sector
-        if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
-            G_OROR_DupeSprites(&sprite[ror_sprite]);
+            // dupe the sprites touching the portal to the other sector
+            if ((unsigned)ror_sprite < MAXSPRITES && drawing_ror == 1)
+                G_OROR_DupeSprites(&sprite[ror_sprite]);
 
-        G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,fix16_to_int(ud.cameraq16ang),smoothratio);
-        drawing_ror = 0;
-        renderDrawMasks();
+            G_DoSpriteAnimations(ud.camerapos.x,ud.camerapos.y,ud.camerapos.z,fix16_to_int(ud.cameraq16ang),smoothratio);
+            drawing_ror = 0;
+            renderDrawMasks();
+        }
 
         if (g_screenCapture == 1)
         {
@@ -3306,6 +3741,8 @@ void G_DrawRooms(int snum,int smoothratio)
         newaspect_enable = 0;
         renderSetAspect(viewingRange, tabledivide32_noinline(65536 * ydim * 8, xdim * 5));
     }
+
+    X_OnEvent(EVENT_DISPLAYROOMSEND, g_player[screenpeek].ps->i, screenpeek, -1);
 }
 
 static void G_DumpDebugInfo(void)
@@ -3520,8 +3957,23 @@ static inline bool OnEvenGround(spritetype* pSprite, int32_t radius)
     return true;
 }
 
+extern int g_vbDukeWatchSprite;
+
 int A_Spawn(int spriteNum, int tileNum)
 {
+    {
+        static int32_t watchTile = -2;
+        if (watchTile == -2)
+        {
+            char const *const env = Bgetenv("VB_CP_WATCH_TILE");
+            watchTile = env != NULL ? Batoi(env) : -1;
+        }
+
+        if (watchTile > 0 && g_vbDukeWatchSprite < 0 && spriteNum == -1 &&
+            (unsigned)tileNum < MAXSPRITES && sprite[tileNum].picnum == watchTile)
+            g_vbDukeWatchSprite = tileNum;
+    }
+
     spritetype*  const pParent = (spriteNum >= 0) ? &sprite[spriteNum] : nullptr;
     spritetype*  pSprite;
     ActorData_t* pActor;
@@ -5505,7 +5957,8 @@ SPAWN_END:
         X_OnEvent(EVENT_SPAWN, newSprite, playerNum, pDist);
     }
 
-    VBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);
+    VBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);   // VibeBuild32: spawn -> JS (filter by tile)
+
     return newSprite;
 }
 
@@ -5590,6 +6043,22 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
         t = &tsprite[j];
         i = t->owner;
         s = &sprite[i];
+
+        if (WORLDTOUR && t->picnum == WORLDTOUR_COMMENTARY_MARKER)
+        {
+            if (!g_worldTourCommentary)
+            {
+                t->xrepeat = t->yrepeat = 0;
+                continue;
+            }
+
+            // The lit frame while the marker is speaking.  Drawn only, never
+            // written back to the sprite: whether the local player is listening
+            // is a client setting, and the simulation has to stay identical on
+            // every machine.
+            if (G_WorldTourCommentaryIsSpeaking(i))
+                t->picnum = WORLDTOUR_COMMENTARY_MARKER_ACTIVE;
+        }
 
         switch (tileGetMapping(s->picnum))
         {
@@ -5831,18 +6300,20 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 // draw that skin's dead frame instead.
                 int32_t const ow = s->owner;
                 int32_t const dp = (ow >= 0 && sprite[ow].picnum == APLAYER) ? sprite[ow].yvel : -1;
-                if ((unsigned)dp < MAXPLAYERS && t->pal != 1 && P_ValidateSkin(g_player[dp].pskin))
+                if ((unsigned)dp < MAXPLAYERS && t->pal != 1 && P_ValidateSkin(g_player[dp].pskin)
+                    && P_SkinHasRenderableArt(g_player[dp].pskin))
                 {
-                    int32_t ds, df, dv;
-                    P_GetSkinFrame(g_player[dp].pskin, 113, 1, &ds, &df, &dv);  // PLYINGDEAD -> dead frame
+                    int32_t const renderTile = P_SkinRenderTile(g_player[dp].pskin, 113, 1, 0, 0);
+                    if (renderTile < 0)
+                    {
+                        t->z += (24 << 8);
+                        break;
+                    }
 
-                    int32_t const skinBase = P_SkinBaseTile(g_player[dp].pskin);
-                    t->picnum = skinBase + ds;   // single-view dead frame
-                    t->pal = g_player[dp].ps->palookup;
+                    t->picnum = renderTile;   // single-view dead frame
+                    t->pal = P_SkinUsesPlayerPalette(g_player[dp].pskin) ? g_player[dp].ps->palookup : 0;
 
-                    int32_t rs, rf, rv;
-                    P_GetSkinFrame(g_player[dp].pskin, 0, 1, &rs, &rf, &rv);  // stand reference for size
-                    int32_t const refTile = skinBase + rs;
+                    int32_t const refTile = P_SkinReferenceTile(g_player[dp].pskin);
                     if ((unsigned)refTile < MAXTILES && tilesiz[refTile].y > 0 && tilesiz[APLAYER].y > 0)
                     {
                         int32_t const num = tilesiz[APLAYER].y, den = tilesiz[refTile].y;
@@ -6128,19 +6599,11 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                 // chosen enemy's, translating the current CON action of APLAYER
                 // (PSTAND/PWALK/...) to the enemy's equivalent frames. Purely
                 // cosmetic - the game sprite stays APLAYER.
-                if (s->owner >= 0 && P_ValidateSkin(g_player[p].pskin) && t->pal != 1
+                if (s->owner >= 0 && P_ValidateSkin(g_player[p].pskin) && P_SkinHasRenderableArt(g_player[p].pskin) && t->pal != 1
                     && (unsigned)scrofs_action + ACTION_PARAM_COUNT <= (unsigned)g_scriptSize
                     && apScript[scrofs_action + ACTION_PARAM_COUNT] == CON_END)
                 {
-                    int32_t skinStart, skinFrames, skinViewtype;
                     int32_t const aplayerStart = apScript[scrofs_action + ACTION_STARTFRAME];
-                    P_GetSkinFrame(g_player[p].pskin, aplayerStart,
-                                   apScript[scrofs_action + ACTION_NUMFRAMES],
-                                   &skinStart, &skinFrames, &skinViewtype);
-
-                    int32_t skinOffset = 0;
-                    if (skinViewtype == 5)
-                        skinOffset = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
 
                     // Remember the player's ground position (its sprite origin,
                     // ignoring the player tile's own art yoffset) so we can plant
@@ -6148,19 +6611,22 @@ void G_DoSpriteAnimations(int32_t x, int32_t y, int32_t z, int32_t a, int32_t sm
                     int32_t const origPicnum   = t->picnum;
                     int32_t const origFootOfs  = P_SkinFootOffset(origPicnum, t->yrepeat, t->cstat, 0);
 
-                    int32_t const skinBase = P_SkinBaseTile(g_player[p].pskin);
-                    t->picnum = skinBase + skinStart + skinOffset
-                                + skinViewtype * (klabs(curframe) % skinFrames);
-                    t->pal = g_player[p].ps->palookup;
+                    int32_t const skinDirection = getofs_viewtype_mirrored<5>(t->cstat, s->ang - a);
+                    int32_t const renderTile = P_SkinRenderTile(g_player[p].pskin, aplayerStart,
+                                                                apScript[scrofs_action + ACTION_NUMFRAMES],
+                                                                curframe, skinDirection);
+                    if (renderTile < 0)
+                        goto PALONLY;
+
+                    t->picnum = renderTile;
+                    t->pal = P_SkinUsesPlayerPalette(g_player[p].pskin) ? g_player[p].ps->palookup : 0;
                     scrofs_action = 0;  // The generic CON action block below must not re-offset.
 
                     // Size: scale uniformly (preserving aspect and each frame's
                     // relative proportions) so the enemy's stand frame is drawn
                     // at the player tile's world height - otherwise a tall enemy
                     // tile towers and a short one shrinks at the player's repeat.
-                    int32_t rs, rf, rv;
-                    P_GetSkinFrame(g_player[p].pskin, 0, 1, &rs, &rf, &rv);  // PSTAND reference
-                    int32_t const refTile = skinBase + rs;
+                    int32_t const refTile = P_SkinReferenceTile(g_player[p].pskin);
                     // Use the fixed APLAYER stand tile as the reference height (a
                     // constant), not the player's current frame, so the enemy's
                     // size stays steady instead of pulsing as the player animates.
@@ -6686,6 +7152,15 @@ static void G_DoCheats(void)
 
 FOUNDCHEAT:
             {
+                k = X_OnEventWithReturn(EVENT_ACTIVATECHEAT, g_player[myconnectindex].ps->i, myconnectindex, k);
+
+                if ((unsigned)k >= NUMCHEATCODES)
+                {
+                    KB_FlushKeyboardQueue();
+                    g_player[myconnectindex].ps->cheat_phase = 0;
+                    return;
+                }
+
                 switch (k)
                 {
                 case CHEAT_WEAPONS:
@@ -7710,6 +8185,89 @@ static void parsedefinitions_game_include(const char* fileName, scriptfile* pScr
     }
 }
 
+static const tokenlist newGameTokens[] =
+{
+    { "choice",      T_CHOICE },
+};
+
+static const tokenlist newGameChoiceTokens[] =
+{
+    { "name",        T_NAME },
+    { "locked",      T_LOCKED },
+    { "hidden",      T_HIDDEN },
+    { "choice",      T_CHOICE },
+    { "usercontent", T_USERCONTENT },
+};
+
+static int parsedefinitions_newgamechoice(scriptfile *pScript, MenuGameplayEntry &entry);
+
+static int parsedefinitions_newgamesubchoice(scriptfile *pScript, MenuGameplayEntry &parent)
+{
+    char *choicePtr = pScript->ltextptr;
+    char *choiceEnd;
+    int32_t choiceID;
+
+    if (scriptfile_getsymbol(pScript, &choiceID))
+        return -1;
+    if (scriptfile_getbraces(pScript, &choiceEnd))
+        return -1;
+
+    if ((unsigned)choiceID >= MAXMENUGAMEPLAYENTRIES)
+    {
+        LOG_F(ERROR, "%s:%d: error: maximum newgamechoices entries exceeded",
+              pScript->filename, scriptfile_getlinum(pScript, choicePtr));
+        pScript->textptr = choiceEnd + 1;
+        return -1;
+    }
+
+    if (!parent.subentries)
+        parent.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+    MenuGameplayEntry &entry = parent.subentries[choiceID];
+    G_ClearNewGameChoice(&entry);
+    entry.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+    while (pScript->textptr < choiceEnd)
+        parsedefinitions_newgamechoice(pScript, entry);
+
+    return 0;
+}
+
+static int parsedefinitions_newgamechoice(scriptfile *pScript, MenuGameplayEntry &entry)
+{
+    switch (getatoken(pScript, newGameChoiceTokens, ARRAY_SIZE(newGameChoiceTokens)))
+    {
+        case T_CHOICE:
+            return parsedefinitions_newgamesubchoice(pScript, entry);
+
+        case T_NAME:
+        {
+            char *name = nullptr;
+            if (scriptfile_getstring(pScript, &name))
+                return -1;
+
+            Bmemset(entry.name, 0, sizeof(entry.name));
+            Bstrncpy(entry.name, name, sizeof(entry.name) - 1);
+            return 0;
+        }
+
+        case T_LOCKED:
+            entry.flags |= MEF_Disabled;
+            return 0;
+
+        case T_HIDDEN:
+            entry.flags |= MEF_Hidden;
+            return 0;
+
+        case T_USERCONTENT:
+            entry.gameFlags |= MGE_UserContent;
+            return 0;
+
+        default:
+            return 0;
+    }
+}
+
 static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 {
     int tokn;
@@ -7723,11 +8281,14 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "#define",           T_DEFINE,          },
         { "loadgrp",           T_LOADGRP          },
         { "cachesize",         T_CACHESIZE        },
+        { "noautoload",        T_NOAUTOLOAD       },
         { "noautload",         T_NOAUTOLOAD       },
         { "music",             T_MUSIC            },
         { "sound",             T_SOUND            },
         { "addplayercolor",    T_ADDPLAYERCOL     },
         { "delplayercolor",    T_DELPLAYERCOL     },
+        { "newgamechoices",    T_NEWGAMECHOICES   },
+        { "keyconfig",         T_KEYCONFIG        },
     };
 
     static const tokenlist soundTokens[] =
@@ -7741,6 +8302,18 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         { "distance", T_DISTANCE },
         { "volume",   T_VOLUME },
     };
+
+    for (int f = 0; f < NUMGAMEFUNCTIONS; ++f)
+        scriptfile_addsymbolvalue(gamefunc_symbol_names[f], f);
+
+#ifndef EDUKE32_STANDALONE
+    scriptfile_addsymbolvalue("gamefunc_Holo_Duke", gamefunc_Holo_Duke);
+    scriptfile_addsymbolvalue("gamefunc_Jetpack", gamefunc_Jetpack);
+    scriptfile_addsymbolvalue("gamefunc_NightVision", gamefunc_NightVision);
+    scriptfile_addsymbolvalue("gamefunc_MedKit", gamefunc_MedKit);
+    scriptfile_addsymbolvalue("gamefunc_Steroids", gamefunc_Steroids);
+    scriptfile_addsymbolvalue("gamefunc_Quick_Kick", gamefunc_Quick_Kick);
+#endif
 
     while (1)
     {
@@ -7906,6 +8479,129 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
         }
         break;
 
+        case T_NEWGAMECHOICES:
+        {
+            char *choicesEnd;
+
+            if (scriptfile_getbraces(pScript, &choicesEnd))
+                break;
+
+            if (firstPass)
+            {
+                pScript->textptr = choicesEnd + 1;
+                break;
+            }
+
+            G_ClearNewGameChoices();
+
+            while (pScript->textptr < choicesEnd)
+            {
+                switch (getatoken(pScript, newGameTokens, ARRAY_SIZE(newGameTokens)))
+                {
+                    case T_CHOICE:
+                    {
+                        char *choicePtr = pScript->ltextptr;
+                        char *choiceEnd;
+                        int32_t choiceID;
+
+                        if (scriptfile_getsymbol(pScript, &choiceID))
+                            break;
+                        if (scriptfile_getbraces(pScript, &choiceEnd))
+                            break;
+
+                        if ((unsigned)choiceID >= MAXMENUGAMEPLAYENTRIES)
+                        {
+                            LOG_F(ERROR, "%s:%d: error: maximum newgamechoices entries exceeded",
+                                  pScript->filename, scriptfile_getlinum(pScript, choicePtr));
+                            pScript->textptr = choiceEnd + 1;
+                            break;
+                        }
+
+                        MenuGameplayEntry &entry = g_MenuGameplayEntries[choiceID];
+                        G_ClearNewGameChoice(&entry);
+                        entry.subentries = (MenuGameplayEntry *)Xcalloc(MAXMENUGAMEPLAYENTRIES, sizeof(MenuGameplayEntry));
+
+                        while (pScript->textptr < choiceEnd)
+                            parsedefinitions_newgamechoice(pScript, entry);
+
+                        break;
+                    }
+
+                    case T_EOF:
+                        pScript->textptr = choicesEnd;
+                        break;
+                }
+            }
+        }
+        break;
+
+        case T_KEYCONFIG:
+        {
+            char *keyRemapEnd = nullptr;
+            int32_t currSlot = 0;
+            int32_t keyIndex = -1;
+            uint64_t gamefuncBitmap = 0ULL;
+
+            Bassert(NUMGAMEFUNCTIONS <= 64);
+
+            if (scriptfile_getbraces(pScript, &keyRemapEnd))
+                break;
+
+            if (firstPass)
+            {
+                pScript->textptr = keyRemapEnd + 1;
+                break;
+            }
+
+            while (pScript->textptr < keyRemapEnd - 1)
+            {
+                char *mapPtr = pScript->ltextptr;
+
+                if (currSlot >= NUMGAMEFUNCTIONS)
+                {
+                    LOG_F(ERROR, "%s:%d: error: keyconfig exceeds number of valid game functions %d.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), NUMGAMEFUNCTIONS);
+                    pScript->textptr = keyRemapEnd + 1;
+                    break;
+                }
+
+                if (scriptfile_getsymbol(pScript, &keyIndex))
+                    continue;
+
+                if ((unsigned)keyIndex >= NUMGAMEFUNCTIONS)
+                {
+                    LOG_F(ERROR, "%s:%d: error: invalid keyconfig game function index %d.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), keyIndex);
+                    continue;
+                }
+
+                if (gamefuncBitmap & (1ULL << keyIndex))
+                {
+                    LOG_F(WARNING, "%s:%d: warning: duplicate keyconfig entry '%s'.",
+                          pScript->filename, scriptfile_getlinum(pScript, mapPtr), G_GamefuncSymbolName(keyIndex));
+                    continue;
+                }
+
+                keybind_order_custom[currSlot++] = keyIndex;
+                gamefuncBitmap |= 1ULL << keyIndex;
+            }
+
+            while (currSlot < NUMGAMEFUNCTIONS)
+                keybind_order_custom[currSlot++] = -1;
+
+            for (keyIndex = 0; keyIndex < NUMGAMEFUNCTIONS; ++keyIndex)
+            {
+                if (!(gamefuncBitmap & (1ULL << keyIndex)))
+                {
+                    if (gamefunctions[keyIndex][0] != '\0')
+                        hash_delete(&h_gamefuncs, gamefunctions[keyIndex]);
+                    gamefunctions[keyIndex][0] = '\0';
+                }
+            }
+
+            break;
+        }
+
         case T_ADDPLAYERCOL:
         {
             int palnum;
@@ -7942,7 +8638,9 @@ static int parsedefinitions_game(scriptfile *pScript, int firstPass)
 const char* G_DefaultRtsFile(void)
 {
 #ifndef EDUKE32_STANDALONE
-    if (DUKE)
+    if (FURY)
+        return "";
+    else if (DUKE)
         return defaultrtsfilename[GAME_DUKE];
     else if (WW2GI)
         return defaultrtsfilename[GAME_WW2GI];
@@ -8031,7 +8729,10 @@ static void G_DisplayLogo(void)
     S_StopMusic();
     FX_StopAllSounds(); // JBF 20031228
 
-    if (ud.multimode < 2 && (logoflags & LOGO_ENABLED) && !g_noLogo)
+    if (FURY)
+        Gv_SetVarByLabel("main_menu_set", 3, g_player[myconnectindex].ps->i, myconnectindex);
+
+    if (ud.multimode < 2 && X_OnEventWithReturn(EVENT_MAINMENUSCREEN, g_player[myconnectindex].ps->i, myconnectindex, 0) == 0 && (logoflags & LOGO_ENABLED) && !g_noLogo)
     {
         if (VOLUMEALL && (logoflags & LOGO_PLAYANIM))
         {
@@ -8201,6 +8902,9 @@ static void G_Cleanup(void)
         Xfree(apXStrings[i]);
     }
 
+    for (i=WT_COMMENTARY_MAX;i>=0;i--)
+        Xfree(g_wtCommentaryPaths[i]);
+
     for (i=MAXPLAYERS-1;i>=0;i--)
     {
         if (g_player[i].ps != NULL)
@@ -8247,6 +8951,8 @@ static void G_Cleanup(void)
     // NetDuke32: Clear dukeanim here once backported.
     inthash_free(&h_dsound);
     inthash_free(&h_dynamictilemap);
+
+    G_ClearNewGameChoices();
 
     Duke_CommonCleanup();
 }
@@ -8440,10 +9146,20 @@ static void G_Startup(void)
             Bcorrectfilename(boardfilename,0);
 
             i = kopen4loadfrommod(boardfilename,0);
-            if (i!=-1)
+            int crossplayMapFound = 0;
+            if (i == -1 && artCrossplayForeignDataCount() > 0)
+            {
+                char *crossplayMapData = NULL;
+                int32_t crossplayMapSize = 0;
+                crossplayMapFound = artCrossplayReadForeignDataEntry(boardfilename, &crossplayMapData, &crossplayMapSize, NULL, 0);
+                if (crossplayMapData)
+                    Xfree(crossplayMapData);
+            }
+            if (i!=-1 || crossplayMapFound)
             {
                 LOG_F(INFO, "Using level: '%s'.",boardfilename);
-                kclose(i);
+                if (i != -1)
+                    kclose(i);
             }
             else
             {
@@ -8462,10 +9178,16 @@ static void G_Startup(void)
     //LOG_F("* Hold Esc to Abort. *\n");
     //LOG_F("Loading art header...\n");
 
+    artSetBaseSearchFirst(artCrossplayForeignDataCount() > 0 ? 1 : 0);
+    if (artCrossplayForeignDataCount() > 0)
+        LOG_F(INFO, "Crossplay: base runtime ART pinned to main game data.");
+
     if (artLoadFiles("tiles000.art", MAXCACHE1DSIZE) < 0)
         G_GameExit("Failed loading art.");
 
     G_LoadLookups();
+
+    X_OnEvent(EVENT_INITCOMPLETE, -1, -1, -1);
 
     ReadSaveGameHeaders();
 
@@ -8500,6 +9222,8 @@ void G_UpdatePlayerFromMenu(void)
 
 void G_BackToMenu(void)
 {
+    if (ud.gm & MODE_GAME)
+        VBJS_FireSimple("leftGame");
     VBJS_ClearAttachments();
     boardfilename[0] = 0;
 
@@ -8548,6 +9272,7 @@ static int G_EndOfLevel(void)
 
     if (ud.gm & MODE_EOL)
     {
+        VBJS_FireSimple("levelFinished");
         G_CloseDemoWrite();
 
         if (p.player_par > 0 && (p.player_par < ud.playerbest || ud.playerbest < 0) && ud.display_bonus_screen == 1)
@@ -8575,6 +9300,7 @@ static int G_EndOfLevel(void)
                     G_DoOrderScreen();
                 }
                 ud.gm = MODE_MENU;
+                VBJS_FireSimple("leftGame");
                 ChangeToMenu(0);
                 probey = 0;
                 return 2;
@@ -8922,7 +9648,9 @@ static const char* dukeVerbosityCallback(loguru::Verbosity verbosity)
     }
 }
 
-int app_main(int32_t argc, char const* const* argv)
+// Renamed from app_main: the engine's app_main is now the game selector (see
+// gameselect.cpp), which dispatches here for Duke3D.
+int Duke_app_main(int32_t argc, char const* const* argv)
 {
     for (int i = 1; i < argc; ++i)
         if (!Bstrcmp(argv[i], "--editor-mcp"))
@@ -9072,6 +9800,7 @@ int app_main(int32_t argc, char const* const* argv)
 
     LOG_F(INFO, "Using config file '%s'.", g_setupFileName);
     int32_t const readSetup = CONFIG_ReadSetup();
+    G_ApplyCommandLineVideoOverrides();
 
 #ifdef _WIN32
 //    LOG_F(INFO, "build %d",(char)atoi(BUILDDATE));
@@ -9105,6 +9834,8 @@ int app_main(int32_t argc, char const* const* argv)
         }
     }
 #endif
+
+    G_ApplyCommandLineVideoOverrides();
 
     timerInit(TICRATE);
     timerSetCallback(gameTimerHandler);
@@ -9210,6 +9941,8 @@ int app_main(int32_t argc, char const* const* argv)
     }
     loaddefinitions_game(defsfile, FALSE);
 
+    G_WorldTourLoadDeveloperCommentary();
+
     S_PrecacheSounds();
 
     if (enginePostInit())
@@ -9238,6 +9971,7 @@ int app_main(int32_t argc, char const* const* argv)
     // [JM] I'll need to make sure this doesn't fuck up a few command lines.
     CONFIG_WriteSetup(1);
     CONFIG_ReadSetup();
+    G_ApplyCommandLineVideoOverrides();
 
     char const* rtsname = g_rtsNamePtr ? g_rtsNamePtr : ud.rtsname;
     RTS_Init(rtsname);
@@ -9249,6 +9983,11 @@ int app_main(int32_t argc, char const* const* argv)
     OSD_SetVersion(tempbuf, 10, 0);
     OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, OSDTEXT_DARKRED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     registerosdcommands();
+
+    // Load autojs/<project>/index.{ts,js} as soon as its game and OSD bindings
+    // are ready. Waiting for the first render callback made auto-loaded mods
+    // appear only after the menu/game had already started.
+    VBJS_Init();
 
     if (CONTROL_Startup(controltype_keyboardandmouse, &GetTime, TICRATE))
     {
@@ -9311,8 +10050,15 @@ int app_main(int32_t argc, char const* const* argv)
     Net_RestoreServerSettings();
 
     CONFIG_SetDefaultKeys(keydefaults, true);
+    CONFIG_RepairFuryDefaults();
 
     system_getcvars();
+
+    // Settings/autoexec can restore stale key command strings after setup has
+    // already shown the right key names. Rebind Fury controls after the final
+    // cvar/settings restore so W/S/E and mouse2 work without forcing users to
+    // reassign them in the menu.
+    CONFIG_RepairFuryDefaults();
 
     // Re-apply the command-line audio mute here, as the LAST thing before audio
     // init: every earlier restore point (CONFIG_ReadSetup, CONFIG_ReadSettings
@@ -9332,12 +10078,22 @@ int app_main(int32_t argc, char const* const* argv)
     }
     else
     {
-        LOG_F(INFO, "Initializing music...");
-        S_MusicStartup();
-        LOG_F(INFO, "Initializing sound...");
-        S_SoundStartup();
+        if (ud.config.MusicToggle)
+        {
+            LOG_F(INFO, "Initializing music...");
+            S_MusicStartup();
+        }
+        else
+            LOG_F(INFO, "Music disabled.");
 
-        FX_StopAllSounds();
+        if (ud.config.SoundToggle)
+        {
+            LOG_F(INFO, "Initializing sound...");
+            S_SoundStartup();
+            FX_StopAllSounds();
+        }
+        else
+            LOG_F(INFO, "Sound disabled.");
     }
 
     VBJS_Init();
@@ -10003,6 +10759,7 @@ RECHECK:
 
                 ud.gm |= MODE_MENU;
                 ChangeToMenu(0);
+                VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
                 S_MenuSound();
             }
 
@@ -10552,4 +11309,207 @@ void M32RunScript(const char* s)
 int GetTime(void)
 {
     return (int32_t)totalclock;
+}
+
+// ---------------------------------------------------------------------------
+// VibeBuild32 crossplay: Duke actor AI hosted by another game's runtime.
+//
+// When a non-Duke runtime (currently Shadow Warrior) plays a Duke-family level,
+// the enemies must behave exactly like Duke's, which means running Duke's own
+// CON scripts and actor code rather than an approximation.  These entry points
+// bring up just the Duke state that the actor system needs; they are named
+// VB_DukeAI_* so they stay globally visible after the per-game symbol merge.
+// See source/sw/DUKE_CROSSPLAY_BRIDGE.md.
+// ---------------------------------------------------------------------------
+
+extern "C" int VB_DukeAI_CompileScripts(void)
+{
+    static int compiled = 0;
+
+    if (compiled)
+        return compiled;
+
+    // The host runtime started through its own app_main, so none of Duke's
+    // game state exists yet.  Bring up the minimum the CON compiler and the
+    // actor system need: one allocated player, then scripts and the derived
+    // enemy flag tables.
+    ud.multimode = 1;
+    G_MaybeAllocPlayer(0);
+    g_player[0].connected = 1;
+
+    if (g_player[0].ps == NULL)
+        return 0;
+
+    // Duke's CONs come out of the foreign game data for the duration of this
+    // compile, so a Duke mod GRP handed to the host brings its own actors,
+    // sounds and level names with it.  See C_CrossplayReadFile().
+    extern int g_crossplayDukeCon;
+    g_crossplayDukeCon = 1;
+    G_CompileScripts();
+    g_crossplayDukeCon = 0;
+    G_InitDynamicNames();
+    G_PostCreateGameState();
+
+    compiled = 1;
+    return compiled;
+}
+
+// VibeBuild32 crossplay: Duke's own episode/level table, as its CON defines it.
+//
+// The host used to work out which levels existed by asking the GRP for
+// E<episode>L<level>.MAP, which is true of stock Duke and of nothing else: a mod
+// GRP names its maps whatever it likes (vacation.grp ships VACA1..VACA7), gives
+// its episodes its own titles and carries a par time and a music track per
+// level.  All of that is already in Duke's `g_mapInfo` once the mod's CON has
+// compiled, so the host reads it from there instead of guessing.
+extern "C" int VB_DukeAI_VolumeCount(void)
+{
+    VB_DukeAI_CompileScripts();
+    return g_numVolumes > 0 ? g_numVolumes : 0;
+}
+
+extern "C" char const *VB_DukeAI_VolumeName(int const volumeNum)
+{
+    if ((unsigned)volumeNum >= MAXVOLUMES)
+        return NULL;
+
+    return EpisodeNames[volumeNum][0] ? EpisodeNames[volumeNum] : NULL;
+}
+
+extern "C" int VB_DukeAI_LevelInfo(int const volumeNum, int const levelNum, char const **filename, char const **title,
+                                   char const **music, int *partime, int *designertime)
+{
+    if ((unsigned)volumeNum >= MAXVOLUMES || (unsigned)levelNum >= MAXLEVELS)
+        return 0;
+
+    map_t const &info = g_mapInfo[volumeNum * MAXLEVELS + levelNum];
+
+    if (!info.filename || !info.filename[0])
+        return 0;
+
+    if (filename)      *filename = info.filename;
+    if (title)         *title = info.name;
+    if (music)         *music = info.musicfn;
+    if (partime)       *partime = info.partime;
+    if (designertime)  *designertime = info.designertime;
+
+    return 1;
+}
+
+extern "C" int VB_DukeAI_MaxLevelsPerVolume(void) { return MAXLEVELS; }
+
+// VibeBuild32 crossplay: the tile a Duke actor should be drawn with.
+//
+// Duke never animates an actor by changing sprite[].picnum; the drawn tile is
+// derived at render time from the actor's current CON action (its start frame,
+// view type and current frame) plus a rotation offset that depends on where the
+// viewer is standing.  A foreign runtime drawing these sprites itself therefore
+// has to ask for the same tile, or every enemy stands frozen on one frame.
+// This mirrors the actor case of G_DoSpriteAnimations().
+extern "C" int VB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY, int32_t camAng, uint16_t *cstat,
+                                       int *viewtypeStep)
+{
+    if (viewtypeStep != NULL)
+        *viewtypeStep = 0;
+
+    if ((unsigned)spriteNum >= MAXSPRITES)
+        return -1;
+
+    auto const s = &sprite[spriteNum];
+
+    int32_t const curframe = AC_CURFRAME(actor[spriteNum].t_data);
+    uint16_t preCstat = cstat != NULL ? *cstat : s->cstat;
+
+    // A few tiles are turned by a rule of their own rather than by the viewtype
+    // on their current action, in a switch G_DoSpriteAnimations() runs *before*
+    // it ever reaches the actor case.  Only the generic case was mirrored here.
+    //
+    // The patrol vehicle is the one that shows: the generic frame is
+    // `picnum + offset + startframe + viewtype * curframe`, and a RECON's
+    // curframe is not an animation frame at all -- it is the turn counter Duke
+    // calls RECON_T4 -- so multiplying it by the viewtype walked the tile clean
+    // out of the vehicle's own art.  Sampled on E1L2 it was landing in the RPG
+    // frames.  Duke never runs that formula on a RECON.
+    switch (tileGetMapping(s->picnum))
+    {
+        case RECON__:
+        {
+            int frameOffset = getofs_viewtype_mirrored<7>(preCstat, s->ang - getangle(s->x - camX, s->y - camY));
+
+            // RECON_T4: past a certain point in its turn the car is banked, and
+            // Duke has a second set of seven frames for that.
+            if (klabs(curframe) > 64)
+                frameOffset += 7;
+
+            if (cstat != NULL)
+                *cstat = preCstat;
+
+            return RECON + frameOffset;
+        }
+
+        case RPG__:
+        {
+            int const frameOffset =
+                getofs_viewtype_mirrored<7>(preCstat, s->ang - getangle(s->x - camX, s->y - camY));
+
+            if (cstat != NULL)
+                *cstat = preCstat;
+
+            return RPG + frameOffset;
+        }
+
+        default:
+            break;
+    }
+
+    if (!G_TileHasActor(s->picnum))
+        return s->picnum;
+
+    int32_t const scrofs_action = AC_ACTION_ID(actor[spriteNum].t_data);
+
+    if ((unsigned)scrofs_action + ACTION_PARAM_COUNT > (unsigned)g_scriptSize ||
+        apScript[scrofs_action + ACTION_PARAM_COUNT] != CON_END)
+        return s->picnum;
+
+    int32_t const viewtype = apScript[scrofs_action + ACTION_VIEWTYPE];
+    uint16_t const action_flags = apScript[scrofs_action + ACTION_FLAGS];
+
+    int const invertp = viewtype < 0;
+    int const l = klabs(viewtype);
+
+    uint16_t spriteCstat = preCstat;
+    int frameOffset;
+
+    int const viewAng = ((l > 4 && l != 8) || action_flags & AF_VIEWPOINT) ? getangle(s->x - camX, s->y - camY) : camAng;
+    int const angDiff = invertp ? viewAng - s->ang : s->ang - viewAng;
+
+    switch (l)
+    {
+        case 2:  frameOffset = getofs_viewtype<8>(angDiff) & 1; break;
+        case 3:
+        case 4:  frameOffset = viewtype_mirror<7>(spriteCstat, getofs_viewtype<16>(angDiff) & 7); break;
+        case 5:  frameOffset = getofs_viewtype_mirrored<5>(spriteCstat, angDiff); break;
+        case 7:  frameOffset = getofs_viewtype_mirrored<7>(spriteCstat, angDiff); break;
+        case 8:  frameOffset = getofs_viewtype<8>(angDiff); spriteCstat &= ~4; break;
+        case 9:  frameOffset = getofs_viewtype_mirrored<9>(spriteCstat, angDiff); break;
+        case 12: frameOffset = getofs_viewtype<12>(angDiff); spriteCstat &= ~4; break;
+        case 16: frameOffset = getofs_viewtype<16>(angDiff); spriteCstat &= ~4; break;
+        default: frameOffset = 0; break;
+    }
+
+    int const picnum = s->picnum + frameOffset + apScript[scrofs_action + ACTION_STARTFRAME] + viewtype * curframe;
+
+    if ((unsigned)picnum >= MAXTILES)
+        return s->picnum;
+
+    // Duke also walks backwards past frames whose art is missing.  That test has
+    // to be made against Duke's art, so a foreign host -- whose tile numbering is
+    // its own -- gets the step and applies the walk after remapping the tile.
+    if (viewtypeStep != NULL && viewtype > 0)
+        *viewtypeStep = l;
+
+    if (cstat != NULL)
+        *cstat = spriteCstat;
+
+    return picnum;
 }

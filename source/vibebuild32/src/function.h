@@ -34,12 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 extern "C" {
 #endif
 
-#define NUMGAMEFUNCTIONS 63
 #define MAXGAMEFUNCLEN 32
-
-extern char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
-extern const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
-extern const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
 
 enum GameFunction_t
    {
@@ -106,7 +101,17 @@ enum GameFunction_t
    gamefunc_Alt_Weapon,
    gamefunc_Third_Person_View,
    gamefunc_Toggle_Crouch,
+   NUMGAMEFUNCTIONS
    };
+
+EDUKE32_STATIC_ASSERT(NUMGAMEFUNCTIONS <= 64);
+
+extern char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
+extern const char gamefunc_symbol_names[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN];
+extern const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
+extern const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN];
+extern int32_t keybind_order_custom[NUMGAMEFUNCTIONS];
+
 #ifdef __cplusplus
 }
 #endif

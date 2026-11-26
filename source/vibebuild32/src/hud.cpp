@@ -606,7 +606,7 @@ void G_DrawStatusBar(int snum)
 
                 int asprites[MAX_WEAPONS] = { BOOTS, AMMO, SHOTGUNAMMO,
                                               BATTERYAMMO, RPGAMMO, HBOMBAMMO, CRYSTALAMMO, DEVISTATORAMMO,
-                                              TRIPBOMBSPRITE, FREEZEAMMO + 1, HBOMBAMMO, GROWAMMO };
+                                              TRIPBOMBSPRITE, FREEZEAMMO + 1, HBOMBAMMO, GROWAMMO, FLAMETHROWERAMMO + 1 };
 
                 Bmemcpy(ammo_sprites, asprites, sizeof(ammo_sprites));
             }

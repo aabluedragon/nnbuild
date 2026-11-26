@@ -351,30 +351,54 @@ int MV_PlayWAV(char *ptr, uint32_t length, int loopstart, int loopend, int pitch
     if (!MV_Installed)
         return MV_Error;
 
-    riff_header   riff;
-    memcpy(&riff, ptr, sizeof(riff_header));
-    riff.file_size   = B_LITTLE32(riff.file_size);
-    riff.format_size = B_LITTLE32(riff.format_size);
-
-    if ((memcmp(riff.RIFF, "RIFF", 4) != 0) || (memcmp(riff.WAVE, "WAVE", 4) != 0) || (memcmp(riff.fmt, "fmt ", 4) != 0))
+    if (length < 12 || memcmp(ptr, "RIFF", 4) != 0 || memcmp(ptr + 8, "WAVE", 4) != 0)
         return MV_SetErrorCode(MV_InvalidFile);
 
-    format_header format;
-    memcpy(&format, ptr + sizeof(riff_header), sizeof(format_header));
-    format.wFormatTag      = B_LITTLE16(format.wFormatTag);
-    format.nChannels       = B_LITTLE16(format.nChannels);
-    format.nSamplesPerSec  = B_LITTLE32(format.nSamplesPerSec);
-    format.nAvgBytesPerSec = B_LITTLE32(format.nAvgBytesPerSec);
-    format.nBlockAlign     = B_LITTLE16(format.nBlockAlign);
-    format.nBitsPerSample  = B_LITTLE16(format.nBitsPerSample);
+    // Walk the chunks rather than assume "fmt " and "data" sit back to back:
+    // perfectly valid files carry a LIST (metadata) chunk between them --
+    // several of PowerSlave Exhumed's do -- and the old fixed-layout read
+    // rejected every one of those.
+    format_header format = {};
+    uint32_t dataofs = 0, datasize = 0;
+    int havefmt = 0;
 
-    data_header   data;
-    memcpy(&data, ptr + sizeof(riff_header) + riff.format_size, sizeof(data_header));
-    data.size = B_LITTLE32(data.size);
+    for (uint32_t ofs = 12; ofs + 8 <= length; )
+    {
+        char const *id = ptr + ofs;
+        uint32_t csize;
+        memcpy(&csize, ptr + ofs + 4, 4);
+        csize = B_LITTLE32(csize);
+        if (csize > length - ofs - 8)
+            csize = length - ofs - 8;
+
+        if (memcmp(id, "fmt ", 4) == 0 && csize >= sizeof(format_header))
+        {
+            memcpy(&format, ptr + ofs + 8, sizeof(format_header));
+            format.wFormatTag      = B_LITTLE16(format.wFormatTag);
+            format.nChannels       = B_LITTLE16(format.nChannels);
+            format.nSamplesPerSec  = B_LITTLE32(format.nSamplesPerSec);
+            format.nAvgBytesPerSec = B_LITTLE32(format.nAvgBytesPerSec);
+            format.nBlockAlign     = B_LITTLE16(format.nBlockAlign);
+            format.nBitsPerSample  = B_LITTLE16(format.nBitsPerSample);
+            havefmt = 1;
+        }
+        else if (memcmp(id, "data", 4) == 0 && !datasize)
+        {
+            dataofs  = ofs + 8;
+            datasize = csize;
+        }
+
+        ofs += 8 + csize + (csize & 1);      // chunks are word-aligned
+    }
+
+    data_header data;
+    memcpy(data.DATA, "data", 4);
+    data.size = datasize;
 
     // Check if it's PCM data.
-    if (format.wFormatTag != 1 || (format.nChannels != 1 && format.nChannels != 2) ||
-        ((format.nBitsPerSample != 8) && (format.nBitsPerSample != 16)) || memcmp(data.DATA, "data", 4) != 0)
+    if (!havefmt || !datasize || format.wFormatTag != 1 ||
+        (format.nChannels != 1 && format.nChannels != 2) ||
+        ((format.nBitsPerSample != 8) && (format.nBitsPerSample != 16)))
         return MV_SetErrorCode(MV_InvalidFile);
 
     // Request a voice from the voice pool
@@ -407,7 +431,7 @@ int MV_PlayWAV(char *ptr, uint32_t length, int loopstart, int loopend, int pitch
     voice->rawdatasiz   = length;
     voice->position     = 0;
     voice->BlockLength  = blocklen;
-    voice->NextBlock    = (char *)((intptr_t)ptr + sizeof(riff_header) + riff.format_size + sizeof(data_header));
+    voice->NextBlock    = ptr + dataofs;
     voice->priority     = priority;
     voice->callbackval  = callbackval;
     voice->Loop.Start   = loopstart >= 0 ? voice->NextBlock : nullptr;

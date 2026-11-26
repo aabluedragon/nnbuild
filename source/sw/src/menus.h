@@ -169,7 +169,7 @@ typedef enum
     sldr_none,
     sldr_mouse, sldr_sndfxvolume, sldr_musicvolume, sldr_scrsize, sldr_brightness,
     sldr_bordertile, sldr_gametype, sldr_netlevel, sldr_monsters, sldr_killlimit,
-    sldr_timelimit, sldr_playercolor, sldr_videores, sldr_videobpp,
+    sldr_timelimit, sldr_playercolor, sldr_playerskin, sldr_videores, sldr_videobpp,
     sldr_fov,
     sldr_mousescalex, sldr_mousescaley,
     sldr_joyaxisscale, sldr_joyaxisanalog, sldr_joyaxisdead, sldr_joyaxissatur,
@@ -283,6 +283,7 @@ typedef struct MenuGroup
 
 // Custom Routine Prototypes ////////////////////////////////////////////////////////////////////
 
+void MNU_BuildCrossplayEpisodeMenu(void);
 SWBOOL MNU_QuitCustom(UserCall call, MenuItem *item);
 SWBOOL MNU_QuickLoadCustom(UserCall call, MenuItem *item);
 SWBOOL MNU_LoadSaveTouchupCustom(UserCall call, MenuItem *item);

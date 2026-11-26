@@ -1988,9 +1988,10 @@ int pushmove(vec3_t *const vect, int16_t *const sectnum,
 //
 // getzrange
 //
-void getzrange(const vec3_t *pos, int16_t sectnum,
-               int32_t *ceilz, int32_t *ceilhit, int32_t *florz, int32_t *florhit,
-               int32_t walldist, uint32_t cliptype)
+void getzrange_filtered(const vec3_t *pos, int16_t sectnum,
+                        int32_t *ceilz, int32_t *ceilhit, int32_t *florz, int32_t *florhit,
+                        int32_t walldist, uint32_t cliptype,
+                        getzrange_sector_filter_t sectorfilter, void *userdata)
 {
     MICROPROFILE_SCOPEI("Engine", EDUKE32_FUNCTION, MP_AUTO);
 
@@ -2218,17 +2219,22 @@ restart_grand:
                 else
 #endif
                 {
+                    // Some source map formats can mark a sector so its floor
+                    // and ceiling do not support an actor whose radius only
+                    // overlaps the sector at an edge. Keep collecting and
+                    // traversing the sector; suppress only its z candidates.
+                    int32_t const allowsector = !sectorfilter || sectorfilter((int16_t)k, userdata);
 #ifdef YAX_ENABLE
                     int16_t cb, fb;
                     yax_getbunches(k, &cb, &fb);
 #endif
-                    if (daz > *ceilz)
+                    if (allowsector && daz > *ceilz)
 #ifdef YAX_ENABLE
                         if (mcf!=YAX_FLOOR && cb < 0)
 #endif
                         *ceilz = daz, *ceilhit = k+16384;
 
-                    if (daz2 < *florz)
+                    if (allowsector && daz2 < *florz)
 #ifdef YAX_ENABLE
                         if (mcf!=YAX_CEILING && fb < 0)
 #endif
@@ -2505,6 +2511,14 @@ restart_grand:
         }
     }
 #endif
+}
+
+void getzrange(const vec3_t *pos, int16_t sectnum,
+               int32_t *ceilz, int32_t *ceilhit, int32_t *florz, int32_t *florhit,
+               int32_t walldist, uint32_t cliptype)
+{
+    getzrange_filtered(pos, sectnum, ceilz, ceilhit, florz, florhit,
+                       walldist, cliptype, nullptr, nullptr);
 }
 
 

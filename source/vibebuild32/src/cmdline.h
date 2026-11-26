@@ -32,6 +32,7 @@ void G_CheckCommandLine(int argc, char const* const* argv);
 bool G_RunStartupCommand(void);
 std::vector<std::string> G_PendingStartupCommands(void);
 void G_RestoreStartupCommands(std::vector<std::string> commands);
+void G_ApplyCommandLineVideoOverrides(void);
 
 extern int32_t g_commandSetup;
 extern int32_t g_noSetup;

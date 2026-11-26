@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "al_midi.h"
 #include "compat.h"
 #include "duke3d.h"
+#include "gameexec.h"
+#include "multivoc.h"
 #include "renderlayer.h"  // for win_gethwnd()
 #include "vfs.h"
 
@@ -50,6 +52,55 @@ static std::atomic<uint32_t> freeSlotReadIndex, freeSlotWriteIndex;
 sound_t** g_sounds;
 sound_t nullsound;
 voiceinfo_t nullvoice = { -1, FX_Ok, UINT16_MAX, 0, -1, { 0, 0, 0 } };
+
+static int S_CrossplayGameFromSoundPrefix(char const *name, char const **entryName)
+{
+    static char constexpr prefix[] = "vb-crossplay://";
+
+    if (!name || Bstrncmp(name, prefix, sizeof(prefix) - 1))
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    char const *game = name + sizeof(prefix) - 1;
+    char const *slash = Bstrchr(game, '/');
+
+    if (!slash || slash == game || !slash[1])
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    int32_t gameId = ART_CROSSPLAY_GAME_UNKNOWN;
+    if (!Bstrncasecmp(game, "duke", slash - game))
+        gameId = ART_CROSSPLAY_GAME_DUKE;
+    else if (!Bstrncasecmp(game, "worldtour", slash - game))
+        gameId = ART_CROSSPLAY_GAME_WORLDTOUR;
+    else if (!Bstrncasecmp(game, "sw", slash - game) || !Bstrncasecmp(game, "shadowwarrior", slash - game))
+        gameId = ART_CROSSPLAY_GAME_SW;
+    else if (!Bstrncasecmp(game, "ionfury", slash - game) || !Bstrncasecmp(game, "fury", slash - game))
+        gameId = ART_CROSSPLAY_GAME_IONFURY;
+
+    if (gameId < 0)
+        return ART_CROSSPLAY_GAME_UNKNOWN;
+
+    if (entryName)
+        *entryName = slash + 1;
+    return gameId;
+}
+
+static void S_LogPlaybackFailure(char const * const prefix, char const * const filename)
+{
+    char const * const error = FX_ErrorString(FX_Error);
+
+    // FX_VoiceAvailable() is checked immediately before playback, but OGG
+    // voices initialize asynchronously and another sound can claim the last
+    // slot before FX_Play*() allocates. Ion Fury can legitimately burst several
+    // optional one-shot sounds at once, so do not spam hard ERROR lines for
+    // that recoverable race.
+    if (FX_ErrorCode == FX_MultiVocError && MV_ErrorCode == MV_NoVoices)
+    {
+        DVLOG_F(LOG_DEBUG, "%s %s: %s", prefix, filename, error);
+        return;
+    }
+
+    LOG_F(ERROR, "%s %s: %s", prefix, filename, error);
+}
 
 void S_AllocIndexes(int sndidx)
 {
@@ -270,7 +321,11 @@ void S_MenuSound(void)
         SELECT_WEAPON
     };
 
-    S_PlaySound(menusnds[SoundNum++ % ARRAY_SIZE(menusnds)]);
+    int const soundNum = FURY ? -1 : menusnds[SoundNum++ % ARRAY_SIZE(menusnds)];
+    int const eventSound = X_OnEventWithReturn(EVENT_OPENMENUSOUND, g_player[screenpeek].ps->i, screenpeek, soundNum);
+
+    if (eventSound != -1)
+        S_PlaySound(eventSound);
 }
 
 static int S_PlayMusic(const char* fn)
@@ -513,7 +568,7 @@ void S_Cleanup(void)
 }
 
 // returns number of bytes read
-int32_t S_LoadSound(int num)
+int32_t S_LoadSound(uint32_t num)
 {
     if ((unsigned)num > (unsigned)g_highestSoundIdx || EDUKE32_PREDICT_FALSE(g_sounds[num] == &nullsound))
         return 0;
@@ -521,19 +576,36 @@ int32_t S_LoadSound(int num)
     auto& snd = g_sounds[num];
 
     buildvfs_kfd fp = S_OpenAudio(snd->filename, g_loadFromGroupOnly, 0);
+    char *crossplayData = NULL;
+    int32_t crossplaySize = 0;
 
     if (EDUKE32_PREDICT_FALSE(fp == buildvfs_kfd_invalid))
     {
-        DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
-        return 0;
+        char const *crossplayEntry = NULL;
+        int32_t const crossplayGame = S_CrossplayGameFromSoundPrefix(snd->filename, &crossplayEntry);
+
+        if (crossplayGame < 0 || !artCrossplayReadForeignGameDataEntry(crossplayGame, crossplayEntry, &crossplayData, &crossplaySize, NULL, 0))
+        {
+            DVLOG_F(LOG_DEBUG, "Unable to load sound #%d: file %s not found.", num, snd->filename);
+            return 0;
+        }
     }
 
-    int32_t l = kfilelength(fp);
+    int32_t l = crossplayData ? crossplaySize : kfilelength(fp);
     g_sounds[num]->lock = CACHE1D_PERMANENT;
     snd->len = l;
     g_cache.allocateBlock((intptr_t*)&snd->ptr, l, (char*)&g_sounds[num]->lock);
-    l = kread(fp, snd->ptr, l);
-    kclose(fp);
+
+    if (crossplayData)
+    {
+        Bmemcpy(snd->ptr, crossplayData, l);
+        Xfree(crossplayData);
+    }
+    else
+    {
+        l = kread(fp, snd->ptr, l);
+        kclose(fp);
+    }
 
     return l;
 }
@@ -547,34 +619,56 @@ void S_PrecacheSounds(void)
 
     LOG_F(INFO, "Precaching sounds...");
 
+    int loadedSounds = 0;
+    int missingSounds = 0;
+
     for (int i = 0, j = 0; i <= g_highestSoundIdx; ++i)
     {
         if (g_sounds[i] != &nullsound && g_sounds[i]->ptr == nullptr)
         {
-            S_LoadSound(i);
+            int32_t const loadedBytes = S_LoadSound(i);
+
+            if (loadedBytes > 0)
+                loadedSounds++;
+            else
+                missingSounds++;
+
             j += g_sounds[i]->len;
             if (j >= 4 * 1024 * 1024)
                 gameHandleEvents(), j = 0;
         }
     }
 
-    LOG_F(INFO, "Sound precache finished in %dms", timerGetTicks() - precachestart);
+    LOG_F(INFO, "Sound precache finished in %dms (%d loaded, %d missing)", timerGetTicks() - precachestart, loadedSounds, missingSounds);
 }
 
 static int32_t S_DefineAudioIfSupported(char** fn, const char* name)
 {
+    char * const normalizedName = Xstrdup(name);
+
+    for (char *ch = normalizedName; *ch; ++ch)
+        if (*ch == '\\')
+            *ch = '/';
+
 #if !defined HAVE_FLAC || !defined HAVE_VORBIS
-    const char* extension = Bstrrchr(name, '.');
+    const char* extension = Bstrrchr(normalizedName, '.');
 # if !defined HAVE_FLAC
     if (extension && !Bstrcasecmp(extension, ".flac"))
+    {
+        Xfree(normalizedName);
         return -2;
+    }
 # endif
 # if !defined HAVE_VORBIS
     if (extension && !Bstrcasecmp(extension, ".ogg"))
+    {
+        Xfree(normalizedName);
         return -2;
+    }
 # endif
 #endif
-    realloc_copy(fn, name);
+    realloc_copy(fn, normalizedName);
+    Xfree(normalizedName);
     return 0;
 }
 
@@ -938,7 +1032,7 @@ error:
 
     if (voice <= FX_Ok)
     {
-        LOG_F(ERROR, "Unable to play %s: unsupported format or file corrupt.", snd->filename);
+        S_LogPlaybackFailure("Unable to play", snd->filename);
         bitmap_clear(&snd->playing, sndSlot);
         goto error;
     }
@@ -948,8 +1042,35 @@ error:
     return voice;
 }
 
+// VibeBuild32 crossplay: when a foreign runtime hosts Duke's actors, that
+// runtime owns the audio device -- Duke must not call FX_Init()/FX_SetCallBack()
+// underneath it.  Duke still decides which sound plays and when, which is the
+// part that is actor behavior; the host just plays it.  See
+// source/vibebuild32/src/crossplay_dukeai.cpp.
+static int (*g_vbDukeAISoundHook)(int soundNum, int spriteNum);
+
+// While the host owns playback, Duke's own g_sounds[] bookkeeping is never
+// filled in, so A_CheckSoundPlaying() would answer "nothing is playing" forever.
+// CON leans on that answer: `soundonce` is exactly "play unless already playing",
+// and without it a looping-by-repetition sound like the broken hydrant's gurgle
+// is started again on every single tic.  Let the host answer instead.
+static int (*g_vbDukeAISoundCheckHook)(int soundNum, int spriteNum);
+
+extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum))
+{
+    g_vbDukeAISoundCheckHook = hook;
+}
+
+extern "C" void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum))
+{
+    g_vbDukeAISoundHook = hook;
+}
+
 int S_PlaySound(int num)
 {
+    if (g_vbDukeAISoundHook != NULL)
+        return g_vbDukeAISoundHook(num, -1);
+
     if (!Net_InPredictableState())
         return -1;
 
@@ -992,7 +1113,7 @@ error:
 
     if (voice <= FX_Ok)
     {
-        LOG_F(ERROR, "Error attempting to play %s", snd->filename);
+        S_LogPlaybackFailure("Error attempting to play", snd->filename);
         bitmap_clear(&snd->playing, sndnum);
         goto error;
     }
@@ -1004,6 +1125,9 @@ error:
 
 int A_PlaySound(int soundNum, int spriteNum)
 {
+    if (g_vbDukeAISoundHook != NULL)
+        return g_vbDukeAISoundHook(soundNum, spriteNum);
+
     return (unsigned)spriteNum >= MAXSPRITES ? S_PlaySound(soundNum) :
         S_PlaySound3D(soundNum, spriteNum, sprite[spriteNum].xyz);
 }
@@ -1013,11 +1137,12 @@ void S_StopEnvSound(int soundNum, int spriteNum)
     if (!Net_InPredictableState(spriteNum))
         return;
 
-    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum)))
-    {
-        LOG_F(WARNING, "Invalid sound #%d", soundNum);
+    // Match the modern/Fury behavior: stopping an invalid, undefined, or
+    // currently non-playing sound is a harmless no-op. Ion Fury scripts use
+    // this defensively for optional state values, and warning here produces
+    // false-positive log spam such as "Invalid sound #2000".
+    if (EDUKE32_PREDICT_FALSE(!S_SoundIsValid(soundNum) || g_sounds[soundNum] == &nullsound || g_sounds[soundNum]->playing == 0))
         return;
-    }
 
     int j;
 
@@ -1213,6 +1338,9 @@ void S_Callback(intptr_t num)
 int A_CheckSoundPlaying(int spriteNum, int soundNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return 0;
+
+    if (g_vbDukeAISoundCheckHook != NULL)
+        return g_vbDukeAISoundCheckHook(soundNum, spriteNum);
 
     auto& snd = g_sounds[soundNum];
 

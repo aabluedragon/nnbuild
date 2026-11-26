@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "duke3d.h"
 //#include "demo.h"
 #include "screens.h"
+#include "vbjs.h"
 #include "renderlayer.h"
 #include "cmdline.h"
 #include "mapeditor.h"
@@ -40,6 +41,10 @@ int32_t g_noSound = 0;
 int32_t g_noMusic = 0;
 int32_t g_noLogoAnim = 0;
 int32_t g_noLogo = 0;
+
+static int32_t g_commandScreenMode = -1;
+static int32_t g_commandScreenWidth = 0;
+static int32_t g_commandScreenHeight = 0;
 
 int32_t g_keepAddr = 0; // Seemingly unused...
 
@@ -120,6 +125,101 @@ static bool G_IsScriptPath(char const *path)
                 || !Bstrcasecmp(ext, ".cjs") || !Bstrcasecmp(ext, ".cts"));
 }
 
+static void G_SetCommandLineScreenMode(int32_t mode)
+{
+    g_commandScreenMode = mode;
+    ud.config.ScreenMode = mode;
+}
+
+static void G_SetCommandLineResolution(int32_t width, int32_t height)
+{
+    if (width < 320 || height < 200)
+        return;
+
+    g_commandScreenWidth = width;
+    g_commandScreenHeight = height;
+    ud.config.ScreenWidth = width;
+    ud.config.ScreenHeight = height;
+}
+
+void G_ApplyCommandLineVideoOverrides(void)
+{
+    if (g_commandScreenMode >= 0)
+        ud.config.ScreenMode = g_commandScreenMode;
+
+    if (g_commandScreenWidth > 0 && g_commandScreenHeight > 0)
+    {
+        ud.config.ScreenWidth = g_commandScreenWidth;
+        ud.config.ScreenHeight = g_commandScreenHeight;
+    }
+}
+
+static const char *G_CommandLineOptionValue(const char *option, const char *shortName, const char *longName,
+                                            int *argIndex, int argc, char const * const *argv)
+{
+    size_t const shortLen = Bstrlen(shortName);
+    size_t const longLen = Bstrlen(longName);
+
+    if (!Bstrncasecmp(option, longName, longLen))
+    {
+        const char *value = option + longLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return isalpha((unsigned char)*value) ? nullptr : value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    if (!Bstrncasecmp(option, shortName, shortLen))
+    {
+        const char *value = option + shortLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return isalpha((unsigned char)*value) ? nullptr : value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
+static const char *G_CommandLineOptionTextValue(const char *option, const char *shortName, const char *longName,
+                                                int *argIndex, int argc, char const * const *argv)
+{
+    size_t const shortLen = Bstrlen(shortName);
+    size_t const longLen = Bstrlen(longName);
+
+    if (!Bstrncasecmp(option, longName, longLen))
+    {
+        const char *value = option + longLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    if (!Bstrncasecmp(option, shortName, shortLen))
+    {
+        const char *value = option + shortLen;
+        if (*value == '=')
+            ++value;
+        if (*value)
+            return value;
+        if (*argIndex + 1 < argc)
+            return argv[++*argIndex];
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
 static void G_ShowParameterHelp(void)
 {
     const char* s = "Usage: " APPBASENAME " [files] [options]\n"
@@ -142,10 +242,34 @@ static void G_ShowParameterHelp(void)
         "-cf, --cmd-file <path>\tRead startup console commands, one per line (repeatable)\n"
         "-js, --js <path>\tLoad a JavaScript or TypeScript mod; a bare path also works\n"
         "-d[file.dmo]\tPlay a demo\n"
-        "-g[file.grp]\tUse an extra group file\n"
+        "-g, --grp [file.grp]\tUse a group/data file; also infers game if -gm is omitted\n"
         "-h[file.def]\tUse an alternate def\n"
         "-j[dir]\t\tAdds a directory to EDuke32's search list\n"
+        "-gm, --game <name>\tForce Duke, World Tour, Ion Fury, SW, Blood, RR, NAM, Napalm, WW2GI, or Exhumed\n"
+        "-gm.lvls, --game.levels <name>\tCrossplay: use this game's levels/maps\n"
+        "-gm.its, --game.items <name>\tCrossplay: use this game's item rules/data\n"
+        "-gm.wpns, --game.weapons <name>\tCrossplay: use this game's weapon rules/data\n"
+        "-gjs, --gen-js [name]\tCreate autojs/<name>/ JavaScript mod starter and exit\n"
+        "-gts, --gen-ts [name]\tCreate autojs/<name>/ TypeScript mod starter and exit\n"
+        "-js, --js [file.js]\tLoad a JavaScript user script\n"
+        "-skn, --skin <name|#>\tPlayer multiplayer skin/profile (e.g. Duke, LoWang, Shelly)\n"
+        "-sm, --skip-menu\tSkip the game picker and native startup window\n"
+        "-m, --menu\t\tForce the native startup window (overrides -sm)\n"
+        "-sc, --skip-cinema\tSkip startup cinematics and logo animations\n"
+        "-clr, --color <name|#rrggbb>\tSet player color\n"
+        "-wnd, --window\tForce windowed video mode\n"
+        "-fscr, --fullscreen\tForce fullscreen video mode\n"
+        "-res, --resolution <WIDTHxHEIGHT>\tForce video resolution\n"
+        "-dbg, --debug\tEnable the JavaScript debugger attach endpoint\n"
+        "-dt, --devtools\tOpen JavaScript DevTools (implies -dbg; forces windowed mode)\n"
+        "-mnst, --monsters <n>\tSet monsters: 0 disables them; 1+ selects skill\n"
+        "-e, --episode <n>\tAlias for -v, --volume <n>\n"
+        "-nosound\t\tDisable sound effects\n"
+        "-nomusic\t\tDisable music\n"
+        "-r, --record\t\tRecord a demo\n"
+        "-pb, --playback [file]\tPlay a demo\n"
         "-l#\t\tWarp to level #, see -v\n"
+        "--level [#]\tWarp to level #\n"
         "-map [file.map]\tLoads a map\n"
         "-m\t\tDisable monsters\n"
         "-nam/-ww2gi\tRun in NAM or WW2GI-compatible mode\n"
@@ -154,17 +278,20 @@ static void G_ShowParameterHelp(void)
         "net command examples:\n"
         "-net /n0:3\tHost 3-player match in master/slave mode.\n"
         "-net /n0 192.168.0.1\tJoin specified IP in master/slave mode.\n"
+        "cross-game example:\n"
+        APPBASENAME " -gm ionfury --game-dir /path/to/Ion\\ Fury -g /path/to/DUKE3D.GRP -map E3L6\n"
+        "\t\tRun Duke3D Atomic's Rabid Transit map with Ion Fury as the main game.\n"
         "\n"
-        "-async\t\tHost: server-authoritative netplay - never stall on a slow\n"
+        "-as, --async\tHost: server-authoritative netplay - never stall on a slow\n"
         "\t\tclient (their own input gets more latency instead). Default\n"
         "\t\tis lockstep (equal lag for all).\n"
-        "-latejoin\tHost: start with open slots that players may join mid-game.\n"
-        "-startnow\tHost: begin immediately with whoever is present (even alone);\n"
-        "\t\tremaining slots stay open to join anytime. Implies -latejoin.\n"
-        "-dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
+        "-lj, --latejoin\tHost: start with open slots that players may join mid-game.\n"
+        "-sn, --startnow\tHost: begin immediately with whoever is present (even alone);\n"
+        "\t\tremaining slots stay open to join anytime. Implies --latejoin.\n"
+        "-dd, --dedicated\tHost: read admin commands from stdin (kick/ban/etc).\n"
         "\t\tConsole commands include map, mod, mapcycle, nextmap, kick and ban.\n"
-        "-headless\tHost: dedicated server with no window, graphics or sound -\n"
-        "\t\tterminal only. Implies -dedicated. (alias: -console)\n"
+        "-hl, --headless\tHost: dedicated server with no window, graphics or sound -\n"
+        "\t\tterminal only. Implies --dedicated. (legacy alias: -console)\n"
         "\n"
         "-noffire\t\tDisable friendly fire\n"
         "-rts [file.rts]\tLoad a custom Remote Ridicule sound bank\n"
@@ -179,6 +306,7 @@ static void G_ShowParameterHelp(void)
 #endif
         "-u#########\tUser's favorite weapon order (default: 3425689071)\n"
         "-v#\t\tWarp to volume #, see -l\n"
+        "--volume [#]\tWarp to volume #\n"
         "-wstay\t\tEnable Weapon Stay\n"
         "-x[game.con]\tLoad custom CON script\n"
         "-y##\t\tSet frag limit for DukeMatch\n"
@@ -247,18 +375,13 @@ void G_CheckCommandLine(int argc, char const* const* argv)
     g_player[0].wchoice[7] = 2;
     g_player[0].wchoice[8] = 9;
     g_player[0].wchoice[9] = 1;
-    Bsprintf(ud.wchoice, "3457860291");
+    Bsnprintf(ud.wchoice, sizeof(ud.wchoice), "3457860291");
 
     if (argc > 1)
     {
-        std::string parameters;
-        for (i = 1; i < argc; ++i)
-        {
-            parameters += " ";
-            parameters += argv[i];
-        }
-
-        LOG_F(INFO, "Application parameters:%s", parameters.c_str());
+        LOG_F(INFO, "Application parameters (%d):", argc);
+        for (int arg = 0; arg < argc; ++arg)
+            LOG_F(INFO, "Command line argument %d: %s", arg, argv[arg]);
 
         i = 1;
         while (i < argc)
@@ -320,6 +443,11 @@ void G_CheckCommandLine(int argc, char const* const* argv)
             }
             if (((*c == '/') || (*c == '-')) && (!firstnet))
             {
+                // VibeBuild32 modern args: accept "--foo" as "-foo" so every Duke option
+                // gains a long form, matching RR/SW/Blood (e.g. --cfg, --map, --nosetup, --nologo).
+                if (c[0] == '-' && c[1] == '-' && c[2])
+                    c++;
+
                 if (!Bstrcasecmp(c + 1, "?") || !Bstrcasecmp(c + 1, "help") || !Bstrcasecmp(c + 1, "-help"))
                 {
                     G_ShowParameterHelp();
@@ -335,6 +463,11 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     if (argc > i + 1)
                     {
                         G_AddGroup(argv[i + 1]);
+                        // A caller that supplied its own game data is explicitly
+                        // asking to launch, not to wait in the platform setup UI.
+                        // This is especially important on macOS, where that window
+                        // may be behind the terminal that launched the game.
+                        g_noSetup = 1;
                         i++;
                     }
                     i++;
@@ -346,6 +479,94 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     {
                         Bstrcpy(g_modDir, argv[i + 1]);
                         G_AddPath(argv[i + 1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                // VibeBuild32: --js/-js <file.js> loads a QuickJS user script.
+                if (!Bstrcasecmp(c + 1, "js"))
+                {
+                    if (argc > i + 1)
+                    {
+                        VBJS_SetScriptPath(argv[i + 1]);
+                        LOG_F(INFO, "JS script: %s", argv[i + 1]);
+                        i++;
+                    }
+                    i++;
+                    continue;
+                }
+                // Create an editor-ready TypeScript project.  The value is optional:
+                // without it VBJS chooses a short unused directory name.
+                if (!Bstrcasecmp(c + 1, "gen-js") || !Bstrcasecmp(c + 1, "gjs") ||
+                    !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts"))
+                {
+                    int const typescript = !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts");
+                    const char *name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : NULL;
+                    if (VBJS_GenerateProject(name, typescript) != 0)
+                    {
+                        LOG_F(ERROR, "Could not create JavaScript project.");
+                        Bexit(EXIT_FAILURE);
+                    }
+                    Bexit(EXIT_SUCCESS);
+                }
+                if (!Bstrcasecmp(c + 1, "devtools") || !Bstrcasecmp(c + 1, "dt"))
+                {
+                    VBJS_SetDevtools(1);
+                    G_SetCommandLineScreenMode(0); // Devtools is a side overlay: never start fullscreen.
+                    g_noSetup = 1;            // debugger launches cannot wait in the native setup window
+                    g_commandSetup = 0;
+                    LOG_F(INFO, "JavaScript devtools enabled (windowed mode).");
+                    i++;
+                    continue;
+                }
+                if ((!Bstrncasecmp(c + 1, "debug", 5) && (!c[6] || isdigit((unsigned char)c[6]))) ||
+                    (!Bstrncasecmp(c + 1, "dbg", 3) && (!c[4] || isdigit((unsigned char)c[4]))))
+                {
+                    VBJS_SetDebug(1);
+                    g_noSetup = 1;            // launch straight into the game for VS Code
+                    g_commandSetup = 0;
+                    const char *portText = !Bstrncasecmp(c + 1, "debug", 5) ? c + 6 : c + 4;
+                    if (*portText) VBJS_SetDebugPort(atoi(portText));
+                    else if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) VBJS_SetDebugPort(atoi(argv[++i]));
+                    LOG_F(INFO, "JavaScript debugger attach endpoint enabled on port %d.", VBJS_DebugPort());
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "monsters") || !Bstrcasecmp(c + 1, "mnst"))
+                {
+                    int const n = (argc > i + 1) ? atoi(argv[i + 1]) : 0;   // 1-based
+                    if (n <= 0)
+                    {
+                        M_DMFLAGS_SET(DMFLAG_NOMONSTERS, true);
+                        ud.m_player_skill = ud.player_skill = 0;
+                        LOG_F(INFO, "No enemies.");
+                    }
+                    else
+                    {
+                        M_DMFLAGS_SET(DMFLAG_NOMONSTERS, false);
+                        ud.m_player_skill = ud.player_skill = clamp(n - 1, 0, 4);
+                    }
+                    if (argc > i + 1) i++;
+                    i++;
+                    continue;
+                }
+                // VibeBuild32 canonical demo flags: --record/-r and --playback/-pb [file] (cross-game).
+                if (!Bstrcasecmp(c + 1, "record") || !Bstrcasecmp(c + 1, "-record"))
+                {
+                    ud.m_recstat = 1;
+                    LOG_F(INFO, "Demo record mode on.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "playback") || !Bstrcasecmp(c + 1, "-playback") || !Bstrcasecmp(c + 1, "pb"))
+                {
+                    if (argc > i + 1 && argv[i + 1][0] != '-')
+                    {
+                        Bstrncpyz(firstdemofile, argv[i + 1], sizeof(firstdemofile));
+                        if (strchr(firstdemofile, '.') == 0)
+                            Bstrcat(firstdemofile, ".dmo");
+                        LOG_F(INFO, "Play demo %s.", firstdemofile);
                         i++;
                     }
                     i++;
@@ -494,6 +715,69 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if (!Bstrcasecmp(c + 1, "nologo"))
                 {
                     g_noLogo = 1;
+                    g_noLogoAnim = 1;
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "nosound"))
+                {
+                    g_noSound = 2;
+                    LOG_F(INFO, "Sound off.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "nomusic"))
+                {
+                    g_noMusic = 1;
+                    LOG_F(INFO, "Music off.");
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "color") && i + 1 < argc)
+                {
+                    ud.m_color = ud.color = atoi(argv[++i]);
+                    LOG_F(INFO, "Player color palette: %d", ud.color);
+                    i++;
+                    continue;
+                }
+                if (!Bstrncasecmp(c + 1, "skin", 4) || !Bstrncasecmp(c + 1, "skn", 3))
+                {
+                    if (const char *skinName = G_CommandLineOptionTextValue(c + 1, "skn", "skin", &i, argc, argv))
+                    {
+                        int32_t const skin = P_SkinIndexFromName(skinName);
+                        if (skin >= 0)
+                        {
+                            ud.skin = skin;
+                            LOG_F(INFO, "Player skin/profile: %s (%d)", g_playerSkinNames[skin], skin);
+                        }
+                        else
+                        {
+                            LOG_F(WARNING, "Unknown player skin/profile '%s'.", skinName);
+                        }
+                    }
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "window") || !Bstrcasecmp(c + 1, "wnd"))
+                {
+                    G_SetCommandLineScreenMode(0);
+                    i++;
+                    continue;
+                }
+                if (!Bstrcasecmp(c + 1, "fullscreen") || !Bstrcasecmp(c + 1, "fscr"))
+                {
+                    G_SetCommandLineScreenMode(1);
+                    i++;
+                    continue;
+                }
+                if (!Bstrncasecmp(c + 1, "resolution", 10) || !Bstrncasecmp(c + 1, "res", 3))
+                {
+                    if (const char *resolution = G_CommandLineOptionValue(c + 1, "res", "resolution", &i, argc, argv))
+                    {
+                        int width = 0, height = 0;
+                        if (sscanf(resolution, "%dx%d", &width, &height) == 2)
+                            G_SetCommandLineResolution(width, height);
+                    }
                     i++;
                     continue;
                 }
@@ -507,7 +791,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "x"))
+                if (!Bstrcasecmp(c + 1, "x") || !Bstrcasecmp(c + 1, "con"))   // VibeBuild32 canonical: --con
                 {
                     if (argc > i + 1)
                     {
@@ -564,7 +848,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "latejoin"))
+                if (!Bstrcasecmp(c + 1, "latejoin") || !Bstrcasecmp(c + 1, "lj"))
                 {
                     // Host: start once at least one other player is present
                     // and let the remaining slots join mid-game.
@@ -573,7 +857,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "startnow") || !Bstrcasecmp(c + 1, "nowait"))
+                if (!Bstrcasecmp(c + 1, "startnow") || !Bstrcasecmp(c + 1, "sn") || !Bstrcasecmp(c + 1, "nowait"))
                 {
                     // Host: begin the match immediately with whoever is present
                     // (even just the host alone) instead of waiting for the
@@ -586,7 +870,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "async"))
+                if (!Bstrcasecmp(c + 1, "async") || !Bstrcasecmp(c + 1, "as"))
                 {
                     // Host: server-authoritative netplay - the master never
                     // blocks on slow clients (vs lockstep's equal-lag model).
@@ -602,7 +886,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "dedicated"))
+                if (!Bstrcasecmp(c + 1, "dedicated") || !Bstrcasecmp(c + 1, "dd"))
                 {
                     // Host: read admin commands from stdin, log to stdout. The
                     // operator has no view and no speakers, so run fully headless
@@ -618,7 +902,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "advertise"))
+                if (!Bstrcasecmp(c + 1, "advertise") || !Bstrcasecmp(c + 1, "ad"))
                 {
                     // Host: publish this server to a masterserver so it shows up
                     // in the in-game lobby. Next arg is the masterserver
@@ -631,7 +915,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "punchtarget"))
+                if (!Bstrcasecmp(c + 1, "punchtarget") || !Bstrcasecmp(c + 1, "pt"))
                 {
                     // Client: the "host:port" this client is joining, so the
                     // connection loop can request a masterserver NAT hole-punch
@@ -645,7 +929,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "masteraddr"))
+                if (!Bstrcasecmp(c + 1, "masteraddr") || !Bstrcasecmp(c + 1, "ma"))
                 {
                     // Client: the masterserver address the lobby used, carried
                     // across the join relaunch so the connecting client contacts
@@ -658,7 +942,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "joinerror"))
+                if (!Bstrcasecmp(c + 1, "joinerror") || !Bstrcasecmp(c + 1, "je"))
                 {
                     // Client: a message describing why the previous join failed,
                     // shown once in the JOIN GAME menu after relaunching there.
@@ -670,7 +954,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     i++;
                     continue;
                 }
-                if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "console"))
+                if (!Bstrcasecmp(c + 1, "headless") || !Bstrcasecmp(c + 1, "hl") || !Bstrcasecmp(c + 1, "console"))
                 {
                     // Dedicated console server with no graphics at all: no
                     // window, no OpenGL, no sound - just the terminal. Implies
@@ -715,6 +999,33 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 netparam[netparamcount++] = const_cast<char*>(argv[i]);
                 i++;
                 continue;
+            }
+
+            // VibeBuild32: canonical long aliases for value-taking single-char options.
+            // Normalize "--name value", "--name=value", "--namevalue", "-x value",
+            // "-x=value", and "-xvalue" into the attached short form handled below.
+            static char s_optbuf[BMAX_PATH + 4];
+            if (c[0] == '-')
+            {
+                static const struct { const char *lng; char shrt; } aliases[] = {
+                    { "level", 'l' }, { "volume", 'v' }, { "episode", 'v' }, { "skill", 's' }, { "coop", 'c' },
+                    { "players", 'q' }, { "respawn", 't' }, { "weapons", 'u' }, { "def", 'h' },
+                    { "path", 'j' }, { "demo", 'd' },
+                };
+                const char *option = c + 1;
+
+                for (auto const &alias : aliases)
+                {
+                    const char shortName[2] = { alias.shrt, '\0' };
+                    const char *value = G_CommandLineOptionValue(option, shortName, alias.lng, &i, argc, argv);
+
+                    if (value == nullptr)
+                        continue;
+
+                    Bsnprintf(s_optbuf, sizeof(s_optbuf), "-%c%s", alias.shrt, value);
+                    c = s_optbuf;
+                    break;
+                }
             }
 
             if ((*c == '/') || (*c == '-'))
@@ -921,7 +1232,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                             g_player[0].wchoice[7] = 2;
                             g_player[0].wchoice[8] = 9;
                             g_player[0].wchoice[9] = 1;
-                            Bsprintf(ud.wchoice, "3457860291");
+                            Bsnprintf(ud.wchoice, sizeof(ud.wchoice), "3457860291");
                         }
                         break;
                     case 'v':

@@ -33,11 +33,19 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "tags.h"
 #include "names2.h"
 #include "network.h"
+#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
 #include "pal.h"
 #include "demo.h"
 
 #include "weapon.h"
 #include "text.h"
+
+#if defined __APPLE__
+# include <mach-o/dyld.h>   // _NSGetExecutablePath (server-browser relaunch)
+#endif
+#if defined __APPLE__ || defined __linux__
+# include <unistd.h>        // execv, chdir, readlink
+#endif
 #include "menus.h"
 
 
@@ -968,7 +976,8 @@ AddSyncInfoToPacket(int *j)
     }
 }
 
-void faketimerhandler(void) { ; }
+// Renamed: the canonical faketimerhandler is a dispatcher in gameselect.cpp.
+void SW_faketimerhandler(void) { ; }
 
 void
 UpdateInputs(void)
@@ -1291,6 +1300,207 @@ checkmasterslaveswitch(void)
 {
 }
 
+// --- VibeBuild32 masterserver/lobby, ported onto SW's net path ----------------
+// The masterserver module (source/vibebuild32/src/masterserver.cpp) is only
+// linked in the combined `vibebuild32` binary, not in the standalone `sw`/voidsw
+// build. Declaring its API weak lets this same object file link both ways: in
+// the combined binary the symbols bind to Duke's game-agnostic implementation;
+// in the standalone SW build they stay null and every call is guarded away.
+// The weak Masterserver_* client API is shared in netshared.h.
+
+// Client-side NAT-punch: a joining client asks the masterserver to open a hole
+// toward the server it is trying to reach. -punchto sets the server address,
+// -masteraddr sets the masterserver. Fired (throttled) from SW's connect cycle.
+static char s_swPunchTarget[128] = "";
+static char s_swMasterAddr[128]  = "";
+void Net_SetPunchTarget(const char *addr) { Bstrncpyz(s_swPunchTarget, addr, sizeof(s_swPunchTarget)); }
+void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, sizeof(s_swMasterAddr)); }
+
+// Client lobby query: ask a masterserver for its list of advertised servers.
+// This is the backend a future in-menu server browser calls; -lobbylist <addr>
+// exercises it from the console. vb_msserver_t + the weak Masterserver_QueryList
+// come from netshared.h.
+
+int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
+
+// --- in-menu server browser backend -----------------------------------------
+int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
+{
+    if (!Masterserver_QueryList) return -1;
+    vb_msserver_t list[16];
+    int const cap = maxout < 16 ? maxout : 16;
+    int32_t const n = Masterserver_QueryList(masterAddr, list, cap, 1200);
+    for (int i = 0; i < n && i < maxout; i++)
+    {
+        Bstrncpyz(out[i].addr, list[i].addr[0] ? list[i].addr : list[i].addr6, sizeof(out[i].addr));
+        Bstrncpyz(out[i].name, list[i].name, sizeof(out[i].name));
+        Bstrncpyz(out[i].map,  list[i].map,  sizeof(out[i].map));
+        out[i].players = list[i].players;
+        out[i].maxplayers = list[i].maxplayers;
+    }
+    return n;
+}
+
+const char *Net_GetMasterAddr(void) { return s_swMasterAddr[0] ? s_swMasterAddr : "127.0.0.1"; }
+
+// The SW mmulti connection is established at startup from -net args, not from the
+// menu; the cleanest way to join a browser-picked server is to relaunch into that
+// connection. Re-exec ourselves with -game sw -net <server>.
+void Net_JoinServerBrowser(const char *serverAddr)
+{
+#if defined __APPLE__ || defined __linux__
+    char exe[BMAX_PATH] = "";
+# if defined __APPLE__
+    uint32_t sz = sizeof(exe);
+    if (_NSGetExecutablePath(exe, &sz) != 0) { LOG_F(ERROR, "browser: can't find exe path"); return; }
+# else
+    ssize_t const r = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (r <= 0) { LOG_F(ERROR, "browser: can't find exe path"); return; }
+    exe[r] = 0;
+# endif
+    static char sarg[128];  Bstrncpyz(sarg,  serverAddr, sizeof(sarg));
+    static char maddr[136]; Bstrncpyz(maddr, Net_GetMasterAddr(), sizeof(maddr));
+    char const *args[] = { exe, (char*)"-game", (char*)"sw", (char*)"-nosetup",
+                           (char*)"-masteraddr", maddr, (char*)"-net", sarg, NULL };
+    // The selector chdir'd us into sw/; back out so the relaunch re-selects the game.
+    if (chdir("..") != 0) { /* best effort */ }
+    LOG_F(INFO, "Server browser: joining %s (relaunching)...", serverAddr);
+    execv(exe, (char * const *)args);
+    LOG_F(ERROR, "Server browser: relaunch failed (execv)");
+#else
+    (void)serverAddr;
+    LOG_F(WARNING, "Server browser join not supported on this platform");
+#endif
+}
+
+// -joinlobby <masteraddr>: query the masterserver, pick the first advertised
+// server, and hand its address to SW's mmulti connect (with NAT-punch armed).
+// This is the discover+join core of a server browser, driven from the command
+// line so it is verifiable without menu rendering.
+static char s_autoJoinMaster[128] = "";
+char s_autoJoinServer[128] = "";  // filled by Net_ResolveAutoJoin; read by InitGame
+void Net_SetAutoJoin(const char *masterAddr) { Bstrncpyz(s_autoJoinMaster, masterAddr, sizeof(s_autoJoinMaster)); }
+
+int Net_ResolveAutoJoin(void)
+{
+    if (!s_autoJoinMaster[0])
+        return 0;
+    if (!Masterserver_QueryList)
+    {
+        LOG_F(WARNING, "joinlobby: no masterserver support in this build");
+        return 0;
+    }
+    vb_msserver_t list[16];
+    int32_t const n = Masterserver_QueryList(s_autoJoinMaster, list, 16, 1500);
+    if (n <= 0)
+    {
+        LOG_F(WARNING, "joinlobby: no servers advertised at %s", s_autoJoinMaster);
+        return 0;
+    }
+    Bstrncpyz(s_autoJoinServer, list[0].addr[0] ? list[0].addr : list[0].addr6, sizeof(s_autoJoinServer));
+    Net_SetPunchTarget(s_autoJoinServer);   // arm NAT punch toward the chosen server
+    Net_SetMasterAddr(s_autoJoinMaster);
+    LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)",
+          list[0].name, s_autoJoinServer, s_autoJoinMaster);
+    return 1;
+}
+
+void Net_ClientPunchAttempt(void)
+{
+    if (!Masterserver_MakePunchReq)              // weak-absent in the standalone SW build
+        return;
+    if (!s_swPunchTarget[0] || !s_swMasterAddr[0])  // only a lobby/manual joiner sets these
+        return;
+    static int throttle = 0;                     // the connect cycle spins fast; punch periodically
+    if ((throttle++ % 60) != 0)
+        return;
+
+    char msEp[128];
+    unsigned char pbuf[160];
+    int32_t const plen = Masterserver_MakePunchReq(s_swMasterAddr, s_swPunchTarget,
+                                                   msEp, sizeof(msEp), pbuf, sizeof(pbuf));
+    if (plen > 0)
+    {
+        mmulti_sendraw_str(msEp, pbuf, plen);    // request goes out our game socket
+        LOG_F(INFO, "SW: requested NAT punch to %s via masterserver %s", s_swPunchTarget, msEp);
+    }
+}
+
+extern char LevelName[20];
+
+// Enable advertising this server to a masterserver (from -advertise <addr>). Shared.
+void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }
+
+// Called each net tic from getpackets(): service NAT-punch requests and pulse
+// this server's presence (host only). Mirrors Duke's Net_HostAdvertise().
+void Net_HostAdvertise(void)
+{
+    if (!Masterserver_IsAdvertising)  // weak-absent in the standalone SW build
+        return;
+    if (myconnectindex != connecthead || !Masterserver_IsAdvertising())
+        return;
+
+    static int punchFnRegistered = 0;
+    if (!punchFnRegistered && Masterserver_SetPunchFn)
+    {
+        Masterserver_SetPunchFn(mmulti_punchto_str);  // opens a NAT hole toward waiting clients
+        punchFnRegistered = 1;
+    }
+    if (Masterserver_HostPump)
+        Masterserver_HostPump();
+
+    char map[24];
+    Bstrncpyz(map, LevelName[0] ? LevelName : "SW", sizeof(map));
+
+    char const *name = Player[connecthead].PlayerName;
+    if (Masterserver_AdvertisePulse)
+        Masterserver_AdvertisePulse(name && name[0] ? name : "VibeBuild32 SW server",
+                                    mmulti_getport(), numplayers, numplayers, map);
+}
+
+// ===== Mid-game file transfer (ported from Duke oldnet.cpp) ==================
+// Host streams the game files a joiner needs (extra GRPs given via -netfile, and
+// the current usermap) as two custom packets over mmulti's reliable channel; the
+// client dedups by size+CRC, writes any missing file, and mounts group files.
+extern char UserMapName[80];
+// Chunk size / max files / crc / byte helpers are shared in netshared.h (VB_*).
+static char s_swNetFiles[VB_MAX_NETFILES][BMAX_PATH];
+static int  s_swNetFileCount = 0;
+void Net_AddNetFile(const char *path) { if (s_swNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
+
+// VB_HaveFile (shared dedup check) lives in netshared.h.
+
+// mmulti transport callback for the shared VB_SendFile. ctx carries the target slot
+// (-1 = all connected joiners); SW streams over mmulti's reliable channel.
+static void Net_SendCbSW(void *ctx, const void *buf, int len)
+{
+    int const slot = (int)(intptr_t)ctx;
+    for (int i = 0; i < numplayers; i++)
+        if (i != myconnectindex && (slot < 0 ? mmulti_slotconnected(i) : (i == slot && mmulti_slotconnected(i))))
+            mmulti_sendpacket(i, (unsigned char *)buf, len);
+}
+void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
+{
+    if (myconnectindex != connecthead) return;
+    VB_SendFile(Net_SendCbSW, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
+                PACKET_TYPE_FILE_HEADER, PACKET_TYPE_FILE_CHUNK, "SW");
+}
+
+// Host: push every file a joiner needs (extra GRPs + the current usermap).
+void Net_SendGameFiles(int slot)
+{
+    if (myconnectindex != connecthead) return;
+    int const total = s_swNetFileCount + (UserMapName[0] ? 1 : 0);
+    if (total == 0) return;
+    int idx = 0;
+    for (int i = 0; i < s_swNetFileCount; i++) Net_SendFile(slot, s_swNetFiles[i], ++idx, total);
+    if (UserMapName[0]) Net_SendFile(slot, UserMapName, ++idx, total);
+}
+
+static vb_filerecv_t s_swRecv;   // incoming file reassembly (shared receiver, netshared.h)
+// The file receiver (VB_RecvFileHeader/Chunk) reads SW's global packbuf; see the
+// dispatch below. Reassembly/CRC/write/mount are shared in netshared.h.
+
 void
 getpackets(void)
 {
@@ -1300,6 +1510,8 @@ getpackets(void)
     SW_PACKET tempinput;
 
     timerUpdateClock();
+
+    Net_HostAdvertise();  // masterserver/lobby heartbeat + NAT punch (host only)
 
     if (!CommEnabled)
         return;
@@ -1646,6 +1858,13 @@ getpackets(void)
 
         case PACKET_TYPE_PROXY:
             LOG_F(ERROR, "getpackets(): nested proxy packets!?");
+            break;
+
+        case PACKET_TYPE_FILE_HEADER:   // mid-game file transfer (host -> joiner)
+            VB_RecvFileHeader(&s_swRecv, (const uint8_t *)packbuf, "SW");
+            break;
+        case PACKET_TYPE_FILE_CHUNK:
+            VB_RecvFileChunk(&s_swRecv, (const uint8_t *)packbuf, "SW");
             break;
 
         default:

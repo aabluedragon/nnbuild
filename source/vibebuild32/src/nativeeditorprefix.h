@@ -37,6 +37,7 @@
 #define Gv_NewVar NativeEditor_Gv_NewVar
 #define M32RunScript NativeEditor_M32RunScript
 #define S_Callback NativeEditor_S_Callback
+#define S_LoadSound NativeEditor_S_LoadSound
 #define S_OpenAudio NativeEditor_S_OpenAudio
 #define S_PlaySound NativeEditor_S_PlaySound
 #define S_SoundShutdown NativeEditor_S_SoundShutdown

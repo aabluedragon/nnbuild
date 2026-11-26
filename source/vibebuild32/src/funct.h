@@ -72,6 +72,7 @@ extern void Sect_DamageCeiling_Internal(int const spriteNum, int const sectNum);
 
 
 extern void A_DamageObject_Internal(int i,int sn);
+extern void A_DamageObject_Generic(int i,int sn);
 extern void A_DamageObject(int i, int sn);
 extern void allignwarpelevators(void);
 extern void P_HandleSharedKeys(int snum);

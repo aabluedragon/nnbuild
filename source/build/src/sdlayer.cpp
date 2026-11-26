@@ -49,6 +49,9 @@
 
 #include "vfs.h"
 #include "communityapi.h"
+#ifdef VBJS
+# include "vbjs.h"
+#endif
 
 #define MICROPROFILE_IMPL
 #include "microprofile.h"
@@ -172,6 +175,16 @@ int32_t wm_msgbox(const char *name, const char *fmt, ...)
     Bvsnprintf(buf,MSGBOX_PRINTF_MAX,fmt,va);
     va_end(va);
     buf[MSGBOX_PRINTF_MAX-1] = 0;
+
+    // Unattended test runs deliberately have no visible UI.  A native modal
+    // alert would otherwise sit above the hidden game window forever waiting
+    // for input, so emit the same information to the log and keep the caller's
+    // normal error/exit path moving.
+    if (getenv("VB_HIDE_WINDOW"))
+    {
+        LOG_F(INFO, "Suppressed message box '%s': %s", name, buf);
+        return 0;
+    }
 #if defined EDUKE32_OSX
     auto result = osx_msgbox(name, buf);
     return result;
@@ -219,6 +232,14 @@ int32_t wm_ynbox(const char *name, const char *fmt, ...)
     Bvsnprintf(buf,MSGBOX_PRINTF_MAX,fmt,va);
     va_end(va);
     buf[MSGBOX_PRINTF_MAX-1] = 0;
+
+    // Hidden unattended runs cannot answer a modal question.  Default to the
+    // safe negative response and leave a diagnostic instead of blocking.
+    if (getenv("VB_HIDE_WINDOW"))
+    {
+        LOG_F(INFO, "Suppressed question box '%s' (answering No): %s", name, buf);
+        return 0;
+    }
 #if defined EDUKE32_OSX
     auto result = osx_ynbox(name, buf);
     return result;
@@ -560,13 +581,17 @@ int main(int argc, char *argv[])
     // A dedicated server has no operator at a screen, so it never needs a window
     // or an OpenGL/graphics context - run it fully headless.
     for (int ha = 1; ha < argc; ha++)
-        if (argv[ha] && (argv[ha][0] == '-') &&
-            (!Bstrcasecmp(argv[ha] + 1, "headless") || !Bstrcasecmp(argv[ha] + 1, "console")
-             || !Bstrcasecmp(argv[ha] + 1, "dedicated")))
+    {
+        if (!argv[ha] || argv[ha][0] != '-') continue;
+        const char *a = argv[ha];
+        while (*a == '-') a++;                          // accept --headless and -hl
+        if (!Bstrcasecmp(a, "headless") || !Bstrcasecmp(a, "hl") ||
+            !Bstrcasecmp(a, "console") || !Bstrcasecmp(a, "dedicated") || !Bstrcasecmp(a, "dd"))
         {
             g_forceHeadless = 1;
             break;
         }
+    }
 
 #ifdef EDUKE32_OSX
     osx_preopen();
@@ -1130,7 +1155,12 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
         Bstrncpyz(g_keyNameTable[keytranslation[i]], SDL_GetKeyName(SDL_SCANCODE_TO_KEYCODE(i)), sizeof(g_keyNameTable[0]));
     }
 
-    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0)
+    // A dedicated/headless server has no player at a controller; initializing the
+    // joystick/gamecontroller subsystem there makes SDL re-enumerate HID devices on
+    // every event pump (on macOS, DARWIN_JoystickDetect runs a CFRunLoop) - profiling
+    // showed that dominating CPU when the loop isn't vsync-capped, i.e. a dedicated
+    // server would spin ~100% CPU on joystick polling. Skip it entirely when headless.
+    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0 && !g_forceHeadless)
     {
 #if SDL_MAJOR_VERSION >= 2
 # if defined SDL_HINT_DIRECTINPUT_ENABLED
@@ -1309,6 +1339,19 @@ static void SetWindowGrab(SDL_Window *pWindow, int const clipToWindow)
 static inline char grabmouse_low(char a)
 {
 #if !defined EDUKE32_TOUCH_DEVICES
+    // macOS implements SDL relative mouse mode for the entire process, not
+    // per SDL_Window.  Once DevTools exists, allowing the game to enable it
+    // makes the next DevTools click activate/capture the game window before
+    // SDL can dispatch that click to the secondary window.
+# ifdef VBJS
+    if (a && VBJS_DevtoolsSuppressGameMouseCapture())
+    {
+        if (sdl_window)
+            SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        return 0;
+    }
+# endif
     /* FIXME: Maybe it's better to make sure that grabmouse_low
        is called only when a window is ready?                */
     if (sdl_window)
@@ -1622,7 +1665,8 @@ void engineSetupImGui(void)
 
 #ifdef USE_OPENGL
     ImGui_ImplSDL2_InitForOpenGL(sdl_window, sdl_context);
-    ImGui_ImplOpenGL3_Init();
+    // Keep the engine and detached VibeBuild DevTools compatible with OpenGL 2.1.
+    ImGui_ImplOpenGL3_Init("#version 120");
 #endif
 
     g_ImGui_IO->Fonts->AddFontDefault();
@@ -1713,9 +1757,10 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
     static int osx_didforeground = 0;
     if (!osx_didforeground && !g_forceHeadless)
     {
-        osx_foreground();
+        if (!getenv("VB_HIDE_WINDOW"))
+            osx_foreground();
 # if SDL_MAJOR_VERSION >= 2
-        if (sdl_window)
+        if (sdl_window && !getenv("VB_HIDE_WINDOW"))
             SDL_RaiseWindow(sdl_window);
 # endif
         osx_didforeground = 1;
@@ -1816,7 +1861,11 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
 
     if (fs)
     {
-        if (SDL_SetWindowFullscreen(sdl_window, SDL_WINDOW_FULLSCREEN))
+        // VibeBuild32: use desktop (borderless) fullscreen rather than exclusive mode-changing
+        // fullscreen. On macOS/retina, exclusive fullscreen switches to a physical mode that may
+        // not match the requested resolution, leaving the framebuffer letterboxed in a corner.
+        // Desktop fullscreen always covers the whole screen; the render is scaled up to fill it.
+        if (SDL_SetWindowFullscreen(sdl_window, SDL_WINDOW_FULLSCREEN_DESKTOP))
         {
             LOG_F(ERROR, "Unable to set window fullscreen: %s.", SDL_GetError());
             return -1;
@@ -1900,8 +1949,14 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
               { SDL_GL_CONTEXT_FLAGS,
 #ifndef NDEBUG
               SDL_GL_CONTEXT_DEBUG_FLAG |
+              // Robust access helps catch invalid GL usage while developing,
+              // but can make the driver add bounds checks to every command.
+              // Release builds prioritize the normal fast rendering path.
+              SDL_GL_CONTEXT_ROBUST_ACCESS_FLAG
+#else
+              0
 #endif
-              SDL_GL_CONTEXT_ROBUST_ACCESS_FLAG },
+              },
               { SDL_GL_CONTEXT_RESET_NOTIFICATION, SDL_GL_CONTEXT_RESET_LOSE_CONTEXT },
               { SDL_GL_DOUBLEBUFFER, 1 },
 
@@ -1922,6 +1977,12 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
         if (sdl_window)
             sdl_context = SDL_GL_CreateContext(sdl_window);
+
+        // VibeBuild32: VB_HIDE_WINDOW keeps an unattended test run off the
+        // desktop -- the window is created hidden and never raised. Rendering
+        // and screenshots go on in the offscreen backbuffer.
+        if (sdl_window && getenv("VB_HIDE_WINDOW"))
+            SDL_HideWindow(sdl_window);
 
         if (!sdl_window || !sdl_context)
         {
@@ -1967,6 +2028,18 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
             SDL2_VIDEO_ERR("SDL_GetWindowSurface");
     }
 
+#ifdef VBJS
+    // In -dt mode reserve the left side for the game from its first visible
+    // frame.  The external DevTools window may take a moment to start, but
+    // the game must not begin life on the right and then jump later.
+    if (!fullscreen && sdl_window && VBJS_DevtoolsEnabled())
+    {
+        SDL_Rect usable;
+        if (SDL_GetDisplayUsableBounds(display, &usable) == 0)
+            SDL_SetWindowPosition(sdl_window, usable.x + 20, usable.y + max(0, (usable.h - y) / 2));
+    }
+#endif
+
     setvideomode_sdlcommonpost(x, y, c, fs, regrab);
 
 #if MICROPROFILE_ENABLED != 0
@@ -1977,6 +2050,12 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 #ifdef _WIN32
     windowsHandleFocusChange(1);
 #endif
+
+    // Keep an interactive test launch out of the way without suppressing its
+    // window altogether.  Unlike VB_HIDE_WINDOW, this still gives the tester
+    // a normal taskbar window that can be restored when they are ready.
+    if (sdl_window && getenv("VB_MINIMIZE_WINDOW") && !getenv("VB_HIDE_WINDOW"))
+        SDL_MinimizeWindow(sdl_window);
 
     return 0;
 }
@@ -2573,6 +2652,33 @@ int32_t handleevents_pollsdl(void)
 
     while (SDL_PollEvent(&ev))
     {
+#ifdef VBJS
+        // The detached JavaScript DevTools owns input targeted at its window;
+        // never let those keystrokes or clicks control the game as well.
+        if (VBJS_DevtoolsProcessEvent(&ev))
+        {
+            // Any DevTools interaction must release relative mode immediately.
+            // On Cocoa, waiting for the later focus event lets the game's
+            // captured mouse pull focus straight back to its own window.
+            appactive = false;
+            if (sdl_window) SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+            continue;
+        }
+        // Do not let an input event with a missing/incorrect window ID reach
+        // the game while Cocoa says DevTools owns focus.  This is the race
+        // that otherwise re-enables Duke's relative mouse capture on click.
+        if (VBJS_DevtoolsOwnsInput() &&
+            (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP ||
+             ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN ||
+             ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
+        {
+            appactive = false;
+            if (sdl_window) SDL_SetWindowGrab(sdl_window, SDL_FALSE);
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+            continue;
+        }
+#endif
         if (g_ImGui_IO)
         {
             if (g_ImGuiExclusiveInput && ev.type == SDL_WINDOWEVENT)
@@ -2612,6 +2718,16 @@ int32_t handleevents_pollsdl(void)
             case SDL_KEYDOWN:
             case SDL_KEYUP:
             {
+#ifdef VBJS
+                // Browser-equivalent DevTools shortcut: Command+Option+I on
+                // macOS focuses the detached external DevTools surface.
+                if (ev.key.type == SDL_KEYDOWN && ev.key.keysym.scancode == SDL_SCANCODE_I &&
+                    (ev.key.keysym.mod & KMOD_GUI) && (ev.key.keysym.mod & KMOD_ALT))
+                {
+                    VBJS_DevtoolsFocus();
+                    break;
+                }
+#endif
                 auto const &sc = ev.key.keysym.scancode;
                 code = keytranslation[sc];
 

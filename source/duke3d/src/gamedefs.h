@@ -28,39 +28,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //
 //****************************************************************************
 
-#ifndef gamedefs_public_h_
-#define gamedefs_public_h_
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// config file name
-#define SETUPFILENAME APPBASENAME ".cfg"
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXJOYBUTTONS 32
-#define MAXJOYBUTTONSANDHATS (MAXJOYBUTTONS+4)
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXMOUSEAXES 2
-
-// KEEPINSYNC mact/include/_control.h, build/src/sdlayer.cpp
-#define MAXJOYAXES 9
-#define MAXJOYDIGITAL (MAXJOYAXES*2)
-
-// default joystick settings
-
-#if defined(GEKKO)
-#define DEFAULTJOYSTICKANALOGUESCALE        16384
-#define DEFAULTJOYSTICKANALOGUEDEAD         1000
-#define DEFAULTJOYSTICKANALOGUESATURATE     9500
-#else
-#define DEFAULTJOYSTICKANALOGUESENSITIVITY  5.f
-#define DEFAULTJOYSTICKANALOGUEDEAD         1000
-#define DEFAULTJOYSTICKANALOGUESATURATE     9500
-#endif
-
-#ifdef __cplusplus
-}
-#endif
-#endif
+#define GAMEDEFS_JOYSTICK_DEFAULT GAMEDEFS_JOYSTICK_DEFAULT_SENSITIVITY
+#define GAMEDEFS_DEFINE_MOUSE_ANALOGUE_SCALE 0
+#include "../../build/include/gamedefs_shared.h"

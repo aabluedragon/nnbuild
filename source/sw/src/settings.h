@@ -74,6 +74,7 @@ typedef struct
     SWBOOL WeaponAutoSwitch;
     int FOV;
     SWBOOL AltReverb;
+    uint8_t PlayerSkin;    // Shadow Warrior's colours first, then Duke's own skins
 } GAME_SET, *GAME_SETp;
 
 extern const GAME_SET gs_defaults;

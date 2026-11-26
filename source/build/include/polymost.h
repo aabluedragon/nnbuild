@@ -141,7 +141,7 @@ static FORCE_INLINE int32_t eligible_for_tileshades(int32_t const picnum, int32_
 
 static FORCE_INLINE int polymost_useindexedtextures(void)
 {
-    return videoGetRenderMode() == REND_POLYMOST && r_useindexedcolortextures && gltexfiltermode == 0;
+    return videoGetRenderMode() == REND_POLYMOST && r_useindexedcolortextures && gltexfiltermode == 0 && !duke64;
 }
 
 static FORCE_INLINE int polymost_usetileshades(void)
@@ -155,6 +155,21 @@ static FORCE_INLINE float polymost_getanisotropy(int filtered = 0)
 {
     return filtered == 0 && polymost_useindexedtextures() ? 1.f : clamp<float>(glanisotropy, 1.f, glinfo.maxanisotropy);
 }
+
+// VibeBuild32: per-vertex shading from a light field (see polymost.cpp)
+typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t sectnum, wallnum; int32_t isceil; } polymost_kexsurf_t;
+// The KEX light sidecar also retains the source face's authored triangles.
+// Small floors can be rendered using that mesh directly, so their lighting
+// does not depend on the camera-clipped corners of a Build polygon.
+typedef struct polymost_kextriangle_t { vec3f_t p[3]; } polymost_kextriangle_t;
+extern polymost_kexsurf_t polymost_kexsurf;
+extern int32_t polymost_kexVertexLight;
+extern int32_t (*polymost_kexShadeAt)(float x, float y, float z, int32_t fallback);
+extern int32_t (*polymost_kexColorAt)(float x, float y, float z, float color[3]);
+extern int32_t (*polymost_kexTriangles)(polymost_kextriangle_t *out, int32_t max);
+// While polymost draws an authored source triangle, this is its index in the
+// current face.  -1 means an ordinary face-local light query.
+extern int32_t polymost_kexLightTriangle;
 
 static inline float getshadefactor(int32_t const shade)
 {

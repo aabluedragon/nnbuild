@@ -82,6 +82,8 @@ extern char britable[16][256];
 
 #ifdef USE_OPENGL
 extern palette_t palookupfog[MAXPALOOKUPS];
+extern float palookupfogfactor[MAXPALOOKUPS];  // Blood (NotBlood) per-palookup fog; unused by our polymost
+void videoTintBlood(int32_t r, int32_t g, int32_t b);  // Blood (NotBlood) screen tint; stubbed no-op
 
 static inline void bricolor(palette_t *wpptr, int32_t dacol)
 {

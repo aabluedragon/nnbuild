@@ -27,16 +27,43 @@ enum {
 // -js handling / lifecycle.
 int  VBJS_IsEnabled(void);                 // a script was requested and the runtime is up
 void VBJS_CaptureLaunchDir(void);          // record the launch cwd early (before the game chdir's); holds autojs/
+void VBJS_SetExecutablePath(const char *path); // record argv[0] so generators can find bundled templates safely
+int  VBJS_GenerateProject(const char *name, int typescript); // create autojs/<name>/ JS or TS starter; 0 on success
+void VBJS_SetGenericMode(int enabled);     // run core JS/debugger APIs without Duke game-state bindings
 void VBJS_SetScriptPath(const char *path); // remember the -js argument (before init)
 void VBJS_SetDevtools(int enabled);         // enable the lightweight JavaScript diagnostics overlay
 int  VBJS_DevtoolsEnabled(void);
+void VBJS_SetDebug(int enabled);            // enable the localhost debugger attach endpoint
+int  VBJS_DebugEnabled(void);
+void VBJS_SetDebugPort(int port);
+int  VBJS_DebugPort(void);
 const char *VBJS_DevtoolsLog(int index);    // oldest-first recent console log, or NULL
 int  VBJS_DevtoolsPaused(void);
 void VBJS_DevtoolsResume(void);
-void VBJS_DevtoolsSetEventBreakpoint(const char *event, int enabled);
-int  VBJS_DevtoolsHasEventBreakpoint(const char *event);
 const char *VBJS_DevtoolsCurrentEvent(void);
 int  VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize);
+void VBJS_DevtoolsFocus(void);             // show/focus the external DevTools surface
+void VBJS_DevtoolsStartDebuggerBridge(void);
+int  VBJS_DevtoolsSourceCount(void);
+const char *VBJS_DevtoolsSourcePath(int index);
+int  VBJS_DevtoolsReadSource(int index, char *out, int outSize);
+/* Thread-safe JSON transport used by the standalone DevTools surface. */
+int  VBJS_DevtoolsDebuggerSend(const char *json);
+int  VBJS_DevtoolsDebuggerReceive(char *out, int outSize);
+int  VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize);
+void VBJS_DevtoolsPump(void);
+// Give the detached DevTools window first refusal of its own SDL input event.
+// `event` is an SDL_Event pointer, intentionally opaque to game-independent users.
+int  VBJS_DevtoolsProcessEvent(const void *event);
+// True while the detached DevTools, rather than the game, owns keyboard or
+// mouse focus.  SDL's Cocoa mouse events may not always retain a window ID
+// while relative mouse mode is being disabled.
+int  VBJS_DevtoolsOwnsInput(void);
+// SDL relative mouse mode is process-wide on Cocoa.  While a detached
+// DevTools window is visible, the game must not recapture it or macOS routes
+// the DevTools activation click back to the game window.
+int  VBJS_DevtoolsSuppressGameMouseCapture(void);
+void VBJS_DevtoolsShutdownWindow(void);
 void VBJS_Init(void);                      // build the runtime and run the script (once, after game init)
 void VBJS_BeginLevelAttachments(void);
 void VBJS_EndLevelAttachments(void);
@@ -45,12 +72,20 @@ void VBJS_ClearAttachments(void);
 void VBJS_NotifySpriteDeleted(int spriteNum);
 void VBJS_RunFixedUpdate(double deltaSeconds);
 void VBJS_Shutdown(void);                  // tear the runtime down
-void VBJS_RunFrame(int activeLevel);       // per-frame: fire "frame", update components and pump JS jobs/timers
+// Per-frame: fire "frame", update map components and pump JS jobs/timers. Pass
+// nonzero while a level is being played (not paused or in a menu) so that map
+// script components receive onUpdate.
+#ifdef __cplusplus
+void VBJS_RunFrame(int activeLevel = 0);
+#else
+void VBJS_RunFrame(int activeLevel);
+#endif
 void VBJS_DispatchCommands(void);
 
 // Event dispatch — call these from real game hook points. `event` is a short
 // name the script listens for with vb.on("name", fn).
 void VBJS_FireSimple(const char *event);                                     // e.g. "playerDied"
+void VBJS_FireMenu(const char *event, int menu, int previousMenu);
 void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile);  // e.g. "actorSpawned"/"itemTaken"
 void VBJS_FireChat(const char *event, int playerNum, const char *text);  // e.g. "chatMessage"/"netMessage"
 int VBJS_RunServerCommand(int player, uint32_t connection, const char *text);
@@ -67,6 +102,12 @@ extern unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS];
 
 // HUD: draw all script-registered text. Call from the game's HUD/overlay pass.
 void VBJS_DrawHUD(void);
+
+// Menu integration.  The JavaScript API can replace any string rendered by
+// menutext() and select a tile used for the standard menu background.
+const char *VBJS_MenuText(const char *text);
+int VBJS_MenuBackground(void); // tile number, or -1 when not overridden
+int VBJS_MenuRoute(int fromMenu, int itemIndex, int requestedMenu);
 
 // Script-registered HUD text, shared between the QuickJS side (which fills it)
 // and the game side (which draws it). x/y are in 0..320 / 0..200 HUD space.

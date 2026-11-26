@@ -965,6 +965,7 @@ typedef struct {
     int8_t xofs, yofs;
     uint8_t sf;  // anim. speed and flags
     uint8_t tileflags; // tile-specific flags, such as true non-power-of-2 drawing.
+    uint8_t extra;     // Blood (NotBlood) tile metadata; unused by Duke/SW
 } picanm_t;
 EXTERN picanm_t picanm[MAXTILES];
 typedef struct { int16_t newtile; int16_t owner; } rottile_t;
@@ -1048,6 +1049,8 @@ enum
 {
     VF_NOTRANS = 1<<0,
     // begin downstream
+    VF_ROTATE  = 1<<6,  // Blood (NotBlood); no-op in our engine
+    VF_RESERVE = 1<<7,  // Blood (NotBlood)
     // end downstream
 };
 
@@ -1204,7 +1207,7 @@ OTHER VARIABLES:
 ***************************************************************************/
 
 typedef struct {
-    union { struct { int32_t x, y, z; }; vec3_t xyz; vec2_t xy; };
+    union { struct { int32_t x, y, z; }; vec3_t xyz, pos; vec2_t xy; };  // 'pos' aliases xyz (Blood)
     int16_t sprite, wall, sect;
 } hitdata_t;
 
@@ -1222,6 +1225,7 @@ void   initspritelists(void);
 int32_t engineFatalError(char const * msg);
 
 int32_t   engineLoadBoard(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
+int32_t   engineLoadBoardNative(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
 int32_t   engineLoadMHK(const char *filename);
 void engineClearLightsFromMHK();
 #ifdef HAVE_CLIPSHAPE_FEATURE
@@ -1240,6 +1244,57 @@ void    tileConvertAnimFormat(int32_t picnum, uint32_t const picanmdisk);
 void    artReadManifest(buildvfs_kfd fil, artheader_t * const local);
 void    artPreloadFile(buildvfs_kfd fil, artheader_t * const local);
 int32_t artLoadFiles(const char *filename, int32_t askedsize);
+void    artSetBaseSearchFirst(char searchfirst);
+char    artGetBaseSearchFirst(void);
+enum
+{
+    ART_CROSSPLAY_GAME_UNKNOWN = -1,
+    ART_CROSSPLAY_GAME_DUKE = 0,
+    ART_CROSSPLAY_GAME_WORLDTOUR = 1,
+    ART_CROSSPLAY_GAME_SW = 2,
+    ART_CROSSPLAY_GAME_BLOOD = 3,
+    ART_CROSSPLAY_GAME_RR = 4,
+    ART_CROSSPLAY_GAME_NAM = 5,
+    ART_CROSSPLAY_GAME_NAPALM = 6,
+    ART_CROSSPLAY_GAME_WW2GI = 7,
+    ART_CROSSPLAY_GAME_EXHUMED = 8,
+    ART_CROSSPLAY_GAME_IONFURY = 9,
+};
+enum
+{
+    ART_CROSSPLAY_DOMAIN_LEVELS = 0,
+    ART_CROSSPLAY_DOMAIN_ITEMS = 1,
+    ART_CROSSPLAY_DOMAIN_WEAPONS = 2,
+    ART_CROSSPLAY_DOMAIN_COUNT = 3,
+};
+void    artCrossplaySetGameDomains(int32_t runtimeGame, int32_t levelsGame, int32_t itemsGame, int32_t weaponsGame);
+int32_t artCrossplayRuntimeGame(void);
+int32_t artCrossplayDomainGame(int32_t domain);
+int32_t artCrossplayEffectiveDomainGame(int32_t domain);
+void    artCrossplayClearForeignData(void);
+int32_t artCrossplayAddForeignData(char const *path);
+int32_t artCrossplayAddForeignGameData(char const *path, int32_t game);
+int32_t artCrossplayForeignDataCount(void);
+int32_t artCrossplayReadForeignDataEntry(char const *entryName, char **data, int32_t *size, char *sourcePath, size_t sourcePathSize);
+int32_t artCrossplayReadForeignGameDataEntry(int32_t game, char const *entryName, char **data, int32_t *size, char *sourcePath, size_t sourcePathSize);
+int32_t artCrossplayHasForeignGameData(int32_t game);
+int16_t artCrossplayLoadForeignGameTile(int32_t game, int16_t sourceTile);
+int16_t artCrossplayReserveTile(int32_t xsize, int32_t ysize);
+// As above, but recoloured through the source game's own alternate palette, for
+// art the source game draws at a non-zero pal (Duke's assault troopers are 22).
+int16_t artCrossplayLoadForeignGameTilePal(int32_t game, int16_t sourceTile, int32_t sourcePal);
+void    artCrossplayResetLevel(void);
+void    artCrossplayCaptureMapSprites(void);
+int32_t artCrossplayIsOriginalMapSprite(int32_t spriteNum);
+int16_t artCrossplayOriginalMapSpritePicnum(int32_t spriteNum);
+int16_t artCrossplayOriginalMapSectorCeilingPicnum(int32_t sectorNum);
+int16_t artCrossplayOriginalMapSectorFloorPicnum(int32_t sectorNum);
+int16_t artCrossplayOriginalMapWallPicnum(int32_t wallNum);
+int16_t artCrossplayOriginalMapWallOverpicnum(int32_t wallNum);
+int16_t artCrossplayRemapMapTile(int16_t tile);
+int32_t artCrossplayPrepareForeignMapArt(char const *mapName);
+int32_t artCrossplayMapArtPrepared(void);
+void    artCrossplayApplyMapTileRemap(void);
 void    artClearMapArt(void);
 void    artSetupMapArt(const char *filename);
 bool    tileLoad(int16_t tilenume);
@@ -1341,6 +1396,15 @@ static FORCE_INLINE void rotatesprite_win(int32_t sx, int32_t sy, int32_t z, int
 
 void   getzrange(const vec3_t *pos, int16_t sectnum, int32_t *ceilz, int32_t *ceilhit, int32_t *florz,
                  int32_t *florhit, int32_t walldist, uint32_t cliptype) ATTRIBUTE((nonnull(1,3,4,5,6)));
+// Like getzrange(), but lets a game exclude a neighbouring sector's surfaces
+// from the edge-support result while still traversing through that sector.
+// The starting sector is always considered. This is useful for map formats
+// that explicitly distinguish standing inside a sector from merely
+// overlapping one with the actor's radius.
+typedef int32_t (*getzrange_sector_filter_t)(int16_t sectnum, void *userdata);
+void   getzrange_filtered(const vec3_t *pos, int16_t sectnum, int32_t *ceilz, int32_t *ceilhit, int32_t *florz,
+                          int32_t *florhit, int32_t walldist, uint32_t cliptype,
+                          getzrange_sector_filter_t sectorfilter, void *userdata) ATTRIBUTE((nonnull(1,3,4,5,6)));
 extern vec2_t hitscangoal;
 int32_t   hitscan(const vec3_t *sv, int16_t sectnum, int32_t vx, int32_t vy, int32_t vz,
                   hitdata_t *hitinfo, uint32_t cliptype) ATTRIBUTE((nonnull(1,6)));
@@ -1496,6 +1560,33 @@ void do_deletespritesect(int16_t deleteme);
 int32_t insertsprite(int16_t sectnum, int16_t statnum);
 int32_t deletesprite(int16_t spritenum);
 
+// Blood (NotBlood) engine override hooks: nullable function pointers the game can
+// set to replace core engine behavior. Default NULL -> stock behavior, so Duke/SW
+// are unaffected. See source/blood/BLOOD_UNIFY.md.
+extern int32_t (*insertsprite_replace)(int16_t sectnum, int16_t statnum);
+extern int32_t (*deletesprite_replace)(int16_t spritenum);
+// Optional observers for game-side render state. They do not replace or alter
+// Build's sprite-list operations.
+extern void (*insertsprite_callback)(int16_t spritenum);
+extern void (*deletesprite_callback)(int16_t spritenum);
+extern int32_t (*changespritesect_replace)(int16_t spritenum, int16_t newsectnum);
+extern int32_t (*changespritestat_replace)(int16_t spritenum, int16_t newstatnum);
+extern void    (*initspritelists_replace)(void);
+extern int32_t (*animateoffs_replace)(int const tilenum, int fakevar);
+extern void    (*paletteLoadFromDisk_replace)(void);
+extern int32_t (*getpalookup_replace)(int32_t davis, int32_t dashade);
+extern void    (*loadvoxel_replace)(int32_t voxel);
+extern int32_t (*loadboard_replace)(const char *filename, char flags, vec3_t *dapos, int16_t *daang, int16_t *dacursectnum);
+extern int32_t (*saveboard_replace)(const char *filename, const vec3_t *dapos, int16_t daang, int16_t dacursectnum);
+extern int32_t bloodhack;  // NotBlood: alters YAX wall-pointer arithmetic for Blood maps
+
+// Blood (NotBlood) room-over-room (ROR) compat. POLYMER is -DPOLYMER=0 here (no
+// real Polymer), so these are stubs: the globals exist and the callback setter is
+// a no-op (Blood's ROR/stacked-sector visuals don't render under polymost).
+extern int32_t r_rortexture, r_rortexturerange, r_rorphase;
+typedef void (*rorcallback)(int16_t sectnum, int16_t wallnum, int8_t rorstat, int16_t *msectnum, int32_t *gx, int32_t *gy, int32_t *gz);
+void polymer_setrorcallback(rorcallback callback);
+
 int32_t   changespritesect(int16_t spritenum, int16_t newsectnum);
 int32_t   changespritestat(int16_t spritenum, int16_t newstatnum);
 int32_t   setsprite(int16_t spritenum, const vec3_t *) ATTRIBUTE((nonnull(2)));
@@ -1629,6 +1720,11 @@ typedef struct
 
 EXTERN int32_t mdinited;
 EXTERN tile2model_t tile2model[MAXTILES+EXTRATILES];
+
+// Duke Nukem 64 (Reality) mode hooks. duke64 is 0 for every other game.
+// rt_tileload_callback is defined (=nullptr) in tiles.cpp, so declare it plain extern.
+EXTERN int32_t duke64;
+extern bool (*rt_tileload_callback)(int16_t tileNum);
 
 static FORCE_INLINE int32_t md_tilehasmodel(int32_t const tilenume, int32_t const pal)
 {

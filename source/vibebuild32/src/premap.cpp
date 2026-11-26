@@ -35,7 +35,6 @@ int g_numRealPalettes;
 
 static char precachehightile[2][MAXTILES>>3];
 static int  g_precacheCount;
-
 static void flag_precache(int32_t tile, int32_t type)
 {
     if (!bitmap_test(gotpic, tile))
@@ -647,6 +646,16 @@ static void P_ResetStatus(int snum)
 {
     DukePlayer_t *p = g_player[snum].ps;
 
+    p->floorzoffset     = PLAYER_ZOFF_NORMAL;
+    p->floorzrebound    = 768;
+    p->floorzcutoff     = 256;
+    p->waterzoffset     = PLAYER_ZOFF_WATER;
+    p->minwaterzdist    = PLAYER_MINWATERZDIST;
+    p->shrunkzoffset    = PLAYER_ZOFF_SHRUNK;
+    p->spritezoffset    = PHEIGHT;
+    p->crouchzincrement = PLAYER_CROUCH_INC;
+    p->gravity          = g_spriteGravity + 80;
+
     ud.show_help        = 0;
     ud.showallmap       = 0;
     p->dead_flag        = 0;
@@ -676,6 +685,9 @@ static void P_ResetStatus(int snum)
     p->crack_time       = 0;
     p->hbomb_hold_delay = 0;
     p->transporter_hold = 0;
+    p->clipdist         = 164;
+    p->autostep         = 20 << 8;
+    p->autostep_sbw     = 4 << 8;
     p->wantweaponfire   = -1;
     p->hurt_delay       = 0;
     p->footprintcount   = 0;
@@ -879,9 +891,240 @@ static void resetprestat(int snum,int g)
     g_player[snum].fraggedby_time = g_player[snum].fragged_time = 0;
 }
 
+enum
+{
+    VB_SW_ICON_STAR = 1793,
+    VB_SW_ICON_SHOTGUN = 1794,
+    VB_SW_ICON_LG_ROCKET = 1796,
+    VB_SW_ICON_UZI = 1797,
+    VB_SW_ICON_LG_UZI_AMMO = 1799,
+    VB_SW_ICON_MICRO_BATTERY = 1800,
+    VB_SW_ICON_SM_MEDKIT = 1802,
+    VB_SW_ICON_MEDKIT = 1803,
+    VB_SW_ICON_CLOAK = 1804,
+    VB_SW_ICON_FLASHBOMB = 1805,
+    VB_SW_ICON_UZIFLOOR = 1807,
+    VB_SW_ICON_CHEMBOMB = 1808,
+    VB_SW_ICON_NUKE = 1809,
+    VB_SW_ICON_BOOSTER = 1810,
+    VB_SW_ICON_RAIL_GUN = 1811,
+    VB_SW_ICON_RAIL_AMMO = 1812,
+    VB_SW_ICON_REPAIR_KIT = 1813,
+    VB_SW_ICON_GUARD_HEAD = 1814,
+    VB_SW_ICON_GRENADE_LAUNCHER = 1817,
+    VB_SW_ICON_MICRO_GUN = 1818,
+    VB_SW_ICON_HEAT_CARD = 1819,
+    VB_SW_ICON_HEART_LG_AMMO = 1820,
+    VB_SW_ICON_AUTORIOT = 1822,
+    VB_SW_ICON_LG_SHOTSHELL = 1823,
+    VB_SW_ICON_HEART = 1824,
+    VB_SW_ICON_CALTROPS = 1829,
+    VB_SW_ICON_LG_GRENADE = 1831,
+    VB_SW_ICON_LG_MINE = 1842,
+    VB_SW_ICON_ROCKET = 1843,
+    VB_SW_ICON_NIGHT_VISION = 3031,
+    VB_SW_ICON_ARMOR = 3030,
+    VB_SW_ICON_FIREBALL_LG_AMMO = 3035,
+    VB_SW_BLUE_CARD = 1767,
+    VB_SW_RED_CARD = 1771,
+    VB_SW_GREEN_CARD = 1775,
+    VB_SW_YELLOW_CARD = 1779,
+};
+
+static int32_t G_CrossplayIsDukeLikeGame(int32_t game)
+{
+    switch (game)
+    {
+    case ART_CROSSPLAY_GAME_DUKE:
+    case ART_CROSSPLAY_GAME_WORLDTOUR:
+    case ART_CROSSPLAY_GAME_NAM:
+    case ART_CROSSPLAY_GAME_NAPALM:
+    case ART_CROSSPLAY_GAME_WW2GI:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int16_t G_CrossplayShadowWarriorCardPalette(int16_t sourcePicnum)
+{
+    switch (sourcePicnum)
+    {
+    case VB_SW_RED_CARD:
+        return 21;
+    case VB_SW_YELLOW_CARD:
+        return 23;
+    case VB_SW_GREEN_CARD:
+        return 11;
+    default:
+        return 0;
+    }
+}
+
+static int16_t G_CrossplayShadowWarriorPickupToDuke(int16_t sourcePicnum, int32_t *domain, int16_t *pal)
+{
+    *domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+    *pal = 0;
+
+    switch (sourcePicnum)
+    {
+    case VB_SW_ICON_SM_MEDKIT:
+        return SIXPAK;
+    case VB_SW_ICON_MEDKIT:
+    case VB_SW_ICON_REPAIR_KIT:
+        return FIRSTAID;
+    case VB_SW_ICON_BOOSTER:
+        return ATOMICHEALTH;
+    case VB_SW_ICON_ARMOR:
+        return SHIELD;
+    case VB_SW_ICON_HEAT_CARD:
+    case VB_SW_ICON_NIGHT_VISION:
+        return HEATSENSOR;
+    case VB_SW_ICON_CLOAK:
+        return HOLODUKE;
+    case VB_SW_BLUE_CARD:
+    case VB_SW_RED_CARD:
+    case VB_SW_GREEN_CARD:
+    case VB_SW_YELLOW_CARD:
+        *pal = G_CrossplayShadowWarriorCardPalette(sourcePicnum);
+        return ACCESSCARD;
+
+    case VB_SW_ICON_STAR:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return FIRSTGUNSPRITE;
+    case VB_SW_ICON_SHOTGUN:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHOTGUNSPRITE;
+    case VB_SW_ICON_UZI:
+    case VB_SW_ICON_UZIFLOOR:
+    case VB_SW_ICON_AUTORIOT:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return CHAINGUNSPRITE;
+    case VB_SW_ICON_MICRO_GUN:
+    case VB_SW_ICON_ROCKET:
+    case VB_SW_ICON_LG_ROCKET:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return RPGSPRITE;
+    case VB_SW_ICON_GRENADE_LAUNCHER:
+    case VB_SW_ICON_CHEMBOMB:
+    case VB_SW_ICON_FLASHBOMB:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return HEAVYHBOMB;
+    case VB_SW_ICON_LG_MINE:
+    case VB_SW_ICON_CALTROPS:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return TRIPBOMBSPRITE;
+    case VB_SW_ICON_RAIL_GUN:
+    case VB_SW_ICON_GUARD_HEAD:
+    case VB_SW_ICON_HEART:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHRINKERSPRITE;
+    case VB_SW_ICON_NUKE:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return DEVISTATORSPRITE;
+
+    case VB_SW_ICON_LG_UZI_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return AMMO;
+    case VB_SW_ICON_LG_SHOTSHELL:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return SHOTGUNAMMO;
+    case VB_SW_ICON_MICRO_BATTERY:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return RPGAMMO;
+    case VB_SW_ICON_LG_GRENADE:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return HBOMBAMMO;
+    case VB_SW_ICON_RAIL_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return CRYSTALAMMO;
+    case VB_SW_ICON_FIREBALL_LG_AMMO:
+    case VB_SW_ICON_HEART_LG_AMMO:
+        *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
+        return DEVISTATORAMMO;
+    default:
+        return -1;
+    }
+}
+
+static int32_t G_CrossplayConvertShadowWarriorMapSpriteToDuke(int32_t spriteNum, int32_t *itemsConverted, int32_t *weaponsConverted)
+{
+    int16_t const sourcePicnum = artCrossplayOriginalMapSpritePicnum(spriteNum);
+    if (sourcePicnum < 0)
+        return 0;
+
+    int32_t domain = ART_CROSSPLAY_DOMAIN_ITEMS;
+    int16_t pal = 0;
+    int16_t const dukePicnum = G_CrossplayShadowWarriorPickupToDuke(sourcePicnum, &domain, &pal);
+    if (dukePicnum < 0)
+        return 0;
+
+    if (!G_CrossplayIsDukeLikeGame(artCrossplayEffectiveDomainGame(domain)))
+        return 0;
+
+    auto &sp = sprite[spriteNum];
+    sp.picnum = dukePicnum;
+    sp.cstat = 0;
+    sp.shade = 0;
+    sp.pal = pal;
+    sp.clipdist = 32;
+    sp.xrepeat = 32;
+    sp.yrepeat = 32;
+    sp.xoffset = 0;
+    sp.yoffset = 0;
+    sp.xvel = 0;
+    sp.yvel = 0;
+    sp.zvel = 0;
+    sp.owner = -1;
+    sp.lotag = 0;
+    sp.hitag = 0;
+    sp.extra = 0;
+    changespritestat(spriteNum, STAT_DEFAULT);
+
+    if (domain == ART_CROSSPLAY_DOMAIN_WEAPONS)
+        ++*weaponsConverted;
+    else
+        ++*itemsConverted;
+
+    return 1;
+}
+
+static void G_CrossplayPrepareForeignMapSpritesForDukeRuntime(void)
+{
+    if (!artCrossplayMapArtPrepared())
+        return;
+
+    if (!G_CrossplayIsDukeLikeGame(artCrossplayRuntimeGame()) ||
+        artCrossplayEffectiveDomainGame(ART_CROSSPLAY_DOMAIN_LEVELS) != ART_CROSSPLAY_GAME_SW)
+        return;
+
+    int32_t itemsConverted = 0;
+    int32_t weaponsConverted = 0;
+    int32_t removed = 0;
+
+    for (int32_t i = MAXSPRITES - 1; i >= 0; --i)
+    {
+        if (sprite[i].statnum == MAXSTATUS || !artCrossplayIsOriginalMapSprite(i))
+            continue;
+
+        if (G_CrossplayConvertShadowWarriorMapSpriteToDuke(i, &itemsConverted, &weaponsConverted))
+            continue;
+
+        A_DeleteSprite(i);
+        ++removed;
+    }
+
+    if (itemsConverted > 0 || weaponsConverted > 0)
+        LOG_F(INFO, "Crossplay: converted %d Shadow Warrior item pickup(s) and %d Shadow Warrior weapon/ammo pickup(s) to Duke runtime pickups.",
+              itemsConverted, weaponsConverted);
+
+    if (removed > 0)
+        LOG_F(INFO, "Crossplay: culled %d foreign Shadow Warrior map sprite(s) for Duke runtime compatibility.", removed);
+}
+
 static void prelevel(char g)
 {
-    int i, nexti, j, startwall, endwall, lotaglist;
+    int i, j, startwall, endwall, lotaglist;
     int lotags[MAXSPRITES];
     int switchpicnum;
     extern char ror_protectedsectors[MAXSECTORS];
@@ -901,6 +1144,16 @@ static void prelevel(char g)
 
     g_numClouds = 0;
     G_SetupGlobalPsky();
+
+    if (FURY)
+    {
+        // Ion Fury's CON expects per-actor vars to be reset for every map
+        // sprite before EVENT_PRELEVEL runs. Upstream Fury does this globally
+        // here; resetting only STAT_DEFAULT sprites later leaves non-default
+        // sprite actorvars stale and can erase state prepared by PRELEVEL.
+        for (i = 0; i < Numsprites; ++i)
+            A_ResetVars(i);
+    }
 
     X_OnEvent(EVENT_PRELEVEL, -1, -1, -1);
 
@@ -946,13 +1199,21 @@ static void prelevel(char g)
         }
     }
 
-    i = headspritestat[STAT_DEFAULT];
-    while (i >= 0)
+    G_CrossplayPrepareForeignMapSpritesForDukeRuntime();
+
+    for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
     {
-        nexti = nextspritestat[i];
-        A_ResetVars(i);
+        if (!FURY)
+            A_ResetVars(i);
+
         A_LoadActor(i);
+        if (sprite[i].statnum == MAXSTATUS || (unsigned)sprite[i].sectnum >= MAXSECTORS)
+            continue;
+
         X_OnEvent(EVENT_LOADACTOR, i, -1, -1);
+        if (sprite[i].statnum == MAXSTATUS || (unsigned)sprite[i].sectnum >= MAXSECTORS)
+            continue;
+
         if (sprite[i].lotag == -1 && (sprite[i].cstat&16))
         {
             for (ALL_PLAYERS(j))
@@ -965,7 +1226,8 @@ static void prelevel(char g)
             {
             case GPSPEED__:
                 sector[SECT(i)].extra = SLT(i);
-                A_DeleteSprite(i);
+                if (!FURY)
+                    A_DeleteSprite(i);
                 break;
 
             case CYCLER__:
@@ -981,7 +1243,8 @@ static void prelevel(char g)
                 cyclers[g_numCyclers][4] = SHT(i);
                 cyclers[g_numCyclers][5] = (SA(i) == 1536);
                 g_numCyclers++;
-                A_DeleteSprite(i);
+                if (!FURY)
+                    A_DeleteSprite(i);
                 break;
 
             case SECTOREFFECTOR__:
@@ -992,10 +1255,26 @@ static void prelevel(char g)
             case LOCATORS__:
             case MASTERSWITCH__:
             case RESPAWN__:
-                sprite[i].cstat = 0;
+                if (FURY)
+                    sprite[i].cstat &= ~(CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN | CSTAT_SPRITE_ALIGNMENT_MASK);
+                else
+                    sprite[i].cstat = 0;
                 break;
             }
-        i = nexti;
+    }
+
+    if (FURY)
+    {
+        // Ion Fury expects GPSPEED/CYCLER to stay in STAT_DEFAULT until all
+        // LOADACTOR handlers have run, then deletes them before global spawn.
+        for (int nextSprite, SPRITES_OF_STAT_SAFE(STAT_DEFAULT, i, nextSprite))
+            switch (tileGetMapping(PN(i)))
+            {
+            case GPSPEED__:
+            case CYCLER__:
+                A_DeleteSprite(i);
+                break;
+            }
     }
 
     for (i=0;i < MAXSPRITES;i++)
@@ -1017,6 +1296,16 @@ static void prelevel(char g)
             if (sprite[i].cstat & 2048)
                 actor[i].flags |= SFLAG_NOSHADE;
         }
+
+    // Reference dump for the SW crossplay bridge: what Duke's own spawn leaves
+    // on every map sprite.  A_Spawn(-1,i) keeps the map's sprite index, so this
+    // diffs line-by-line against the bridge's dump of the same level.
+    if (Bgetenv("VB_CP_CSTAT_DUMP") != NULL)
+        for (i=0; i < MAXSPRITES; i++)
+            if (sprite[i].statnum < MAXSTATUS)
+                OSD_Printf("CSTATDUMP spr=%d tile=%d cstat=%d stat=%d x=%d y=%d z=%d\n",
+                           (int)i, (int)sprite[i].picnum, (int)sprite[i].cstat, (int)sprite[i].statnum,
+                           (int)sprite[i].x, (int)sprite[i].y, (int)sprite[i].z);
 
     lotaglist = 0;
 
@@ -1570,8 +1859,9 @@ static void resetpspritevars(char g)
 // level started: a real APLAYER sprite at a spawn point, full health, weapons
 // and inventory. Called deterministically on every machine already in the game
 // (and captured in the snapshot the joiner loads), so the sprite index and
-// state line up everywhere. Consumes no synced RNG. Level-wide key access is
-// preserved so integrating a joiner doesn't re-lock doors for everyone.
+// state line up everywhere. Deathmatch spawn scattering consumes synced RNG, so
+// callers must run this at the same tick with the same RNG state. Level-wide key
+// access is preserved so integrating a joiner doesn't re-lock doors for everyone.
 void P_SpawnLateJoiner(int snum)
 {
     if (g_numPlayerSprites <= 0)
@@ -1759,6 +2049,12 @@ int G_EnterLevel(int g)
 {
     int i;
 
+    artCrossplayResetLevel();
+
+    // Nothing is speaking in a level that has not started yet, and the sprite
+    // index the last one was talking through belongs to something else now.
+    G_WorldTourResetCommentary();
+
     // G_ApplyMenuToGameFlags?
     // ---------------------------------
     vote = votedata_t();
@@ -1885,6 +2181,10 @@ int G_EnterLevel(int g)
         G_LoadMapHack(levelName, m.filename);
     }
 
+    artCrossplayCaptureMapSprites();
+    artCrossplayPrepareForeignMapArt(Menu_HaveUserMap() ? boardfilename : m.filename);
+    artCrossplayApplyMapTileRemap();
+
     g_player[0].ps->q16ang = fix16_from_int(playerAngle);
 
     g_precacheCount = 0;
@@ -1962,16 +2262,11 @@ int G_EnterLevel(int g)
 
     Net_WaitForPlayers();
 
-    // Video isn't up yet if a client enters a level straight from Net_WaitForPlayers
-    // during G_InitMultiplayer; app_main draws the first frame later in that case.
-    if (in3dmode())
-    {
-        G_FadePalette(0,0,0,0);
-        G_UpdateScreenArea();
-        videoClearViewableArea(0L);
-        G_DrawBackground();
-        G_DrawRooms(myconnectindex,65536);
-    }
+    // Do not draw the first world frame from inside level setup. The main loop
+    // draws it immediately after G_EnterLevel() returns, once render state and
+    // frame timing are coherent. Drawing here can hit platform GL drivers while
+    // the level is still transitioning; Ion Fury on macOS/Metal GL faults in
+    // gleRunVertexSubmitImmediate on this eager draw path.
 
     g_player[myconnectindex].ps->over_shoulder_on = 0;
 
@@ -2008,7 +2303,12 @@ int G_EnterLevel(int g)
 
     DukeEditor::ActivateLaunchProjectScripts();
     VBJS_EndLevelAttachments();
-    OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
+    if (currentboardfilename[0])
+        OSD_Printf(OSDTEXT_YELLOW "User map: %s\n", currentboardfilename);
+    else
+        OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
+    VBJS_FireSimple("gameStarted");
+    VBJS_FireSimple("levelChanged");
     return 0;
 }
 
@@ -2033,4 +2333,3 @@ void G_FreeMapState(int mapnum)
     Xfree(g_mapInfo[mapnum].savedstate);
     g_mapInfo[mapnum].savedstate = NULL;
 }
-

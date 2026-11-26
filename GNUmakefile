@@ -17,6 +17,16 @@ endif
 ### Platform and Toolchain Configuration
 include Common.mak
 
+# VibeBuild32 is the multi-game binary.  A plain `make vibebuild32` should
+# include every linked game by default; callers can still override any one with
+# WITH_SW=0, WITH_BLOOD=0, WITH_RR=0, or WITH_EXHUMED=0.
+ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
+    WITH_SW ?= 1
+    WITH_BLOOD ?= 1
+    WITH_RR ?= 1
+    WITH_EXHUMED ?= 1
+endif
+
 ### File Extensions
 asm := nasm
 o := o
@@ -140,12 +150,20 @@ endif
 
 glad_cflags :=
 
-#### QuickJS (VibeBuild32 mod runtime)
+#### quickjs (VibeBuild32 JS scripting engine, quickjs-ng)
 
 quickjs := quickjs
-quickjs_src := $(source)/quickjs
-quickjs_obj := $(obj)/quickjs
-quickjs_objs := dtoa.c libregexp.c libunicode.c quickjs.c
+
+quickjs_root := $(source)/$(quickjs)
+quickjs_src := $(quickjs_root)
+quickjs_inc := $(quickjs_root)
+quickjs_obj := $(obj)/$(quickjs)
+
+quickjs_objs := $(call getfiltered,quickjs,*.c)
+
+# Vendored C11 code. This tree compiles .c as C++ (COMPILER_C=COMPILER_CXX), but
+# QuickJS is C-only, so force real C mode (-x c overrides the earlier -x c++),
+# pin C11, and silence its warnings (it is not our code).
 quickjs_cflags := -x c -std=gnu11 -w -DNDEBUG
 
 
@@ -595,16 +613,33 @@ duke3d_editor_miscdeps :=
 duke3d_game_orderonlydeps :=
 duke3d_editor_orderonlydeps :=
 
+# Only link FLAC when it is enabled, so HAVE_FLAC=0 builds do not need the library.
 ifeq ($(SUBPLATFORM),LINUX)
-    LIBS += -lFLAC -lasound
+    LIBS += -lasound -lcurl
+    ifneq (0,$(HAVE_FLAC))
+        LIBS += -lFLAC
+    endif
 endif
 
 ifeq ($(PLATFORM),BSD)
-    LIBS += -lFLAC -lexecinfo
+    LIBS += -lexecinfo -lcurl
+    ifneq (0,$(HAVE_FLAC))
+        LIBS += -lFLAC
+    endif
+endif
+
+# Ogg Theora, for the PowerSlave remaster's movies (source/exhumed/src/
+# kexmovie.cpp). Optional: without it the intro falls back to book.mov.
+THEORA_CFLAGS := $(shell $(PKG_CONFIG) --cflags theoradec ogg 2>/dev/null)
+THEORA_LIBS := $(shell $(PKG_CONFIG) --libs theoradec ogg 2>/dev/null)
+ifneq ($(THEORA_LIBS),)
+    COMPILERFLAGS += -DHAVE_THEORA $(THEORA_CFLAGS)
+    LIBS += $(THEORA_LIBS)
 endif
 
 ifeq ($(PLATFORM),DARWIN)
     LIBS += -lFLAC \
+            -lcurl \
             -Wl,-framework,Cocoa -Wl,-framework,Carbon \
             -Wl,-framework,CoreMIDI -Wl,-framework,AudioUnit \
             -Wl,-framework,AudioToolbox -Wl,-framework,IOKit
@@ -650,7 +685,7 @@ sw_src := $(sw_root)/src
 sw_rsrc := $(sw_root)/rsrc
 sw_obj := $(obj)/$(sw)
 
-sw_cflags :=
+sw_cflags := -I$(source)/glue
 
 sw_game_deps := audiolib mact
 sw_editor_deps := audiolib
@@ -718,7 +753,7 @@ vibebuild32_src := $(vibebuild32_root)/src
 vibebuild32_rsrc := $(vibebuild32_root)/rsrc
 vibebuild32_obj := $(obj)/$(vibebuild32)
 
-vibebuild32_cflags := -I$(vibebuild32_src) -I$(quickjs_src) -I$(source)/glue
+vibebuild32_cflags := -I$(vibebuild32_src) -I$(quickjs_inc) -I$(source)/glue -DVBJS
 
 vibebuild32_game_deps := audiolib mact quickjs
 
@@ -736,12 +771,14 @@ endif
 vibebuild32_game_proper := VibeBuild32
 
 vibebuild32_game_objs := \
+    gameselect.cpp \
     actors.cpp \
     anim.cpp \
     chatpipe.cpp \
     cmdline.cpp \
     config.cpp \
     common.cpp \
+    crossplay_dukeai.cpp \
     discord.cpp \
     dnames.cpp \
     dukebot.cpp \
@@ -782,8 +819,8 @@ vibebuild32_game_objs := \
     sync.cpp \
     utils.cpp \
     vbjs.cpp \
-    vbjs_duke.cpp \
     vbjs_ts.cpp \
+    vbjs_duke.cpp \
 
 vibebuild32_game_rsrc_objs :=
 vibebuild32_game_gen_objs :=
@@ -928,6 +965,139 @@ ifeq ($(PLATFORM),WII)
 ifneq ($(ELF2DOL),)
 %$(DOLSUFFIX): %$(EXESUFFIX)
 endif
+endif
+
+# ---- WITH_SW: link Shadow Warrior (VoidSW) into the vibebuild32 binary --------
+# The SW game objects are prelinked (ld -r) into one relocatable object with
+# their game-internal symbols that also exist in Duke localized, so the two game
+# modules no longer collide. SW's own startup window is dropped (Duke's serves
+# both). See source/sw/UNIFY_WITH_VIBEBUILD32.md. macOS (arm64) for now.
+# $(call MERGE_RULE,<game>,<prior-merge-objs>): prelink <game>'s game objects
+# ($(<game>merge_objs)) with every game-internal symbol that also exists in one of the
+# already-linked games (<prior-merge-objs>) localized, so the coexisting copies do not
+# collide in the combined binary. macOS/arm64: objcopy is unavailable, so this uses
+# ld -r + -unexported_symbols_list. Instantiated once per extra game below.
+define MERGE_RULE
+$$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2)
+	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
+	@nm -g $(2) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
+	@nm -g $$($(1)merge_objs) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
+	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
+	ld -r -arch arm64 $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	ld -r -arch arm64 $$(obj)/$(1)_premerge.o -o $$@ -unexported_symbols_list $$(obj)/$(1)_hide.txt
+endef
+
+ifeq ($(WITH_SW),1)
+vibebuild32_cflags += -DWITH_SW
+swmerge_objs := $(filter-out %GameListSource.game.$o %GrpFile.game.$o %StartupWinController.game.$o %startosx.game.$o %startwin.game.$o %startgtk.game.$o,$(addprefix $(sw_obj)/,$(addsuffix .$o,$(basename $(sw_game_objs)))))
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+
+$(eval $(call MERGE_RULE,sw,$(dukemerge_objs)))
+
+vibebuild32_game_miscdeps += $(obj)/sw_merged.o
+endif
+
+# ---- WITH_BLOOD: link Blood (from NotBlood) into the vibebuild32 binary -------
+# Same pattern as WITH_SW. Blood's game objects are prelinked (ld -r) with the
+# game-internal symbols that also exist in Duke or SW localized. Blood's own
+# Blood uses its native enet netcode (enet is built into our engine: build/src/enet.cpp).
+# Excludes: mapedit (editor), credits (smacker cutscenes), nnext* (modern-map
+# conditions), and Blood's startup window (Duke's serves all). Build with
+# WITH_SW=1 WITH_BLOOD=1. See source/blood/BLOOD_UNIFY.md. macOS (arm64) for now.
+ifeq ($(WITH_BLOOD),1)
+vibebuild32_cflags += -DWITH_BLOOD
+blood := blood
+blood_root := $(source)/blood
+blood_src := $(blood_root)/src
+blood_rsrc := $(blood_root)/rsrc
+blood_obj := $(obj)/blood
+blood_cflags := -I$(source)/glue -I$(blood_src) -Wno-c++11-narrowing -Wno-narrowing
+blood_game_deps := audiolib mact
+blood_game_objs := \
+    blood.cpp actor.cpp ai.cpp aibat.cpp aibeast.cpp aiboneel.cpp aiburn.cpp \
+    aicaleb.cpp aicerber.cpp aicult.cpp aigarg.cpp aighost.cpp aigilbst.cpp \
+    aihand.cpp aihound.cpp aiinnoc.cpp aipod.cpp airat.cpp aispid.cpp \
+    aitchern.cpp aizomba.cpp aizombf.cpp asound.cpp barf.cpp callback.cpp \
+    chatpipe.cpp choke.cpp common.cpp config.cpp controls.cpp db.cpp demo.cpp \
+    dude.cpp endgame.cpp eventq.cpp fire.cpp fx.cpp gamemenu.cpp gameutil.cpp \
+    getopt.cpp gfx.cpp gib.cpp globals.cpp gui.cpp inifile.cpp iob.cpp \
+    levels.cpp loadsave.cpp map2d.cpp menu.cpp messages.cpp mirrors.cpp \
+    misc.cpp network.cpp osdcmd.cpp player.cpp qav.cpp qheap.cpp replace.cpp \
+    resource.cpp screen.cpp sectorfx.cpp seq.cpp sfx.cpp sound.cpp tile.cpp \
+    trig.cpp triggers.cpp view.cpp warp.cpp weapon.cpp weather.cpp \
+    vb_compat.cpp \
+
+components += blood
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+bloodmerge_objs := $(addprefix $(blood_obj)/,$(addsuffix .$o,$(basename $(blood_game_objs))))
+
+$(eval $(call MERGE_RULE,blood,$(dukemerge_objs) $(swmerge_objs)))
+
+vibebuild32_game_miscdeps += $(obj)/blood_merged.o
+endif
+
+# ---- WITH_RR: link Redneck Rampage (from Rednukem/NBlood) into vibebuild32 ----
+# RR is a Duke-engine variant (eduke32 lineage, like our Duke code), so it compiles
+# against our engine cleanly; it collides heavily with our Duke code, so the ld -r
+# merge localizes ALL of the game-internal collisions (vs Duke/SW/Blood). Excludes
+# the Mapster32 editor (astub/m32*/sounds_mapster32), platform-only files
+# (in_android/mdump/winbits) and the startup window (Duke's serves all). Build with
+# WITH_SW=1 WITH_BLOOD=1 WITH_RR=1. See source/rr/RR_UNIFY.md. macOS (arm64) for now.
+ifeq ($(WITH_RR),1)
+vibebuild32_cflags += -DWITH_RR
+rr := rr
+rr_root := $(source)/rr
+rr_src := $(rr_root)/src
+rr_obj := $(obj)/rr
+rr_cflags := -I$(source)/glue -I$(rr_src) -Wno-c++11-narrowing -Wno-narrowing
+rr_game_deps := audiolib mact
+rr_game_objs := \
+    actors.cpp anim.cpp cheats.cpp cmdline.cpp common.cpp config.cpp demo.cpp \
+    filestream.cpp game.cpp gamedef.cpp gameexec.cpp gamestructures.cpp gamevars.cpp \
+    global.cpp grpscan.cpp input.cpp menus.cpp namesdyn.cpp net.cpp osdcmds.cpp \
+    osdfuncs.cpp player.cpp playmve.cpp premap.cpp rrdh.cpp rts.cpp savegame.cpp \
+    sbar.cpp screens.cpp screentext.cpp sector.cpp sounds.cpp soundsdyn.cpp \
+    n64/reality_stubs.cpp \
+
+components += rr
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+rrmerge_objs := $(addprefix $(rr_obj)/,$(addsuffix .$o,$(basename $(rr_game_objs))))
+
+$(eval $(call MERGE_RULE,rr,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)))
+
+vibebuild32_game_miscdeps += $(obj)/rr_merged.o
+endif
+
+# ---- WITH_EXHUMED: link PCExhumed into vibebuild32 ---------------------------
+# PCExhumed comes from NBlood's source/exhumed tree. It is a separate Build-game
+# runtime, so it is prelinked exactly like SW/Blood/RR and its internal symbol
+# collisions are localized against the games already linked into VibeBuild32.
+# Startup-window objects are excluded; the shared launcher/selector owns startup.
+ifeq ($(WITH_EXHUMED),1)
+vibebuild32_cflags += -DWITH_EXHUMED
+exhumed := exhumed
+exhumed_root := $(source)/exhumed
+exhumed_src := $(exhumed_root)/src
+exhumed_obj := $(obj)/exhumed
+exhumed_cflags := -I$(source)/glue -I$(exhumed_src) -Wno-c++11-narrowing -Wno-narrowing
+exhumed_game_objs := \
+    aistuff.cpp anims.cpp anubis.cpp bubbles.cpp bullet.cpp cd.cpp \
+    common.cpp config.cpp enginesubs.cpp exhumed.cpp exscript.cpp fish.cpp \
+    grenade.cpp grpscan.cpp gun.cpp init.cpp input.cpp items.cpp lavadude.cpp \
+    light.cpp lighting.cpp lion.cpp map.cpp memorystream.cpp menu.cpp mono.cpp \
+    move.cpp movie.cpp mummy.cpp network.cpp object.cpp osdcmds.cpp player.cpp \
+    queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
+    runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
+    sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
+    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp kextactile.cpp \
+
+components += exhumed
+dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+exhumedmerge_objs := $(addprefix $(exhumed_obj)/,$(addsuffix .$o,$(basename $(exhumed_game_objs))))
+
+$(eval $(call MERGE_RULE,exhumed,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs) $(rrmerge_objs)))
+
+vibebuild32_game_miscdeps += $(obj)/exhumed_merged.o
 endif
 
 

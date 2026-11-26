@@ -41,6 +41,8 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #define PACKET_TYPE_MENU_LEVEL_QUIT                 35
 #define PACKET_TYPE_NAME_CHANGE                     36
 #define PACKET_TYPE_VERSION                         38
+#define PACKET_TYPE_FILE_HEADER                     40  // mid-game file transfer: begin (name/size/crc)
+#define PACKET_TYPE_FILE_CHUNK                      41  // mid-game file transfer: a chunk
 
 #define PACKET_TYPE_NULL_PACKET                     127
 #define PACKET_TYPE_PLAYER_READY                    250
@@ -171,6 +173,23 @@ extern SWBOOL AutoNet;
 
 void UpdateInputs(void);
 void getpackets(void);
+void Net_SetAdvertise(const char *addr);  // VibeBuild32 masterserver/lobby advertise
+void Net_HostAdvertise(void);
+void Net_SetPunchTarget(const char *addr);  // client NAT-punch: server to reach
+void Net_SetMasterAddr(const char *addr);   // client NAT-punch: masterserver addr
+void Net_ClientPunchAttempt(void);
+int  Net_QueryLobby(const char *masterAddr); // client: fetch+log masterserver server list
+
+// In-menu server browser (menus.cpp) support.
+struct sw_lobby_server { char addr[128]; char name[32]; char map[24]; int players, maxplayers; };
+int   Net_QueryLobbyList(const char *masterAddr, struct sw_lobby_server *out, int maxout);
+const char *Net_GetMasterAddr(void);          // masterserver for the browser (-masteraddr, else default)
+void  Net_JoinServerBrowser(const char *serverAddr);  // join a browser-picked server
+void Net_SetAutoJoin(const char *masterAddr); // -joinlobby: query+join first server
+int  Net_ResolveAutoJoin(void);               // returns 1 + fills s_autoJoinServer if a server was picked
+void Net_AddNetFile(const char *path);        // host: offer this file to joiners (-netfile)
+void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal);
+void Net_SendGameFiles(int slot);             // host: stream all offered files + usermap to joiners
 void SendMulitNameChange(char *new_name);
 void InitNetVars(void);
 void InitTimingVars(void);
