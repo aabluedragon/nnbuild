@@ -256,8 +256,22 @@ void SoundDriver_PCM_Lock(void)                            { SoundDrivers[ASS_PC
 void SoundDriver_PCM_Unlock(void)                          { SoundDrivers[ASS_PCMSoundDriver].PCM_Unlock(); }
 int  SoundDriver_MIDI_Init(midifuncs *funcs)               { return SoundDrivers[ASS_MIDISoundDriver].MIDI_Init(funcs); }
 int  SoundDriver_MIDI_StartPlayback(void)                  { return SoundDrivers[ASS_MIDISoundDriver].MIDI_StartPlayback(); }
-void SoundDriver_MIDI_Shutdown(void)                       { SoundDrivers[ASS_MIDISoundDriver].MIDI_Shutdown(); }
-void SoundDriver_MIDI_HaltPlayback(void)                   { SoundDrivers[ASS_MIDISoundDriver].MIDI_HaltPlayback(); }
+// Music that was never started (for example with -nomusic) leaves the driver
+// unselected, and the game still shuts music down on exit.
+static int SoundDriver_MIDI_Selected(void)
+{
+    return ASS_MIDISoundDriver >= 0 && ASS_MIDISoundDriver < ASS_NumSoundCards;
+}
+void SoundDriver_MIDI_Shutdown(void)
+{
+    if (SoundDriver_MIDI_Selected() && SoundDrivers[ASS_MIDISoundDriver].MIDI_Shutdown)
+        SoundDrivers[ASS_MIDISoundDriver].MIDI_Shutdown();
+}
+void SoundDriver_MIDI_HaltPlayback(void)
+{
+    if (SoundDriver_MIDI_Selected() && SoundDrivers[ASS_MIDISoundDriver].MIDI_HaltPlayback)
+        SoundDrivers[ASS_MIDISoundDriver].MIDI_HaltPlayback();
+}
 void SoundDriver_MIDI_SetTempo(int tempo, int division)    { SoundDrivers[ASS_MIDISoundDriver].MIDI_SetTempo(tempo, division); }
 void SoundDriver_MIDI_Lock(void)                           { if (SoundDrivers[ASS_MIDISoundDriver].MIDI_Lock) SoundDrivers[ASS_MIDISoundDriver].MIDI_Lock(); }
 void SoundDriver_MIDI_Unlock(void)                         { if (SoundDrivers[ASS_MIDISoundDriver].MIDI_Unlock) SoundDrivers[ASS_MIDISoundDriver].MIDI_Unlock(); }
