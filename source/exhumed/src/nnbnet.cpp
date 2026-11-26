@@ -202,7 +202,7 @@ void ExNet_SetPunchTarget(const char *addr) { Bstrncpyz(s_punchTarget, addr, siz
 void ExNet_SetMasterAddr(const char *addr)  { Bstrncpyz(s_masterAddr,  addr, sizeof(s_masterAddr)); }
 void ExNet_SetAutoJoin(const char *addr)    { Bstrncpyz(s_autoJoinMaster, addr, sizeof(s_autoJoinMaster)); }
 void ExNet_SetAdvertise(const char *addr)   { NNB_SetAdvertise(addr); }
-int  ExNet_QueryLobby(const char *addr)     { return NNB_QueryLobby(addr, "Exhumed"); }
+int  ExNet_QueryLobby(const char *addr)     { NNB_SetLobbyGame("exhumed"); return NNB_QueryLobby(addr, "Exhumed"); }
 void ExNet_SetPlayerName(const char *name)  { Bstrncpyz(s_playerName, name, sizeof(s_playerName)); }
 void ExNet_SetPlayerColor(int color)        { s_playerColor = clamp(color, 0, 7); }
 void ExNet_SetStartNowPlayers(int n)        { s_startNowPlayers = clamp(n, 2, kMaxPlayers); }
@@ -763,6 +763,7 @@ void ExNet_HostAdvertise(void)
     int const hostPlayer = ExNet_PlayerForSlot(connecthead);
     char const *name = hostPlayer >= 0 ? playerNames[hostPlayer] : "";
     int const advertisedPlayers = s_rosterReady ? s_activePlayers : 1;
+    NNB_SetLobbyGame("exhumed");
     NNB_HostAdvertisePulse(1, name && name[0] ? name : "NNBuild Powerslave server",
                           mmulti_getport(), advertisedPlayers, kMaxPlayers, map);
 }
@@ -798,6 +799,7 @@ int ExNet_ResolveAutoJoin(void)
         return 0;
 
     char name[32] = "";
+    NNB_SetLobbyGame("exhumed");   // the first listed server has to be an Exhumed one
     if (!NNB_QueryFirstServer(s_autoJoinMaster, ExNet_autoJoinServer, sizeof(ExNet_autoJoinServer),
                              name, sizeof(name)))
         return 0;

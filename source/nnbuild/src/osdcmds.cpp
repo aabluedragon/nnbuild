@@ -427,15 +427,18 @@ static int osdcmd_serverlist(const osdfuncparm_t *parm)
     // With no argument, ask the lobby server the Join Game menu uses.
     const char *master = (parm->numparms >= 1) ? parm->parms[0]
                        : (g_masterServerAddr[0] ? g_masterServerAddr : NNB_DEFAULT_MASTERSERVER);
+    // Every game's matches, each with the game it is for. (The JOIN GAME screen
+    // lists only the matches of the game being played.)
     struct msserver_t list[64];
-    int32_t n = Masterserver_QueryList(master, list, 64, 1500);
+    int32_t n = Masterserver_QueryListAll(master, list, 64, 1500);
     if (n < 0) { OSD_Printf("serverlist: could not reach masterserver '%s'\n", master); return OSDCMD_OK; }
-    OSD_Printf("%d server(s) advertised on %s:\n", n, master);
+    OSD_Printf("%d server(s) advertised on %s (this game is \"%s\"):\n", n, master, Net_LobbyGameName());
     for (int32_t i = 0; i < n; i++)
     {
-        OSD_Printf("  %-28s %2d/%-2d  %-10s %s\n",
+        OSD_Printf("  %-28s %2d/%-2d  %-10s %-14s %s\n",
                    list[i].addr[0] ? list[i].addr : list[i].addr6,
-                   list[i].players, list[i].maxplayers, list[i].map, list[i].name);
+                   list[i].players, list[i].maxplayers, list[i].map,
+                   list[i].game[0] ? list[i].game : "?", list[i].name);
         if (list[i].addr[0] && list[i].addr6[0])
             OSD_Printf("    also IPv6: %s\n", list[i].addr6);
     }

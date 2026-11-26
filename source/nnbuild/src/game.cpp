@@ -10111,6 +10111,17 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     if (!Mcp_Start())
         return EXIT_FAILURE;
 
+    // Restarted to the menu after a join that failed: open the JOIN GAME screen,
+    // which shows why, and do not sit through the intro again. This is decided
+    // here because the title loop below is where the menu runs; by the time
+    // that loop returns, the player has already started something else.
+    if (g_joinErrorMsg[0] && ud.multimode < 2 && ud.warp_on == 0)
+    {
+        g_noLogo = g_noLogoAnim = 1;
+        ud.gm = MODE_MENU;
+        ChangeToMenu(20020);
+    }
+
     if (ud.warp_on > 1 && ud.multimode < 2)
     {
         videoClearViewableArea(0L);
@@ -10199,15 +10210,6 @@ MAIN_LOOP_RESTART:
 
     ud.warp_on = 0;
     KB_KeyDown[sc_Pause] = 0;   // JBF: I hate the pause key
-
-    // Relaunched to the menu after a failed join: drop the user straight onto
-    // the JOIN GAME screen so they see the error banner and can retry/pick
-    // another server, rather than starting back at the main menu.
-    if (g_joinErrorMsg[0])
-    {
-        ud.gm = MODE_MENU;
-        ChangeToMenu(20020);
-    }
 
     do // main loop
     {

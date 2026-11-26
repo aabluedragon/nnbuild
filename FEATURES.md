@@ -36,7 +36,8 @@ what NNBuild adds on top of that, in plain language.
   launch commands.
 - **Game list.** Join Game shows the games people are hosting, with the server
   name, size and current map. Pick one to join, or type an address yourself.
-  The list comes from a public lobby server that works out of the box.
+  The list comes from a public lobby server that works out of the box, and
+  shows only games you can join: those of the game you are playing.
   NNBuild can run as a lobby server too, so any community can keep its own
   list.
 - **Connecting screen.** After you pick a game, a screen shows how the

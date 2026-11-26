@@ -1643,6 +1643,8 @@ void M_DisplayMenus(void)
             {
                 // The answer arrives on a worker thread, so the menu keeps
                 // running however long the lobby or the name lookup takes.
+                // Only matches of this game are asked for.
+                Masterserver_SetGame(Net_LobbyGameName());
                 Masterserver_QueryListBegin(g_masterServerAddr);
                 s_count = -3;
             }

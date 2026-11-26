@@ -2926,13 +2926,14 @@ void Net_SetAdvertise(const char *addr) { NNB_SetAdvertise(addr); }  // -adverti
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
+    NNB_SetLobbyGame("rr");
     char map[24];
     Bstrncpyz(map, boardfilename[0] ? boardfilename : "Redneck Rampage", sizeof(map));
     NNB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Redneck server",
                           g_netPort, numplayers, numplayers, map);
 }
 
-int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
+int Net_QueryLobby(const char *masterAddr) { NNB_SetLobbyGame("rr"); return NNB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
 
 // Client NAT hole-punch: ask the masterserver to punch a hole toward the server we
 // are joining. The request must leave our GAME socket (enet's) so the master learns
@@ -2949,6 +2950,7 @@ void Net_ClientPunch(void)
 int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_rrMasterAddr, masterAddr, sizeof(s_rrMasterAddr));  // remember for NAT punch
+    NNB_SetLobbyGame("rr");   // the first listed server has to be a Redneck Rampage one
     char ep[64], name[32];
     if (!NNB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     Bstrncpyz(s_rrJoinAddr, ep, sizeof(s_rrJoinAddr));  // "ip:port" punch target

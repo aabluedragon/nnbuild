@@ -5,23 +5,21 @@ other Build-engine games.
 
 ## New in this release
 
-- **A public lobby, built in.** NNBuild now uses the lobby
-  `nnb.ms.nukemnet.com` unless you name another one. **JOIN GAME** shows the
-  matches people host, and **HOST INTERNET GAME** puts yours on the list,
-  without any setup.
-- **A CONNECTING screen.** After you pick a match, NNBuild shows how the
-  connection is going and offers **CANCEL**. The game no longer waits
-  silently, and the list itself is fetched in the background.
-- **IPv6 and IPv4 together.** A match with both kinds of address is tried over
-  both at once. IPv6 is preferred and gets a few extra seconds; the address
-  that works is used. A full server is reported as full at once.
-- **The lobby as a small program.** The Linux downloads contain
-  `nnbuild-lobby`, the lobby server without the game, for machines that only
-  keep the list. A lobby now limits how many packets and matches one address
-  may send, so a public lobby cannot be misused to flood others.
+- **Only games you can join.** The public lobby holds the matches of every
+  game NNBuild runs. Each match now carries its game, and your list shows
+  only matches of the game you are running, so a Duke Nukem 3D player no
+  longer sees Shadow Warrior rooms or rooms of another Duke edition.
+- **Shadow Warrior's server browser** joins like the Duke one: it asks the
+  server over IPv6 and IPv4 at once, prefers IPv6, shows the progress, and
+  Esc cancels. Enter in that browser now really joins, and the list is
+  fetched without freezing the menu.
+- **Player numbers in the list are real.** A server shows the players in the
+  match and its slots; an empty server no longer looks full.
+- **After a join that fails late**, NNBuild opens JOIN GAME with the reason
+  instead of starting at the main menu behind the intro.
 
-Hosts and players need the same release: an older host does not answer the
-question the CONNECTING screen asks.
+Hosts and players need this release to see each other in the list: a host
+on an older release does not say which game it runs.
 
 ## Downloads
 

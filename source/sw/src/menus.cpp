@@ -467,26 +467,147 @@ MenuGroup networkextragroup = {50, 5, "^Net Options", network_extra_i, pic_newga
 
 // --- In-menu server browser (NNBuild) -----------------------------------
 // A custom-draw menu group that lists servers advertised to the masterserver and
-// lets the player pick one; selecting relaunches into that server (SW connects at
-// startup, so joining is a re-exec with -net <server>). Backend in network.cpp.
+// lets the player pick one. Picking one first asks the server, over its IPv4 and
+// its IPv6 address at once, whether it is there (the CONNECTING steps below);
+// then the game relaunches into that server (SW connects at startup, so joining
+// is a re-exec with -net <server>). Backend in network.cpp.
 static sw_lobby_server s_sbList[16];
-static int s_sbCount = -2;   // -2 = not queried yet, -1 = query failed, >=0 = server count
+static int s_sbCount = -2;   // -2 = ask the lobby, -3 = waiting for its answer, -1 = no answer, >=0 = server count
 static int s_sbSel = 0;
+static SWBOOL s_sbJoining = FALSE;   // the CONNECTING steps are running
+static sw_join_status s_sbJoin;      // how far they are, for drawing
+static char s_sbJoinName[40];        // the server being reached
+static char s_sbNote[64];            // why the last attempt ended; shown under the list
+
+extern SWBOOL(*cust_callback)(UserCall call, MenuItem_p item);
+extern UserCall cust_callback_call;
+extern MenuItem_p cust_callback_item;
+
+// The CONNECTING steps on screen. While they run, the menu hands every frame
+// to MNU_ServerBrowserConnecting instead of drawing the menu, so that function
+// draws this itself.
+static void MNU_ServerBrowserDrawConnecting(void)
+{
+    char line[160];
+
+    Bsnprintf(line, sizeof(line), "Connecting to %s", s_sbJoinName);
+    MNU_DrawString(20, 40, line, 1, 16);
+
+    int y = 58;
+    for (int v6 = 1; v6 >= 0; v6--)
+    {
+        if (!(v6 ? s_sbJoin.have6 : s_sbJoin.have4))
+            continue;
+        // One line per kind of address. The address itself is left out: an
+        // IPv6 one is wider than the screen in this font.
+        if (v6 ? s_sbJoin.ok6 : s_sbJoin.ok4)
+            Bsnprintf(line, sizeof(line), "%s: answered in %d ms", v6 ? "IPv6" : "IPv4",
+                      v6 ? s_sbJoin.ms6 : s_sbJoin.ms4);
+        else
+            Bsnprintf(line, sizeof(line), "%s: no answer yet", v6 ? "IPv6" : "IPv4");
+        MNU_DrawString(20, y, line, 1, 16);
+        y += 10;
+    }
+
+    y += 6;
+    if (s_sbJoin.graceLeftMs > 0)
+    {
+        int const seconds = (s_sbJoin.graceLeftMs + 999) / 1000;
+        Bsnprintf(line, sizeof(line), "IPv4 answered. Waiting %d s for IPv6...", seconds);
+    }
+    else if (s_sbJoin.lobbyRequests > 0)
+        Bsnprintf(line, sizeof(line), "Asking the masterserver for help...");
+    else
+        Bsnprintf(line, sizeof(line), "Asking the server...");
+    MNU_DrawString(20, y, line, 1, 16);
+
+    Bsnprintf(line, sizeof(line), "%d of 25 seconds     ESC = cancel", (int)(s_sbJoin.elapsedMs / 1000));
+    MNU_DrawString(20, y + 14, line, 1, 16);
+}
+
+// Runs in place of the menu's own input handling while a server is being
+// reached, so that ESC stops the attempt instead of leaving the screen.
+static SWBOOL MNU_ServerBrowserConnecting(UserCall UNUSED(call), MenuItem_p UNUSED(item))
+{
+    if (KEY_PRESSED(KEYSC_ESC))
+    {
+        KEY_PRESSED(KEYSC_ESC) = FALSE;
+        CONTROL_ClearButton(gamefunc_Show_Menu);
+        Net_BrowserJoinCancel();
+        s_sbJoining = FALSE;
+        cust_callback = NULL;
+        return TRUE;
+    }
+
+    int const state = Net_BrowserJoinPoll(&s_sbJoin);
+    if (state == SWJOIN_TRYING)
+    {
+        MNU_ServerBrowserDrawConnecting();
+        return TRUE;
+    }
+
+    s_sbJoining = FALSE;
+    cust_callback = NULL;
+    if (state == SWJOIN_CONNECTED)
+    {
+        Net_JoinServerBrowser(s_sbJoin.chosen);   // restarts as a player; comes back only if it could not
+        Bsnprintf(s_sbNote, sizeof(s_sbNote), "Joining from this list does not work on this system.");
+    }
+    else if (state == SWJOIN_FULL)
+        Bsnprintf(s_sbNote, sizeof(s_sbNote), "%.24s is full.", s_sbJoinName);
+    else
+        Bsnprintf(s_sbNote, sizeof(s_sbNote), "No answer from %.24s.", s_sbJoinName);
+    return TRUE;
+}
+
+// Start reaching the selected server. Where the server cannot be asked first,
+// join it directly, as the browser always used to.
+static void MNU_ServerBrowserJoin(void)
+{
+    if (s_sbSel < 0 || s_sbSel >= s_sbCount)
+        return;
+    sw_lobby_server const *server = &s_sbList[s_sbSel];
+
+    s_sbNote[0] = 0;
+    if (Net_BrowserJoinBegin(server))
+    {
+        Bstrncpyz(s_sbJoinName, server->name[0] ? server->name : "the server", sizeof(s_sbJoinName));
+        Bmemset(&s_sbJoin, 0, sizeof(s_sbJoin));
+        s_sbJoin.state = SWJOIN_TRYING;
+        s_sbJoining = TRUE;
+        cust_callback = MNU_ServerBrowserConnecting;
+        cust_callback_call = uc_setup;
+        cust_callback_item = NULL;
+    }
+    else
+        Net_JoinServerBrowser(server->addr[0] ? server->addr : server->addr6);
+}
 
 SWBOOL MNU_ServerBrowserDraw(UserCall UNUSED(call), MenuItem *UNUSED(item))
 {
-    char line[96];
-    if (s_sbCount == -2)   // query once on entry
+    char line[160];
+
+    if (s_sbCount == -2)   // ask once on entry; the answer arrives without the menu waiting for it
     {
         s_sbSel = 0;
-        s_sbCount = Net_QueryLobbyList(Net_GetMasterAddr(), s_sbList, 16);
+        s_sbCount = Net_QueryLobbyListBegin(Net_GetMasterAddr()) ? -3 : -1;
     }
+    if (s_sbCount == -3)
+    {
+        int answered;
+        if (Net_QueryLobbyListPoll(s_sbList, 16, &answered))
+            s_sbCount = answered;
+    }
+
     Bsnprintf(line, sizeof(line), "Masterserver: %s", Net_GetMasterAddr());
     MNU_DrawString(20, 40, line, 1, 16);
     if (s_sbCount <= 0)
     {
-        MNU_DrawString(20, 58, s_sbCount == 0 ? "No servers found." : "Masterserver unavailable.", 1, 16);
+        MNU_DrawString(20, 58, s_sbCount == -3 ? "Asking the masterserver..."
+                             : s_sbCount == 0 ? "No servers found." : "Masterserver unavailable.", 1, 16);
         MNU_DrawString(20, 72, "R = refresh    ESC = back", 1, 16);
+        if (s_sbNote[0])
+            MNU_DrawString(20, 90, s_sbNote, 1, 16);
         return TRUE;
     }
     Bsnprintf(line, sizeof(line), "%d server(s):", s_sbCount);
@@ -499,25 +620,36 @@ SWBOOL MNU_ServerBrowserDraw(UserCall UNUSED(call), MenuItem *UNUSED(item))
         MNU_DrawString(20, 68 + i * 9, line, i == s_sbSel ? 0 : 12, 16);
     }
     MNU_DrawString(20, 68 + s_sbCount * 9 + 8, "ENTER = join   R = refresh   ESC = back", 1, 16);
+    if (s_sbNote[0])
+        MNU_DrawString(20, 68 + s_sbCount * 9 + 22, s_sbNote, 1, 16);
     return TRUE;
 }
 
 SWBOOL MNU_ServerBrowserMove(UserCall UNUSED(call), MenuItem *UNUSED(item))
 {
+    if (s_sbJoining)
+        return TRUE;
     if (KB_KeyPressed(sc_UpArrow))   { KB_ClearKeyDown(sc_UpArrow);   if (s_sbSel > 0) s_sbSel--; }
     if (KB_KeyPressed(sc_DownArrow)) { KB_ClearKeyDown(sc_DownArrow); if (s_sbSel < s_sbCount - 1) s_sbSel++; }
-    if (KB_KeyPressed(sc_R))         { KB_ClearKeyDown(sc_R); s_sbCount = -2; }  // refresh
-    if (KB_KeyPressed(sc_Enter) && s_sbCount > 0)
-    {
-        KB_ClearKeyDown(sc_Enter);
-        Net_JoinServerBrowser(s_sbList[s_sbSel].addr);
-    }
+    if (KB_KeyPressed(sc_R))         { KB_ClearKeyDown(sc_R); s_sbCount = -2; s_sbNote[0] = 0; }  // refresh
+    return TRUE;
+}
+
+// The browser's single menu item. The menu calls this when the item is chosen
+// (Enter or the fire button), which joins the highlighted server. Reading the
+// Enter key here in MNU_ServerBrowserMove does not work: the menu has already
+// cleared the keys by the time it runs.
+static SWBOOL MNU_ServerBrowserChosen(void)
+{
+    if (!s_sbJoining && s_sbCount > 0)
+        MNU_ServerBrowserJoin();
     return TRUE;
 }
 
 MenuItem serverbrowser_i[] =
 {
-    {DefInert(0, " "), OPT_XS, OPT_LINE(0), 0, m_defshade, 0, NULL, NULL, NULL},
+    // No picture, so nothing is drawn for it; the list above is the display.
+    {DefOption(0, " "), OPT_XS, OPT_LINE(0), 0, m_defshade, 0, MNU_ServerBrowserChosen, NULL, NULL},
     {DefNone}
 };
 MenuGroup serverbrowsergroup = {20, 5, "^Server Browser", serverbrowser_i, pic_newgametitl, 0, m_defshade, MNU_ServerBrowserDraw, MNU_ServerBrowserMove, 0};

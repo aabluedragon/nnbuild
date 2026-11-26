@@ -1321,18 +1321,28 @@ void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, siz
 // exercises it from the console. nnb_msserver_t + the weak Masterserver_QueryList
 // come from netshared.h.
 
-int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
+// The lobby keeps the matches of every game. Tell it which one this is, so that
+// lists hold Shadow Warrior matches only. The shareware episode cannot play with
+// the full game, so it goes by its own name.
+static void Net_LobbyIdentify(void)
+{
+    NNB_SetLobbyGame(SW_SHAREWARE ? "sw-shareware" : "sw");
+}
+
+int Net_QueryLobby(const char *masterAddr) { Net_LobbyIdentify(); return NNB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
 
 // --- in-menu server browser backend -----------------------------------------
 int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
 {
     if (!Masterserver_QueryList) return -1;
+    Net_LobbyIdentify();
     nnb_msserver_t list[16];
     int const cap = maxout < 16 ? maxout : 16;
     int32_t const n = Masterserver_QueryList(masterAddr, list, cap, 1200);
     for (int i = 0; i < n && i < maxout; i++)
     {
-        Bstrncpyz(out[i].addr, list[i].addr[0] ? list[i].addr : list[i].addr6, sizeof(out[i].addr));
+        Bstrncpyz(out[i].addr,  list[i].addr,  sizeof(out[i].addr));
+        Bstrncpyz(out[i].addr6, list[i].addr6, sizeof(out[i].addr6));
         Bstrncpyz(out[i].name, list[i].name, sizeof(out[i].name));
         Bstrncpyz(out[i].map,  list[i].map,  sizeof(out[i].map));
         out[i].players = list[i].players;
@@ -1341,7 +1351,59 @@ int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
     return n;
 }
 
+int Net_QueryLobbyListBegin(const char *masterAddr)
+{
+    if (!Masterserver_QueryListBegin || !Masterserver_QueryListPoll) return 0;
+    Net_LobbyIdentify();
+    Masterserver_QueryListBegin(masterAddr);
+    return 1;
+}
+
+int Net_QueryLobbyListPoll(sw_lobby_server *out, int maxout, int *count)
+{
+    nnb_msserver_t list[16];
+    int32_t n = 0;
+    if (!Masterserver_QueryListPoll(list, maxout < 16 ? maxout : 16, &n))
+        return 0;
+    for (int i = 0; i < n && i < maxout; i++)
+    {
+        Bstrncpyz(out[i].addr,  list[i].addr,  sizeof(out[i].addr));
+        Bstrncpyz(out[i].addr6, list[i].addr6, sizeof(out[i].addr6));
+        Bstrncpyz(out[i].name, list[i].name, sizeof(out[i].name));
+        Bstrncpyz(out[i].map,  list[i].map,  sizeof(out[i].map));
+        out[i].players = list[i].players;
+        out[i].maxplayers = list[i].maxplayers;
+    }
+    *count = n;
+    return 1;
+}
+
 const char *Net_GetMasterAddr(void) { return s_swMasterAddr[0] ? s_swMasterAddr : NNB_DEFAULT_MASTERSERVER; }
+
+// Reaching a browser-picked server before joining it (see network.h).
+EDUKE32_STATIC_ASSERT(sizeof(sw_join_status) == sizeof(nnb_msjoin_t));
+
+int Net_BrowserJoinBegin(const sw_lobby_server *server)
+{
+    if (!Masterserver_JoinBegin)
+        return 0;
+    nnb_msserver_t target;
+    Bmemset(&target, 0, sizeof(target));
+    Bstrncpyz(target.addr,  server->addr,  sizeof(target.addr));
+    Bstrncpyz(target.addr6, server->addr6, sizeof(target.addr6));
+    Bstrncpyz(target.name,  server->name,  sizeof(target.name));
+    return Masterserver_JoinBegin(&target, Net_GetMasterAddr(), NNB_JOIN_PORT, 1);
+}
+
+int Net_BrowserJoinPoll(sw_join_status *status)
+{
+    return Masterserver_JoinPoll ? Masterserver_JoinPoll(status) : SWJOIN_FAILED;
+}
+
+void Net_BrowserJoinCancel(void)
+{
+    if (Masterserver_JoinCancel) Masterserver_JoinCancel();
+}
 
 // The SW mmulti connection is established at startup from -net args, not from the
 // menu; the cleanest way to join a browser-picked server is to relaunch into that
@@ -1360,8 +1422,13 @@ void Net_JoinServerBrowser(const char *serverAddr)
 # endif
     static char sarg[128];  Bstrncpyz(sarg,  serverAddr, sizeof(sarg));
     static char maddr[136]; Bstrncpyz(maddr, Net_GetMasterAddr(), sizeof(maddr));
+    // The match uses the port the browser asked the server from, so a path that
+    // was opened through a router while asking is still open. -punchto lets the
+    // connection ask the lobby for that help again if it needs to.
+    static char parg[16];   Bsnprintf(parg, sizeof(parg), "/p%d", NNB_JOIN_PORT);
     char const *args[] = { exe, (char*)"-game", (char*)"sw", (char*)"-nosetup",
-                           (char*)"-masteraddr", maddr, (char*)"-net", sarg, NULL };
+                           (char*)"-masteraddr", maddr, (char*)"-punchto", sarg,
+                           (char*)"-net", parg, (char*)"/n0", sarg, NULL };
     // The selector chdir'd us into sw/; back out so the relaunch re-selects the game.
     if (chdir("..") != 0) { /* best effort */ }
     LOG_F(INFO, "Server browser: joining %s (relaunching)...", serverAddr);
@@ -1390,6 +1457,7 @@ int Net_ResolveAutoJoin(void)
         LOG_F(WARNING, "joinlobby: no masterserver support in this build");
         return 0;
     }
+    Net_LobbyIdentify();   // the first listed server has to be a Shadow Warrior one
     nnb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(s_autoJoinMaster, list, 16, 1500);
     if (n <= 0)
@@ -1411,9 +1479,13 @@ void Net_ClientPunchAttempt(void)
         return;
     if (!s_swPunchTarget[0] || !s_swMasterAddr[0])  // only a lobby/manual joiner sets these
         return;
-    static int throttle = 0;                     // the connect cycle spins fast; punch periodically
-    if ((throttle++ % 60) != 0)
+    // By the clock, not by counting calls: the connect cycle that calls this spins
+    // as fast as it can, and the lobby ignores an address that sends too much.
+    static uint32_t lastAsked = 0;
+    uint32_t const now = timerGetTicks();
+    if (lastAsked && (now - lastAsked) < 3000)
         return;
+    lastAsked = now | 1;
 
     char msEp[128];
     unsigned char pbuf[160];
@@ -1452,10 +1524,17 @@ void Net_HostAdvertise(void)
     char map[24];
     Bstrncpyz(map, LevelName[0] ? LevelName : "SW", sizeof(map));
 
+    // Who is here now, and how many the match has room for. While the host waits
+    // for players, numplayers is the number of slots, so count the ones in use.
+    int present = 0;
+    for (int i = 0; i < numplayers; i++)
+        if (mmulti_slotconnected(i)) present++;
+
+    Net_LobbyIdentify();
     char const *name = Player[connecthead].PlayerName;
     if (Masterserver_AdvertisePulse)
         Masterserver_AdvertisePulse(name && name[0] ? name : "NNBuild SW server",
-                                    mmulti_getport(), numplayers, numplayers, map);
+                                    mmulti_getport(), present, numplayers, map);
 }
 
 // ===== Mid-game file transfer (ported from Duke oldnet.cpp) ==================

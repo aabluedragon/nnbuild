@@ -23,6 +23,20 @@
 // overridable with the cl_masterserver cvar. Defaults to the public lobby.
 char g_masterServerAddr[128] = NNB_DEFAULT_MASTERSERVER;
 
+// The short name the lobby files this game's matches under. A player is only
+// shown matches with the same name, so data sets that cannot play together get
+// different names. Valid once the game data and its CON are loaded.
+const char *Net_LobbyGameName(void)
+{
+    if (FURY)      return "ionfury";
+    if (WW2GI)     return "ww2gi";
+    if (NAPALM)    return "napalm";
+    if (NAM)       return "nam";
+    if (WORLDTOUR) return "duke-worldtour";
+    if (VOLUMEONE) return "duke-shareware";
+    return g_scriptVersion == 13 ? "duke13" : "duke";
+}
+
 // When a client is relaunched to join a specific server (from the lobby or a
 // manual address), this holds that server's "host:port" so the connection loop
 // can ask the masterserver to punch a NAT hole to it if the direct connect
@@ -738,9 +752,18 @@ void Net_HostAdvertise(void)
     char const *name = g_player[connecthead].user_name;
     int32_t const dedic = g_netServerDedicated ? 1 : 0;
 
+    // Who is in the match now, and how many it has room for. In a match that
+    // can be joined while it runs, numplayers is the number of slots, so the
+    // players present are counted from the connect list. A dedicated host takes
+    // a slot but does not play.
+    int32_t present = 0;
+    for (int32_t i = connecthead; i >= 0; i = connectpoint2[i])
+        present++;
+
+    Masterserver_SetGame(Net_LobbyGameName());
     Masterserver_AdvertisePulse(name && name[0] ? name : "NNBuild server",
-                                mmulti_getport(), numplayers - dedic,
-                                playerswhenstarted - dedic, map);
+                                mmulti_getport(), present - dedic,
+                                numplayers - dedic, map);
 }
 
 void Net_MasterCheckTimeouts(void)

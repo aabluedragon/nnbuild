@@ -75,6 +75,12 @@ address. A row that ends in `v6` has only an IPv6 address.
 The list is fetched in the background. While NNBuild waits for the lobby, the
 screen shows `Asking the masterserver...` and the menu keeps working.
 
+The list holds matches of the game you are running. A lobby also lists other
+games, for example Shadow Warrior or another edition of Duke Nukem 3D; those
+are left out because you could not join them. The player numbers are the
+players in the match and the slots it has, so `0/3` is an empty server with
+three slots.
+
 ### The CONNECTING screen
 
 After you pick a match, the **CONNECTING** screen opens. NNBuild first checks
@@ -122,7 +128,7 @@ The screen can also show these messages:
 | `No servers advertised.` | The lobby's list is empty, or the lobby did not answer in time. |
 | `No answer from <server>.` | You tried to join and the server did not answer within 25 seconds. It is offline, or it cannot be reached from your network. |
 | `<server> is full.` | The server answered, and every player slot is taken. |
-| `No answer from the server.` | The server answered at first, but the match could not be joined within about 30 seconds. A server that has banned your address behaves like this. |
+| `No answer from the server.` | The server answered at first, but the match could not be joined within about 30 seconds. A server that has banned your address behaves like this. NNBuild restarts for this and opens **JOIN GAME** again, without the intro. |
 
 The host has to run the same NNBuild release as you. An older host does not
 answer the question the **CONNECTING** screen asks.

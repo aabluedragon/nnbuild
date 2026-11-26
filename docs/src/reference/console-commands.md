@@ -420,9 +420,10 @@ A lobby server keeps a list of games that players can join. See
 serverlist [address]
 ```
 
-Asks a lobby server for its list and prints one line per game: address,
-players, map and name. Without an address it asks the lobby server set in
-[`cl_masterserver`](#cl_masterserver).
+Asks a lobby server for its list and prints one line per match: address,
+players, map, game and name. Without an address it asks the lobby server set
+in [`cl_masterserver`](#cl_masterserver). It lists the matches of every game;
+the **Join Game** screen lists only those of the game you are running.
 
 ```text
 serverlist

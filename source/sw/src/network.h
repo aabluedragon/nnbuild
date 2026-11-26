@@ -181,10 +181,36 @@ void Net_ClientPunchAttempt(void);
 int  Net_QueryLobby(const char *masterAddr); // client: fetch+log masterserver server list
 
 // In-menu server browser (menus.cpp) support.
-struct sw_lobby_server { char addr[128]; char name[32]; char map[24]; int players, maxplayers; };
+// addr is the server's IPv4 address and addr6 its IPv6 address; either may be "".
+struct sw_lobby_server { char addr[128]; char addr6[128]; char name[32]; char map[24]; int players, maxplayers; };
 int   Net_QueryLobbyList(const char *masterAddr, struct sw_lobby_server *out, int maxout);
+// The same without waiting: Begin starts asking (0 when that is not possible),
+// Poll returns 1 once *count holds the number of servers written to out (-1: no answer).
+int   Net_QueryLobbyListBegin(const char *masterAddr);
+int   Net_QueryLobbyListPoll(struct sw_lobby_server *out, int maxout, int *count);
 const char *Net_GetMasterAddr(void);          // masterserver for the browser (-masteraddr, else default)
 void  Net_JoinServerBrowser(const char *serverAddr);  // join a browser-picked server
+
+// Reaching a server picked in the browser. Its IPv4 and IPv6 address are asked
+// at the same time and the one that works is joined, IPv6 preferred; nothing
+// here waits. See Masterserver_JoinBegin in masterserver.h, whose msjoin_t this
+// mirrors field for field.
+enum { SWJOIN_IDLE = 0, SWJOIN_TRYING, SWJOIN_CONNECTED, SWJOIN_FAILED, SWJOIN_FULL };
+struct sw_join_status
+{
+    int32_t state;
+    int32_t have4, have6;
+    int32_t ok4, ok6;
+    int32_t ms4, ms6;
+    int32_t elapsedMs;
+    int32_t graceLeftMs;
+    int32_t lobbyRequests;
+    char    addr4[128], addr6[128];
+    char    chosen[128];
+};
+int   Net_BrowserJoinBegin(const struct sw_lobby_server *server);  // 0: cannot ask first here
+int   Net_BrowserJoinPoll(struct sw_join_status *status);          // returns SWJOIN_*
+void  Net_BrowserJoinCancel(void);
 void Net_SetAutoJoin(const char *masterAddr); // -joinlobby: query+join first server
 int  Net_ResolveAutoJoin(void);               // returns 1 + fills s_autoJoinServer if a server was picked
 void Net_AddNetFile(const char *path);        // host: offer this file to joiners (-netfile)

@@ -37,6 +37,12 @@ extern "C" {
     void    Masterserver_SetPunchFn(void (*fn)(const char *)) MS_WEAK;
     void    Masterserver_HostPump(void) MS_WEAK;
     int32_t Masterserver_QueryList(const char *masterAddr, void *out, int32_t maxout, int32_t timeoutMs) MS_WEAK;
+    void    Masterserver_SetGame(const char *game) MS_WEAK;
+    void    Masterserver_QueryListBegin(const char *masterAddr) MS_WEAK;
+    int32_t Masterserver_QueryListPoll(void *out, int32_t maxout, int32_t *count) MS_WEAK;
+    int32_t Masterserver_JoinBegin(const void *server, const char *masterAddr, int32_t localPort, int32_t preferIPv6) MS_WEAK;
+    int32_t Masterserver_JoinPoll(void *status) MS_WEAK;
+    void    Masterserver_JoinCancel(void) MS_WEAK;
     int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr,
                                       char *outMasterEp, int32_t outcap, void *buf, int32_t cap) MS_WEAK;
 }
@@ -50,7 +56,28 @@ struct nnb_msserver_t
     char    name[32];
     char    map[24];
     int32_t players, maxplayers;
+    char    game[24];
 };
+
+// The progress of reaching a listed server (Masterserver_JoinPoll). MUST match
+// masterserver.h's msjoin_t and MSJOIN_* byte-for-byte; see there for the meaning.
+enum { NNB_JOIN_IDLE = 0, NNB_JOIN_TRYING, NNB_JOIN_CONNECTED, NNB_JOIN_FAILED, NNB_JOIN_FULL };
+struct nnb_msjoin_t
+{
+    int32_t state;
+    int32_t have4, have6;
+    int32_t ok4, ok6;
+    int32_t ms4, ms6;
+    int32_t elapsedMs;
+    int32_t graceLeftMs;
+    int32_t lobbyRequests;
+    char    addr4[128], addr6[128];
+    char    chosen[128];
+};
+
+// The UDP port a player's game uses after joining from a server list; the list
+// screen asks the server from the same port first. Matches Duke's NET_JOIN_PORT.
+#define NNB_JOIN_PORT 23530
 
 // FNV-1a over the file bytes; must match Duke's masterserver/file-transfer CRC.
 static inline uint32_t NNB_FileCrc(const char *data, int len)
@@ -87,6 +114,14 @@ struct nnb_filerecv_t
 // headers that declare them (it is, in every game's netcode TU).
 
 // --- masterserver client helpers (identical logic across the games) -----------
+
+// Tell the lobby code which game this is ("sw", "blood", "rr", ...). One lobby
+// serves every game: matches are reported with this name, and Masterserver_QueryList
+// returns only matches that carry the same one. Call it before reporting or asking.
+static inline void NNB_SetLobbyGame(const char *game)
+{
+    if (Masterserver_SetGame) Masterserver_SetGame(game);
+}
 static inline void NNB_AdvertiseStopAtExit(void) { if (Masterserver_AdvertiseStop) Masterserver_AdvertiseStop(); }
 
 // -advertise <masteraddr>: register this listen server with a masterserver, and

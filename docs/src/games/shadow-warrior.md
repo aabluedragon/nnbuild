@@ -122,10 +122,16 @@ When the host has loaded a map file with `-map`, it is sent to the other
 players before the level starts.
 
 When Shadow Warrior runs as a network game, **New Game** opens the Network
-Game menu. Its **Browse Servers** entry shows the games on a lobby server and
-joins the one you pick. It asks the lobby server named with
+Game menu. Its **Browse Servers** entry shows the Shadow Warrior matches on a
+lobby server and joins the one you pick. It asks the lobby server named with
 `-masteraddr <address>`, or the public lobby `nnb.ms.nukemnet.com` if that
 option was not given.
+
+Press Enter on a match to join it. NNBuild first asks the server whether it
+is there, over its IPv4 and its IPv6 address at once, and shows the progress.
+IPv6 is used when it answers. Esc cancels, and after 25 seconds without an
+answer the list comes back with a message. Then NNBuild restarts itself as a
+player in that match.
 Joining from this list works on Linux and macOS.
 
 ## Script mods

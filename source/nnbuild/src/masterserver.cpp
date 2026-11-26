@@ -43,6 +43,10 @@ enum
     MS_STUN_RESP      = 0xB5,   // master  -> sender : your public address is ...
     MS_PUNCH_REQ      = 0xB6,   // client  -> master : arrange a hole-punch to <server>
     MS_PUNCH_NOTIFY   = 0xB7,   // master  -> server : client <addr> wants in, punch to it
+    // The list with each match's game, narrowed to one game when the request
+    // names one. MS_LIST_REQ / _RESP stay as they are for older programs.
+    MS_LIST_REQ2      = 0xB8,   // client  -> master : send me the list [of this game]
+    MS_LIST_RESP2     = 0xB9,   // master  -> client : the list, each entry with its game
 };
 
 #define MS_ENTRY_TTL_MS   30000   // drop a server not heard from in this long
@@ -311,6 +315,7 @@ struct ms_entry_t
     uint8_t players, maxplayers;
     char name[32];
     char map[24];
+    char game[24];                 // "" when the server did not say
     uint32_t lastseen;
     int used;
 };
@@ -463,11 +468,13 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
         uint8_t maxp = buf[pos++];
         uint32_t serverId = (uint32_t)(buf[pos] | (buf[pos+1] << 8) | (buf[pos+2] << 16) | ((uint32_t)buf[pos+3] << 24));
         pos += 4;
-        char name[32] = "", map[24] = "";
+        char name[32] = "", map[24] = "", game[24] = "";
         ms_getstr(buf, n, &pos, name, sizeof(name));
         ms_getstr(buf, n, &pos, map, sizeof(map));
+        ms_getstr(buf, n, &pos, game, sizeof(game));   // absent from older servers
         ms_clean(name);
         ms_clean(map);
+        ms_clean(game);
 
         // One logical server may advertise from both its IPv4 and IPv6 endpoint;
         // merge those by serverId into a single entry that carries both. Match an
@@ -511,11 +518,12 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
             g_ent[slot].maxplayers = maxp;
             Bstrncpyz(g_ent[slot].name, name, sizeof(g_ent[slot].name));
             Bstrncpyz(g_ent[slot].map, map, sizeof(g_ent[slot].map));
+            Bstrncpyz(g_ent[slot].game, game, sizeof(g_ent[slot].game));
             g_ent[slot].lastseen = now;
             if (fresh || !hadFamily)
             {
                 char a[128]; ms_addr_to_str(from, gameport, a, sizeof(a));
-                LOG_F(INFO, "masterserver: + %s \"%s\" (%s)", a, name, map);
+                LOG_F(INFO, "masterserver: + %s \"%s\" (%s) [%s]", a, name, map, game[0] ? game : "?");
             }
         }
     }
@@ -540,16 +548,27 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
             }
         }
     }
-    else if (type == MS_LIST_REQ)
+    else if (type == MS_LIST_REQ || type == MS_LIST_REQ2)
     {
+        // The newer request may name a game; then only its matches are sent.
+        // The newer answer also carries each match's game.
+        int const withGame = (type == MS_LIST_REQ2);
+        char wanted[24] = "";
+        if (withGame)
+        {
+            ms_getstr(buf, n, &pos, wanted, sizeof(wanted));
+            ms_clean(wanted);
+        }
+
         uint8_t out[MS_PKT];
         Bmemcpy(out, MS_MAGIC, 4);
-        out[4] = MS_LIST_RESP;
+        out[4] = withGame ? MS_LIST_RESP2 : MS_LIST_RESP;
         int op = 6;   // out[5] = count (filled below)
         int count = 0;
-        for (int i = 0; i < MS_MAX_ENTRIES && op < (int)sizeof(out) - 160; i++)
+        for (int i = 0; i < MS_MAX_ENTRIES && op < (int)sizeof(out) - 190; i++)
         {
             if (!g_ent[i].used) continue;
+            if (wanted[0] && Bstrcasecmp(wanted, g_ent[i].game)) continue;
             char a4[128] = "", a6[128] = "";
             if (g_ent[i].src4.ss_family) ms_addr_to_str(&g_ent[i].src4, g_ent[i].gameport, a4, sizeof(a4));
             if (g_ent[i].src6.ss_family) ms_addr_to_str(&g_ent[i].src6, g_ent[i].gameport, a6, sizeof(a6));
@@ -561,6 +580,7 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
             out[op++] = g_ent[i].maxplayers;
             if (!ms_putstr(out, &op, sizeof(out), g_ent[i].name)) { op = save; break; }
             if (!ms_putstr(out, &op, sizeof(out), g_ent[i].map)) { op = save; break; }
+            if (withGame && !ms_putstr(out, &op, sizeof(out), g_ent[i].game)) { op = save; break; }
             count++;
         }
         out[5] = (uint8_t)count;
@@ -687,6 +707,19 @@ static int g_advOn = 0;
 static uint32_t g_advLast = 0;
 static uint32_t g_serverId = 0;
 
+// The game this program runs, as told to and asked of the lobby.
+static char g_msGame[24] = "";
+
+void Masterserver_SetGame(const char *game)
+{
+    Bstrncpyz(g_msGame, game ? game : "", sizeof(g_msGame));
+}
+
+const char *Masterserver_GetGame(void)
+{
+    return g_msGame;
+}
+
 void Masterserver_SetAdvertise(const char *addr)
 {
     g_advOn = 0;
@@ -747,6 +780,7 @@ static int ms_build_advertise(uint8_t *out, int cap, const char *name, int32_t g
     out[op++] = (uint8_t)((g_serverId >> 24) & 0xff);
     ms_putstr(out, &op, cap, name ? name : "server");
     ms_putstr(out, &op, cap, map ? map : "");
+    ms_putstr(out, &op, cap, g_msGame);   // an older lobby does not read this far
     return op;
 }
 
@@ -873,7 +907,11 @@ int32_t Masterserver_MakePunchReq(const char *masterAddr, const char *targetAddr
 // client side: query the list
 // ---------------------------------------------------------------------------
 
-int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs)
+// Ask a lobby for its list. `game` narrows it to one game ("" asks for every
+// game). The newer request goes out first. A lobby too old to know it stays
+// silent and is then asked the old way, which lists every game without saying
+// which one each match is.
+static int32_t ms_query_list(const char *masterAddr, const char *game, struct msserver_t *out, int32_t maxout, int32_t timeoutMs)
 {
     struct sockaddr_storage dst;
     if (!ms_resolve(masterAddr, MASTERSERVER_DEFAULT_PORT, &dst))
@@ -884,20 +922,30 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
         return -1;
     ms_setnonblock(s);
 
-    uint8_t req[8];
+    uint8_t req[40];
     Bmemcpy(req, MS_MAGIC, 4);
-    req[4] = MS_LIST_REQ;
-    sendto(s, (char *)req, 5, 0, (struct sockaddr *)&dst, ms_sslen(&dst));
+    req[4] = MS_LIST_REQ2;
+    int reqLen = 5;
+    ms_putstr(req, &reqLen, sizeof(req), game ? game : "");
+    sendto(s, (char *)req, reqLen, 0, (struct sockaddr *)&dst, ms_sslen(&dst));
 
-    int32_t got = 0;
+    int32_t got = 0, askedOldWay = 0;
+    int32_t const oldWayAfterMs = (timeoutMs / 2 < 600) ? timeoutMs / 2 : 600;
     uint32_t start = ms_nowms();
     while ((int32_t)(ms_nowms() - start) < timeoutMs && got < maxout)
     {
+        if (!askedOldWay && (int32_t)(ms_nowms() - start) >= oldWayAfterMs)
+        {
+            req[4] = MS_LIST_REQ;
+            sendto(s, (char *)req, 5, 0, (struct sockaddr *)&dst, ms_sslen(&dst));
+            askedOldWay = 1;
+        }
+
         uint8_t buf[MS_PKT];
         struct sockaddr_storage from;
         socklen_t fl = sizeof(from);
         int n = (int)recvfrom(s, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
-        if (n < 6 || Bmemcmp(buf, MS_MAGIC, 4) || buf[4] != MS_LIST_RESP)
+        if (n < 6 || Bmemcmp(buf, MS_MAGIC, 4) || (buf[4] != MS_LIST_RESP && buf[4] != MS_LIST_RESP2))
         {
 #ifdef _WIN32
             Sleep(5);
@@ -907,11 +955,12 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
 #endif
             continue;
         }
+        int const withGame = (buf[4] == MS_LIST_RESP2);
         int count = buf[5];
         int pos = 6;
         for (int i = 0; i < count && got < maxout; i++)
         {
-            char a4[128] = "", a6[128] = "", name[32] = "", map[24] = "";
+            char a4[128] = "", a6[128] = "", name[32] = "", map[24] = "", entryGame[24] = "";
             if (!ms_getstr(buf, n, &pos, a4, sizeof(a4))) break;
             if (!ms_getstr(buf, n, &pos, a6, sizeof(a6))) break;
             if (pos + 2 > n) break;
@@ -919,10 +968,12 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
             int maxp = buf[pos++];
             if (!ms_getstr(buf, n, &pos, name, sizeof(name))) break;
             if (!ms_getstr(buf, n, &pos, map, sizeof(map))) break;
+            if (withGame && !ms_getstr(buf, n, &pos, entryGame, sizeof(entryGame))) break;
             Bstrncpyz(out[got].addr, a4, sizeof(out[got].addr));
             Bstrncpyz(out[got].addr6, a6, sizeof(out[got].addr6));
             Bstrncpyz(out[got].name, name, sizeof(out[got].name));
             Bstrncpyz(out[got].map, map, sizeof(out[got].map));
+            Bstrncpyz(out[got].game, entryGame, sizeof(out[got].game));
             out[got].players = players;
             out[got].maxplayers = maxp;
             got++;
@@ -932,6 +983,16 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
 
     ms_close(s);
     return got;
+}
+
+int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs)
+{
+    return ms_query_list(masterAddr, g_msGame, out, maxout, timeoutMs);
+}
+
+int32_t Masterserver_QueryListAll(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs)
+{
+    return ms_query_list(masterAddr, "", out, maxout, timeoutMs);
 }
 
 // ---------------------------------------------------------------------------

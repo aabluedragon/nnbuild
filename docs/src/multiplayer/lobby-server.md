@@ -14,6 +14,10 @@ NNBuild comes with a public lobby, **`nnb.ms.nukemnet.com`**. The menus use it
 until you name another one, so most players never have to think about lobbies.
 Any community can also run its own.
 
+One lobby serves every game NNBuild runs. Each match is listed with the game
+it is for, and a player is only shown the matches of the game they are
+running. See [Games on one lobby](#games-on-one-lobby).
+
 Most of this page describes the Duke Nukem 3D family.
 [Other games](#other-games) lists what the other runtimes do.
 
@@ -46,14 +50,14 @@ NNBuild masterserver listening on UDP 23519 (IPv4:on IPv6:on)
 After that it prints a line for each event:
 
 ```text
-masterserver: + 203.0.113.10:23513 "ARENA ONE" (E1L1)
+masterserver: + 203.0.113.10:23513 "ARENA ONE" (E1L1) [duke]
 masterserver: punch 198.51.100.4:23530 <-> 203.0.113.10:23513
 masterserver: - 203.0.113.10:23513 "ARENA ONE" (going away)
 ```
 
 | Line | Meaning |
 | --- | --- |
-| `+` | A server was added to the list. |
+| `+` | A server was added to the list. The name in square brackets is its game; `?` means the host is too old to say. |
 | `punch` | The lobby helped a player and a server find each other. |
 | `- ... (going away)` | A server said it was shutting down. |
 | `- ... (timed out)` | A server stopped reporting and was dropped. |
@@ -105,8 +109,9 @@ in the console setting `cl_masterserver`, which is the public lobby unless you
 changed it. To put a match started from the command line on the public lobby,
 write `--advertise nnb.ms.nukemnet.com`.
 
-The host sends its name, its game port, its player and slot numbers and the
-name of the current map. The lobby adds the address the report came from.
+The host sends its name, its game port, the number of players in the match,
+the number of slots, the name of the current map and the name of its game.
+The lobby adds the address the report came from.
 
 ## Use a lobby as a player
 
@@ -136,10 +141,38 @@ serverlist lobby.example.org
 Without an address, the command asks the lobby in `cl_masterserver`, the same
 one **JOIN GAME** uses. With an address, it asks that lobby instead.
 
-The answer starts with the number of matches. Then there is one line per
-match with its address, the player and slot numbers it reported, the map and
-the server's name. If a match also has an IPv6 address, a second line starting
-with `also IPv6:` follows. The command prints up to 64 matches.
+Unlike **JOIN GAME**, the command lists the matches of every game. The answer
+starts with the number of matches and the name of the game you are running.
+Then there is one line per match with its address, the player and slot
+numbers it reported, the map, its game and the server's name. If a match also
+has an IPv6 address, a second line starting with `also IPv6:` follows. The
+command prints up to 64 matches.
+
+## Games on one lobby
+
+A host tells the lobby which game its match is for, and a player's list holds
+only the matches of the same game. Data that cannot play together goes by
+different names:
+
+| Name | Game |
+| --- | --- |
+| `duke` | Duke Nukem 3D, Atomic Edition (1.4 and 1.5) |
+| `duke13` | Duke Nukem 3D 1.3D |
+| `duke-shareware` | Duke Nukem 3D shareware |
+| `duke-worldtour` | Duke Nukem 3D: 20th Anniversary World Tour |
+| `nam`, `napalm`, `ww2gi`, `ionfury` | NAM, NAPALM, World War II GI, Ion Fury |
+| `sw`, `sw-shareware` | Shadow Warrior, and its shareware episode |
+| `blood` | Blood |
+| `rr` | Redneck Rampage and Rides Again |
+| `exhumed` | Exhumed / PowerSlave |
+
+- The same goes for `--lobbylist` and `--joinlobby`: they see only matches of
+  the game being started.
+- A host from a release before these names existed is listed without one. It
+  appears in `serverlist`, and to players on older releases, but not in the
+  list of a current game.
+- A lobby from an older release does not know the names. A current game then
+  gets that lobby's whole list, as before.
 
 ## How long an entry lives
 
@@ -232,7 +265,7 @@ The menu adds both for you when you join from **JOIN GAME**.
 
 ## Limits of the list
 
-- A lobby holds up to 256 matches.
+- A lobby holds up to 256 matches, of all games together.
 - One internet address can have up to 8 matches on the list.
 - The lobby answers up to 60 packets in 10 seconds from one address and
   ignores the rest. Ordinary play stays far below that. The limit stops a
@@ -240,10 +273,8 @@ The menu adds both for you when you join from **JOIN GAME**.
 - Names are limited to plain printable characters; anything else is shown as
   `?`.
 - The list is sent to a player in one packet. A very long list is cut short.
-- **JOIN GAME** shows the first 12 matches and `serverlist` the first 64.
-- The lobby does not record which game a match is for. If a community plays
-  several of the games NNBuild runs, a separate lobby per game keeps the lists
-  apart.
+- **JOIN GAME** shows the first 12 matches of your game and `serverlist` the
+  first 64 of all games.
 
 ## Other games
 
@@ -262,8 +293,9 @@ Notes:
 
 - Shadow Warrior's **Browse Servers** screen asks the lobby given at launch
   with `--masteraddr <lobby>`, or the public lobby without it. Press Enter to
-  join and R to refresh. It joins over the IPv4 address and has no
-  **CONNECTING** screen.
+  join and R to refresh. Joining works as in the Duke Nukem 3D family: the
+  server is asked over its IPv4 and its IPv6 address at once, IPv6 is
+  preferred, the screen shows the progress, and Esc cancels.
 - For a join by address in Shadow Warrior and Exhumed, `--punchto <server>`
   and `--masteraddr <lobby>` ask the lobby for help, as `--punchtarget` and
   `--masteraddr` do in the Duke Nukem 3D family.

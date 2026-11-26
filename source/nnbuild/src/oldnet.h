@@ -162,6 +162,9 @@ extern char g_masterServerAddr[128];
 extern char g_punchTargetAddr[128];
 // Reason a previous join failed, shown once in the JOIN GAME menu; empty if none.
 extern char g_joinErrorMsg[128];
+// The name the lobby knows this game by ("duke", "duke13", "nam", ...).
+const char *Net_LobbyGameName(void);
+
 // cl_preferipv6: joining a listed server uses IPv6 when it answers (see oldnet.cpp).
 extern int32_t g_netPreferIPv6;
 

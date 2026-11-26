@@ -1416,13 +1416,14 @@ void Net_SetAdvertise(const char *addr) { NNB_SetAdvertise(addr); }  // -adverti
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
+    NNB_SetLobbyGame("blood");
     char map[24];
     Bstrncpyz(map, gGameOptions.zLevelName[0] ? gGameOptions.zLevelName : "Blood", sizeof(map));
     NNB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Blood server",
                           gNetPort, gNetPlayers, gNetPlayers, map);
 }
 
-int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "Blood"); }  // -lobbylist (shared)
+int Net_QueryLobby(const char *masterAddr) { NNB_SetLobbyGame("blood"); return NNB_QueryLobby(masterAddr, "Blood"); }  // -lobbylist (shared)
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised
 // server, split its ip:port into Blood's gNetAddress/gNetPort, and become a client.
@@ -1440,6 +1441,7 @@ void Net_ClientPunch(void)
 int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_blMasterAddr, masterAddr, sizeof(s_blMasterAddr));  // remember for NAT punch
+    NNB_SetLobbyGame("blood");   // the first listed server has to be a Blood one
     char ep[48], name[32];
     if (!NNB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     char host[48]; Bstrncpyz(host, ep, sizeof(host));

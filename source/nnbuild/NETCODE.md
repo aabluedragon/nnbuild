@@ -297,8 +297,19 @@ The default lobby everywhere is `NNB_DEFAULT_MASTERSERVER`
 - **Advertise** (`MS_ADVERTISE`/`_STOP`): a host started with `-advertise <addr>`
   pulses name/gameport/players/map from `Net_HostAdvertise` each frame; the
   master keys the entry off the packet source. `-advertise` must precede `-net`.
+- **Games** (`Masterserver_SetGame`): one lobby holds every game's matches.
+  `MS_ADVERTISE` ends with the game's name (`Net_LobbyGameName()` for the Duke
+  family: `duke`, `duke13`, `duke-shareware`, `duke-worldtour`, `nam`, `napalm`,
+  `ww2gi`, `ionfury`; `sw` / `sw-shareware`, `blood`, `rr`, `exhumed` are set by
+  those games with `NNB_SetLobbyGame`). `MS_LIST_REQ2` carries the wanted name
+  and `MS_LIST_RESP2` returns only matching entries, each with its name.
+  `Masterserver_QueryList` asks for the program's own game;
+  `Masterserver_QueryListAll` (the `serverlist` command) asks for all. An older
+  lobby ignores `MS_LIST_REQ2`; after 600 ms the client falls back to
+  `MS_LIST_REQ`, which lists everything without names. An older host has no
+  name and is left out of named lists.
 - **List** (`MS_LIST_REQ`/`_RESP`): the `serverlist` console command calls
-  `Masterserver_QueryList` (blocking). The in-game **JOIN GAME** menu
+  `Masterserver_QueryListAll` (blocking). The in-game **JOIN GAME** menu
   (menus.cpp case 20020) uses `Masterserver_QueryListBegin` / `...Poll`, which
   run the same query on a worker thread so the menu never waits on DNS or the
   lobby.

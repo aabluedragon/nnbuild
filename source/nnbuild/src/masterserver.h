@@ -18,6 +18,14 @@ extern "C" {
 // ---------------------------------------------------------------------------
 void Masterserver_Run(int32_t port);
 
+// ----- Which game this is -----------------------------------------------------
+// One lobby serves every game the program can run. Each match is reported with
+// a short name for its game ("duke", "sw", "blood", ...), and a game is only
+// given the matches of its own game. Call this once the game is known. Until
+// then reports carry no game, and lists are not narrowed down.
+void        Masterserver_SetGame(const char *game);
+const char *Masterserver_GetGame(void);
+
 // ----- Game-server side: advertise this server to a masterserver -------------
 // addr is "host[:port]" - IPv4, [IPv6], or a hostname; missing port defaults to
 // MASTERSERVER_DEFAULT_PORT. Configure once, then pulse periodically from the
@@ -35,11 +43,14 @@ struct msserver_t
     char name[32];
     char map[24];
     int32_t players, maxplayers;
+    char game[24];      // the game it runs ("" when the host or the lobby is too old to say)
 };
 
 // Blocking query with a timeout (ms). Fills up to maxout entries; returns the
-// count, or -1 on error.
+// count, or -1 on error. Only matches of this program's game are returned (see
+// Masterserver_SetGame); QueryListAll returns the matches of every game.
 int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs);
+int32_t Masterserver_QueryListAll(const char *masterAddr, struct msserver_t *out, int32_t maxout, int32_t timeoutMs);
 
 // The same query without blocking the caller: looking up the lobby's name and
 // waiting for its answer happen on a worker thread, so a menu keeps drawing.
