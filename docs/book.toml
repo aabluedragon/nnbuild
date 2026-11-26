@@ -1,0 +1,22 @@
+[book]
+title = "NNBuild"
+description = "Play, host and build for Duke Nukem 3D and other Build-engine games: modern multiplayer, a built-in map editor, and JavaScript or TypeScript mods."
+authors = ["NNBuild contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/nnbuild.css"]
+git-repository-url = "https://github.com/aabluedragon/nnbuild"
+edit-url-template = "https://github.com/aabluedragon/nnbuild/edit/multiplayer/docs/{path}"
+site-url = "/"
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 1

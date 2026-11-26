@@ -91,3 +91,7 @@ project.xcworkspace/
 /source/voidwrap/sdk/
 /source/discordrpc/obj_linux
 /source/discordrpc/obj_win
+
+# Built documentation site and release archives
+/docs/book/
+/dist/

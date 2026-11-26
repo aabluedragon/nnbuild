@@ -1,0 +1,158 @@
+/* NNBuild colours on top of the stock mdBook themes.
+   Navy, cyan and orange come from the program icon. */
+
+:root {
+    --content-max-width: 820px;
+}
+
+.navy {
+    --bg: #0b1230;
+    --fg: #c9d3ea;
+    --sidebar-bg: #070c22;
+    --sidebar-fg: #b7c3df;
+    --sidebar-non-existant: #55618a;
+    --sidebar-active: #2fe0f7;
+    --sidebar-spacer: #18214a;
+    --scrollbar: #3a4a86;
+    --icons: #7f8fc0;
+    --icons-hover: #e6ecfb;
+    --links: #2fd6f0;
+    --inline-code-color: #ffb648;
+    --theme-popup-bg: #0f183d;
+    --theme-popup-border: #2a3670;
+    --theme-hover: #18214a;
+    --quote-bg: #121b45;
+    --quote-border: #24306a;
+    --table-border-color: #24306a;
+    --table-header-bg: #18214a;
+    --table-alternate-bg: #0f173b;
+    --searchbar-border-color: #2a3670;
+    --searchbar-bg: #0f183d;
+    --searchbar-fg: #e6ecfb;
+    --searchresults-header-fg: #9aa7d0;
+    --searchresults-border-color: #2a3670;
+    --searchresults-li-bg: #121b45;
+    --search-mark-bg: #b36a00;
+}
+
+.light {
+    --sidebar-bg: #f3f6fc;
+    --sidebar-fg: #1b2550;
+    --sidebar-active: #0a6fa3;
+    --links: #0a6fa3;
+    --inline-code-color: #7a3d00;
+    --quote-bg: #eef4fb;
+    --quote-border: #cfe0f2;
+    --table-header-bg: #dfe8f6;
+    --table-alternate-bg: #f6f9fd;
+}
+
+.content h1 {
+    letter-spacing: -0.01em;
+}
+
+.content h2 {
+    margin-block-start: 2em;
+    padding-block-end: 0.2em;
+    border-block-end: 1px solid var(--quote-border);
+}
+
+.content table {
+    margin: 1.2em 0;
+    width: 100%;
+}
+
+.content table td,
+.content table th {
+    padding: 6px 12px;
+    vertical-align: top;
+}
+
+.content img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Landing page */
+.nn-hero {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin: 8px 0 28px;
+}
+
+.nn-hero img {
+    width: 132px;
+    height: 132px;
+    flex: none;
+}
+
+.nn-hero p {
+    font-size: 1.15em;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.nn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 0 0 32px;
+}
+
+.nn-actions a {
+    display: inline-block;
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--links);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.nn-actions a.primary {
+    background: var(--links);
+    color: var(--bg);
+}
+
+.nn-actions a:hover {
+    filter: brightness(1.12);
+    text-decoration: none;
+}
+
+.nn-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+    margin: 18px 0 8px;
+}
+
+.nn-cards > div {
+    border: 1px solid var(--quote-border);
+    background: var(--quote-bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+
+.nn-cards h3 {
+    margin: 0 0 6px;
+    font-size: 1.05em;
+}
+
+.nn-cards p {
+    margin: 0;
+    font-size: 0.95em;
+    line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+    .nn-hero {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    .nn-hero img {
+        width: 96px;
+        height: 96px;
+    }
+}
