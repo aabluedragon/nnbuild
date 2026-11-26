@@ -180,6 +180,11 @@ score starts at zero, unless you are coming back to a match you left (see
 If nothing arrives from the host for 20 seconds, the join stops with
 `Timed out joining the game in progress (no data from host).`
 
+The host also gives up on a player whose game needs more than 25 seconds to
+load after connecting, and that player then sees the same message. If it
+happens to you, join again. The second attempt is usually faster, because your
+computer has just read the same files.
+
 If the host has not started the match yet, your game waits with it and enters
 the level together with everyone else.
 

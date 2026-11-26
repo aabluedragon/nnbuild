@@ -9,6 +9,8 @@ set -eu
 
 target="${1:?usage: platform/package.sh <target>}"
 name="nnbuild-$target"
+# Version shown by macOS for the app; release builds pass the tag's number.
+version="${NNBUILD_VERSION:-1.3}"
 stage="dist/$name"
 
 mkdir -p dist
@@ -66,6 +68,19 @@ macos-*)
     # it runs on a Mac that does not have Homebrew.
     dylibbundler -od -b -x "$app/Contents/MacOS/vibebuild32" \
         -d "$app/Contents/Frameworks/" -p @executable_path/../Frameworks/
+    # The app needs the newest macOS version that any binary inside it asks for.
+    minos=$(for f in "$app/Contents/MacOS/vibebuild32" "$app"/Contents/Frameworks/*.dylib; do
+                otool -l "$f" | awk '/LC_BUILD_VERSION/ { found = 1 } found && /minos/ { print $2; found = 0 }'
+            done | sort -t. -k1,1n -k2,2n | tail -1)
+    plist="$app/Contents/Info.plist"
+    plutil -replace CFBundleIdentifier -string com.nukemnet.nnbuild "$plist"
+    plutil -replace CFBundleShortVersionString -string "$version" "$plist"
+    plutil -replace CFBundleVersion -string "$version" "$plist"
+    plutil -replace CFBundleGetInfoString -string "NNBuild $version" "$plist"
+    if [ -n "$minos" ]; then
+        plutil -replace LSMinimumSystemVersion -string "$minos" "$plist"
+    fi
+    echo "minimum macOS version: ${minos:-unknown}"
     codesign --force --deep --sign - "$app"
     ditto -c -k --sequesterRsrc --keepParent "$stage" "dist/$name.zip"
     ls -l "dist/$name.zip"

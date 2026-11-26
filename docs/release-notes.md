@@ -5,14 +5,14 @@ and building for Duke Nukem 3D and other Build-engine games.
 
 ## Downloads
 
-| System | File |
-| --- | --- |
-| Windows, 64-bit | `nnbuild-windows-x64.zip` |
-| Windows, 32-bit | `nnbuild-windows-x86.zip` |
-| Linux, x64 | `nnbuild-linux-x64.tar.gz` |
-| Linux, ARM64 | `nnbuild-linux-arm64.tar.gz` |
-| macOS, Apple silicon | `nnbuild-macos-arm64.zip` |
-| macOS, Intel | `nnbuild-macos-x64.zip` |
+| System | File | Needs |
+| --- | --- | --- |
+| Windows, 64-bit | `nnbuild-windows-x64.zip` | Windows 10 or later |
+| Windows, 32-bit | `nnbuild-windows-x86.zip` | Windows 10 or later |
+| Linux, x64 | `nnbuild-linux-x64.tar.gz` | glibc 2.35 or later, SDL2 |
+| Linux, ARM64 | `nnbuild-linux-arm64.tar.gz` | glibc 2.35 or later, SDL2 |
+| macOS, Apple silicon | `nnbuild-macos-arm64.zip` | macOS 15 or later |
+| macOS, Intel | `nnbuild-macos-x64.zip` | macOS 14 or later |
 
 The downloads contain the program only. You also need the data files of each
 game you want to play, from your own copy of that game. See

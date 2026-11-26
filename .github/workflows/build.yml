@@ -46,7 +46,9 @@ jobs:
       - name: Smoke test
         run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./vibebuild32 --help
       - name: Package
-        run: sh platform/package.sh linux-${{ matrix.arch }}
+        run: |
+          case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac
+          sh platform/package.sh linux-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
           name: nnbuild-linux-${{ matrix.arch }}
@@ -76,7 +78,9 @@ jobs:
       - name: Build
         run: make -j"$(nproc)" PLATFORM=WINDOWS CROSS=${{ matrix.triple }}- vibebuild32 PRETTY_OUTPUT=0
       - name: Package
-        run: sh platform/package.sh windows-${{ matrix.arch }}
+        run: |
+          case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac
+          sh platform/package.sh windows-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
           name: nnbuild-windows-${{ matrix.arch }}
@@ -90,8 +94,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { arch: arm64, runner: macos-15 }
-          - { arch: x64, runner: macos-15-intel }
+          - { arch: arm64, runner: macos-15, min_os: '15.0' }
+          - { arch: x64, runner: macos-15-intel, min_os: '14.0' }
+    env:
+      # Matches the Homebrew libraries on each runner, which set the real limit.
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.min_os }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,7 +111,9 @@ jobs:
       - name: Smoke test
         run: ./vibebuild32 --help
       - name: Package
-        run: sh platform/package.sh macos-${{ matrix.arch }}
+        run: |
+          case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac
+          sh platform/package.sh macos-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
           name: nnbuild-macos-${{ matrix.arch }}
