@@ -2249,7 +2249,6 @@ int G_EnterLevel(int g)
     g_globalRandom = 0;
 
     ud.last_level = ud.level_number+1;
-    VBJS_FireSimple("levelChanged");
 
     G_BackupInterpolations();
 

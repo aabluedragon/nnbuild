@@ -1590,8 +1590,6 @@ void G_AddUserQuote(const char *daquote)
     if (Bstrlen(daquote) > MAXUSERQUOTELEN)
         return;
 
-    VBJS_FireChat("chatMessage", -1, daquote);   // VibeBuild32: user quotes / MP chat -> JS
-
     for (i=MAXUSERQUOTES-1;i>0;i--)
     {
         Bstrcpy(user_quote[i],user_quote[i-1]);
@@ -2737,8 +2735,6 @@ void G_DisplayRest(int smoothratio)
 
     G_PrintGameQuotes();
     G_PrintLevelName();
-    VBJS_DrawHUD();
-
     VBJS_DrawHUD();   // VibeBuild32: script-registered HUD text
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
@@ -10730,6 +10726,7 @@ RECHECK:
             // The title menu and demo playback run in this loop rather than the
             // main one, so scripts and the debugger are serviced here as well.
             VBJS_RunFrame(0);
+            VBJS_DispatchCommands();
 
             if (foundemo == 0)
             {

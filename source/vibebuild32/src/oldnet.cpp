@@ -110,6 +110,9 @@ static int32_t g_lateJoinRestoreFrag = 0, g_lateJoinRestoreFraggedself = 0, g_la
 static bool g_slotAwaitingRestore[MAXPLAYERS];
 static uint16_t lateJoinGoMask;
 static uint16_t inputEpoch, lateJoinInputEpoch;
+// Pointer size of the host build, from the GO packet. The snapshot is a
+// savegame, and saves are not portable between 32-bit and 64-bit builds.
+static uint8_t lateJoinHostPointerSize;
 enum
 {
     LATEJOIN_RNG_RANDOMSEED,
@@ -1022,6 +1025,8 @@ int32_t Net_KickPlayer(const char *ref)
 
 static void Net_AddBanIP(uint32_t ip, const char *name)
 {
+    if (!ip)
+        return;  // not an IPv4 address; see Net_BanPlayer
     if (Net_IsLoopbackIP(ip))
     {
         LOG_F(WARNING, "Refusing to ban a loopback address (localhost).");
@@ -1054,6 +1059,14 @@ int32_t Net_BanPlayer(const char *ref)
     if (slot >= 0 && slot != myconnectindex)
     {
         uint32_t ip = (uint32_t)mmulti_getslotip(slot);
+        if (!ip)
+        {
+            // The ban list holds IPv4 addresses. An entry of 0 would match
+            // every IPv6 player, so do not create one.
+            LOG_F(WARNING, "Cannot ban %s: they are connected over IPv6 and the ban list is IPv4 only. Use kick instead.",
+                  g_player[slot].user_name);
+            return -1;
+        }
         if (Net_IsLoopbackIP(ip))
         {
             LOG_F(WARNING, "Refusing to ban %s: they are on localhost.", g_player[slot].user_name);
@@ -1909,7 +1922,7 @@ void Net_ParsePackets(void)
             }
             case PACKET_TYPE_LATEJOIN_GO:
             {
-                if (myconnectindex == connecthead || packbufleng != 4 + LATEJOIN_RNG_COUNT * 4 + 2 ||
+                if (myconnectindex == connecthead || packbufleng != 4 + LATEJOIN_RNG_COUNT * 4 + 3 ||
                     static_cast<uint8_t>(packbuf[1]) >= numplayers)
                     break;
                 if (g_netLateJoiner == 1 && (snapshotBuf == NULL || snapshotChunksGot < snapshotChunkTotal))
@@ -1929,6 +1942,7 @@ void Net_ParsePackets(void)
                 for (i = 0; i < LATEJOIN_RNG_COUNT; i++)
                     lateJoinGoRNG[i] = (int32_t)B_UNBUF32(&packbuf[4 + i * 4]);
                 lateJoinInputEpoch = B_UNBUF16(packbuf + 4 + LATEJOIN_RNG_COUNT * 4);
+                lateJoinHostPointerSize = (uint8_t)packbuf[4 + LATEJOIN_RNG_COUNT * 4 + 2];
                 // Drain through the final broadcast tick even when the local
                 // jitter buffer would normally keep that tick queued.
                 if (lateJoinGoSlot != myconnectindex && (ud.gm & MODE_GAME))
@@ -2704,6 +2718,16 @@ static void Net_IntegrateLateJoin(int32_t slot)
 // load it; G_LoadPlayer ends in the ready barrier the others are waiting at.
 static void Net_CompleteLateJoin(int32_t slot)
 {
+    if (lateJoinHostPointerSize != sizeof(intptr_t))
+    {
+        LOG_F(ERROR, "Late join: host is a %d-bit build, this is a %d-bit build",
+              lateJoinHostPointerSize * 8, (int)sizeof(intptr_t) * 8);
+        Net_ClearLateJoinSnapshot();
+        G_GameExit(sizeof(intptr_t) == 4
+            ? "This match is hosted by a 64-bit build.\nJoining a match in progress needs the 64-bit build of the game."
+            : "This match is hosted by a 32-bit build.\nJoining a match in progress needs the 32-bit build of the game.");
+    }
+
     if (snapshotBuf == NULL || snapshotChunksGot < snapshotChunkTotal)
     {
         LOG_F(ERROR, "Late join: snapshot incomplete (%d/%d chunks)",
@@ -2977,10 +3001,11 @@ void Net_MasterCheckLateJoin(void)
     B_BUF32(&packbuf[24], g_random.playerweapon);
     B_BUF32(&packbuf[28], (int32_t)wrandomseed);
     B_BUF16(&packbuf[4 + LATEJOIN_RNG_COUNT * 4], ++inputEpoch);
+    packbuf[4 + LATEJOIN_RNG_COUNT * 4 + 2] = (char)sizeof(intptr_t);
 
     for (int32_t i = 0; i < numplayers; i++)
         if (i != myconnectindex && g_player[i].connected)
-            mmulti_sendpacket(i, (unsigned char *)packbuf, 4 + LATEJOIN_RNG_COUNT * 4 + 2);
+            mmulti_sendpacket(i, (unsigned char *)packbuf, 4 + LATEJOIN_RNG_COUNT * 4 + 3);
 
     Net_IntegrateLateJoin(slot);
     // Snapshot was pre-spawn; spawn the joiner into our live world with the
@@ -3514,6 +3539,7 @@ void Net_ClientReconnect(void)
     char const *exe = Net_ProcessExecutable();
     if (exe && g_procArgv)
     {
+        buildvfs_chdir(g_procLaunchDir);
 #ifdef _WIN32
         _execv(exe, (char * const *)g_procArgv);
 #else
@@ -3570,6 +3596,7 @@ void Net_LaunchAddress(const char *hostport)
 
     LOG_F(INFO, "Joining %s (relaunching as client)", hostport);
     mmulti_uninitmultiplayers();
+    buildvfs_chdir(g_procLaunchDir);
 #ifdef _WIN32
     _execv(exe, (char * const *)newargv);
 #else
@@ -3615,6 +3642,7 @@ void Net_LaunchMenu(const char *errmsg)
 
     LOG_F(INFO, "Returning to the menu%s%s", errmsg && errmsg[0] ? ": " : "", errmsg ? errmsg : "");
     mmulti_uninitmultiplayers();
+    buildvfs_chdir(g_procLaunchDir);
 #ifdef _WIN32
     _execv(exe, (char * const *)mv);
 #else
@@ -3661,6 +3689,7 @@ void Net_LaunchHost(int32_t advertise)
 
     LOG_F(INFO, "Hosting a listen server (relaunching)%s", advertise ? " + advertising" : "");
     mmulti_uninitmultiplayers();
+    buildvfs_chdir(g_procLaunchDir);
 #ifdef _WIN32
     _execv(exe, (char * const *)nv);
 #else

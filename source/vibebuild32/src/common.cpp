@@ -278,7 +278,9 @@ void G_ScanGroups(void)
 
 #define DUKE_COMMON_STANDALONE_PROJECT() DukeEditor::ProjectStandalone()
 #define DUKE_COMMON_AFTER_COMMAND_GRP_LOAD(path) do { \
-    if (g_netModFileCount < MAXNETMODFILES) \
+    /* Known game data given with -g/--grp is not a mod pack: every player has \
+       their own copy, so it is not offered to joining players. */ \
+    if (g_netModFileCount < MAXNETMODFILES && !G_KnownGameDataInfo(path)) \
     { \
         std::string resolvedPath; \
         Net_ResolveContentPath((path), resolvedPath); \

@@ -22,20 +22,54 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <fcntl.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
+#ifdef _WIN32
+# include <winsock2.h>
+# include <ws2tcpip.h>
+# include <windows.h>
+# include <winhttp.h>
+# include <direct.h>
+#else
+# include <fcntl.h>
+# include <netdb.h>
+# include <sys/socket.h>
+# include <netinet/in.h>
+# include <netinet/tcp.h>
+# include <arpa/inet.h>
+# include <curl/curl.h>
+# ifndef __APPLE__
+#  include <dlfcn.h>
+# endif
+#endif
 #include <pthread.h>
 #include <atomic>
 #include <deque>
 #include <unordered_map>
-#include <curl/curl.h>
 
+// ---- Platform layer: the few places where Windows differs from POSIX.
 #ifdef _WIN32
-# include <direct.h>
+static void vbjs_net_startup(void)
+{
+    static bool started;
+    if (!started) { WSADATA data; started = WSAStartup(MAKEWORD(2, 2), &data) == 0; }
+}
+static int  vbjs_sock_close(int fd) { return closesocket((SOCKET)fd); }
+static void vbjs_sock_nonblocking(int fd) { u_long on = 1; ioctlsocket((SOCKET)fd, FIONBIO, &on); }
+static bool vbjs_sock_would_block(void) { return WSAGetLastError() == WSAEWOULDBLOCK; }
+static bool vbjs_sock_in_progress(void) { int const e = WSAGetLastError(); return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
+static int  vbjs_mkdir(const char *path) { return _mkdir(path); }
+static char *vbjs_realpath(const char *path, char *resolved) { return _fullpath(resolved, path, 1024); }
+# define VBJS_SHUT_WR SD_SEND
+# define VBJS_FD(fd) ((SOCKET)(fd))
+#else
+static void vbjs_net_startup(void) {}
+static int  vbjs_sock_close(int fd) { return close(fd); }
+static void vbjs_sock_nonblocking(int fd) { fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK); }
+static bool vbjs_sock_would_block(void) { return errno == EAGAIN || errno == EWOULDBLOCK; }
+static bool vbjs_sock_in_progress(void) { return errno == EINPROGRESS; }
+static int  vbjs_mkdir(const char *path) { return mkdir(path, 0755); }
+static char *vbjs_realpath(const char *path, char *resolved) { return realpath(path, resolved); }
+# define VBJS_SHUT_WR SHUT_WR
+# define VBJS_FD(fd) (fd)
 #endif
 
 extern "C" {
@@ -179,6 +213,9 @@ static vbjs_debug_transport_t s_debugTransport;
 // mutex in every game frame when neither the browser inspector nor VS Code has
 // submitted a request.
 static std::atomic<bool> s_debuggerWorkPending { false };
+// Set once the VS Code adapter has polled the bridge. Until then nobody will
+// send "configurationDone", so start-up only waits a few seconds for it.
+static std::atomic<bool> s_debugClientSeen { false };
 static std::unordered_map<std::string, std::string> s_menuTextOverrides;
 static std::unordered_map<uint64_t, int> s_menuRoutes;
 
@@ -267,7 +304,7 @@ static void vbjs_add_script(const char *path)
 {
     if (!path || s_scriptCount >= VBJS_MAX_SCRIPTS) return;
     char canonical[2048];
-    const char *storedPath = realpath(path, canonical) ? canonical : path;
+    const char *storedPath = vbjs_realpath(path, canonical) ? canonical : path;
     for (int i = 0; i < s_scriptCount; i++)
         if (!strcmp(s_scripts[i].path, storedPath)) return;   // dedupe
     snprintf(s_scripts[s_scriptCount++].path, sizeof(s_scripts[0].path), "%s", storedPath);
@@ -538,7 +575,7 @@ static void js_dgram_socket_finalizer(JSRuntime *rt, JSValue value)
 {
     auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque(value, s_dgramSocketClass);
     if (!socket) return;
-    if (socket->fd >= 0) close(socket->fd);
+    if (socket->fd >= 0) vbjs_sock_close(socket->fd);
     vbjs_dgram_remove(socket);
     JS_FreeValueRT(rt, socket->listeners);
     delete socket;
@@ -626,7 +663,7 @@ static JSValue js_dgram_send(JSContext *ctx, JSValueConst this_val, int argc, JS
     if (js_dgram_resolve(ctx, argv[1], addressIndex >= 0 ? argv[addressIndex] : JS_UNDEFINED, socket->family, &address, &addressLength)) return JS_EXCEPTION;
     std::vector<uint8_t> data;
     if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
-    ssize_t const sent = sendto(socket->fd, data.data(), data.size(), 0, (sockaddr *)&address, addressLength);
+    int const sent = (int)sendto(socket->fd, (const char *)data.data(), (int)data.size(), 0, (sockaddr *)&address, addressLength);
     if (callback >= 0) { JSValue args[1] = { sent < 0 ? JS_NewError(ctx) : JS_NULL }; JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 1, args); JS_FreeValue(ctx, args[0]); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram send callback"); JS_FreeValue(ctx, result); }
     if (sent < 0) return JS_ThrowReferenceError(ctx, "dgram.send: cannot send datagram");
     return JS_UNDEFINED;
@@ -636,7 +673,7 @@ static JSValue js_dgram_close(JSContext *ctx, JSValueConst this_val, int argc, J
 {
     auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
-    if (socket->fd >= 0) { close(socket->fd); socket->fd = -1; js_dgram_emit(ctx, socket, "close", 0, nullptr); }
+    if (socket->fd >= 0) { vbjs_sock_close(socket->fd); socket->fd = -1; js_dgram_emit(ctx, socket, "close", 0, nullptr); }
     if (argc && JS_IsFunction(ctx, argv[0])) { JSValue result = JS_Call(ctx, argv[0], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram close callback"); JS_FreeValue(ctx, result); }
     return JS_UNDEFINED;
 }
@@ -657,10 +694,11 @@ static JSValue js_dgram_createSocket(JSContext *ctx, JSValueConst, int argc, JSV
     const char *type = JS_ToCString(ctx, argv[0]); if (!type) return JS_EXCEPTION;
     int const family = !strcmp(type, "udp6") ? AF_INET6 : !strcmp(type, "udp4") ? AF_INET : 0; JS_FreeCString(ctx, type);
     if (!family) return JS_ThrowTypeError(ctx, "dgram.createSocket type must be 'udp4' or 'udp6'");
+    vbjs_net_startup();
     auto *socket = new vbjs_dgram_socket_t; socket->family = family;
-    socket->fd = ::socket(socket->family, SOCK_DGRAM, 0);
+    socket->fd = (int)::socket(socket->family, SOCK_DGRAM, 0);
     if (socket->fd < 0) { delete socket; return JS_ThrowReferenceError(ctx, "dgram.createSocket: cannot create socket"); }
-    fcntl(socket->fd, F_SETFL, fcntl(socket->fd, F_GETFL) | O_NONBLOCK); socket->listeners = JS_NewObject(ctx);
+    vbjs_sock_nonblocking(socket->fd); socket->listeners = JS_NewObject(ctx);
     JSValue object = JS_NewObjectClass(ctx, s_dgramSocketClass); JS_SetOpaque(object, socket); s_dgramSockets.push_back(socket);
     if (argc > 1 && JS_IsFunction(ctx, argv[1]))
     {
@@ -678,8 +716,8 @@ static void vbjs_dgram_poll(JSContext *ctx)
         if (socket->fd < 0) continue;
         for (;;)
         {
-            uint8_t data[65536]; sockaddr_storage from {}; socklen_t fromLength = sizeof(from); ssize_t const received = recvfrom(socket->fd, data, sizeof(data), 0, (sockaddr *)&from, &fromLength);
-            if (received < 0) { if (errno != EAGAIN && errno != EWOULDBLOCK) { JSValue error = JS_NewError(ctx); js_dgram_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); } break; }
+            uint8_t data[65536]; sockaddr_storage from {}; socklen_t fromLength = sizeof(from); int const received = (int)recvfrom(socket->fd, (char *)data, sizeof(data), 0, (sockaddr *)&from, &fromLength);
+            if (received < 0) { if (!vbjs_sock_would_block()) { JSValue error = JS_NewError(ctx); js_dgram_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); } break; }
             char host[NI_MAXHOST] = "", service[NI_MAXSERV] = ""; getnameinfo((sockaddr *)&from, fromLength, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
             JSValue args[2] = { JS_NewUint8ArrayCopy(ctx, data, (size_t)received), JS_NewObject(ctx) }; JS_SetPropertyStr(ctx, args[1], "address", JS_NewString(ctx, host)); JS_SetPropertyStr(ctx, args[1], "port", JS_NewInt32(ctx, atoi(service))); JS_SetPropertyStr(ctx, args[1], "family", JS_NewString(ctx, from.ss_family == AF_INET6 ? "IPv6" : "IPv4")); JS_SetPropertyStr(ctx, args[1], "size", JS_NewInt32(ctx, (int)received)); js_dgram_emit(ctx, socket, "message", 2, args); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]);
         }
@@ -696,7 +734,7 @@ static void vbjs_net_remove(vbjs_net_socket_t *socket)
 static void js_net_socket_finalizer(JSRuntime *rt, JSValue value)
 {
     auto *socket = (vbjs_net_socket_t *)JS_GetOpaque(value, s_netSocketClass);
-    if (!socket) return; if (socket->fd >= 0) close(socket->fd); vbjs_net_remove(socket); JS_FreeValueRT(rt, socket->listeners); delete socket;
+    if (!socket) return; if (socket->fd >= 0) vbjs_sock_close(socket->fd); vbjs_net_remove(socket); JS_FreeValueRT(rt, socket->listeners); delete socket;
 }
 static void js_net_emit(JSContext *ctx, vbjs_net_socket_t *socket, const char *event, int argc, JSValueConst *argv)
 {
@@ -715,14 +753,14 @@ static JSValue js_net_on(JSContext *ctx, JSValueConst this_val, int argc, JSValu
 }
 static void js_net_close(JSContext *ctx, vbjs_net_socket_t *socket, int hadError)
 {
-    if (socket->closed) return; socket->closed = 1; if (socket->fd >= 0) { close(socket->fd); socket->fd = -1; } JSValue args[1] = { JS_NewBool(ctx, hadError) }; js_net_emit(ctx, socket, "close", 1, args); JS_FreeValue(ctx, args[0]);
+    if (socket->closed) return; socket->closed = 1; if (socket->fd >= 0) { vbjs_sock_close(socket->fd); socket->fd = -1; } JSValue args[1] = { JS_NewBool(ctx, hadError) }; js_net_emit(ctx, socket, "close", 1, args); JS_FreeValue(ctx, args[0]);
 }
 static JSValue js_net_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
     auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
     if (!argc) return JS_ThrowTypeError(ctx, "socket.write(data[, callback])"); if (socket->closed) return JS_ThrowReferenceError(ctx, "net.Socket is closed");
     std::vector<uint8_t> data; if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
-    ssize_t const written = send(socket->fd, data.data(), data.size(), 0); int const failed = written < 0;
+    int const written = (int)send(socket->fd, (const char *)data.data(), (int)data.size(), 0); int const failed = written < 0;
     if (argc > 1 && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net write callback"); JS_FreeValue(ctx, result); }
     if (failed) { JSValue error = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); return JS_FALSE; } return JS_TRUE;
 }
@@ -730,7 +768,7 @@ static JSValue js_net_end(JSContext *ctx, JSValueConst this_val, int argc, JSVal
 {
     auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
     if (argc && !JS_IsFunction(ctx, argv[0])) { JSValue result = js_net_write(ctx, this_val, 1, argv); if (JS_IsException(result)) return result; JS_FreeValue(ctx, result); }
-    if (!socket->closed) shutdown(socket->fd, SHUT_WR); if (argc && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net end callback"); JS_FreeValue(ctx, result); } return JS_DupValue(ctx, this_val);
+    if (!socket->closed) shutdown(socket->fd, VBJS_SHUT_WR); if (argc && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net end callback"); JS_FreeValue(ctx, result); } return JS_DupValue(ctx, this_val);
 }
 static JSValue js_net_destroy(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
 {
@@ -738,52 +776,217 @@ static JSValue js_net_destroy(JSContext *ctx, JSValueConst this_val, int, JSValu
 }
 static JSValue js_net_setNoDelay(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; int enabled = 1; if (argc) enabled = JS_ToBool(ctx, argv[0]); setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled)); return JS_DupValue(ctx, this_val);
+    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; int enabled = 1; if (argc) enabled = JS_ToBool(ctx, argv[0]); setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&enabled, sizeof(enabled)); return JS_DupValue(ctx, this_val);
 }
 static JSValue js_net_createConnection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (!argc) return JS_ThrowTypeError(ctx, "net.createConnection(port[, host][, callback])"); int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
+    if (!argc) return JS_ThrowTypeError(ctx, "net.createConnection(port[, host][, callback])"); vbjs_net_startup(); int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
     int32_t port = 0; if (JS_ToInt32(ctx, &port, argv[0]) || port < 1 || port > 65535) return JS_ThrowRangeError(ctx, "port must be between 1 and 65535");
     int freeHost = 0; const char *host = "127.0.0.1";
     if (argc > 1 && callback != 1) { host = JS_ToCString(ctx, argv[1]); freeHost = 1; if (!host) return JS_EXCEPTION; }
     char service[16]; snprintf(service, sizeof(service), "%d", port); addrinfo hints {}; hints.ai_socktype = SOCK_STREAM; hints.ai_family = AF_UNSPEC; addrinfo *result = nullptr; int const rc = getaddrinfo(host, service, &hints, &result); if (freeHost) JS_FreeCString(ctx, host);
     if (rc || !result) return JS_ThrowReferenceError(ctx, "net.createConnection: cannot resolve host");
-    auto *socket = new vbjs_net_socket_t; socket->fd = ::socket(result->ai_family, SOCK_STREAM, 0); if (socket->fd < 0) { freeaddrinfo(result); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot create socket"); }
-    fcntl(socket->fd, F_SETFL, fcntl(socket->fd, F_GETFL) | O_NONBLOCK); int const connectResult = connect(socket->fd, result->ai_addr, result->ai_addrlen); freeaddrinfo(result);
-    if (connectResult && errno != EINPROGRESS) { close(socket->fd); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot connect"); }
+    auto *socket = new vbjs_net_socket_t; socket->fd = (int)::socket(result->ai_family, SOCK_STREAM, 0); if (socket->fd < 0) { freeaddrinfo(result); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot create socket"); }
+    vbjs_sock_nonblocking(socket->fd); int const connectResult = connect(socket->fd, result->ai_addr, (int)result->ai_addrlen); int const connectPending = connectResult && vbjs_sock_in_progress(); freeaddrinfo(result);
+    if (connectResult && !connectPending) { vbjs_sock_close(socket->fd); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot connect"); }
     socket->connecting = connectResult != 0; socket->listeners = JS_NewObject(ctx); JSValue object = JS_NewObjectClass(ctx, s_netSocketClass); JS_SetOpaque(object, socket); s_netSockets.push_back(socket);
     if (callback >= 0) { JSValue args[2] = { JS_NewString(ctx, "connect"), JS_DupValue(ctx, argv[callback]) }; JSValue ignored = js_net_on(ctx, object, 2, args); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]); }
     return object;
 }
 static void vbjs_net_poll(JSContext *ctx)
 {
-    for (auto *socket : s_netSockets) { if (socket->closed) continue; if (socket->connecting) { fd_set writeSet; FD_ZERO(&writeSet); FD_SET(socket->fd, &writeSet); timeval timeout {}; int const ready = select(socket->fd + 1, nullptr, &writeSet, nullptr, &timeout); if (ready > 0) { int error = 0; socklen_t length = sizeof(error); getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, &error, &length); if (!error) { socket->connecting = 0; js_net_emit(ctx, socket, "connect", 0, nullptr); } else { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } } } if (socket->connecting) continue; for (;;) { uint8_t data[65536]; ssize_t const received = recv(socket->fd, data, sizeof(data), 0); if (received > 0) { JSValue value = JS_NewUint8ArrayCopy(ctx, data, (size_t)received); js_net_emit(ctx, socket, "data", 1, &value); JS_FreeValue(ctx, value); continue; } if (!received) { js_net_emit(ctx, socket, "end", 0, nullptr); js_net_close(ctx, socket, 0); } else if (errno != EAGAIN && errno != EWOULDBLOCK) { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } break; } }
+    for (auto *socket : s_netSockets) { if (socket->closed) continue; if (socket->connecting) { fd_set writeSet; FD_ZERO(&writeSet); FD_SET(VBJS_FD(socket->fd), &writeSet); timeval timeout {}; int const ready = select(socket->fd + 1, nullptr, &writeSet, nullptr, &timeout); if (ready > 0) { int error = 0; socklen_t length = sizeof(error); getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, (char *)&error, &length); if (!error) { socket->connecting = 0; js_net_emit(ctx, socket, "connect", 0, nullptr); } else { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } } } if (socket->connecting) continue; for (;;) { uint8_t data[65536]; int const received = (int)recv(socket->fd, (char *)data, sizeof(data), 0); if (received > 0) { JSValue value = JS_NewUint8ArrayCopy(ctx, data, (size_t)received); js_net_emit(ctx, socket, "data", 1, &value); JS_FreeValue(ctx, value); continue; } if (!received) { js_net_emit(ctx, socket, "end", 0, nullptr); js_net_close(ctx, socket, 0); } else if (!vbjs_sock_would_block()) { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } break; } }
 }
 
-// ------------------------------------------------------------ fetch (libcurl) ---
+// ------------------------------------- fetch (libcurl, or WinHTTP on Windows) ---
 
-static size_t vbjs_fetch_write(char *data, size_t size, size_t count, void *opaque)
-{
-    auto *result = (vbjs_fetch_result_t *)opaque; result->body.append(data, size * count); return size * count;
-}
 static size_t vbjs_fetch_header(char *data, size_t size, size_t count, void *opaque)
 {
     auto *result = (vbjs_fetch_result_t *)opaque; std::string line(data, size * count); size_t const colon = line.find(':');
     if (colon != std::string::npos) { std::string name = line.substr(0, colon), value = line.substr(colon + 1); while (!value.empty() && isspace((unsigned char)value.front())) value.erase(value.begin()); while (!value.empty() && isspace((unsigned char)value.back())) value.pop_back(); for (char &c : name) c = (char)tolower((unsigned char)c); result->headers[name] = value; }
     return size * count;
 }
-static void *vbjs_fetch_thread(void *opaque)
+
+#ifdef _WIN32
+static std::wstring vbjs_widen(const std::string &text)
 {
-    auto *request = (vbjs_fetch_request_t *)opaque; CURL *curl = curl_easy_init();
+    int const n = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0);
+    std::wstring out((size_t)n, L'\0');
+    if (n) MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), &out[0], n);
+    return out;
+}
+static std::string vbjs_narrow(const wchar_t *text, int length)
+{
+    int const n = WideCharToMultiByte(CP_UTF8, 0, text, length, nullptr, 0, nullptr, nullptr);
+    std::string out((size_t)n, '\0');
+    if (n) WideCharToMultiByte(CP_UTF8, 0, text, length, &out[0], n, nullptr, nullptr);
+    return out;
+}
+
+// Windows ships an HTTP client, so fetch needs no extra library there.
+static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
+{
+    vbjs_fetch_result_t *result = request->result;
+    std::wstring const url = vbjs_widen(request->url);
+    wchar_t host[256] = L"", path[4096] = L"", extra[4096] = L"";
+    URL_COMPONENTS parts {};
+    parts.dwStructSize = sizeof(parts);
+    parts.lpszHostName = host;   parts.dwHostNameLength = ARRAYSIZE(host);
+    parts.lpszUrlPath = path;    parts.dwUrlPathLength = ARRAYSIZE(path);
+    parts.lpszExtraInfo = extra; parts.dwExtraInfoLength = ARRAYSIZE(extra);
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) { result->error = "fetch: invalid URL"; return; }
+
+    std::wstring const target = std::wstring(path[0] ? path : L"/") + extra;
+    std::wstring const method = vbjs_widen(request->method ? request->method : "GET");
+    HINTERNET session = WinHttpOpen(L"NNBuild", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : nullptr;
+    HINTERNET handle = connection ? WinHttpOpenRequest(connection, method.c_str(), target.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
+                                                       parts.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
+    if (!handle)
+        result->error = "fetch: unable to create HTTP client";
+    else
+    {
+        WinHttpSetTimeouts(handle, 10000, 10000, 30000, 30000);
+        std::wstring headers;
+        for (auto const &header : request->headers) { headers += vbjs_widen(header); headers += L"\r\n"; }
+        DWORD const bodySize = (DWORD)request->body.size();
+        BOOL const sent = WinHttpSendRequest(handle, headers.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headers.c_str(), headers.empty() ? 0 : (DWORD)-1L,
+                                             bodySize ? (LPVOID)request->body.data() : WINHTTP_NO_REQUEST_DATA, bodySize, bodySize, 0);
+        if (!sent || !WinHttpReceiveResponse(handle, nullptr))
+        {
+            char message[64]; snprintf(message, sizeof(message), "fetch: request failed (error %lu)", (unsigned long)GetLastError());
+            result->error = message;
+        }
+        else
+        {
+            DWORD status = 0, size = sizeof(status);
+            WinHttpQueryHeaders(handle, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &size, WINHTTP_NO_HEADER_INDEX);
+            result->status = (long)status;
+
+            DWORD rawSize = 0;
+            WinHttpQueryHeaders(handle, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, WINHTTP_NO_OUTPUT_BUFFER, &rawSize, WINHTTP_NO_HEADER_INDEX);
+            if (rawSize)
+            {
+                std::wstring raw(rawSize / sizeof(wchar_t) + 1, L'\0');
+                if (WinHttpQueryHeaders(handle, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, &raw[0], &rawSize, WINHTTP_NO_HEADER_INDEX))
+                {
+                    std::string const text = vbjs_narrow(raw.c_str(), (int)(rawSize / sizeof(wchar_t)));
+                    for (size_t start = 0; start < text.size(); )
+                    {
+                        size_t end = text.find("\r\n", start);
+                        if (end == std::string::npos) end = text.size();
+                        std::string line = text.substr(start, end - start);
+                        if (!line.empty()) vbjs_fetch_header(&line[0], 1, line.size(), result);
+                        start = end + 2;
+                    }
+                }
+            }
+
+            for (;;)
+            {
+                DWORD available = 0, received = 0;
+                if (!WinHttpQueryDataAvailable(handle, &available) || !available) break;
+                std::string chunk(available, '\0');
+                if (!WinHttpReadData(handle, &chunk[0], available, &received) || !received) break;
+                result->body.append(chunk.data(), received);
+            }
+
+            wchar_t finalUrl[4096]; DWORD finalSize = sizeof(finalUrl);
+            if (WinHttpQueryOption(handle, WINHTTP_OPTION_URL, finalUrl, &finalSize)) result->url = vbjs_narrow(finalUrl, (int)wcslen(finalUrl));
+            else result->url = request->url;
+        }
+    }
+    if (handle) WinHttpCloseHandle(handle);
+    if (connection) WinHttpCloseHandle(connection);
+    if (session) WinHttpCloseHandle(session);
+}
+#else
+static size_t vbjs_fetch_write(char *data, size_t size, size_t count, void *opaque)
+{
+    auto *result = (vbjs_fetch_result_t *)opaque; result->body.append(data, size * count); return size * count;
+}
+
+// libcurl entry points. macOS always has libcurl, so it is linked normally.
+// Elsewhere it is loaded on first use: a binary linked against one
+// distribution's libcurl does not start on another, and only fetch() needs it.
+namespace vbcurl {
+#ifdef __APPLE__
+static bool load(void) { static bool ready; if (!ready) { curl_global_init(CURL_GLOBAL_DEFAULT); ready = true; } return true; }
+static CURL *(*const easy_init)(void) = curl_easy_init;
+static CURLcode (*const easy_setopt)(CURL *, CURLoption, ...) = curl_easy_setopt;
+static CURLcode (*const easy_perform)(CURL *) = curl_easy_perform;
+static CURLcode (*const easy_getinfo)(CURL *, CURLINFO, ...) = curl_easy_getinfo;
+static void (*const easy_cleanup)(CURL *) = curl_easy_cleanup;
+static const char *(*const easy_strerror)(CURLcode) = curl_easy_strerror;
+static curl_slist *(*const slist_append)(curl_slist *, const char *) = curl_slist_append;
+static void (*const slist_free_all)(curl_slist *) = curl_slist_free_all;
+#else
+static CURL *(*easy_init)(void);
+static CURLcode (*easy_setopt)(CURL *, CURLoption, ...);
+static CURLcode (*easy_perform)(CURL *);
+static CURLcode (*easy_getinfo)(CURL *, CURLINFO, ...);
+static void (*easy_cleanup)(CURL *);
+static const char *(*easy_strerror)(CURLcode);
+static curl_slist *(*slist_append)(curl_slist *, const char *);
+static void (*slist_free_all)(curl_slist *);
+
+static bool load(void)
+{
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    static int state;   // 0 = not tried, 1 = ready, -1 = unavailable
+    pthread_mutex_lock(&lock);
+    if (!state)
+    {
+        state = -1;
+        for (const char *name : { "libcurl.so.4", "libcurl-gnutls.so.4", "libcurl.so" })
+        {
+            void *const lib = dlopen(name, RTLD_NOW | RTLD_GLOBAL);
+            if (!lib) continue;
+            auto const global_init = (CURLcode (*)(long))dlsym(lib, "curl_global_init");
+            easy_init = (CURL *(*)(void))dlsym(lib, "curl_easy_init");
+            easy_setopt = (CURLcode (*)(CURL *, CURLoption, ...))dlsym(lib, "curl_easy_setopt");
+            easy_perform = (CURLcode (*)(CURL *))dlsym(lib, "curl_easy_perform");
+            easy_getinfo = (CURLcode (*)(CURL *, CURLINFO, ...))dlsym(lib, "curl_easy_getinfo");
+            easy_cleanup = (void (*)(CURL *))dlsym(lib, "curl_easy_cleanup");
+            easy_strerror = (const char *(*)(CURLcode))dlsym(lib, "curl_easy_strerror");
+            slist_append = (curl_slist *(*)(curl_slist *, const char *))dlsym(lib, "curl_slist_append");
+            slist_free_all = (void (*)(curl_slist *))dlsym(lib, "curl_slist_free_all");
+            if (global_init && easy_init && easy_setopt && easy_perform && easy_getinfo && easy_cleanup && easy_strerror && slist_append && slist_free_all)
+            {
+                global_init(CURL_GLOBAL_DEFAULT);
+                state = 1;
+                break;
+            }
+            dlclose(lib);
+        }
+    }
+    bool const ready = state > 0;
+    pthread_mutex_unlock(&lock);
+    return ready;
+}
+#endif
+}
+
+static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
+{
+    if (!vbcurl::load()) { request->result->error = "fetch: libcurl is not installed on this system"; return; }
+    CURL *curl = vbcurl::easy_init();
     if (!curl) request->result->error = "fetch: unable to create HTTP client";
     else
     {
-        curl_slist *headers = nullptr; for (auto const &header : request->headers) headers = curl_slist_append(headers, header.c_str()); if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_URL, request->url); curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L); curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, vbjs_fetch_write); curl_easy_setopt(curl, CURLOPT_WRITEDATA, request->result); curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, vbjs_fetch_header); curl_easy_setopt(curl, CURLOPT_HEADERDATA, request->result);
-        if (request->method && strcmp(request->method, "GET")) curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
-        if (!request->body.empty()) { curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->body.data()); curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)request->body.size()); }
-        CURLcode const code = curl_easy_perform(curl); if (code != CURLE_OK) request->result->error = curl_easy_strerror(code); else { char *effectiveUrl = nullptr; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &request->result->status); curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl); if (effectiveUrl) request->result->url = effectiveUrl; } curl_slist_free_all(headers); curl_easy_cleanup(curl);
+        curl_slist *headers = nullptr; for (auto const &header : request->headers) headers = vbcurl::slist_append(headers, header.c_str()); if (headers) vbcurl::easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        vbcurl::easy_setopt(curl, CURLOPT_URL, request->url); vbcurl::easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); vbcurl::easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); vbcurl::easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L); vbcurl::easy_setopt(curl, CURLOPT_WRITEFUNCTION, vbjs_fetch_write); vbcurl::easy_setopt(curl, CURLOPT_WRITEDATA, request->result); vbcurl::easy_setopt(curl, CURLOPT_HEADERFUNCTION, vbjs_fetch_header); vbcurl::easy_setopt(curl, CURLOPT_HEADERDATA, request->result);
+        if (request->method && strcmp(request->method, "GET")) vbcurl::easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
+        if (!request->body.empty()) { vbcurl::easy_setopt(curl, CURLOPT_POSTFIELDS, request->body.data()); vbcurl::easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)request->body.size()); }
+        CURLcode const code = vbcurl::easy_perform(curl); if (code != CURLE_OK) request->result->error = vbcurl::easy_strerror(code); else { char *effectiveUrl = nullptr; vbcurl::easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &request->result->status); vbcurl::easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl); if (effectiveUrl) request->result->url = effectiveUrl; } vbcurl::slist_free_all(headers); vbcurl::easy_cleanup(curl);
     }
+}
+#endif
+
+static void *vbjs_fetch_thread(void *opaque)
+{
+    auto *request = (vbjs_fetch_request_t *)opaque;
+    vbjs_fetch_perform(request);
     free(request->url); free(request->method);
     pthread_mutex_lock(&s_fetchMutex);
     if (!s_fetchShuttingDown) s_fetchReady.push_back(request->result);
@@ -904,7 +1107,7 @@ static JSValue js_fs_renameSync(JSContext *ctx, JSValueConst, int argc, JSValueC
 }
 static JSValue js_fs_mkdirSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (!argc) return JS_ThrowTypeError(ctx, "fs.mkdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; int const ok = mkdir(path, 0755) == 0 || errno == EEXIST; JS_FreeCString(ctx, path); return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.mkdirSync: cannot create directory");
+    if (!argc) return JS_ThrowTypeError(ctx, "fs.mkdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; int const ok = vbjs_mkdir(path) == 0 || errno == EEXIST; JS_FreeCString(ctx, path); return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.mkdirSync: cannot create directory");
 }
 static JSValue js_fs_stat_isFile(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISREG(value)); }
 static JSValue js_fs_stat_isDirectory(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISDIR(value)); }
@@ -1974,6 +2177,7 @@ int VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
 {
     if (!out || outSize < 2) return 0;
     client = client == 1 ? 1 : 0;
+    if (client) s_debugClientSeen.store(true, std::memory_order_release);
     pthread_mutex_lock(&s_debugTransport.mutex);
     if (s_debugTransport.outbound[client].size() < 9) { pthread_mutex_unlock(&s_debugTransport.mutex); return 0; }
     char header[10]; for (int i = 0; i < 9; ++i) header[i] = s_debugTransport.outbound[client][i]; header[8] = 0;
@@ -2045,9 +2249,9 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
 
     char autojs[1100], project[1200];
     snprintf(autojs, sizeof(autojs), "%s/autojs", s_launchDir);
-    if (mkdir(autojs, 0755) != 0 && errno != EEXIST) return -1;
+    if (vbjs_mkdir(autojs) != 0 && errno != EEXIST) return -1;
     snprintf(project, sizeof(project), "%s/%s", autojs, name);
-    if (mkdir(project, 0755) != 0) return -1; // never overwrite a project
+    if (vbjs_mkdir(project) != 0) return -1; // never overwrite a project
 
     char path[1400];
     const char *packageTs =
@@ -2207,6 +2411,18 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare module 'node:net' { export * from 'net'; import api from 'net'; export default api; }\n"
         "declare module 'fs' { export const unlink: (path: string, callback?: (error: Error | null) => void) => void; export const rename: (oldPath: string, newPath: string, callback?: (error: Error | null) => void) => void; export const unlinkSync: (path: string) => void; export const renameSync: (oldPath: string, newPath: string) => void; }\n"
         "declare interface FS { unlink(path: string, callback?: (error: Error | null) => void): void; rename(oldPath: string, newPath: string, callback?: (error: Error | null) => void): void; unlinkSync(path: string): void; renameSync(oldPath: string, newPath: string): void; }\n"
+        "declare type CommandRequest = { player: number; command: string; args: string; reply(text: string): void };\n"
+        "declare interface VB { registerCommand(name: string, handler: (request: CommandRequest) => string | void): void; }\n"
+        "declare module 'vb' { export type { CommandRequest }; export const registerCommand: VB['registerCommand']; }\n"
+        "declare function setTimeout(callback: (...args: any[]) => void, delay?: number, ...args: any[]): number;\n"
+        "declare function setInterval(callback: (...args: any[]) => void, delay?: number, ...args: any[]): number;\n"
+        "declare function clearTimeout(id?: number): void;\n"
+        "declare function clearInterval(id?: number): void;\n"
+        "declare interface FSStats { size: number; isDirectory(): boolean; isFile(): boolean; }\n"
+        "declare interface FS { mkdirSync(path: string, options?: unknown): void; readdirSync(path: string, options?: unknown): string[]; statSync(path: string, options?: unknown): FSStats; }\n"
+        "declare module 'fs' { export type { FSStats }; export const mkdirSync: FS['mkdirSync']; export const readdirSync: FS['readdirSync']; export const statSync: FS['statSync']; }\n"
+        "declare type MapComponentContext = { kind: 'sprite' | 'sector' | 'wall'; index: number; map: string; state: Record<string, any> };\n"
+        "declare type MapComponentModule = { onAttach?(component: MapComponentContext): void | (() => void); onUpdate?(component: MapComponentContext, deltaSeconds: number): void; onFixedUpdate?(component: MapComponentContext, deltaSeconds: number): void; onDetach?(component: MapComponentContext): void; };\n"
         "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
     snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
     snprintf(path, sizeof(path), "%s/%sconfig.json", project, typescript ? "ts" : "js");
@@ -2218,7 +2434,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     // It works for either index.ts or index.js because the adapter receives
     // source paths directly from VS Code.
     char vscode[1400]; snprintf(vscode, sizeof(vscode), "%s/.vscode", project);
-    if (mkdir(vscode, 0755) != 0) return -1;
+    if (vbjs_mkdir(vscode) != 0) return -1;
     // The adapter is a single-use background task.  It exits when the DAP
     // client or the game exits, so a later VS Code launch never attaches to
     // stale state from an earlier run.
@@ -2271,7 +2487,6 @@ static void vbjs_scan_autojs(void)
 static bool vbjs_create_context()
 {
     s_fetchShuttingDown = false;
-    curl_global_init(CURL_GLOBAL_DEFAULT);
     s_rt = JS_NewRuntime();
     if (!s_rt) { vbjs_log("[js] failed to create runtime"); return false; }
     JS_SetHostPromiseRejectionTracker(s_rt, vbjs_promise_rejection_tracker, nullptr);
@@ -2561,7 +2776,11 @@ void VBJS_RunFrame(int activeLevel)
         // retain the short bounded wait used for ordinary auto-loaded mods.
         if (!js_debugger_configuration_done(s_ctx))
         {
-            if (s_debug || ++s_startWaitFrames < 30) return;
+            // With a debugger enabled, wait for VS Code once it has shown up;
+            // if it never does (a plain --debug or --devtools launch), start
+            // the scripts after a few seconds anyway.
+            int const limit = !s_debug ? 30 : s_debugClientSeen.load(std::memory_order_acquire) ? INT32_MAX : 300;
+            if (s_startWaitFrames < limit) { ++s_startWaitFrames; return; }
         }
         s_startPending = 0;
         vbjs_load_scripts();

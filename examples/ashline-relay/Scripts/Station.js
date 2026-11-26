@@ -113,7 +113,7 @@ function updateUplink(component) {
     vb.sound(TRANSMIT);
     signal("TRANSMISSION COMPLETE", 3);
     vb.setPlayer(0, "customexitsound", -1);
-    vb.setUserdef(0, "eog", 1);
+    vb.setUserdef("eog", 1);
     vb.setPlayer(0, "timebeforeexit", 90);
     vb.log("Ashline Relay: transmission complete");
 }

@@ -24,6 +24,12 @@
 #include "common_game.h"
 #include "crc32.h"
 #include "vbjs.h"
+
+#ifdef _WIN32
+# include <io.h>
+#else
+# include <unistd.h>
+#endif
 #include <ctype.h>
 #include <dirent.h>
 #include <limits.h>
@@ -420,6 +426,17 @@ static int gs_option(const char *arg, const char *longName, const char *shortNam
     return 0;
 }
 
+// A long option shares its first letters with other long options (--con with
+// --console, --content-probe, --connect, ...), so a value attached to one may
+// not look like the rest of an option word. Numbers and paths attach; anything
+// else needs a space or '='.
+static int gs_attachableToLongName(char const *value)
+{
+    unsigned char const c = (unsigned char)value[0];
+    if (isalpha(c)) return value[1] == ':';   // only a drive path such as C:\Games
+    return c != '-' && c != '_';
+}
+
 static int gs_valueOptionWithAttached(char const *arg, char const *longName, char const *shortName,
                                       char const *legacyName, char const **inlineValue)
 {
@@ -433,6 +450,7 @@ static int gs_valueOptionWithAttached(char const *arg, char const *longName, cha
         size_t const length = Bstrlen(name);
         if (Bstrncasecmp(arg, name, length)) continue;
         if (!arg[length] || arg[length] == '=') continue;
+        if (name[0] == '-' && name[1] == '-' && !gs_attachableToLongName(arg + length)) continue;
         if (inlineValue) *inlineValue = gs_skipValueWhitespace(arg + length);
         return 1;
     }
@@ -477,6 +495,9 @@ static int gs_compactValueOption(char const *arg, char const *longName, char con
         if (Bstrncasecmp(arg, name, length)) continue;
         char const *value = arg + length;
         if (*value == '=') ++value;
+        else if (*value && name[0] == '-' && name[1] == '-' && !gs_attachableToLongName(value)) continue;
+        // These options take a number. "-l3" is a level; "-lj" and "-latejoin" are not.
+        else if (*value && name[1] != '-' && !isdigit((unsigned char)*value)) continue;
         if (*value || !Bstrcasecmp(arg, name)) { if (inlineValue) *inlineValue = value; return 1; }
     }
     return 0;
@@ -571,6 +592,21 @@ static void gs_collectDebugParamsFromFile(char const *filename)
     fclose(file);
 }
 
+// The console picker may read a line only when a person is at a terminal.
+// A piped server console, an MCP client on stdin/stdout and a process
+// supervisor all own standard input; a prompt there would swallow their first
+// line.
+static int gs_canPromptOnConsole(int argc, char const * const *argv)
+{
+    for (int i = 1; i < argc; ++i)
+        if (!Bstrcasecmp(argv[i], "--mcp-stdio")) return 0;
+#ifdef _WIN32
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
 static int gs_debugModeRequested(int argc, char const * const *argv)
 {
     for (int i = 1; i < argc; ++i)
@@ -639,6 +675,8 @@ static int gs_colorOption(char const *arg, char const **inlineValue)
 
 static int gs_resolutionOption(char const *arg, char const **inlineValue)
 {
+    // "-res1280x720" attaches a size; "-respawn" is a different option.
+    if (!Bstrncasecmp(arg, "-res", 4) && isalpha((unsigned char)arg[4])) return 0;
     return gs_valueOptionWithAttached(arg, "--resolution", "-res", NULL, inlineValue);
 }
 
@@ -1410,8 +1448,11 @@ static int gs_conOption(char const *arg, char const **inlineValue)
 
 static int gs_searchPathOption(char const *arg, char const **inlineValue)
 {
-    // Do not let the `-j` path shorthand consume VibeBuild32's `-js` script option.
+    // Do not let the `-j` path shorthand consume VibeBuild32's `-js` script option
+    // or the join options that also start with "-j".
     if (!Bstrncasecmp(arg, "-js", 3)) return 0;
+    if (!Bstrcasecmp(arg, "-joinerror") || !Bstrcasecmp(arg, "-joinlobby") ||
+        !Bstrcasecmp(arg, "-jl") || !Bstrcasecmp(arg, "-je")) return 0;
     return gs_valueOptionWithAttached(arg, "--search-path", "-j", NULL, inlineValue) ||
            gs_valueOptionWithAttached(arg, "--path", NULL, NULL, inlineValue);
 }
@@ -1623,7 +1664,7 @@ static void gs_choose(int argc, char const * const * argv)
     // A debugger launch must never wait for the interactive game picker: VS
     // Code has no way to answer it.  Explicit --game/-gm still wins; without
     // one, retain the normal first-available fallback below.
-    int bypass = gs_debugModeRequested(argc, argv);
+    int bypass = gs_debugModeRequested(argc, argv) || !gs_canPromptOnConsole(argc, argv);
     for (int i = 1; i < argc; i++)
     {
         const char *inlineValue = NULL;
@@ -1989,6 +2030,14 @@ int app_main(int32_t argc, char const * const * argv)
     artCrossplayClearForeignData();
     VBJS_CaptureLaunchDir();   // VibeBuild32: record the launch dir now (before any chdir) for autojs/
     VBJS_SetExecutablePath(argc > 0 ? argv[0] : NULL);
+
+    // The live-editor MCP adapter and the lobby server are small network-only
+    // programs handled at the top of the Duke entry point. They use no game
+    // data, so they skip game selection and get their arguments unchanged.
+    for (int i = 1; i < argc; ++i)
+        if (!Bstrcmp(argv[i], "--editor-mcp") || !Bstrcasecmp(argv[i], "-masterserver"))
+            return Duke_app_main(argc, argv);
+
     if (gs_debugModeRequested(argc, argv))
     {
         // Enable the shared debugger before dispatch. Shadow Warrior has its

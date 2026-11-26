@@ -424,7 +424,9 @@ static int osdcmd_god(const osdfuncparm_t *parm)
 // serverlist <masterserver-addr>: query a masterserver and print the lobby.
 static int osdcmd_serverlist(const osdfuncparm_t *parm)
 {
-    const char *master = (parm->numparms >= 1) ? parm->parms[0] : "127.0.0.1";
+    // With no argument, ask the lobby server the Join Game menu uses.
+    const char *master = (parm->numparms >= 1) ? parm->parms[0]
+                       : (g_masterServerAddr[0] ? g_masterServerAddr : "127.0.0.1");
     struct msserver_t list[64];
     int32_t n = Masterserver_QueryList(master, list, 64, 1500);
     if (n < 0) { OSD_Printf("serverlist: could not reach masterserver '%s'\n", master); return OSDCMD_OK; }

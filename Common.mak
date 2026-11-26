@@ -448,6 +448,13 @@ ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
     ifneq ($(PLATFORM),DARWIN)
         override LTO := 0
     endif
+    # GCC on ELF gives template static data and similar items a "unique"
+    # binding that objcopy cannot make local; plain weak symbols work.
+    ifeq (,$(filter $(PLATFORM),DARWIN WINDOWS))
+        ifeq (0,$(CLANG))
+            VIBEBUILD32_NO_GNU_UNIQUE := -fno-gnu-unique
+        endif
+    endif
 endif
 
 ifeq (0,$(CLANG))
@@ -484,6 +491,7 @@ ifneq (0,$(CLANG))
 endif
 CONLYFLAGS := $(CSTD)
 CXXONLYFLAGS := $(CXXSTD) -fno-exceptions -fno-rtti
+CXXONLYFLAGS += $(VIBEBUILD32_NO_GNU_UNIQUE)
 
 ASFLAGS := -s #-g
 
@@ -907,7 +915,9 @@ endif
 
 ifneq (0,$(USE_LIBVPX))
     COMPILERFLAGS += -DUSE_LIBVPX
-    LIBS += -lvpx
+    # VPX_LIBS can be overridden, for example with "-l:libvpx.a" to link statically.
+    VPX_LIBS ?= -lvpx
+    LIBS += $(VPX_LIBS)
 endif
 ifneq (0,$(USE_MIMALLOC))
     COMPILERFLAGS += -DUSE_MIMALLOC
@@ -1008,6 +1018,8 @@ ifeq ($(PLATFORM),WINDOWS)
         LIBS += -ldxguid_sdl
     endif
     LIBS += -lmingwex -lgdi32 -lcomctl32 -lwinmm $(L_SSP) -lwsock32 -lws2_32 -lshlwapi -luuid -lpsapi -ldinput -limm32 -lversion -lsetupapi -lole32 -loleaut32
+    # The script runtime uses the system HTTP client for fetch() and POSIX threads.
+    LIBS += -lwinhttp -lpthread
     # -lshfolder
 else ifeq ($(PLATFORM),WII)
     LIBS += -laesnd_tueidj -lfat -lwiiuse -lbte -lwiikeyboard -logc

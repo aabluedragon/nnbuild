@@ -614,17 +614,20 @@ duke3d_game_orderonlydeps :=
 duke3d_editor_orderonlydeps :=
 
 # Only link FLAC when it is enabled, so HAVE_FLAC=0 builds do not need the library.
+# FLAC_LIBS can be overridden, for example with "-l:libFLAC.a -l:libogg.a" to
+# link it statically for a binary that runs on other distributions.
+FLAC_LIBS ?= -lFLAC
 ifeq ($(SUBPLATFORM),LINUX)
-    LIBS += -lasound -lcurl
+    LIBS += -lasound
     ifneq (0,$(HAVE_FLAC))
-        LIBS += -lFLAC
+        LIBS += $(FLAC_LIBS)
     endif
 endif
 
 ifeq ($(PLATFORM),BSD)
-    LIBS += -lexecinfo -lcurl
+    LIBS += -lexecinfo
     ifneq (0,$(HAVE_FLAC))
-        LIBS += -lFLAC
+        LIBS += $(FLAC_LIBS)
     endif
 endif
 
@@ -999,23 +1002,37 @@ endef
 else
 # GNU toolchains (Linux, BSD, MinGW): relocatable link, then objcopy turns every
 # external definition that a prior game also defines into a local symbol.
-# Section groups are dissolved first (ELF) so that an inline function or vtable
-# belonging to this game is not discarded in favour of a same-named one from
-# another game.
 ifeq ($(PLATFORM),WINDOWS)
-    MERGE_LDFLAGS :=
+# PE/COFF keeps virtual tables and (on x64) ".refptr" pointer stubs in link-once
+# sections that the final link de-duplicates by section name. A symbol made
+# local to one game must not lose its section to another game's same-named
+# copy, so those sections are renamed first; see platform/pe-private-sections.sh.
+MERGE_OBJDUMP := $(CROSS)objdump$(CROSS_SUFFIX)
+define MERGE_RULE
+$$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2) platform/pe-private-sections.sh
+	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
+	@$(MERGE_NM) -g --defined-only $(2) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
+	@$(MERGE_NM) -g --defined-only $$($(1)merge_objs) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
+	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
+	$(MERGE_LD) -r $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	sh platform/pe-private-sections.sh $(MERGE_OBJDUMP) $(1) $$(obj)/$(1)_hide.txt $$(obj)/$(1)_premerge.o > $$(obj)/$(1)_rename.txt
+	$(MERGE_OBJCOPY) @$$(obj)/$(1)_rename.txt --localize-symbols=$$(obj)/$(1)_hide.txt $$(obj)/$(1)_premerge.o $$@
+endef
 else
-    MERGE_LDFLAGS := --force-group-allocation
-endif
+# ELF: section groups are dissolved first so that an inline function or virtual
+# table belonging to this game is not discarded in favour of a same-named one
+# from another game. (Common.mak passes -fno-gnu-unique for this target, since
+# objcopy cannot make a GNU "unique" symbol local.)
 define MERGE_RULE
 $$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2)
 	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
 	@$(MERGE_NM) -g --defined-only $(2) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
 	@$(MERGE_NM) -g --defined-only $$($(1)merge_objs) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
 	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
-	$(MERGE_LD) -r $(MERGE_LDFLAGS) $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	$(MERGE_LD) -r --force-group-allocation $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
 	$(MERGE_OBJCOPY) --localize-symbols=$$(obj)/$(1)_hide.txt $$(obj)/$(1)_premerge.o $$@
 endef
+endif
 endif
 
 ifeq ($(WITH_SW),1)
