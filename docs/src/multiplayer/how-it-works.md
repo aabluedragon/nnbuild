@@ -6,7 +6,7 @@ server owners who want to know why NNBuild behaves the way it does.
 
 It describes the Duke Nukem 3D family. The technical version, written for
 people who work on the code, is
-[NETCODE.md](https://github.com/aabluedragon/nnbuild/blob/multiplayer/source/vibebuild32/NETCODE.md).
+[NETCODE.md](https://github.com/aabluedragon/nnbuild/blob/multiplayer/source/nnbuild/NETCODE.md).
 
 ## Every computer runs the whole game
 

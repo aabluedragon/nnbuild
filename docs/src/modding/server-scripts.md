@@ -11,7 +11,7 @@ Everything on this page needs the **Duke runtime**.
 Give the script on the command line, like any other script:
 
 ```sh
-./vibebuild32 --headless --startnow --js ./server.ts -net /p23513 /n0:8
+./nnbuild --headless --startnow --js ./server.ts -net /p23513 /n0:8
 ```
 
 - `--headless` starts a dedicated server with no window, graphics or sound.
@@ -176,7 +176,7 @@ When the server changes to a different content pack, the server program restarts
 
 ```ts
 // server.ts
-// ./vibebuild32 --headless --startnow --js ./server.ts -net /p23513 /n0:8
+// ./nnbuild --headless --startnow --js ./server.ts -net /p23513 /n0:8
 import { log, run, sendMessage, registerCommand, session } from 'vb';
 import fs from 'fs';
 

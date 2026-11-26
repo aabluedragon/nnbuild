@@ -32,7 +32,7 @@ game you want to play, from your own copy of that game. See
 
 ### Windows
 
-Unpack the ZIP into a folder of its own and run `vibebuild32.exe`. Windows may
+Unpack the ZIP into a folder of its own and run `nnbuild.exe`. Windows may
 show a "Windows protected your PC" notice because the program is not signed;
 choose **More info**, then **Run anyway**.
 
@@ -41,7 +41,7 @@ Windows have not been tried.
 
 ### Linux
 
-Unpack the archive and run `./vibebuild32` from a terminal. The program uses
+Unpack the archive and run `./nnbuild` from a terminal. The program uses
 the system's SDL2 library. On Debian or Ubuntu, install it with:
 
 ```sh

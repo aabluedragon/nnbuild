@@ -33,7 +33,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "tags.h"
 #include "names2.h"
 #include "network.h"
-#include "netshared.h"   // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared.h"   // NNBuild: shared masterserver-client + file-transfer glue
 #include "pal.h"
 #include "demo.h"
 
@@ -1300,9 +1300,9 @@ checkmasterslaveswitch(void)
 {
 }
 
-// --- VibeBuild32 masterserver/lobby, ported onto SW's net path ----------------
-// The masterserver module (source/vibebuild32/src/masterserver.cpp) is only
-// linked in the combined `vibebuild32` binary, not in the standalone `sw`/voidsw
+// --- NNBuild masterserver/lobby, ported onto SW's net path ----------------
+// The masterserver module (source/nnbuild/src/masterserver.cpp) is only
+// linked in the combined `nnbuild` binary, not in the standalone `sw`/voidsw
 // build. Declaring its API weak lets this same object file link both ways: in
 // the combined binary the symbols bind to Duke's game-agnostic implementation;
 // in the standalone SW build they stay null and every call is guarded away.
@@ -1454,7 +1454,7 @@ void Net_HostAdvertise(void)
 
     char const *name = Player[connecthead].PlayerName;
     if (Masterserver_AdvertisePulse)
-        Masterserver_AdvertisePulse(name && name[0] ? name : "VibeBuild32 SW server",
+        Masterserver_AdvertisePulse(name && name[0] ? name : "NNBuild SW server",
                                     mmulti_getport(), numplayers, numplayers, map);
 }
 

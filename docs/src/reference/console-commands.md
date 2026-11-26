@@ -18,7 +18,7 @@ GI.
   [Launch options](command-line.md#sound-settings-and-startup-commands).
 
   ```sh
-  vibebuild32 --game duke --dedicated --startnow \
+  nnbuild --game duke --dedicated --startnow \
       --cmd "sv_maprotation 1" -net /n0:8
   ```
 
@@ -488,7 +488,7 @@ skin 6
 To set a skin when you start the game:
 
 ```sh
-vibebuild32 --game duke --cmd "skin 6"
+nnbuild --game duke --cmd "skin 6"
 ```
 
 ## Input

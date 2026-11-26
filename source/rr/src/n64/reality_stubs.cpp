@@ -1,4 +1,4 @@
-// Duke Nukem 64 ("Reality") link stubs for the VibeBuild32 unified build.
+// Duke Nukem 64 ("Reality") link stubs for the NNBuild unified build.
 //
 // Rednukem bundles a Duke Nukem 64 total conversion ("Reality", the n64/ dir)
 // alongside Redneck Rampage. Its renderer (reality_render.cpp) needs a large set

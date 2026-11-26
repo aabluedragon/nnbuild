@@ -11,8 +11,8 @@ when you choose one of them.
 | WWII GI | `ww2gi` | `WW2GI.GRP` | `ww2gi` |
 | Platoon Leader | `ww2gi` | `PLATOONL.GRP`, together with `WW2GI.GRP` | `ww2gi` |
 
-Settings and the log are shared with Duke Nukem 3D: `vibebuild32.cfg` and
-`vibebuild32.log`.
+Settings and the log are shared with Duke Nukem 3D: `nnbuild.cfg` and
+`nnbuild.log`.
 
 ## Data files
 
@@ -42,19 +42,19 @@ files in the same folder.
 
 ```sh
 # Data in the nam, napalm or ww2gi subfolder
-vibebuild32 --game nam
-vibebuild32 --game napalm
-vibebuild32 --game ww2gi
+nnbuild --game nam
+nnbuild --game napalm
+nnbuild --game ww2gi
 
 # Naming the data file selects the game by itself
-vibebuild32 --grp ~/games/nam/NAM.GRP
-vibebuild32 --grp ~/games/ww2gi/WW2GI.GRP
+nnbuild --grp ~/games/nam/NAM.GRP
+nnbuild --grp ~/games/ww2gi/WW2GI.GRP
 
 # Platoon Leader
-vibebuild32 --gamegrp ~/games/ww2gi/PLATOONL.GRP
+nnbuild --gamegrp ~/games/ww2gi/PLATOONL.GRP
 
 # No startup window and no intro
-vibebuild32 --game ww2gi --skip-menu --skip-cinema
+nnbuild --game ww2gi --skip-menu --skip-cinema
 ```
 
 The older switches `-nam`, `-napalm` and `-ww2gi` still exist. They change the

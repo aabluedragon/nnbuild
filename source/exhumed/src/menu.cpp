@@ -1667,7 +1667,7 @@ void menu_ResetZoom()
 
 int menu_Menu(int bInLevelMenus)
 {
-    // VibeBuild32: when the Nightdive remaster's data is mounted (-kex), draw
+    // NNBuild: when the Nightdive remaster's data is mounted (-kex), draw
     // its menu instead of the classic one. Same return codes either way.
     if (KexMenu_Available())
         return KexMenu_Main(bInLevelMenus);

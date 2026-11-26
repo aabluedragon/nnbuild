@@ -1,4 +1,4 @@
-/* Private, length-prefixed JSON debugger protocol used by VibeBuild32's
+/* Private, length-prefixed JSON debugger protocol used by NNBuild's
  * built-in browser DevTools client.  It deliberately has no IDE dependency. */
 #include "quickjs-debugger.h"
 #include <ctype.h>

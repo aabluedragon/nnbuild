@@ -39,12 +39,12 @@ for how you use it.
 ## Building
 
 ```sh
-make vibebuild32
+make nnbuild
 ```
 
-The program file is named `vibebuild32` (the project's earlier name was
-VibeBuild32). Requirements for each platform, and the options used for the
-release builds, are in
+This produces the program file `nnbuild` (`nnbuild.exe` on Windows).
+Requirements for each platform, and the options used for the release builds,
+are in
 [Building from source](https://nnb.nukemnet.com/building/from-source.html).
 
 The documentation site is in [`docs/`](docs) and is built with

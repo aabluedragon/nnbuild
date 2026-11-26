@@ -33,7 +33,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "items.h"
 #include "lighting.h"
 #include "save.h"
-#include "kexbreak.h" // VibeBuild32: KEX Bastet teleport sound
+#include "kexbreak.h" // NNBuild: KEX Bastet teleport sound
 #include "kexinv.h"
 #include "anims.h"
 #include <assert.h>

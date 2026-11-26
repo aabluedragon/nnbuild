@@ -1,7 +1,7 @@
-// Shared Duke/VibeBuild32 psky setup helpers.
+// Shared Duke/NNBuild psky setup helpers.
 //
 // Included from source/duke3d/src/common.cpp and
-// source/vibebuild32/src/common.cpp. The including translation unit provides
+// source/nnbuild/src/common.cpp. The including translation unit provides
 // tileSetupSky(), DEFAULTPSKY, sector/numsectors, getpskyidx(), and g_pskyidx.
 
 // Set up new-style multi-psky handling.

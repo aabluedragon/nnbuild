@@ -1,15 +1,15 @@
 # Building from source
 
-NNBuild is built with GNU Make. The target is named `vibebuild32`, after the
-project's earlier name, and produces a program file of the same name.
+NNBuild is built with GNU Make. The target is named `nnbuild` and produces a
+program file of the same name.
 
 ```sh
 git clone https://github.com/aabluedragon/nnbuild.git
 cd nnbuild
-make -j8 vibebuild32
+make -j8 nnbuild
 ```
 
-A plain `make vibebuild32` builds every game runtime into the one program. To
+A plain `make nnbuild` builds every game runtime into the one program. To
 leave one out, pass `WITH_SW=0`, `WITH_BLOOD=0`, `WITH_RR=0` or
 `WITH_EXHUMED=0`.
 
@@ -30,7 +30,7 @@ sudo apt install build-essential nasm pkg-config \
 Then build:
 
 ```sh
-make -j"$(nproc)" vibebuild32
+make -j"$(nproc)" nnbuild
 ```
 
 Useful options:
@@ -58,7 +58,7 @@ On Ubuntu, for the 64-bit build:
 sudo apt install make nasm g++-mingw-w64-x86-64-posix
 sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
 sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
-make -j"$(nproc)" PLATFORM=WINDOWS CROSS=x86_64-w64-mingw32- vibebuild32
+make -j"$(nproc)" PLATFORM=WINDOWS CROSS=x86_64-w64-mingw32- nnbuild
 ```
 
 For the 32-bit build, use `g++-mingw-w64-i686-posix` and
@@ -74,7 +74,7 @@ Install the Xcode command line tools and the libraries with Homebrew:
 ```sh
 xcode-select --install
 brew install sdl2 flac libogg libvpx
-make -j"$(sysctl -n hw.ncpu)" vibebuild32
+make -j"$(sysctl -n hw.ncpu)" nnbuild
 ```
 
 The build also creates an application bundle next to the program file.

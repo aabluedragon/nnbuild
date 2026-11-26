@@ -48,19 +48,19 @@ Start Blood with `--skip-menu`. It then goes straight to its own title screen.
 
 ```sh
 # Data in the blood subfolder
-vibebuild32 --game blood --skip-menu
+nnbuild --game blood --skip-menu
 
 # Data somewhere else
-vibebuild32 --game blood --game-dir ~/games/blood --skip-menu
+nnbuild --game blood --game-dir ~/games/blood --skip-menu
 
 # Episode 1, level 3
-vibebuild32 --game blood --skip-menu -level 1 3
+nnbuild --game blood --skip-menu -level 1 3
 
 # A map file of your own
-vibebuild32 --game blood --skip-menu -map ~/maps/crypt.map
+nnbuild --game blood --skip-menu -map ~/maps/crypt.map
 
 # Cryptic Passage
-vibebuild32 --game blood --skip-menu --ini ~/games/blood/CRYPTIC.INI
+nnbuild --game blood --skip-menu --ini ~/games/blood/CRYPTIC.INI
 ```
 
 Useful options of this runtime:
@@ -96,10 +96,10 @@ players, and the others connect to it.
 
 ```sh
 # Server for 2 players
-vibebuild32 --game blood --skip-menu -server 2
+nnbuild --game blood --skip-menu -server 2
 
 # Client
-vibebuild32 --game blood --skip-menu -client 192.0.2.10
+nnbuild --game blood --skip-menu -client 192.0.2.10
 ```
 
 | Option | Meaning |
@@ -134,11 +134,11 @@ Lobby options:
 
 ```sh
 # Server listed on a lobby server, sharing a mod file
-vibebuild32 --game blood --skip-menu -server 4 \
+nnbuild --game blood --skip-menu -server 4 \
     --advertise lobby.example.org --netfile mymod.pk3
 
 # Join whatever that lobby server lists first
-vibebuild32 --game blood --skip-menu --joinlobby lobby.example.org
+nnbuild --game blood --skip-menu --joinlobby lobby.example.org
 ```
 
 Write the lobby options in full. Blood does not know their short forms, such

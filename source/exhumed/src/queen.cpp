@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sound.h"
 #include "names.h"
 #include "save.h"
-#include "kexbreak.h" // VibeBuild32: KEX Queen death sound
+#include "kexbreak.h" // NNBuild: KEX Queen death sound
 #include "kexinv.h"
 #include <assert.h>
 

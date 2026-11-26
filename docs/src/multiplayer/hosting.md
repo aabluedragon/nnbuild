@@ -63,7 +63,7 @@ and must come last: everything after `--net` belongs to the connection, and
 every other option must come before it.
 
 ```text
-vibebuild32 [options] --net [/p<port>] /n0:<slots>
+nnbuild [options] --net [/p<port>] /n0:<slots>
 ```
 
 - `/n0:<slots>` hosts a match with that many slots. The host counts as one.
@@ -85,46 +85,46 @@ when it is not. See [First launch](../getting-started/first-launch.md).
 starts on episode 1, level 1.
 
 ```sh
-vibebuild32 --name HOST --coop 1 --volume 1 --level 1 --net /n0
+nnbuild --name HOST --coop 1 --volume 1 --level 1 --net /n0
 ```
 
 The other player joins with:
 
 ```sh
-vibebuild32 --name GUEST --net /n0 203.0.113.10:23513
+nnbuild --name GUEST --net /n0 203.0.113.10:23513
 ```
 
 **An open deathmatch with 8 slots.** The match starts at once, and players
 come and go as they like.
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --net /n0:8
 ```
 
 **A co-op game for four that starts when the first friend arrives.** The other
 two can join later.
 
 ```sh
-vibebuild32 --name HOST --latejoin --coop 2 --volume 1 --level 1 --net /n0:4
+nnbuild --name HOST --latejoin --coop 2 --volume 1 --level 1 --net /n0:4
 ```
 
 **A different port.** Players then add `:23600` to your address.
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --net /p23600 /n0:8
+nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --net /p23600 /n0:8
 ```
 
 **A mod pack and a custom map.** Players who join get both files
 automatically.
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --grp arena.pk3 --map "User Arena.map" --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --grp arena.pk3 --map "User Arena.map" --net /n0:8
 ```
 
 **A match on the lobby list.** Add `--advertise` and the lobby's address.
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
 ```
 
 ## Number of slots
@@ -231,7 +231,7 @@ limits the damage with a countdown and a vote, described in
 **No-wait mode** is turned on by the host with `--async` (short `-as`).
 
 ```sh
-vibebuild32 --name ARENA --startnow --async --coop 1 --volume 1 --level 1 --net /n0:8
+nnbuild --name ARENA --startnow --async --coop 1 --volume 1 --level 1 --net /n0:8
 ```
 
 In this mode the host never waits. If a player's input is late, the host
@@ -256,7 +256,7 @@ players at launch.
 List every player's address, your own included. The order does not matter:
 
 ```sh
-vibebuild32 --net /n1 192.168.1.2 192.168.1.100 192.168.1.4
+nnbuild --net /n1 192.168.1.2 192.168.1.100 192.168.1.4
 ```
 
 Every player runs the same command. NNBuild sorts the addresses the same way
@@ -327,7 +327,7 @@ used.
 Add `--advertise` (short `-ad`) and the lobby's address before `--net`:
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
 ```
 
 - The address can be a host name, an IPv4 address or an IPv6 address in square
@@ -343,7 +343,7 @@ vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lo
 Start the host with the mod pack and it is shared with everyone who joins:
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --grp arena.pk3 --volume 1 --level 1 --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --grp arena.pk3 --volume 1 --level 1 --net /n0:8
 ```
 
 - `--grp <file>` (short `-g <file>`) loads a mod pack. A pack can be a GRP,

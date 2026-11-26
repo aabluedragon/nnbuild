@@ -42,8 +42,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "kexmenu.h"
 #include "player.h"
 #include "network.h"
-#include "vbnet.h"    // VibeBuild32: Powerslave multiplayer
-#include "netargs.h"  // VibeBuild32: unified multiplayer command-line flags
+#include "vbnet.h"    // NNBuild: Powerslave multiplayer
+#include "netargs.h"  // NNBuild: unified multiplayer command-line flags
 #include "input.h"
 #include "sound.h"
 #include "cd.h"
@@ -742,7 +742,7 @@ int bVanilla = 0;
 char debugBuffer[256];
 char gUserMapFilename[BMAX_PATH];
 
-// VibeBuild32: set by -kex, i.e. "this session is playing the Nightdive
+// NNBuild: set by -kex, i.e. "this session is playing the Nightdive
 // remaster's content". It gates the remaster-styled menu, which must not appear
 // when the original Build PowerSlave is what's being played.
 int g_kexMode = 0;
@@ -1756,7 +1756,7 @@ static void GameDisplay(void)
     Exhumed_CaptureFrame();
 }
 
-// VibeBuild32: which music track a converted Kex level asks for. kexmusic.txt is
+// NNBuild: which music track a converted Kex level asks for. kexmusic.txt is
 // written by source/exhumed/tools/kexmap.py straight out of the remaster's
 // defs/mapInfo.txt, so the pairing is the remaster's own.
 char const *Kex_MusicForMap(char const *mapname)
@@ -2015,7 +2015,7 @@ void ExitGame()
     }
     else
     {
-        // VibeBuild32 multiplayer: announce the leave on the reliable channel and
+        // NNBuild multiplayer: announce the leave on the reliable channel and
         // let it drain, so the peers drop this player at an agreed tick instead
         // of stalling forever waiting for input that will never come.
         if (ExNet_Enabled())
@@ -2102,11 +2102,11 @@ int Exhumed_app_main(int argc, char const* const* argv)
     int nMenu = 0; // TEMP
     int lateJoinRestored = 0;
 
-    // VibeBuild32: argv index of the first mmulti token after -net (0 = no -net).
+    // NNBuild: argv index of the first mmulti token after -net (0 = no -net).
     // Everything from there on belongs to the transport, not to us.
     int firstnet = 0;
 
-    // VibeBuild32: the shared multiplayer flags every game accepts identically
+    // NNBuild: the shared multiplayer flags every game accepts identically
     // (--advertise/--lobbylist/--joinlobby/--netfile/--headless/--dedicated/
     // --nplayers/--startnow/--wait/--latejoin). Exhumed takes its server role from the
     // mmulti args, so networkMode stays NULL; the auto-start knobs are collected
@@ -2133,8 +2133,8 @@ int Exhumed_app_main(int argc, char const* const* argv)
             pChar++;
             //strlwr(pChar);
 
-            // VibeBuild32: accept the canonical "--flag" spelling for every
-            // VibeBuild32 multiplayer flag, not just the one-dash form. pChar has
+            // NNBuild: accept the canonical "--flag" spelling for every
+            // NNBuild multiplayer flag, not just the one-dash form. pChar has
             // had exactly one dash removed, so a "--joinlobby" still reads as
             // "-joinlobby" here and used to fall through to the shared VB_NetArg
             // handler -- which accepted and swallowed it without doing anything,
@@ -2145,7 +2145,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             if (!Bstrcasecmp(pChar, "?") || !Bstrcasecmp(pChar, "help") || !Bstrcasecmp(pChar, "-help")) {
                 PrintHelp();
             }
-            // ---- VibeBuild32 multiplayer -------------------------------------
+            // ---- NNBuild multiplayer -------------------------------------
             else if (!Bstrcasecmp(pOpt, "net"))
             {
                 firstnet = i + 1;
@@ -2220,7 +2220,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             }
             else if (Bstrncasecmp(pOpt, "map", 3) == 0 && (pOpt[3] || i + 1 < argc))
             {
-                // VibeBuild32: this used to compare the whole token against "map"
+                // NNBuild: this used to compare the whole token against "map"
                 // and then read the filename from pChar+4 -- i.e. from one past
                 // the terminating NUL of a token that had to be exactly "-map".
                 // No spelling of the flag could ever name a file. Accept both
@@ -2232,7 +2232,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             }
             else if (Bstrcasecmp(pOpt, "cfg") == 0 && i + 1 < argc)
             {
-                // VibeBuild32: "-cfg" was only ever in the (commented-out) help
+                // NNBuild: "-cfg" was only ever in the (commented-out) help
                 // text; the game read and wrote APPBASENAME.cfg whatever was
                 // passed, so a test launch meant to use its own file rewrote
                 // the player's config on a clean exit. Parsed before
@@ -2335,7 +2335,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             }
             else if (Bstrcasecmp(pOpt, "nologo") == 0 || Bstrcasecmp(pOpt, "nlogo") == 0)
             {
-                // VibeBuild32: skip the logo/title sequence and go straight to
+                // NNBuild: skip the logo/title sequence and go straight to
                 // the menu, the same flag the other merged games accept.
                 doTitle = kFalse;
                 stopTitle = kTrue;
@@ -2343,7 +2343,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             else if (Bstrcasecmp(pOpt, "kex") == 0 && i + 1 < argc)
             {
                 g_kexMode = 1;
-                // VibeBuild32: -kex <dir> points at a Nightdive PowerSlave
+                // NNBuild: -kex <dir> points at a Nightdive PowerSlave
                 // Exhumed install and mounts its PowerslaveEX.kpf, which is a
                 // plain zip the Build engine reads natively. That is where the
                 // levels converted by source/exhumed/tools/kexmap.py get their
@@ -2426,7 +2426,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
         forcelevel = 1;
     }
 
-    // VibeBuild32: hand the parsed multiplayer knobs to the netcode. A dedicated
+    // NNBuild: hand the parsed multiplayer knobs to the netcode. A dedicated
     // server auto-starts with whoever is present (that is what makes it
     // dedicated) unless --wait was given to hold it in the lobby.
     ExNet_SetStartNowPlayers(netStartNowPlayers);
@@ -2474,7 +2474,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    // VibeBuild32: -nosetup must also skip the first-run (readSetup<0) startup window,
+    // NNBuild: -nosetup must also skip the first-run (readSetup<0) startup window,
     // else a fresh config hangs on a setup dialog we don't ship for this game.
     // Matches the SW, Blood and RR fixes.
     if ((readSetup < 0 && !g_noSetup) || (!g_noSetup && gSetup.forcesetup) || g_commandSetup)
@@ -2637,7 +2637,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     }
 #endif
 
-    // VibeBuild32 multiplayer: bring the mmulti transport up here, after the
+    // NNBuild multiplayer: bring the mmulti transport up here, after the
     // group files are mounted (so a joiner can receive and mount a mod GRP) but
     // before InstallEngine() reads the ART, and before the title sequence -- a
     // networked launch skips straight to the level.
@@ -2727,7 +2727,7 @@ MENU:
     SavePosition = -1;
     nMenu = menu_Menu(0);
 
-    // VibeBuild32: in Kex mode a new game means the remaster's campaign, not
+    // NNBuild: in Kex mode a new game means the remaster's campaign, not
     // the original game's LEV1. The level comes from the overworld the menu
     // just showed; the converter also writes the campaign's opening map out of
     // the remaster's own mapInfo.txt, as the fallback.
@@ -2876,7 +2876,7 @@ LOOP1:
         menu_GameSave(SavePosition);
     }
 LOOP2:
-    // VibeBuild32: showmap() is the classic port's own level-map screen. In Kex
+    // NNBuild: showmap() is the classic port's own level-map screen. In Kex
     // mode the overworld has already been shown and a level chosen, so putting
     // this up as well means picking a level twice -- and its return value is a
     // level NUMBER, which would override the map the overworld just chose.
@@ -2996,7 +2996,7 @@ LATEJOIN_READY:
         if (cdSuccess && !CDplaying() && !nFreeze && !nNetPlayerCount
             && !bNoSound && MusicToggle)
         {
-            // VibeBuild32: in Kex mode every level names its own track in the
+            // NNBuild: in Kex mode every level names its own track in the
             // remaster's mapInfo.txt; the converter writes those out beside the
             // maps. Falling back to the CD track numbering would play whatever
             // the original game's level N used, which is a different level.
@@ -3309,7 +3309,7 @@ LATEJOIN_READY:
                             goto LOOP1;
                         break;
 
-                    // VibeBuild32: the Kex pause menu's "exit to title screen".
+                    // NNBuild: the Kex pause menu's "exit to title screen".
                     // The classic menu has no such entry, so this code is only
                     // ever reached in Kex mode.
                     case 4:
@@ -3527,7 +3527,7 @@ void FadeInScreen(int nTile)
 
 void DoTitle()
 {
-    // VibeBuild32: in Kex mode the opening is the book cinematic and then a
+    // NNBuild: in Kex mode the opening is the book cinematic and then a
     // PRESS START hold -- no publisher logos, no skull animation. The movie is
     // still played from here rather than from kexmenu.cpp: its loop only
     // advances when the audio backend feeds it a sample, so it has to run after

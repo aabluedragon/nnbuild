@@ -28,7 +28,7 @@ gives an answer.
    The names are listed in [Supported games](../games/overview.md).
 
    ```sh
-   vibebuild32 --game sw
+   nnbuild --game sw
    ```
 
 2. **You pointed at data.** If you gave a data file or folder, NNBuild works
@@ -39,7 +39,7 @@ gives an answer.
    folder is recognised when it holds the main data file of exactly one game.
 
    ```sh
-   vibebuild32 --grp ~/games/sw/SW.GRP
+   nnbuild --grp ~/games/sw/SW.GRP
    ```
 
 3. **Only one game is installed.** If the [places NNBuild looks
@@ -109,7 +109,7 @@ For Shadow Warrior, Blood, Redneck Rampage and Exhumed, start with
 A typical command that goes straight into the game:
 
 ```sh
-vibebuild32 --game duke --skip-menu --skip-cinema
+nnbuild --game duke --skip-menu --skip-cinema
 ```
 
 In the Duke Nukem 3D family, some options skip the startup window by
@@ -127,7 +127,7 @@ The file names and folders for every system are in
 In short:
 
 - **Linux and macOS:** a folder under `.config` in your home folder, for
-  example `~/.config/vibebuild32/vibebuild32.cfg`.
+  example `~/.config/nnbuild/nnbuild.cfg`.
 - **Windows:** the folder the game runs from, unless you opted in to the
   folder under `%APPDATA%`.
 - `-usecwd` keeps settings in the folder the game runs from on every system.
@@ -139,7 +139,7 @@ you rejoin a match, so keep the file if you play online.
 To try something without touching your normal settings, name another file:
 
 ```sh
-vibebuild32 --game duke -cfg ~/games/test.cfg
+nnbuild --game duke -cfg ~/games/test.cfg
 ```
 
 `-cfg` works for the Duke Nukem 3D family, Blood, Redneck Rampage and Exhumed.

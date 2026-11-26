@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 #include "sound.h"
 #include "anims.h"
-#include "kexbreak.h" // VibeBuild32: KEX sentry sounds
+#include "kexbreak.h" // NNBuild: KEX sentry sounds
 #include "kexinv.h"
 #include <assert.h>
 

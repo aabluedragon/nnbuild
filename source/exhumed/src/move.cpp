@@ -2229,7 +2229,7 @@ int AngleChase(int nSprite, int nSprite2, int ebx, int ecx, int push1)
     int xshift = x >> 8;
     int yshift = y >> 8;
 
-    // VibeBuild32: the squares overflow for a fast flyer (the crows past
+    // NNBuild: the squares overflow for a fast flyer (the crows past
     // ~512 units a move logged "overflow" some 1700 times a level in CAVERN
     // and had their length clamped, flattening the dive). The length has a
     // closed form -- x and y are (cos, sin) * ebx * eax, so their norm is

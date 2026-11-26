@@ -1,4 +1,4 @@
-// VibeBuild32 compatibility stubs for NotBlood input/control extensions that our
+// NNBuild compatibility stubs for NotBlood input/control extensions that our
 // mact/engine doesn't provide. No-ops (Blood loses these controller niceties) so
 // the Blood game module links against our tree. Part of the Blood module only.
 #include "compat.h"

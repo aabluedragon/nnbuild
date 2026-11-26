@@ -671,7 +671,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
             int nTop;
             if (KexHold_PadTop(nSector, &nTop))
             {
-                // VibeBuild32: compatibility for pre-kexpad conversions. Fresh
+                // NNBuild: compatibility for pre-kexpad conversions. Fresh
                 // KEX output uses the paired-surface KexPad controller instead.
                 int const kexPadSpeed = kexMover ? kexMoveSpeed : 400;
                 int nElev = BuildElevF(nChannel, nSector, FindWallSprites(nSector), kexPadSpeed, kexPadSpeed, 2, nTop, sector[nSector].floorz);
@@ -735,7 +735,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
-            if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's active lift stays down
+            if (KexHold_Sector(nSector))    // NNBuild: the remaster's active lift stays down
                 return;
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), kexMover ? 90 : 150);
 
@@ -951,7 +951,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
 
             runlist_AddRunRec(sRunChannels[nChannel].a, nElev, kRunElev);
 
-            if (KexHold_Sector(nSector))    // VibeBuild32: the remaster's open-only door stays open
+            if (KexHold_Sector(nSector))    // NNBuild: the remaster's open-only door stays open
                 return;
             int nSwitch = BuildSwPause(nChannel, BuildLink(2, -1, 0), kexMover ? 90 : 60);
 
@@ -1071,7 +1071,7 @@ void runlist_ProcessSectorTag(int nSector, int nLotag, int nHitag)
         case 36:
         {
             if (!g_kexMode)
-                nEnergyTowers++;    // VibeBuild32: the remaster's bomb walls are not the finale's towers
+                nEnergyTowers++;    // NNBuild: the remaster's bomb walls are not the finale's towers
 
             int nEnergyBlock = BuildEnergyBlock(nSector, g_kexMode ? nChannel : -1);
 

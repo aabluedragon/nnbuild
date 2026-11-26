@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch NNBuild",
+      "type": "node",
+      "request": "launch",
+      "debugServer": 4714,
+      "preLaunchTask": "NNBuild: Start VS Code debug adapter",
+      "gameExecutable": "${workspaceFolder}/../../nnbuild",
+      "cwd": "${workspaceFolder}/../..",
+      "debugPort": 8501
+    },
+    {
+      "name": "Attach to running NNBuild",
+      "type": "node",
+      "request": "attach",
+      "debugServer": 4714,
+      "preLaunchTask": "NNBuild: Start VS Code debug adapter",
+      "debugPort": 8501
+    }
+  ]
+}

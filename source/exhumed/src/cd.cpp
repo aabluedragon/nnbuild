@@ -50,7 +50,7 @@ void setCDaudiovolume(int val)
     }
 }
 
-// VibeBuild32: play a music file named outright, rather than by track number.
+// NNBuild: play a music file named outright, rather than by track number.
 // The Kex remaster gives every level its own track in defs/mapInfo.txt, so the
 // converted levels need to ask for one by name. Everything below the file open
 // is what playCDtrack() already does.

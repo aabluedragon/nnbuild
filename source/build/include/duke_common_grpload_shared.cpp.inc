@@ -1,4 +1,4 @@
-// Shared Duke/VibeBuild32 GRP loading and add-on selection.
+// Shared Duke/NNBuild GRP loading and add-on selection.
 //
 // Define DUKE_COMMON_AFTER_COMMAND_GRP_LOAD(path) before including this file
 // when a caller needs a side effect after a command-line GRP is loaded.

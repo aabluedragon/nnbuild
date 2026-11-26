@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// VibeBuild32: the Nightdive PowerSlave Exhumed menu, drawn in the Build engine.
+// NNBuild: the Nightdive PowerSlave Exhumed menu, drawn in the Build engine.
 //
 // The remaster's menu is a tiled stone panel over the twin-Anubis backdrop,
 // with a gold/blue display font. All of that art lives in PowerslaveEX.kpf, so
@@ -2946,7 +2946,7 @@ static void KexMenu_Credits(void)
         "NIGHTDIVE STUDIOS",
         "",
         "BUILD ENGINE PORT",
-        "VIBEBUILD32",
+        "NNBUILD",
     };
     while (1)
     {

@@ -5932,7 +5932,7 @@ default_case2:
                 while (t->picnum > 0 && tilesiz[t->picnum].x == 0)
                     t->picnum -= l;
 
-            // VibeBuild32: the hack loop can overshoot below 0 (e.g. picnum 5, l 10 -> -5)
+            // NNBuild: the hack loop can overshoot below 0 (e.g. picnum 5, l 10 -> -5)
             // and bad CON action frames can push picnum past MAXTILES; either feeds a
             // negative/oob tile to the renderer's texcache/hightile lookup and faults.
             // RR actually hits this at E1L1 (Duke's actor tiles happen to always be
@@ -7969,7 +7969,7 @@ static void G_Startup(void)
     {
         char *cwd;
 
-        // VibeBuild32: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
+        // NNBuild: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
         // engine's artGetIndexedFileName() substitutes digits positionally into a literal
         // "tilesNNN.art" name; a format string produced "tiles000i.art", so zero ART files
         // loaded and the game rendered black (same bug that hit Blood).
@@ -8238,7 +8238,7 @@ int RR_app_main(int argc, char const * const * argv)
 
     G_CheckCommandLine(argc,argv);
 
-    // VibeBuild32: a dedicated/headless server always HOLDS at the pre-game lobby to
+    // NNBuild: a dedicated/headless server always HOLDS at the pre-game lobby to
     // gather players (never auto-warps into a solo level, which would reject joiners),
     // and auto-starts the match once the lobby fills - this is the DEFAULT. -wait opts
     // out of the auto-start (the lobby just waits); -startnow forces auto-start on for a
@@ -8336,7 +8336,7 @@ int RR_app_main(int argc, char const * const * argv)
     G_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    // VibeBuild32: -nosetup must also skip the first-run (readSetup<0) startup window,
+    // NNBuild: -nosetup must also skip the first-run (readSetup<0) startup window,
     // else a fresh config hangs on a setup dialog we don't ship. Matches SW/Blood.
     if ((readSetup < 0 && !g_noSetup) || (!g_noSetup && (ud.configversion != BYTEVERSION_EDUKE32 || ud.setup.forcesetup)) || g_commandSetup)
     {

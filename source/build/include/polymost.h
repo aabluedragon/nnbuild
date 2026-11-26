@@ -156,7 +156,7 @@ static FORCE_INLINE float polymost_getanisotropy(int filtered = 0)
     return filtered == 0 && polymost_useindexedtextures() ? 1.f : clamp<float>(glanisotropy, 1.f, glinfo.maxanisotropy);
 }
 
-// VibeBuild32: per-vertex shading from a light field (see polymost.cpp)
+// NNBuild: per-vertex shading from a light field (see polymost.cpp)
 typedef struct { int32_t kind; vec2f_t n0, n1; float x0, x1, ryp0, ryp1; int32_t sectnum, wallnum; int32_t isceil; } polymost_kexsurf_t;
 // The KEX light sidecar also retains the source face's authored triangles.
 // Small floors can be rendered using that mesh directly, so their lighting

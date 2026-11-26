@@ -459,7 +459,7 @@ void InstallEngine()
 
     char *cwd;
 
-    // VibeBuild32: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
+    // NNBuild: pass the literal "tiles000.art" (not a "%03i" format). The eduke32
     // engine's artGetIndexedFileName() substitutes digits positionally into a literal
     // "tilesNNN.art" name; a format string produced "tiles000i.art", so zero ART files
     // loaded -- every tilesiz stayed 0x0, the title screen drew nothing, and PlayMovie()
@@ -867,7 +867,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     return;
                 }
 
-                // VibeBuild32: hitag 1 is a crow -- the wasp in bird's feathers.
+                // NNBuild: hitag 1 is a crow -- the wasp in bird's feathers.
                 BuildWasp(nSprite, 0, 0, 0, 0, 0, g_kexMode && nHitag == 1);
                 return;
             }
@@ -938,7 +938,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     return;
                 }
 
-                BuildSpider(nSprite, 0, 0, 0, 0, 0, g_kexMode && nHitag == 1);   // VibeBuild32: hitag 1 = the remaster's scorpion
+                BuildSpider(nSprite, 0, 0, 0, 0, 0, g_kexMode && nHitag == 1);   // NNBuild: hitag 1 = the remaster's scorpion
                 return;
             }
             case 104:
@@ -991,13 +991,13 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildAnubis(nSprite, 0, 0, 0, 0, 0, 0);
                 return;
             }
-            case 82:    // VibeBuild32: the remaster's submerged sector with no surface above it
+            case 82:    // NNBuild: the remaster's submerged sector with no surface above it
             {
                 SectFlag[sprite[nSprite].sectnum] |= kSectUnderwater;
                 mydeletesprite(nSprite);
                 return;
             }
-            case 83:    // VibeBuild32: Kex sector flag 0x20, "No standing on edges"
+            case 83:    // NNBuild: Kex sector flag 0x20, "No standing on edges"
             {
                 KexNoStanding_Add(nSprite);
                 return;
@@ -1075,7 +1075,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildObject(nSprite, 3, nHitag);
                 return;
             }
-            case 91:    // VibeBuild32: Kex DOOR_OPEN_ONLY_MESSAGE direct-use behavior
+            case 91:    // NNBuild: Kex DOOR_OPEN_ONLY_MESSAGE direct-use behavior
             {
                 KexSealedDoor_Add(sprite[nSprite].sectnum);
                 mydeletesprite(nSprite);
@@ -1134,7 +1134,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildObject(nSprite, 1, nHitag);
                 return;
             }
-            case 69:    // VibeBuild32: the remaster's boulder spawner
+            case 69:    // NNBuild: the remaster's boulder spawner
             {
                 int nTrap = BuildBoulderTrap(nSprite, nSpeed);
                 if (!ConfigureKexTrap(nTrap, nChannel))
@@ -1143,7 +1143,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
             }
             case 71:
             {
-                // VibeBuild32: in Kex mode the hitag is the channel only. The
+                // NNBuild: in Kex mode the hitag is the channel only. The
                 // wall-texture flip Build keys off it would otherwise catch a
                 // switch on the same channel in the same room.
                 int nFireball = BuildFireBall(nSprite, g_kexMode ? -1 : nHitag, nSpeed);
@@ -1151,7 +1151,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     runlist_AddRunRec(sRunChannels[nChannel].a, nFireball, kRunTrap);
                 return;
             }
-            case 72:    // VibeBuild32: source-actor-ordered KEX trap stop record
+            case 72:    // NNBuild: source-actor-ordered KEX trap stop record
             {
                 KexTrapStop_Add(nSprite, nChannel);
                 return;
@@ -1161,34 +1161,34 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 BuildDrip(nSprite);
                 return;
             }
-            case 73:    // VibeBuild32: this sector's mover holds where its tag put it
-            case 74:    // VibeBuild32: a bomb wall's floor once blown (read at InitSectFlag)
-            case 81:    // VibeBuild32: legacy drop-pad top marker (pre-kexpad output)
+            case 73:    // NNBuild: this sector's mover holds where its tag put it
+            case 74:    // NNBuild: a bomb wall's floor once blown (read at InitSectFlag)
+            case 81:    // NNBuild: legacy drop-pad top marker (pre-kexpad output)
             {
                 KexHold_Add(nSprite);
                 return;
             }
-            case 66:    // VibeBuild32: ACTOR_TRIGGER, fires when the pen's creatures are dead
+            case 66:    // NNBuild: ACTOR_TRIGGER, fires when the pen's creatures are dead
             {
                 KexTrigger_Add(nSprite, nChannel);
                 return;
             }
-            case 68:    // VibeBuild32: a KILENTRY shrine pad, hitag = the artifact
+            case 68:    // NNBuild: a KILENTRY shrine pad, hitag = the artifact
             {
                 KexInv_AddShrinePad(nSprite, nHitag);
                 return;
             }
-            case 67:    // VibeBuild32: a SCRIPT sector, hitag = the script's tag
+            case 67:    // NNBuild: a SCRIPT sector, hitag = the script's tag
             {
                 KexScript_Add(nSprite, nHitag);
                 return;
             }
-            case 65:    // VibeBuild32: the remaster's laser beam (hitag 1000 = always on)
+            case 65:    // NNBuild: the remaster's laser beam (hitag 1000 = always on)
             {
                 KexBeam_Add(nSprite, nHitag >= 1000 ? -1 : nChannel);
                 return;
             }
-            case 64:    // VibeBuild32: a sector the remaster's level script moves
+            case 64:    // NNBuild: a sector the remaster's level script moves
             {
                 // xvel stores partner Build sector + 1; zero is the legacy
                 // no-partner marker emitted by old/custom conversions.
@@ -1197,20 +1197,20 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                 mydeletesprite(nSprite);
                 return;
             }
-            case 84:    // VibeBuild32: the remaster's sinking floor trigger plate
+            case 84:    // NNBuild: the remaster's sinking floor trigger plate
             {
                 KexPlate_Add(sprite[nSprite].sectnum, nHitag, sprite[nSprite].z);
                 mydeletesprite(nSprite);
                 return;
             }
-            case 85:    // VibeBuild32: Kex switch off art, keyed by its raw event tag
+            case 85:    // NNBuild: Kex switch off art, keyed by its raw event tag
             {
                 KexSwitch_Add(sprite[nSprite].sectnum, nHitag, sprite[nSprite].xvel,
                               sprite[nSprite].yvel, sprite[nSprite].x, sprite[nSprite].y);
                 mydeletesprite(nSprite);
                 return;
             }
-            case 86:    // VibeBuild32: Kex ARTIFACT_SPAWN exact floor-triangle destination
+            case 86:    // NNBuild: Kex ARTIFACT_SPAWN exact floor-triangle destination
             {
                 if (g_kexMode)
                     KexInv_AddShrineSpawn(nSprite, nHitag);
@@ -1218,7 +1218,7 @@ void ProcessSpriteTag(short nSprite, short nLotag, short nHitag)
                     mydeletesprite(nSprite);
                 return;
             }
-            case 87:    // VibeBuild32: Kex REMOTE_TRIGGER dispatcher
+            case 87:    // NNBuild: Kex REMOTE_TRIGGER dispatcher
             {
                 // hitag is the allotted Build channel; xvel preserves the
                 // signed source tag and yvel says its source event is one-shot.

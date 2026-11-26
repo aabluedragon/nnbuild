@@ -91,7 +91,7 @@ NNBuild sees that the file belongs to a different game than the one running and
 uses it only as a source of levels and art.
 
 ```sh
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP \
+nnbuild --game sw --grp ~/games/sw/SW.GRP \
     --game.levels duke --grp ~/games/duke3d/DUKE3D.GRP -map E1L1.MAP
 ```
 

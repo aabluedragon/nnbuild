@@ -41,8 +41,6 @@ Source code and new releases:
 
     https://github.com/aabluedragon/nnbuild
 
-The program file is named "vibebuild32" (the project's earlier name).
-
 DISCLAIMER
 ----------
 
@@ -57,12 +55,12 @@ EOF
 
 case "$target" in
 linux-*)
-    cp vibebuild32 eduke32.dat "$stage/"
+    cp nnbuild eduke32.dat "$stage/"
     tar -C dist -czf "dist/$name.tar.gz" "$name"
     ls -l "dist/$name.tar.gz"
     ;;
 windows-*)
-    cp vibebuild32.exe eduke32.dat "$stage/"
+    cp nnbuild.exe eduke32.dat "$stage/"
     # Windows text files: CRLF line endings for Notepad on older systems.
     for f in "$stage"/*.txt; do sed -i 's/\r$//; s/$/\r/' "$f"; done
     (cd dist && zip -q -r -9 "$name.zip" "$name")
@@ -70,14 +68,14 @@ windows-*)
     ;;
 macos-*)
     app="$stage/NNBuild.app"
-    cp -R VibeBuild32.app "$app"
+    cp -R NNBuild.app "$app"
     cp eduke32.dat "$app/Contents/Resources/"
     # Carry the non-system libraries inside the app and re-sign it (ad hoc), so
     # it runs on a Mac that does not have Homebrew.
-    dylibbundler -od -b -x "$app/Contents/MacOS/vibebuild32" \
+    dylibbundler -od -b -x "$app/Contents/MacOS/nnbuild" \
         -d "$app/Contents/Frameworks/" -p @executable_path/../Frameworks/
     # The app needs the newest macOS version that any binary inside it asks for.
-    minos=$(for f in "$app/Contents/MacOS/vibebuild32" "$app"/Contents/Frameworks/*.dylib; do
+    minos=$(for f in "$app/Contents/MacOS/nnbuild" "$app"/Contents/Frameworks/*.dylib; do
                 otool -l "$f" | awk '/LC_BUILD_VERSION/ { found = 1 } found && /minos/ { print $2; found = 0 }'
             done | sort -t. -k1,1n -k2,2n | tail -1)
     plist="$app/Contents/Info.plist"

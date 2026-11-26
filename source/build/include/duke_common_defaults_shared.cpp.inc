@@ -1,4 +1,4 @@
-// Shared Duke/VibeBuild32 default grp/def/con handling.
+// Shared Duke/NNBuild default grp/def/con handling.
 //
 // Define DUKE_COMMON_DEFAULT_DEF_FILE_SYMBOL before including this file when
 // the Duke default-def implementation needs a non-canonical exported name.

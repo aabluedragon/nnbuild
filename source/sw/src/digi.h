@@ -989,7 +989,7 @@ DIGI_ENTRY("ZC8.VOC",     DIGI_ZC8,               623,      PRI_PLAYERVOICE, 0, 
 DIGI_ENTRY("ZC9.VOC",     DIGI_ZC9,               624,      PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
 DIGI_ENTRY("Z16043.VOC",  DIGI_Z16043,            625,      PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
 
-// VibeBuild32 crossplay: Duke Nukem 3D sounds used by Duke actors/maps when
+// NNBuild crossplay: Duke Nukem 3D sounds used by Duke actors/maps when
 // Shadow Warrior is the runtime but the level domain is Duke/World Tour.
 DIGI_ENTRY("predrg.voc",  DIGI_DUKE_PRED_RECOG,   626,      PRI_NPCATTACK,   0,      0, 0, DIST_NORMAL, VF_NORMAL)
 DIGI_ENTRY("gblasr01.voc",DIGI_DUKE_PRED_ATTACK,  627,      PRI_NPCWEAP,    256,    256, 0, 7680,        VF_NORMAL)
@@ -1145,7 +1145,7 @@ DIGI_ENTRY("squish.voc",  DIGI_DUKE_SQUISHED,774,             PRI_ENVIRONMENT,-1
 DIGI_ENTRY("pissing.voc", DIGI_DUKE_URINATE,775,               PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
 DIGI_ENTRY("ahmuch03.voc",DIGI_DUKE_PISSRELIEF,776,            PRI_PLAYERVOICE, 0,      0, 0, DIST_NORMAL, VF_NORMAL)
 
-// VibeBuild32 crossplay: slots for Duke sounds this table does not name.
+// NNBuild crossplay: slots for Duke sounds this table does not name.
 //
 // Every Duke sound above is a hand-written entry, so a Duke sound with no entry
 // simply did not play -- and a Duke *mod* names its own: vacation.grp defines

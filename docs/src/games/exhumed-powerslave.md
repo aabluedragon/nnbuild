@@ -44,16 +44,16 @@ screens.
 
 ```sh
 # Data in the exhumed subfolder
-vibebuild32 --game exhumed --skip-menu
+nnbuild --game exhumed --skip-menu
 
 # Data somewhere else
-vibebuild32 --game exhumed --grp ~/games/powerslave/STUFF.DAT --skip-menu
+nnbuild --game exhumed --grp ~/games/powerslave/STUFF.DAT --skip-menu
 
 # Jump straight to level 3, without the intro
-vibebuild32 --game exhumed --skip-menu -quick -3
+nnbuild --game exhumed --skip-menu -quick -3
 
 # A map file of your own
-vibebuild32 --game exhumed --skip-menu -map ~/maps/tomb.map
+nnbuild --game exhumed --skip-menu -map ~/maps/tomb.map
 ```
 
 Useful options of this runtime:
@@ -82,10 +82,10 @@ same `-net` syntax as Duke Nukem 3D and holds up to 8 players.
 
 ```sh
 # Host a 2-player game on UDP port 23513
-vibebuild32 --game exhumed --skip-menu -name Host -net /p23513 /n0:2
+nnbuild --game exhumed --skip-menu -name Host -net /p23513 /n0:2
 
 # Join it
-vibebuild32 --game exhumed --skip-menu -name Guest -net /n0 192.0.2.10:23513
+nnbuild --game exhumed --skip-menu -name Guest -net /n0 192.0.2.10:23513
 ```
 
 `-net` and everything after it must come last on the command line. The parts
@@ -111,15 +111,15 @@ A server without a window starts the match by itself unless `--wait` is given.
 ```sh
 # A server with four slots. It starts when one player has joined.
 # Players can keep joining while the level runs.
-vibebuild32 --game exhumed --skip-menu -name Server \
+nnbuild --game exhumed --skip-menu -name Server \
     --dedicated --startnow --nplayers 2 --latejoin -net /p23513 /n0:4
 
 # The same server, listed on a lobby server and sharing a mod file
-vibebuild32 --game exhumed --skip-menu -name Server \
+nnbuild --game exhumed --skip-menu -name Server \
     --dedicated --advertise lobby.example.org --netfile mymod.grp -net /n0:4
 
 # Join whatever that lobby server lists first
-vibebuild32 --game exhumed --skip-menu -name Guest --joinlobby lobby.example.org
+nnbuild --game exhumed --skip-menu -name Guest --joinlobby lobby.example.org
 ```
 
 **Chat.** The console command `say <text>` sends a chat message to the other
@@ -136,7 +136,7 @@ say The next level starts in one minute
 program with its own data. KEX mode lets this runtime use that data.
 
 ```sh
-vibebuild32 --game exhumed --skip-menu \
+nnbuild --game exhumed --skip-menu \
     -j ~/games/powerslave -kex "/home/you/games/PowerSlave Exhumed"
 ```
 
@@ -156,7 +156,7 @@ vibebuild32 --game exhumed --skip-menu \
 To start one converted level directly, add `-map`:
 
 ```sh
-vibebuild32 --game exhumed --skip-menu \
+nnbuild --game exhumed --skip-menu \
     -j ~/games/powerslave -kex "/home/you/games/PowerSlave Exhumed" -map THOTH.MAP
 ```
 

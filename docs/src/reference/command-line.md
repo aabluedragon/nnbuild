@@ -4,7 +4,7 @@ Launch options are the words you add after the program name when you start
 NNBuild. This page lists them by purpose.
 
 ```sh
-vibebuild32 --game duke --skip-menu --volume 1 --level 3
+nnbuild --game duke --skip-menu --volume 1 --level 3
 ```
 
 ## How options are read
@@ -179,7 +179,7 @@ games, set the video mode in the game's own options menu.
 | `-cachesize` | | size in kB | Duke, Blood, RR, Exhumed | Sets the size of the file cache. |
 
 ```sh
-vibebuild32 --game duke --cmd "skin 6" --cmd "echo Ready"
+nnbuild --game duke --cmd "skin 6" --cmd "echo Ready"
 ```
 
 Console commands are listed in [Console commands](console-commands.md).
@@ -240,16 +240,16 @@ Without a port, 23513 is used. An address with no `/n` word means `/n0`.
 
 ```sh
 # Host four slots on the default port and start at once
-vibebuild32 --game duke --startnow -net /n0:4
+nnbuild --game duke --startnow -net /n0:4
 
 # Host on another port
-vibebuild32 --game duke --startnow -net /p23600 /n0:4
+nnbuild --game duke --startnow -net /p23600 /n0:4
 
 # Join a host
-vibebuild32 --game duke -net /n0 192.0.2.10:23513
+nnbuild --game duke -net /n0 192.0.2.10:23513
 
 # Join when your own port has to differ from the host's (same computer)
-vibebuild32 --game duke -net /p23514 /n0 127.0.0.1:23513
+nnbuild --game duke -net /p23514 /n0 127.0.0.1:23513
 ```
 
 In host-and-clients mode the host lists no addresses, and each client lists
@@ -342,7 +342,7 @@ graphics or sound.
   no console in the terminal.
 
 ```sh
-vibebuild32 --game duke --dedicated --startnow -name Server -net /p23513 /n0:8
+nnbuild --game duke --dedicated --startnow -name Server -net /p23513 /n0:8
 ```
 
 ## Lobby server
@@ -364,13 +364,13 @@ Without a port, 23519 is used.
 
 ```sh
 # Run a lobby server on the default port
-vibebuild32 -masterserver
+nnbuild -masterserver
 
 # The same on another port, on a computer without a display
-vibebuild32 --headless -masterserver 24000
+nnbuild --headless -masterserver 24000
 
 # Host a Duke Nukem 3D match and list it
-vibebuild32 --game duke --startnow --advertise lobby.example.org -net /n0:4
+nnbuild --game duke --startnow --advertise lobby.example.org -net /n0:4
 ```
 
 Notes:
@@ -427,10 +427,10 @@ A project ZIP given without an option is played as a project. This is what
 happens when you drop the ZIP onto the program.
 
 ```sh
-vibebuild32 --game duke --gamegrp ~/games/duke3d/DUKE3D.GRP --editor
-vibebuild32 "/home/you/projects/My Project.zip"
-vibebuild32 "/home/you/projects/My Project.zip" --project-map "Maps/Outpost.map"
-vibebuild32 --game duke -j ~/games/duke3d --editor --project "/home/you/projects/My Project"
+nnbuild --game duke --gamegrp ~/games/duke3d/DUKE3D.GRP --editor
+nnbuild "/home/you/projects/My Project.zip"
+nnbuild "/home/you/projects/My Project.zip" --project-map "Maps/Outpost.map"
+nnbuild --game duke -j ~/games/duke3d --editor --project "/home/you/projects/My Project"
 ```
 
 Write these options exactly as shown, with two dashes.
@@ -452,12 +452,12 @@ and `--mcp-http <port>` to offer it over the local web address instead of
 standard input and output.
 
 ```sh
-vibebuild32 --game duke --dedicated --startnow --mcp-http 8787 -net /n0:4
-vibebuild32 --editor-mcp 127.0.0.1:23514 --name "Layout Assistant"
+nnbuild --game duke --dedicated --startnow --mcp-http 8787 -net /n0:4
+nnbuild --editor-mcp 127.0.0.1:23514 --name "Layout Assistant"
 ```
 
-Two environment variables protect the web address. When `VIBEBUILD_MCP_TOKEN`
-is set, a client must send that value as a bearer token. `VIBEBUILD_MCP_ORIGIN`
+Two environment variables protect the web address. When `NNBUILD_MCP_TOKEN`
+is set, a client must send that value as a bearer token. `NNBUILD_MCP_ORIGIN`
 names one extra web origin that is allowed to connect.
 
 ## Files given without an option
@@ -551,5 +551,5 @@ These are for testing and for the program's own use.
 | `DUKE3DDEF` | Duke runtime: the definitions file to use when none is named. |
 | `SWGRP` | Shadow Warrior: the main data file to use when none is named. |
 | `BLOODDEF` | Blood: the definitions file to use when none is named. |
-| `VIBEBUILD_MCP_TOKEN`, `VIBEBUILD_MCP_ORIGIN` | See [MCP](#mcp). |
+| `NNBUILD_MCP_TOKEN`, `NNBUILD_MCP_ORIGIN` | See [MCP](#mcp). |
 | `EDUKE32_LOGSTDOUT` | Set to `TRUE` to write the program's console output to `stdout.txt`. |

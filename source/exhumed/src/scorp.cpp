@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "spider.h"
 #include "save.h"
 #include "anims.h"
-#include "kexbreak.h" // VibeBuild32: Selkis death event
+#include "kexbreak.h" // NNBuild: Selkis death event
 #include "kexinv.h"
 #include "player.h"
 #include <assert.h>

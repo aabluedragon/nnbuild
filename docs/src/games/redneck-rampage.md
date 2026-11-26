@@ -40,19 +40,19 @@ title screen.
 
 ```sh
 # Data in the rr subfolder
-vibebuild32 --game rr --skip-menu
+nnbuild --game rr --skip-menu
 
 # Data somewhere else
-vibebuild32 --game rr --grp ~/games/redneck/REDNECK.GRP --skip-menu
+nnbuild --game rr --grp ~/games/redneck/REDNECK.GRP --skip-menu
 
 # Rides Again
-vibebuild32 --game rr --grp ~/games/rides/REDNECK.GRP --skip-menu
+nnbuild --game rr --grp ~/games/rides/REDNECK.GRP --skip-menu
 
 # Episode 1, level 2, skill 3
-vibebuild32 --game rr --skip-menu --volume 1 --level 2 --skill 3
+nnbuild --game rr --skip-menu --volume 1 --level 2 --skill 3
 
 # A map file of your own
-vibebuild32 --game rr --skip-menu -map ~/maps/barn.map
+nnbuild --game rr --skip-menu -map ~/maps/barn.map
 ```
 
 Useful options of this runtime:
@@ -78,10 +78,10 @@ the others connect to it.
 
 ```sh
 # Server
-vibebuild32 --game rr -server
+nnbuild --game rr -server
 
 # Client
-vibebuild32 --game rr -connect 192.0.2.10
+nnbuild --game rr -connect 192.0.2.10
 ```
 
 | Option | Meaning |
@@ -111,10 +111,10 @@ Each of these options has a short form: `-ad`, `-ll`, `-jl`, `-nf`, `-hl` or
 
 ```sh
 # A server without a window, listed on a lobby server, starting when 3 players are in
-vibebuild32 --game rr --headless --advertise lobby.example.org --nplayers 3
+nnbuild --game rr --headless --advertise lobby.example.org --nplayers 3
 
 # Join whatever that lobby server lists first
-vibebuild32 --game rr --joinlobby lobby.example.org
+nnbuild --game rr --joinlobby lobby.example.org
 ```
 
 A player who receives a file with `--netfile` gets it written into the folder

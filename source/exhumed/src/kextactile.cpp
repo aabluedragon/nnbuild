@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 /*
-Copyright (C) 2026 VibeBuild32 contributors
+Copyright (C) 2026 NNBuild contributors
 
 This file is part of PCExhumed.
 

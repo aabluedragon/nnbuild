@@ -8,7 +8,7 @@ runtime into Ion Fury mode when you choose this game.
 | `--game` name | `ionfury` (also `ion-fury`, `fury`, `aftershock`) |
 | Main data file | `fury.grp` |
 | Folder NNBuild looks in first | `ionfury` |
-| Settings and log | `vibebuild32.cfg`, `vibebuild32.log` (shared with Duke Nukem 3D) |
+| Settings and log | `nnbuild.cfg`, `nnbuild.log` (shared with Duke Nukem 3D) |
 
 ## Data files
 
@@ -33,16 +33,16 @@ How the data is found:
 
 ```sh
 # Data in the ionfury subfolder
-vibebuild32 --game ionfury
+nnbuild --game ionfury
 
 # The game's own folder
-vibebuild32 --game ionfury --game-dir "/home/you/games/Ion Fury"
+nnbuild --game ionfury --game-dir "/home/you/games/Ion Fury"
 
 # Naming the data file selects Ion Fury by itself
-vibebuild32 --grp "/home/you/games/Ion Fury/fury.grp"
+nnbuild --grp "/home/you/games/Ion Fury/fury.grp"
 
 # No startup window and no intro
-vibebuild32 --game ionfury --game-dir "/home/you/games/Ion Fury" --skip-menu --skip-cinema
+nnbuild --game ionfury --game-dir "/home/you/games/Ion Fury" --skip-menu --skip-cinema
 ```
 
 Ion Fury uses its own main script (`scripts/main.con`) and definitions file
@@ -65,7 +65,7 @@ that it belongs to another game and uses it only for its levels and art. This
 example is the one printed by the program's own help:
 
 ```sh
-vibebuild32 --game ionfury --game-dir "/home/you/games/Ion Fury" \
+nnbuild --game ionfury --game-dir "/home/you/games/Ion Fury" \
     --grp ~/games/duke3d/DUKE3D.GRP -map E3L6
 ```
 

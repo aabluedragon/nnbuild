@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// The remaster's breakable props for VibeBuild32.
+// The remaster's breakable props for NNBuild.
 //
 // Vases, barrels and the like are shootable actors in the Kex engine: the
 // actor def gives them health and a deathAnim, and that anim tosses one shard

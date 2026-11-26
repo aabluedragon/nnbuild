@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "renderlayer.h"
 #include "cmdline.h"
 #ifndef NETCODE_DISABLE
-# include "netargs.h"   // VibeBuild32: unified multiplayer command-line flags
+# include "netargs.h"   // NNBuild: unified multiplayer command-line flags
 #endif
 
 int32_t g_commandSetup = 0;
@@ -195,7 +195,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
         initprintf("\n");
 
 #ifndef NETCODE_DISABLE
-        // VibeBuild32: unified multiplayer flags (advertise/lobbylist/joinlobby/netfile/
+        // NNBuild: unified multiplayer flags (advertise/lobbylist/joinlobby/netfile/
         // startnow/nplayers/headless). One dispatcher shared with SW/Blood - see netargs.h.
         vb_netarg_ctx const netctx = {
             &g_networkMode, NET_SERVER, NET_CLIENT,
@@ -212,7 +212,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 
             c = oc;
 
-            // VibeBuild32 modern args: treat "--foo" the same as "-foo" so every option
+            // NNBuild modern args: treat "--foo" the same as "-foo" so every option
             // has a long form; slash ("/foo") options are gone.
             if (c[0] == '-' && c[1] == '-' && c[2])
                 c++;
@@ -603,7 +603,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 }
             }
 
-            // VibeBuild32: long aliases for the single-char options below. Rewrite a
+            // NNBuild: long aliases for the single-char options below. Rewrite a
             // "--name"/"--name=value"/"--name value" token to the short "-Xvalue" form so
             // the existing switch handles it (both forms stay valid).
             static char s_optbuf[BMAX_PATH + 4];
@@ -684,7 +684,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     {
                         G_AddGroup(c);
 #ifndef NETCODE_DISABLE
-                        Net_AddNetFile(c);  // VibeBuild32: offer -g mods to joining clients
+                        Net_AddNetFile(c);  // NNBuild: offer -g mods to joining clients
 #endif
                     }
                     break;

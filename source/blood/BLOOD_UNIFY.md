@@ -1,4 +1,4 @@
-# Adding Blood (from NotBlood) to the vibebuild32 executable
+# Adding Blood (from NotBlood) to the nnbuild executable
 
 ## STATUS: DONE — Blood runs end-to-end in the unified binary
 With your Blood data (notblood-win64: BLOOD.RFF + notblood.pk3 + TILES*.ART) in a
@@ -10,7 +10,7 @@ the demo-attract loop - VERIFIED actively running (99% CPU, state RN, in the gam
 loop, not deadlocked; sound gracefully degrades under dummy audio). One fix needed:
 guard FireInit's null-deref on tile 2342 (fire.cpp). Blood support is ACHIEVED.
 
-`make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 vibebuild32` builds one binary that
+`make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 nnbuild` builds one binary that
 dispatches Duke Nukem 3D, Shadow Warrior, Blood, Redneck Rampage,
 Powerslave/Exhumed, and Duke/NAM-family selector entries such as NAM, Napalm,
 and World War II GI. Select Blood with `--game blood` (short form `-gm blood`).
@@ -25,7 +25,7 @@ documented below.
 
 Historical goal: add `--game blood` (short form `-gm blood`) to the unified binary, sharing our engine,
 sourced from NotBlood (`/Users/alonamir/dev/NotBlood`). Same merge pattern as SW
-(see ../sw/UNIFY_WITH_VIBEBUILD32.md): compile Blood's game module against OUR
+(see ../sw/UNIFY_WITH_NNBUILD.md): compile Blood's game module against OUR
 engine, `ld -r` localize the game-internal collisions, dispatch `app_main` in
 gameselect.cpp.
 
@@ -47,7 +47,7 @@ size change — safe for Duke/SW, verified). Replicated in our buildtypes.h:
   `inittype`↔`zvel`.
 - sectortypev7: `type`↔`lotag`.  walltypev7: `type`↔`lotag`.
 Macros (`StructTracker`/`StructName`) are byte-identical between the trees, so the
-aliasing compiles the same way. Combined `WITH_SW=1 vibebuild32` links; Duke
+aliasing compiles the same way. Combined `WITH_SW=1 nnbuild` links; Duke
 launches; SW launches — no regression.
 
 ## Remaining surface (194 errors), categorized
@@ -134,7 +134,7 @@ Engine changes landed (all null/no-op defaults, zero Duke/SW regression):
 ## Historical remaining-to-running checklist (completed)
 A. Makefile: blood_obj + a WITH_BLOOD block mirroring WITH_SW (compile
    source/blood/src, exclude the 5 files above, ld -r localize collisions vs
-   Duke+SW, blood_merged.o into vibebuild32_game_miscdeps).
+   Duke+SW, blood_merged.o into nnbuild_game_miscdeps).
 B. Rename Blood's app_main/G_DefaultDefFile/faketimerhandler -> Blood_*.
 C. gameselect.cpp: g_activeGame==2 dispatch, `-game blood`, blood/ GRP+RFF autodetect.
 D. 3-game link (localize the Duke/SW/Blood collision intersection).
@@ -151,11 +151,11 @@ F. Port the MP features onto Blood (shared mmulti + the same weak-linked
    Blood-internal undeclared refs; reach 0 compile errors.
 4. Build wiring: `blood_obj`, a `WITH_BLOOD` block mirroring `WITH_SW`
    (`ld -r` localize collisions vs Duke, drop Blood's startup-window objects),
-   `blood_merged.o` into `vibebuild32_game_miscdeps`.
+   `blood_merged.o` into `nnbuild_game_miscdeps`.
 5. Rename Blood's `app_main`/`G_DefaultDefFile`/`faketimerhandler` → `Blood_*`;
    extend gameselect.cpp dispatch (`g_activeGame==2`), add `-game blood`, GRP/RFF
    autodetect (`blood/` subdir, blood.rff / BLOOD.RFF).
 6. Link, localize collisions (nm intersect vs Duke+SW), reach a clean 3-game link.
 7. Run `-game blood` and confirm it reaches Blood's title/menu.
-8. Then port the vibebuild32 MP features onto Blood (mmulti transport is already
+8. Then port the nnbuild MP features onto Blood (mmulti transport is already
    shared; masterserver/advertise/punch/lobby/file-transfer re-home like SW).

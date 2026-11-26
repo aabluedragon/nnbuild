@@ -115,7 +115,7 @@ restart.
 
 - The file is in the folder the server runs from. That is the folder you
   start it in when you use `-usecwd`. Otherwise it is the profile folder,
-  `~/.config/vibebuild32` on Linux and macOS.
+  `~/.config/nnbuild` on Linux and macOS.
 - Each line is one address, optionally followed by a name. A line that starts
   with `#` is a comment.
 

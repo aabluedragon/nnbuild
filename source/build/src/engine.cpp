@@ -11738,7 +11738,7 @@ static int32_t engineLoadBoardCrossplayForeign(const char *filename, char flags,
 
     static uint32_t tempSerial;
     char tempPath[BMAX_PATH];
-    Bsnprintf(tempPath, sizeof(tempPath), "__vibebuild32_crossplay_%u_%u.map",
+    Bsnprintf(tempPath, sizeof(tempPath), "__nnbuild_crossplay_%u_%u.map",
               (unsigned)Btime(), (unsigned)tempSerial++);
 
     FILE *fp = fopen(tempPath, "wb");

@@ -1,6 +1,6 @@
 # TypeScript examples
 
-Each example is a complete `index.ts`. Put it in `autojs/<name>/index.ts`, or generate a project first with `./vibebuild32 --gen-ts <name>` and replace the generated `index.ts`. See [Quick start](quick-start.md).
+Each example is a complete `index.ts`. Put it in `autojs/<name>/index.ts`, or generate a project first with `./nnbuild --gen-ts <name>` and replace the generated `index.ts`. See [Quick start](quick-start.md).
 
 All examples keep to the TypeScript that the game can convert. See [TypeScript support and its limits](project-layout.md#typescript-support-and-its-limits).
 

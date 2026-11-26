@@ -64,7 +64,7 @@ void DoFireFrame(void)
     }
     CellularFrame(FrameBuffer, 128, 132);
     char *pData = tileLoadTile(2342);
-    if (!pData)  // VibeBuild32: tile 2342 not backed in our engine's tile cache; skip
+    if (!pData)  // NNBuild: tile 2342 not backed in our engine's tile cache; skip
         return;  // rather than null-deref (dynamic fire simply doesn't render)
     char *pSource = FrameBuffer;
     int x = fireSize;

@@ -465,7 +465,7 @@ MenuItem network_extra_i[] =
 
 MenuGroup networkextragroup = {50, 5, "^Net Options", network_extra_i, pic_newgametitl, 0, m_defshade, NULL, NULL, 0};
 
-// --- In-menu server browser (VibeBuild32) -----------------------------------
+// --- In-menu server browser (NNBuild) -----------------------------------
 // A custom-draw menu group that lists servers advertised to the masterserver and
 // lets the player pick one; selecting relaunches into that server (SW connects at
 // startup, so joining is a re-exec with -net <server>). Backend in network.cpp.
@@ -547,7 +547,7 @@ MenuItem network_i[] =
     {DefInert(0, UserMapName),         OPT_XSIDE,                OPT_LINE(8), pic_episode1, m_defshade, 0, NULL, NULL, NULL},
     {DefOption(KEYSC_S, "Start Game"),   OPT_XS,                    OPT_LINE(8), pic_episode1, m_defshade, 0, MNU_StartNetGame, NULL, NULL},
 
-    {DefLayer(KEYSC_B, "Browse Servers", &serverbrowsergroup), OPT_XS, OPT_LINE(9), 1, m_defshade, 0, NULL, NULL, NULL},  // VibeBuild32: in-menu server browser
+    {DefLayer(KEYSC_B, "Browse Servers", &serverbrowsergroup), OPT_XS, OPT_LINE(9), 1, m_defshade, 0, NULL, NULL, NULL},  // NNBuild: in-menu server browser
 
     {DefNone}
 

@@ -1,7 +1,7 @@
-// Shared Duke/VibeBuild32 group/autoload/lookup loading helpers.
+// Shared Duke/NNBuild group/autoload/lookup loading helpers.
 //
 // Included from source/duke3d/src/common.cpp and
-// source/vibebuild32/src/common.cpp.
+// source/nnbuild/src/common.cpp.
 
 // loads all group (grp, zip, pk3/4) files in the given directory
 void G_LoadGroupsInDir(const char *dirname)

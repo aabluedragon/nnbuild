@@ -119,7 +119,7 @@ static GLsync drawpolyVertsSync[3] = { 0 };
 static float defaultDrawpolyVertsArray[MAX_DRAWPOLY_VERTS*5];
 static float* drawpolyVerts = defaultDrawpolyVertsArray;
 
-// VibeBuild32 -- per-vertex shading from a light field (PowerSlave's Kex
+// NNBuild -- per-vertex shading from a light field (PowerSlave's Kex
 // levels). The game installs a shade-at-a-point callback; polymost_drawalls
 // and polymost_drawmaskwall describe the surface each polygon lies on, and
 // polymost_drawpoly recovers every screen vertex's world position from that
@@ -3209,7 +3209,7 @@ void polymost_finishBufferedDrawing(int mode)
         // reads. glBufferSubData into an in-use buffer forces a full GPU sync (semaphore
         // wait) on Apple's legacy GL-over-Metal - where glMapBufferRange(UNSYNCHRONIZED)
         // isn't available - and profiling showed ~95% of frame time lost to that stall.
-        // glBufferData is core GL 1.5, so this works on every path. (VibeBuild32 perf.)
+        // glBufferData is core GL 1.5, so this works on every path. (NNBuild perf.)
         glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)drawpolyVertsCnt * sizeof(float) * 5, drawpolyVerts, GL_STREAM_DRAW);
         if (kexColorsEnabled)
         {
@@ -3871,7 +3871,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
 
     Bassert(n <= MAX_DRAWPOLY_VERTS);
 
-    // VibeBuild32: small KEX floors use their authored light mesh; every
+    // NNBuild: small KEX floors use their authored light mesh; every
     // other surface falls back to a bounded world-anchored vertex grid.
     if (!s_kexTess && polymost_kexVertexLight && polymost_kexShadeAt && polymost_kexsurf.kind && !persistentStreamBuffer
         && videoGetRenderMode() == REND_POLYMOST && getpskyidx(globalpicnum) == 0 && n <= MAX_DRAWPOLY_VERTS
@@ -4142,7 +4142,7 @@ static void polymost_drawpoly(vec2f_t const* const dpxy, int32_t const n, int32_
 
     glColor4f(pc[0], pc[1], pc[2], pc[3]);
     Bmemcpy(kexCurColor, pc, sizeof(pc));
-    // VibeBuild32: per-vertex shade from the light field, on walls and flats
+    // NNBuild: per-vertex shade from the light field, on walls and flats
     // of a level that has one; skies, sprites, models and 8-bit tiles keep
     // the polygon colour.
     int const kexvl = polymost_kexVertexLight && (polymost_kexShadeAt || polymost_kexColorAt) && polymost_kexsurf.kind && !persistentStreamBuffer
@@ -8821,7 +8821,7 @@ void polymost_checkornamentedsprite(tspriteptr_t tspr, int16_t *wallnum, wallspr
 
 void polymost_drawsprite(int32_t snum)
 {
-    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
+    polymost_kexsurf.kind = 0;   // NNBuild: sprites keep their polygon shade
 #ifdef POLYMOST2
     if (r_enablepolymost2)
     {
@@ -9820,7 +9820,7 @@ void polymost_dorotatesprite(int32_t sx, int32_t sy, int32_t z, int16_t a, int16
                              int8_t dashade, char dapalnum, int32_t dastat, uint8_t daalpha, uint8_t dablend,
                              int32_t cx1, int32_t cy1, int32_t cx2, int32_t cy2, int32_t uniqid)
 {
-    polymost_kexsurf.kind = 0;   // VibeBuild32: sprites keep their polygon shade
+    polymost_kexsurf.kind = 0;   // NNBuild: sprites keep their polygon shade
     if (usemodels && tile2model[picnum].hudmem[(dastat&4)>>2])
     {
         polymost_dorotatespritemodel(sx, sy, z, a, picnum, dashade, dapalnum, dastat, daalpha, dablend, uniqid);

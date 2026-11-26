@@ -1,10 +1,10 @@
-# VibeBuild32 JavaScript and TypeScript mods
+# NNBuild JavaScript and TypeScript mods
 
-VibeBuild32 embeds QuickJS and loads mods as ES modules. Mods can use either
+NNBuild embeds QuickJS and loads mods as ES modules. Mods can use either
 TypeScript or JavaScript; TypeScript is transpiled by the game, so Node.js is
 not needed when the game runs.
 
-For restart-level engineering context, see `../../VIBEBUILD32_HANDOFF.md`.
+For restart-level engineering context, see `../../NNBUILD_HANDOFF.md`.
 
 ## Create and run a project
 
@@ -12,11 +12,11 @@ Use `--long-name` for a long option and `-short-name` for its short option.
 The following forms create an editor-ready mod and exit without opening a game:
 
 ```sh
-./vibebuild32 --gen-ts my-mod    # or: -gts my-mod
-./vibebuild32 --gen-js my-mod    # or: -gjs my-mod
+./nnbuild --gen-ts my-mod    # or: -gts my-mod
+./nnbuild --gen-js my-mod    # or: -gjs my-mod
 ```
 
-When no name is supplied, VibeBuild32 selects the next unused `mod-N` name.
+When no name is supplied, NNBuild selects the next unused `mod-N` name.
 The generated project contains exactly one auto-loaded entry point:
 
 | mode | entry point | editor config |
@@ -28,14 +28,14 @@ Each project also receives `vb.d.ts`, `package.json`, and `.vscode/` files for
 launching and debugging. Open **the generated project folder** in VS Code.
 `npm install` is optional; it is only needed for `npm run check`.
 
-At launch, VibeBuild32 scans `autojs/<project>/` and loads only `index.ts` or
+At launch, NNBuild scans `autojs/<project>/` and loads only `index.ts` or
 `index.js`; if both exist, `index.ts` wins. Loose files under `autojs/` are not
 auto-loaded. Relative `import` and `require()` paths resolve from the importing
 script.
 
 ```sh
-./vibebuild32 --game duke --grp ~/games/duke3d/duke3d.grp
-./vibebuild32 --game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'
+./nnbuild --game duke --grp ~/games/duke3d/duke3d.grp
+./nnbuild --game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'
 ```
 
 `--game`/`-gm` and `--grp`/`-g` accept their value immediately or after one or
@@ -164,8 +164,8 @@ Node's `http` and `https` module objects are not currently exported.
 
 Generated `.vscode/launch.json` provides:
 
-- **Launch VibeBuild32**: starts `vibebuild32 -dbg` and attaches automatically.
-- **Attach to running VibeBuild32**: attaches to a game already started with
+- **Launch NNBuild**: starts `nnbuild -dbg` and attaches automatically.
+- **Attach to running NNBuild**: attaches to a game already started with
   `-dbg`/`--debug` or `-dt`/`--devtools`.
 
 The generated pre-launch task starts the project-local DAP adapter on localhost
@@ -196,8 +196,8 @@ native game-selector GUI, while `--menu`/`-m` forces it.
 ## Extending the runtime
 
 The lifecycle/API seam is in `source/glue/vbjs.h` and
-`source/vibebuild32/src/vbjs.cpp`. Duke game-state bindings are implemented in
-`source/vibebuild32/src/vbjs_duke.cpp`. When adding an API, implement the real
+`source/nnbuild/src/vbjs.cpp`. Duke game-state bindings are implemented in
+`source/nnbuild/src/vbjs_duke.cpp`. When adding an API, implement the real
 binding, export it from `vb`, and update the generated `vb.d.ts`; do not ship a
 stub. Add an explicit safe implementation or a deliberate throwing boundary
 for every other supported game.

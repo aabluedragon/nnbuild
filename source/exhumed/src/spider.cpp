@@ -29,7 +29,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sequence.h"
 #include "random.h"
 #include "sound.h"
-#include "kexbreak.h" // VibeBuild32: KEX death sound
+#include "kexbreak.h" // NNBuild: KEX death sound
 #include "kexinv.h"
 #include "anims.h"
 #include "trigdat.h"
@@ -76,7 +76,7 @@ int GetSpiderSprite(int nSpider)
     return SpiderList[nSpider].nSprite;
 }
 
-// VibeBuild32: the remaster's scorpion is this AI in a scorpion's shell.
+// NNBuild: the remaster's scorpion is this AI in a scorpion's shell.
 static uint8_t s_spiderScorp[kMaxSpiders];
 static int const kKexExactScorpTileBase = 20900;
 static int const kKexExactScorpTileCount = 48;

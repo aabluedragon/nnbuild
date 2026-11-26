@@ -25,7 +25,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <ifaddrs.h>   // VibeBuild32: local-interface enumeration for order-independent P2P
+#include <ifaddrs.h>   // NNBuild: local-interface enumeration for order-independent P2P
 #define SOCKET int
 #define INVALID_HANDLE_VALUE (-1)
 #define INVALID_SOCKET (-1)
@@ -610,7 +610,7 @@ static void initmultiplayers_reset(void)
 // 192.168.1.100   game 192.168.1.2 /n1    game 192.168.1.2 /n1 192.168.1.4
 // 192.168.1.4                             game 192.168.1.2 192.168.1.100 /n1
 //
-// VibeBuild32: the above legacy form (list the OTHER peers, /n1 marks your slot by
+// NNBuild: the above legacy form (list the OTHER peers, /n1 marks your slot by
 // position) still works. But you may instead list EVERY player's address - including
 // your own - after /n1 in ANY order; mmulti sorts them canonically so all participants
 // derive the same slot ordering, and auto-detects which one is the local machine. That
@@ -659,7 +659,7 @@ int initmultiplayersparms(int argc, const char * const *argv)
 {
     int i, j, daindex, portnum = NETPORT;
     char *st;
-    struct sockaddr_in6 roster[MAXPLAYERS];   // VibeBuild32: all listed addresses, for order-independent P2P
+    struct sockaddr_in6 roster[MAXPLAYERS];   // NNBuild: all listed addresses, for order-independent P2P
     int rosterCnt = 0;
 
     pakmem = (char *)Xmalloc(PAKMEMSIZ);
@@ -749,7 +749,7 @@ int initmultiplayersparms(int argc, const char * const *argv)
     if ((numplayers >= 2) && (daindex) && (networkmode == MMULTI_MODE_MS)) myconnectindex = 1;
     if (daindex > numplayers) numplayers = daindex;
 
-    // VibeBuild32: order-independent P2P. If the local machine's own address is among the
+    // NNBuild: order-independent P2P. If the local machine's own address is among the
     // listed ones, the participant listed the full roster (any order) rather than the
     // legacy "peers only, /n1 marks my slot" form. Sort the roster canonically so every
     // participant agrees on the slot ordering, and take our own slot from where we land.

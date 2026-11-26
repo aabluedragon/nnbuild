@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "eventq.h"
 #include "globals.h"
 #include "network.h"
-#include "netshared.h"       // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared.h"       // NNBuild: shared masterserver-client + file-transfer glue
 #include "netshared_enet.h"  // shared enet-transport glue (NAT punch)
 #include "menu.h"
 #include "player.h"
@@ -597,7 +597,7 @@ void netGetPackets(void)
         case 255:
             keystatus[1] = 1;
             break;
-        case VB_FILE_HEADER:   // VibeBuild32 mid-game file transfer (host -> joiner)
+        case VB_FILE_HEADER:   // NNBuild mid-game file transfer (host -> joiner)
             VB_RecvFileHeader(&s_blRecv, (const uint8_t *)packet, "Blood");
             break;
         case VB_FILE_CHUNK:
@@ -1116,7 +1116,7 @@ void netInitialize(bool bConsole)
         while (numplayers < gNetPlayers)
         {
             handleevents();
-            Net_HostAdvertise();  // VibeBuild32: advertise to the masterserver while waiting for joiners
+            Net_HostAdvertise();  // NNBuild: advertise to the masterserver while waiting for joiners
             if (quitevent)
             {
                 netServerDisconnect();
@@ -1146,7 +1146,7 @@ void netInitialize(bool bConsole)
                         if (gNetPlayerPeer[i] == NULL)
                         {
                             gNetPlayerPeer[i] = event.peer;
-                            Net_SendGameFiles(i);  // VibeBuild32: stream joiner-needed files (reliable, arrives before level load)
+                            Net_SendGameFiles(i);  // NNBuild: stream joiner-needed files (reliable, arrives before level load)
                             break;
                         }
                     }
@@ -1269,7 +1269,7 @@ void netInitialize(bool bConsole)
             netResetToSinglePlayer();
             return;
         }
-        // VibeBuild32: punch a NAT hole toward the server (via the masterserver) while
+        // NNBuild: punch a NAT hole toward the server (via the masterserver) while
         // waiting for the connect, instead of one blocking 5s wait - so a NAT'd server
         // opens its hole toward us and the enet handshake gets through.
         bool bConnected = false;
@@ -1351,7 +1351,7 @@ void netInitialize(bool bConsole)
                             break;
                         }
                     }
-                    else  // VibeBuild32: mid-game file transfer arrives on the GAME channel during join
+                    else  // NNBuild: mid-game file transfer arrives on the GAME channel during join
                     {
                         const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;  // skip prepended sender index
                         if (pkt[0] == VB_FILE_HEADER)      VB_RecvFileHeader(&s_blRecv, pkt, "Blood");
@@ -1406,7 +1406,7 @@ void netPostEPacket(ENetPacket *pEPacket)
 }
 #endif
 
-// --- VibeBuild32 masterserver/lobby features, ported onto Blood ---------------
+// --- NNBuild masterserver/lobby features, ported onto Blood ---------------
 // Transport-independent (own UDP sockets), so they work with Blood's native enet
 // netcode. The shared masterserver-client API + record + crc/byte helpers live in
 // netshared.h; only Blood's thin glue is below. See source/sw for the SW port.
@@ -1418,7 +1418,7 @@ void Net_HostAdvertise(void)  // pulse this server to the masterserver (host onl
 {
     char map[24];
     Bstrncpyz(map, gGameOptions.zLevelName[0] ? gGameOptions.zLevelName : "Blood", sizeof(map));
-    VB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "VibeBuild32 Blood server",
+    VB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Blood server",
                           gNetPort, gNetPlayers, gNetPlayers, map);
 }
 
@@ -1453,7 +1453,7 @@ int Net_JoinLobby(const char *masterAddr)
 
 void netUpdate(void)
 {
-    Net_HostAdvertise();  // VibeBuild32: masterserver/lobby heartbeat (host only)
+    Net_HostAdvertise();  // NNBuild: masterserver/lobby heartbeat (host only)
 #ifndef NETCODE_DISABLE
     ENetEvent event;
     if (gNetMode == NETWORK_NONE)
@@ -1551,7 +1551,7 @@ void netUpdate(void)
                 }
                 case BLOOD_ENET_GAME:
                 {
-                    // VibeBuild32: dispatch mid-game file-transfer packets immediately
+                    // NNBuild: dispatch mid-game file-transfer packets immediately
                     // (they arrive during the join/sync wait, before netGetPackets runs).
                     // Skip the sender-index byte netSendPacket prepends; our command is next.
                     const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;

@@ -5,9 +5,6 @@ and other games made with the Build engine. It is based on NetDuke32, a
 community-made version of the game from the EDuke32 family. This page lists
 what NNBuild adds on top of that, in plain language.
 
-> NNBuild was called VibeBuild32 until recently. You will still see the old name
-> on the program file (`vibebuild32`) and in some messages.
-
 ## At a glance
 
 - Join a match that is already running, and come back if you drop out

@@ -1,6 +1,6 @@
 /* Internal source debugger support for the embedded QuickJS runtime.
  * This is deliberately private to the engine: public game code talks to it
- * through VibeBuild32's DevTools bridge, never through QuickJS internals. */
+ * through NNBuild's DevTools bridge, never through QuickJS internals. */
 #ifndef QUICKJS_DEBUGGER_H
 #define QUICKJS_DEBUGGER_H
 

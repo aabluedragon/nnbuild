@@ -9,7 +9,7 @@ parts fit together.
 
 ## The project folder
 
-A folder is a project when it has a file called `vibebuild.project.json` at
+A folder is a project when it has a file called `nnbuild.project.json` at
 its top level. Every other file in the folder is an *asset*. You may arrange
 assets in subfolders as you like.
 
@@ -17,7 +17,7 @@ The example project looks like this:
 
 ```text
 ashline-relay/
-  vibebuild.project.json      project settings
+  nnbuild.project.json        project settings
   GAME.CON                    game rules (stand-alone games)
   tiles000.art                art (stand-alone games)
   palette.dat                 colours (stand-alone games)
@@ -64,7 +64,7 @@ A new project starts with these settings:
 To open a project when you start the program, use `--editor` with `--project`:
 
 ```sh
-./vibebuild32 --editor --project examples/ashline-relay
+./nnbuild --editor --project examples/ashline-relay
 ```
 
 Starting this way also loads the project's own files together with the game.
@@ -83,14 +83,14 @@ With a project open, the dialog shows:
 | **Asset file**, **Add asset** | Copies a file into the project |
 | **Close project** | Closes the project. The files stay where they are. |
 
-Each change is written to `vibebuild.project.json` at once.
+Each change is written to `nnbuild.project.json` at once.
 
 A relative path in these dialogs starts from the folder in which you started
 NNBuild.
 
 ## The settings file
 
-`vibebuild.project.json` is a small text file. This is the one from the
+`nnbuild.project.json` is a small text file. This is the one from the
 example project:
 
 ```json
@@ -113,7 +113,7 @@ example project:
 
 The editor writes this file for you. If you edit it by hand and it is no
 longer valid, the project does not open and you see "The folder needs a valid
-vibebuild.project.json."
+nnbuild.project.json."
 
 ### Paths inside a project
 
@@ -318,7 +318,7 @@ A project ZIP can hold up to 16,384 files and folders.
 The project is unpacked and opened. You can also drag a project ZIP onto the
 editor window. This opens the dialog with **ZIP** filled in.
 
-A ZIP is accepted as a project when `vibebuild.project.json` is at the top
+A ZIP is accepted as a project when `nnbuild.project.json` is at the top
 level of the archive, not inside a subfolder.
 
 ## How a player runs a project
@@ -327,9 +327,9 @@ A player needs NNBuild and your project as a folder or as a ZIP.
 
 | The player has | Command |
 | --- | --- |
-| A project folder | `./vibebuild32 --project "/path/to/My Project"` |
-| A project ZIP | `./vibebuild32 "My Project.zip"` |
-| A project ZIP, written out in full | `./vibebuild32 --project "My Project.zip"` |
+| A project folder | `./nnbuild --project "/path/to/My Project"` |
+| A project ZIP | `./nnbuild "My Project.zip"` |
+| A project ZIP, written out in full | `./nnbuild --project "My Project.zip"` |
 
 **Drag and drop.** Dragging the ZIP onto the program's icon starts it the same
 way, because the system passes the ZIP as the first argument.
@@ -338,13 +338,13 @@ way, because the system passes the ZIP as the first argument.
 in a different map:
 
 ```sh
-./vibebuild32 "My Project.zip" --project-map "Maps/Outpost.map"
+./nnbuild "My Project.zip" --project-map "Maps/Outpost.map"
 ```
 
 **Edit instead of play.** Add `--editor`:
 
 ```sh
-./vibebuild32 --editor --project "/path/to/My Project"
+./nnbuild --editor --project "/path/to/My Project"
 ```
 
 What happens when a project starts:
@@ -367,7 +367,7 @@ This project needs NAM data. Add the data folder with -j or pass -gamegrp.
 The player then adds the folder that holds the game data:
 
 ```sh
-./vibebuild32 -j/path/to/game-data --project "/path/to/My Project"
+./nnbuild -j/path/to/game-data --project "/path/to/My Project"
 ```
 
 A [stand-alone](#stand-alone-games) project does not need any of this.
@@ -377,7 +377,7 @@ A [stand-alone](#stand-alone-games) project does not need any of this.
 Scripts inside a project ZIP do not run unless the player allows them:
 
 ```sh
-./vibebuild32 --allow-project-scripts "My Project.zip"
+./nnbuild --allow-project-scripts "My Project.zip"
 ```
 
 Without the option, the project still starts, but its script components stay
@@ -413,7 +413,7 @@ autoload folder.
 
 `examples/ashline-relay/` is a one-map stand-alone game.
 
-- `vibebuild.project.json` sets the target to `standalone`, the entry map to
+- `nnbuild.project.json` sets the target to `standalone`, the entry map to
   `Maps/Ashline.map`, and Modern Mode to on.
 - `GAME.CON`, `tiles000.art` and `palette.dat` are the three required files.
   The art and sounds come from Freedoom. The notices are in `Attribution/`.
@@ -425,19 +425,19 @@ autoload folder.
 Run it from the top of the source tree:
 
 ```sh
-./vibebuild32 --project examples/ashline-relay
+./nnbuild --project examples/ashline-relay
 ```
 
 Open it in the editor:
 
 ```sh
-./vibebuild32 --editor --project examples/ashline-relay
+./nnbuild --editor --project examples/ashline-relay
 ```
 
 Run it from an exported ZIP, with its scripts allowed:
 
 ```sh
-./vibebuild32 --allow-project-scripts --project "/path/to/Ashline Relay.zip"
+./nnbuild --allow-project-scripts --project "/path/to/Ashline Relay.zip"
 ```
 
 ## Modern Mode
@@ -450,10 +450,8 @@ Modern Mode turns on the features that only NNBuild has:
 When you turn it on, the editor shows this warning and asks you to confirm:
 
 ```text
-Modern Mode requires VibeBuild32. This project is incompatible with other source ports and the original game.
+Modern Mode requires NNBuild. This project is incompatible with other source ports and the original game.
 ```
-
-VibeBuild32 is the older name of NNBuild.
 
 **For the whole project**
 

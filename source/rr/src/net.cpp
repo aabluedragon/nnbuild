@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "game.h"
 #include "gamedef.h"
 #include "net.h"
-#include "netshared.h"       // VibeBuild32: shared masterserver-client + file-transfer glue
+#include "netshared.h"       // NNBuild: shared masterserver-client + file-transfer glue
 #include "netshared_enet.h"  // shared enet-transport glue (NAT punch)
 #include "premap.h"
 #include "savegame.h"
@@ -44,7 +44,7 @@ enet_uint16 g_netPort = 23513;
 int32_t g_netDisconnect = 0;
 char g_netPassword[32];
 int32_t g_netPlayersWaiting = 0;
-// VibeBuild32: headless/dedicated auto-start. A dedicated/headless server auto-launches
+// NNBuild: headless/dedicated auto-start. A dedicated/headless server auto-launches
 // the match (for everyone) once the pre-game lobby reaches g_netStartNowPlayers - this
 // is the DEFAULT (armed in RR_app_main). -wait (g_netWait) opts out and holds in the
 // lobby; -startnow forces it on even for a windowed -server.
@@ -117,7 +117,7 @@ void Net_SyncPlayer(ENetEvent *event)
     Net_SendPlayerIndex(i, event->peer);
     Net_SendClientInfo();
     Net_SendUserMapName();
-    // VibeBuild32: push the host's custom content (user map + -g mods) to this joiner
+    // NNBuild: push the host's custom content (user map + -g mods) to this joiner
     // now, while still in the lobby. These reliable CHAN_GAMESTATE packets are queued
     // before the match-start NEW_GAME, so the client has the files before it enters.
     Net_SendGameFiles(event->peer);
@@ -2785,7 +2785,7 @@ void Net_Connect(const char *srvaddr)
 
     for (i=4; i>0; i--)
     {
-        Net_ClientPunch();  // VibeBuild32: ask the masterserver to hole-punch toward the server (joinlobby only)
+        Net_ClientPunch();  // NNBuild: ask the masterserver to hole-punch toward the server (joinlobby only)
         /* Wait up to 5 seconds for the connection attempt to succeed. */
         if (enet_host_service(g_netClient, & event, 5000) > 0 &&
                 event.type == ENET_EVENT_TYPE_CONNECT)
@@ -2914,7 +2914,7 @@ void Net_ReceiveDisconnect(ENetEvent *event)
 
 #endif
 
-// --- VibeBuild32 masterserver/lobby features, ported onto Redneck Rampage -----
+// --- NNBuild masterserver/lobby features, ported onto Redneck Rampage -----
 // Redneck Rampage uses the engine's native enet netcode (like Blood), so this is
 // the same transport-independent feature layer as the Blood port. The shared
 // masterserver-client API + record + crc/byte helpers live in netshared.h; only
@@ -2928,7 +2928,7 @@ void Net_HostAdvertise(void)  // pulse this server to the masterserver (host onl
 {
     char map[24];
     Bstrncpyz(map, boardfilename[0] ? boardfilename : "Redneck Rampage", sizeof(map));
-    VB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "VibeBuild32 Redneck server",
+    VB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Redneck server",
                           g_netPort, numplayers, numplayers, map);
 }
 
@@ -2958,7 +2958,7 @@ int Net_JoinLobby(const char *masterAddr)
     return 1;
 }
 
-// --- VibeBuild32 lobby file transfer, ported onto Redneck Rampage --------------
+// --- NNBuild lobby file transfer, ported onto Redneck Rampage --------------
 // RR accepts joiners only in the pre-game lobby, so the host pushes its custom
 // content (user map + -g mods) to each joining client during Net_SyncPlayer. Those
 // packets go host->joiner on CHAN_GAMESTATE (reliable, ordered) and are enqueued
@@ -2998,7 +2998,7 @@ void Net_SendGameFiles(ENetPeer *peer)  // host: push custom content to a joinin
 
 void Net_GetPackets(void)
 {
-    Net_HostAdvertise();  // VibeBuild32: masterserver/lobby heartbeat (host only, rate-limited internally)
+    Net_HostAdvertise();  // NNBuild: masterserver/lobby heartbeat (host only, rate-limited internally)
 
     if (g_netDisconnect)
     {
@@ -3015,7 +3015,7 @@ void Net_GetPackets(void)
     {
         Net_HandleClientPackets();
 
-        // VibeBuild32: headless/dedicated auto-start. Once the pre-game lobby has the
+        // NNBuild: headless/dedicated auto-start. Once the pre-game lobby has the
         // requested number of players, the host launches the match for everyone using
         // the same sequence as the "Launch" menu item. Fires once (MODE_GAME then set).
         if (g_netStartNow && !(g_player[myconnectindex].ps->gm & MODE_GAME)
@@ -3262,7 +3262,7 @@ void Net_ParseServerPacket(ENetEvent *event)
         Net_ReceiveNewGame(event);
         break;
 
-    case VB_FILE_HEADER:   // VibeBuild32: host is pushing custom content to us
+    case VB_FILE_HEADER:   // NNBuild: host is pushing custom content to us
         VB_RecvFileHeader(&s_rrRecv, pbuf, "RR");
         break;
 

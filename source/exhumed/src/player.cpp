@@ -1142,7 +1142,7 @@ void RestartPlayer(short nPlayer)
         SetMapPosition(sprite[nSprite].x, sprite[nSprite].y, sprite[nSprite].ang);
     }
 
-    // VibeBuild32: -name (locally) and each peer's OPTIONS packet fill playerNames[]
+    // NNBuild: -name (locally) and each peer's OPTIONS packet fill playerNames[]
     // during ExNet_Connect(), long before the first RestartPlayer(). Keep those --
     // otherwise every level start renamed everyone back to the stock "JOEn"
     // placeholder and chat lines were attributed to the wrong-looking player.
@@ -1401,7 +1401,7 @@ static void SetItemPickupMessage(int nPlayer, int nVal)
     if (nPlayer != nLocalPlayer)
         return;
 
-    // VibeBuild32: in Kex mode the remaster's own wording wins, for the items
+    // NNBuild: in Kex mode the remaster's own wording wins, for the items
     // that mean the same thing in both games.
     if (g_kexMode && nTotalPlayers == 1)
     {
@@ -1603,7 +1603,7 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                 return;
             }
 
-            // VibeBuild32: in Kex mode these four "pickable items" carry the
+            // NNBuild: in Kex mode these four "pickable items" carry the
             // remaster's artifacts, transmitter pieces, team dolls and ankhs,
             // the hitag naming which (kexinv.h).
             case kKexLotagArtifact:
@@ -1620,7 +1620,7 @@ void PlayerCheckItemPickup(int nPlayer, int nPickupSprite, int valueFlag)
                 break;
             }
 
-            case 31: // VibeBuild32: the remaster's Manacle (Kex mode); a pickable no-op otherwise
+            case 31: // NNBuild: the remaster's Manacle (Kex mode); a pickable no-op otherwise
             {
                 if (g_kexMode)
                 {
@@ -2538,7 +2538,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
 
             int nMove = 0; // TEMP
 
-            // VibeBuild32 test hook: VB_KEX_WALK=<ticks> walks the player
+            // NNBuild test hook: VB_KEX_WALK=<ticks> walks the player
             // straight ahead for that many ticks, then logs where it got to
             // (Kex units), so a step or a sill can be tried without a hand
             // on the keys.

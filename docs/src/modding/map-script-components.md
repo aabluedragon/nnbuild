@@ -8,7 +8,7 @@ Use this model when behavior belongs to a place or an object in a level: a door,
 
 ## Requirements
 
-- An editor project: a folder with a `vibebuild.project.json` file. See [Projects and stand-alone games](../editor/projects.md).
+- An editor project: a folder with a `nnbuild.project.json` file. See [Projects and stand-alone games](../editor/projects.md).
 - **Modern Mode** turned on, for the project or for the map.
 - Script files inside the project folder. Allowed extensions: `.js`, `.ts`, `.mjs`, `.mts`.
 - A Duke runtime game.
@@ -170,13 +170,13 @@ The editor saves attachments in a settings file next to the map, named `<map>.vb
 }
 ```
 
-`script` is a path relative to the project folder. Modern Mode is stored as `"modern": true` in `vibebuild.project.json`, or as `"modern": true` or `false` in the map's settings file when the map overrides it.
+`script` is a path relative to the project folder. Modern Mode is stored as `"modern": true` in `nnbuild.project.json`, or as `"modern": true` or `false` in the map's settings file when the map overrides it.
 
 ## Playing a project with components
 
 ```sh
-./vibebuild32 --project examples/ashline-relay
-./vibebuild32 --editor --project examples/ashline-relay
+./nnbuild --project examples/ashline-relay
+./nnbuild --editor --project examples/ashline-relay
 ```
 
 Components of a project **folder** run without further options.
@@ -184,7 +184,7 @@ Components of a project **folder** run without further options.
 Components of an exported project **ZIP** do not run unless the player allows scripts:
 
 ```sh
-./vibebuild32 --allow-project-scripts --project "/path/to/Ashline Relay.zip"
+./nnbuild --allow-project-scripts --project "/path/to/Ashline Relay.zip"
 ```
 
 Without the option the level loads, but no component is attached. Only allow scripts from projects you trust.

@@ -688,7 +688,7 @@ void DrawSnakeCamStatus()
 
 void DrawStatus()
 {
-    // VibeBuild32: in Kex mode draw the remaster's slim bar instead of Build
+    // NNBuild: in Kex mode draw the remaster's slim bar instead of Build
     // PowerSlave's ornate panel.
     if (g_kexMode && KexHud_Available())
     {

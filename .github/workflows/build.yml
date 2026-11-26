@@ -1,6 +1,6 @@
 name: Build
 
-# Builds NNBuild (the vibebuild32 target) for six platforms. A tag that starts
+# Builds NNBuild for six platforms. A tag that starts
 # with "v" also publishes the archives as a GitHub release.
 
 on:
@@ -41,10 +41,10 @@ jobs:
         # FLAC and VPX are linked statically: their library names differ
         # between distributions, and the archive should run on all of them.
         run: |
-          make -j"$(nproc)" vibebuild32 PRETTY_OUTPUT=0 \
+          make -j"$(nproc)" nnbuild PRETTY_OUTPUT=0 \
             FLAC_LIBS="-l:libFLAC.a -l:libogg.a" VPX_LIBS="-l:libvpx.a"
       - name: Smoke test
-        run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./vibebuild32 --help
+        run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./nnbuild --help
       - name: Package
         run: |
           case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac
@@ -76,7 +76,7 @@ jobs:
           sudo update-alternatives --set ${{ matrix.triple }}-gcc /usr/bin/${{ matrix.triple }}-gcc-posix
           sudo update-alternatives --set ${{ matrix.triple }}-g++ /usr/bin/${{ matrix.triple }}-g++-posix
       - name: Build
-        run: make -j"$(nproc)" PLATFORM=WINDOWS CROSS=${{ matrix.triple }}- vibebuild32 PRETTY_OUTPUT=0
+        run: make -j"$(nproc)" PLATFORM=WINDOWS CROSS=${{ matrix.triple }}- nnbuild PRETTY_OUTPUT=0
       - name: Package
         run: |
           case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac
@@ -107,9 +107,9 @@ jobs:
         run: brew install sdl2 flac libogg libvpx dylibbundler
       - name: Build
         # -k: report every compile error in one run, not just the first.
-        run: make -k -j"$(sysctl -n hw.ncpu)" vibebuild32 PRETTY_OUTPUT=0
+        run: make -k -j"$(sysctl -n hw.ncpu)" nnbuild PRETTY_OUTPUT=0
       - name: Smoke test
-        run: ./vibebuild32 --help
+        run: ./nnbuild --help
       - name: Package
         run: |
           case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac

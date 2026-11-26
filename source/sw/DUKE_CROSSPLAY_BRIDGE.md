@@ -9,7 +9,7 @@ changes.
 When launched like this:
 
 ```sh
-./vibebuild32 -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g ~/games/duke3da/duke3d.grp -map E1L1.MAP -wnd -res1280x720 -sc -sm
+./nnbuild -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g ~/games/duke3da/duke3d.grp -map E1L1.MAP -wnd -res1280x720 -sc -sm
 ```
 
 the active runtime is Shadow Warrior, but the loaded level is a Duke-family map.
@@ -29,7 +29,7 @@ The bridge must preserve Duke map semantics broadly:
 
 Main entry points:
 
-- `source/vibebuild32/src/gameselect.cpp`
+- `source/nnbuild/src/gameselect.cpp`
   - public CLI parsing and attached/separated argument normalization;
   - game selection and domain routing;
   - `-gm.lvls` / `--game.levels`;
@@ -158,7 +158,7 @@ CON scripts plus the hard-coded cases in `actors.cpp`, so anything reimplemented
 in the SW runtime will differ from Duke no matter how carefully it is tuned.
 Instead, the Duke actor system itself runs inside the SW session:
 
-- `source/vibebuild32/src/crossplay_dukeai.cpp` brings up the Duke state the
+- `source/nnbuild/src/crossplay_dukeai.cpp` brings up the Duke state the
   actor system needs (one allocated player, compiled CON scripts, enemy flag
   tables) and exposes a `VB_DukeAI_*` API.  Duke's objects are not symbol
   localized by the per-game merge, so SW can call into them directly.
@@ -257,7 +257,7 @@ runs the game once per group so each starts from a pristine level:
 
 ```sh
 for group in actors world destruct tripmines; do
-    VB_CP_SELFTEST=$group ./vibebuild32 -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+    VB_CP_SELFTEST=$group ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
         -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 done
 ```
@@ -281,7 +281,7 @@ the local player through the systems captured from the Duke map and prints one
 `CPTEST` line per checked behavior before quitting:
 
 ```sh
-VB_CP_SELFTEST=1 ./vibebuild32 -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+VB_CP_SELFTEST=1 ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
     -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
@@ -300,7 +300,7 @@ Rabid Transit's four trains carry the player with zero slip, deterministically.
 Build:
 
 ```sh
-make -j8 vibebuild32
+make -j8 nnbuild
 ```
 
 Last recorded result: linked successfully with warnings only.
@@ -308,7 +308,7 @@ Last recorded result: linked successfully with warnings only.
 E1L1 smoke:
 
 ```sh
-timeout 12s ./vibebuild32 -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
+timeout 12s ./nnbuild -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
 Last recorded result: startup ran until the timeout. Logs showed Duke parallax
@@ -319,7 +319,7 @@ explosives, lights, respawns, quake, map sounds, and Duke sprite behaviors.
 E3L6 / Rabid Transit smoke:
 
 ```sh
-timeout 12s ./vibebuild32 -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E3L6.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
+timeout 12s ./nnbuild -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E3L6.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
 Current result: startup runs through the 15-second smoke-test timeout with no
@@ -332,7 +332,7 @@ and Duke sprite behaviors.
 Suggested crash command:
 
 ```sh
-lldb --batch -o run -o "bt all" -- ./vibebuild32 -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E3L6.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
+lldb --batch -o run -o "bt all" -- ./nnbuild -gm sw -g "/Users/alonamir/games/Shadow Warrior Complete/Sw.grp" -gm.lvls duke -g /Users/alonamir/games/duke3da/duke3d.grp -map E3L6.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
 ## Current known open issues
@@ -2003,8 +2003,8 @@ deterministic A/B rig, shared by both runtimes so traces diff line-by-line:
 
 ```sh
 VB_CP_WATCH_TILE=1725 VB_CP_FORCEWAKE=150 [VB_CP_PINLOW=1] [VB_CP_PINDIST=2600] [VB_CP_BURN=1] \
-    ./vibebuild32 -gm duke ... -map E1L1.MAP ...      # native reference
-VB_CP_WATCH_TILE=1725 VB_CP_FORCEWAKE=150 ...  ./vibebuild32 -gm sw ... -gm.lvls duke ...   # bridge
+    ./nnbuild -gm duke ... -map E1L1.MAP ...      # native reference
+VB_CP_WATCH_TILE=1725 VB_CP_FORCEWAKE=150 ...  ./nnbuild -gm sw ... -gm.lvls duke ...   # bridge
 ```
 
 `WATCH_TILE` pins the first sprite spawned as that tile; `FORCEWAKE` pins the
@@ -2108,7 +2108,7 @@ Use these guardrails:
 
 Do not call the SW-in-Duke bridge done until at least:
 
-- `make -j8 vibebuild32` passes.
+- `make -j8 nnbuild` passes.
 - E1L1 and E3L6 launch without crashing under SW runtime with Duke levels.
 - The E1L1 pipe/shaft teleporter works.
 - The E1L1 rotating door works.

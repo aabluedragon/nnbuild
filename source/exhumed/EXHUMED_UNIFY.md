@@ -1,4 +1,4 @@
-# Powerslave/Exhumed in the VibeBuild32 unified binary
+# Powerslave/Exhumed in the NNBuild unified binary
 
 Powerslave/Exhumed support uses the PCExhumed runtime imported from NBlood's
 `source/exhumed` tree. It is not a Duke/NAM-family variant, so it cannot reuse
@@ -11,7 +11,7 @@ The integration follows the existing non-duplicating merged-module pattern:
    `GNUmakefile`.
 3. Localize symbols that collide with the already-linked games.
 4. Dispatch only the shared engine-facing callbacks from
-   `source/vibebuild32/src/gameselect.cpp`.
+   `source/nnbuild/src/gameselect.cpp`.
 
 The exported callbacks are renamed in the imported source:
 
@@ -66,7 +66,7 @@ Known demo-data limits (not bugs): the demo ships no CD audio, so
 ### Running it
 
 ```
-./vibebuild32 -gm exhumed -g /path/to/powerslave/STUFF.DAT -nosetup
+./nnbuild -gm exhumed -g /path/to/powerslave/STUFF.DAT -nosetup
 ```
 
 `-gm exhumed` is optional when the `-g` path names `STUFF.DAT` -- the selector
@@ -77,7 +77,7 @@ infers the game from the basename and from the full/demo data-file signatures.
 PCExhumed shipped with its network layer stubbed out -- `network.cpp` was a set
 of empty function bodies, and nothing of the original PowerSlave serial/IPX code
 survived the port. So Powerslave multiplayer here is new code
-(`source/exhumed/src/vbnet.cpp` / `.h`) built on the same VibeBuild32 stack the
+(`source/exhumed/src/vbnet.cpp` / `.h`) built on the same NNBuild stack the
 other games use.
 
 What made it tractable is that the *game-side* multiplayer scaffolding was never
@@ -192,7 +192,7 @@ staging level from changing the rejoin spawn allocation.
 
 ### Options
 
-Every VibeBuild32 multiplayer flag (`source/glue/netargs.h`) is accepted, with
+Every NNBuild multiplayer flag (`source/glue/netargs.h`) is accepted, with
 the same meaning it has in the other games:
 
 | Flag | Effect |
@@ -228,15 +228,15 @@ level 1 (or to `-<n>` / `-map <file>` if given).
 ```
 # four transport slots, but start the two-player game as soon as one client is in;
 # --latejoin makes the remaining slots eligible to enter this running level
-./vibebuild32 -gm exhumed -g <STUFF.DAT> -nosetup -name SERVER \
+./nnbuild -gm exhumed -g <STUFF.DAT> -nosetup -name SERVER \
     -dedicated -startnow --nplayers 2 --latejoin -net /p23513 /n0:4
 
 # client
-./vibebuild32 -gm exhumed -g <STUFF.DAT> -nosetup -name PLAYER \
+./nnbuild -gm exhumed -g <STUFF.DAT> -nosetup -name PLAYER \
     -wnd -res640x480 -net /p23514 /n0 127.0.0.1:23513
 
 # after the first two are already moving, this client is frozen/snapshotted in
-./vibebuild32 -gm exhumed -g <STUFF.DAT> -nosetup -name LATE \
+./nnbuild -gm exhumed -g <STUFF.DAT> -nosetup -name LATE \
     -wnd -res640x480 -net /p23515 /n0 127.0.0.1:23513
 ```
 
@@ -260,18 +260,18 @@ Masterserver / lobby path, all on one machine:
 
 ```
 # 1. the standalone lobby + STUN server (no game, no data files)
-./vibebuild32 -masterserver 23519
+./nnbuild -masterserver 23519
 
 # 2. an advertised dedicated Powerslave server, offering a mod file to joiners
-./vibebuild32 -gm exhumed -j <demo dir> -nosound -nomusic -headless \
+./nnbuild -gm exhumed -j <demo dir> -nosound -nomusic -headless \
     --dedicated --advertise 127.0.0.1:23519 --nplayers 2 --netfile MYMOD.GRP \
     -name HOSTY -net -n0:2
 
 # 3. see what the masterserver is advertising
-./vibebuild32 -gm exhumed -j <demo dir> --lobbylist 127.0.0.1:23519
+./nnbuild -gm exhumed -j <demo dir> --lobbylist 127.0.0.1:23519
 
 # 4. join whatever it lists -- no address typed anywhere
-./vibebuild32 -gm exhumed -j <other dir> -name JOINER --joinlobby 127.0.0.1:23519
+./nnbuild -gm exhumed -j <other dir> -name JOINER --joinlobby 127.0.0.1:23519
 ```
 
 The server's stdin is a console, so `say hello` on the host's terminal shows up
@@ -324,7 +324,7 @@ source/exhumed/tools/kexmap.py --testmaps "/path/to/PowerSlave Exhumed" ~/games/
 # The verifier must use the same scope as the conversion.
 source/exhumed/tools/kexverify.py "/path/to/PowerSlave Exhumed" ~/games/powerslave --testmaps
 
-./vibebuild32 -gm exhumed -j ~/games/powerslave \
+./nnbuild -gm exhumed -j ~/games/powerslave \
     -kex "/path/to/PowerSlave Exhumed" -map THOTH.MAP
 ```
 

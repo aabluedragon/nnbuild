@@ -1,6 +1,6 @@
 #pragma once
 //
-// VibeBuild32 shared netcode glue for the non-Duke games (Shadow Warrior, Blood,
+// NNBuild shared netcode glue for the non-Duke games (Shadow Warrior, Blood,
 // Redneck Rampage) linked into the unified binary.
 //
 // The masterserver-client + file-transfer support was originally copy-pasted into

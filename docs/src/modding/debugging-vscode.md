@@ -25,8 +25,8 @@ Open the **project folder** in VS Code, for example `autojs/my-mod`. Do not open
 | --- | --- |
 | `launch.json` | Two debug configurations: launch the game, or attach to a running game. |
 | `tasks.json` | One task that starts the debug adapter before a debug session. |
-| `vibebuild32-debug-adapter.js` | The debug adapter. It translates between VS Code and the game. |
-| `vibebuild32-start-debug-adapter.js` | Starts the adapter in the background and waits until it is ready. |
+| `nnbuild-debug-adapter.js` | The debug adapter. It translates between VS Code and the game. |
+| `nnbuild-start-debug-adapter.js` | Starts the adapter in the background and waits until it is ready. |
 | `README.md` | A short guide. |
 
 ### `launch.json`
@@ -36,21 +36,21 @@ Open the **project folder** in VS Code, for example `autojs/my-mod`. Do not open
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch VibeBuild32",
+      "name": "Launch NNBuild",
       "type": "node",
       "request": "launch",
       "debugServer": 4714,
-      "preLaunchTask": "VibeBuild32: Start VS Code debug adapter",
-      "gameExecutable": "${workspaceFolder}/../../vibebuild32",
+      "preLaunchTask": "NNBuild: Start VS Code debug adapter",
+      "gameExecutable": "${workspaceFolder}/../../nnbuild",
       "cwd": "${workspaceFolder}/../..",
       "debugPort": 8501
     },
     {
-      "name": "Attach to running VibeBuild32",
+      "name": "Attach to running NNBuild",
       "type": "node",
       "request": "attach",
       "debugServer": 4714,
-      "preLaunchTask": "VibeBuild32: Start VS Code debug adapter",
+      "preLaunchTask": "NNBuild: Start VS Code debug adapter",
       "debugPort": 8501
     }
   ]
@@ -69,10 +69,10 @@ Open the **project folder** in VS Code, for example `autojs/my-mod`. Do not open
 {
   "version": "2.0.0",
   "tasks": [{
-    "label": "VibeBuild32: Start VS Code debug adapter",
+    "label": "NNBuild: Start VS Code debug adapter",
     "type": "process",
     "command": "node",
-    "args": ["${workspaceFolder}/.vscode/vibebuild32-start-debug-adapter.js", "--port", "4714"],
+    "args": ["${workspaceFolder}/.vscode/nnbuild-start-debug-adapter.js", "--port", "4714"],
     "options": { "env": { "NODE_OPTIONS": "" } }
   }]
 }
@@ -82,7 +82,7 @@ The task runs `node`. If Node.js is not installed, the task fails and the debug 
 
 ### The debug adapter
 
-- The start script checks whether an adapter already answers on port 4714. If not, it starts `vibebuild32-debug-adapter.js` as a background process and waits until it accepts connections. Then the task ends and VS Code continues.
+- The start script checks whether an adapter already answers on port 4714. If not, it starts `nnbuild-debug-adapter.js` as a background process and waits until it accepts connections. Then the task ends and VS Code continues.
 - The adapter has no dependencies. There is nothing to `npm install`.
 - The adapter serves one debug session and then exits. If no session starts within 60 seconds, it exits too.
 - The adapter listens only on the local computer.
@@ -94,14 +94,14 @@ The task runs `node`. If Node.js is not installed, the task fails and the debug 
 | 4714 | VS Code ↔ debug adapter | `--port` in `tasks.json` and `debugServer` in `launch.json`. Both must be the same number. |
 | 8501 | Debug adapter ↔ game | `debugPort` in `launch.json`, and the port of the game's `--debug` option. |
 
-Both connections are local (`127.0.0.1`). If another program uses port 4714, the task fails with `VibeBuild32 DAP adapter did not start on port 4714`. Choose another port and change it in both files.
+Both connections are local (`127.0.0.1`). If another program uses port 4714, the task fails with `NNBuild DAP adapter did not start on port 4714`. Choose another port and change it in both files.
 
 ## The two debug configurations
 
-### Launch VibeBuild32
+### Launch NNBuild
 
 1. Set breakpoints.
-2. Choose **Launch VibeBuild32** in **Run and Debug** and press **F5**.
+2. Choose **Launch NNBuild** in **Run and Debug** and press **F5**.
 
 The adapter starts the game with the single option `-dbg` and waits for its debug connection. VS Code then sends your breakpoints. Only after that does the game load your scripts. Breakpoints in top-level code and in `start` handlers therefore work.
 
@@ -109,10 +109,10 @@ Pressing **Stop** ends the game.
 
 The game is started with `-dbg` and nothing else. To choose a game, data files or a map, use the [`vbd.params` directive](#launch-arguments-the-vbdparams-directive).
 
-### Attach to running VibeBuild32
+### Attach to running NNBuild
 
 1. Start the game yourself with `--debug` (or `--devtools`).
-2. Choose **Attach to running VibeBuild32** and press **F5**.
+2. Choose **Attach to running NNBuild** and press **F5**.
 
 Attach within the first few seconds after the game starts if you want breakpoints in top-level code or in `start` handlers. The game holds your scripts back for about five seconds to give you that chance. See [When scripts start in debug mode](#when-scripts-start-in-debug-mode). If you attach later, debugging works, but that code has already run.
 
@@ -140,7 +140,7 @@ There is no reason to add `--debug` to a normal launch. It delays your scripts a
 
 ## Launch arguments: the `vbd.params` directive
 
-The **Launch VibeBuild32** configuration cannot pass game arguments. Put them into your entry file instead, as a special comment near the top:
+The **Launch NNBuild** configuration cannot pass game arguments. Put them into your entry file instead, as a special comment near the top:
 
 ```ts
 /// vbd.params="--game duke --grp ~/games/duke3d/duke3d.grp --skip-cinema"
@@ -220,7 +220,7 @@ How expressions are evaluated:
 
 Other things to know:
 
-- `log()` output does not appear in VS Code. Read the game log, `vibebuild32.log`.
+- `log()` output does not appear in VS Code. Read the game log, `nnbuild.log`.
 - When the game exits, the debug session ends.
 
 ## In-game DevTools
@@ -233,7 +233,7 @@ What the view is depends on the platform:
 
 | Platform | DevTools view |
 | --- | --- |
-| Linux, Windows | A second window, *VibeBuild32 JavaScript DevTools*. |
+| Linux, Windows | A second window, *NNBuild JavaScript DevTools*. |
 | macOS | A page in a Google Chrome app window. Google Chrome must be installed. |
 | Builds without OpenGL | A read-only console panel drawn over the game. |
 
@@ -291,7 +291,7 @@ When that happens, the game:
 
 1. Writes the message and the stack trace to the game log, prefixed with `[js]`.
 2. Copies the full text to the clipboard.
-3. Shows a dialog titled *VibeBuild32 JavaScript Error* with the message and the stack trace.
+3. Shows a dialog titled *NNBuild JavaScript Error* with the message and the stack trace.
 4. Exits after you close the dialog.
 
 The message names the place, for example `failed to load /…/index.ts`, `uncaught exception in frame handler #1 (disabled)` or `unhandled promise rejection`. The stack trace lists file names and line numbers.

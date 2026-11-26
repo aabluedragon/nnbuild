@@ -35,7 +35,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sound.h"
 #include <assert.h>
 #include "save.h"
-#include "kexbreak.h"   // VibeBuild32: KEX death sound
+#include "kexbreak.h"   // NNBuild: KEX death sound
 #include "kexinv.h"
 
 #define kMaxWasps   100

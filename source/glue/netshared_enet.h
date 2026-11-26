@@ -1,6 +1,6 @@
 #pragma once
 //
-// VibeBuild32 shared netcode glue that needs the engine's ENet types. Included only
+// NNBuild shared netcode glue that needs the engine's ENet types. Included only
 // by the enet-transport games (Blood, Redneck Rampage) - NOT by Shadow Warrior, which
 // uses mmulti. Include AFTER enet.h and netshared.h (both are pulled in by those games'
 // engine/netcode headers before this).

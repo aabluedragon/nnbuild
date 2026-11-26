@@ -440,11 +440,11 @@ else
     LTO := 1
 endif
 
-# VibeBuild32 prelinks each extra game with a relocatable link and then makes
+# NNBuild prelinks each extra game with a relocatable link and then makes
 # clashing symbols local. That needs objects holding machine code, so link-time
 # optimisation is off for that target except on macOS, whose linker accepts
 # bitcode in a relocatable link.
-ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
+ifneq (,$(filter nnbuild,$(MAKECMDGOALS)))
     ifneq ($(PLATFORM),DARWIN)
         override LTO := 0
     endif
@@ -452,7 +452,7 @@ ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
     # binding that objcopy cannot make local; plain weak symbols work.
     ifeq (,$(filter $(PLATFORM),DARWIN WINDOWS))
         ifeq (0,$(CLANG))
-            VIBEBUILD32_NO_GNU_UNIQUE := -fno-gnu-unique
+            NNBUILD_NO_GNU_UNIQUE := -fno-gnu-unique
         endif
     endif
 endif
@@ -491,7 +491,7 @@ ifneq (0,$(CLANG))
 endif
 CONLYFLAGS := $(CSTD)
 CXXONLYFLAGS := $(CXXSTD) -fno-exceptions -fno-rtti
-CXXONLYFLAGS += $(VIBEBUILD32_NO_GNU_UNIQUE)
+CXXONLYFLAGS += $(NNBUILD_NO_GNU_UNIQUE)
 
 ASFLAGS := -s #-g
 

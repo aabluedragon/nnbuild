@@ -1754,7 +1754,7 @@ void TraverseSectors(short start_sect)
 #endif
 
 
-// VibeBuild32 crossplay: a Duke enemy drops its weapon by spawning a Duke pickup
+// NNBuild crossplay: a Duke enemy drops its weapon by spawning a Duke pickup
 // during play, and the pass that turns a Duke pickup into a Shadow Warrior one runs
 // only at map load.  Setting one up after the fact needs the STATE that
 // SpriteSetup()'s per-icon switch would have given it, and those live here, so the

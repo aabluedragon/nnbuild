@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// The remaster's breakable props for VibeBuild32.  See kexbreak.h.
+// The remaster's breakable props for NNBuild.  See kexbreak.h.
 //
 // The remaster's own recipe, from sprites/objects/vase01_anim.txt:
 //

@@ -217,14 +217,14 @@ void    Net_Connect(const char *srvaddr);
 void    Net_Disconnect(void);
 void    Net_ReceiveDisconnect(ENetEvent *event);
 
-// VibeBuild32 masterserver/lobby features (see net.cpp)
+// NNBuild masterserver/lobby features (see net.cpp)
 void    Net_SetAdvertise(const char *addr);
 void    Net_HostAdvertise(void);
 int     Net_QueryLobby(const char *masterAddr);
 void    Net_ClientPunch(void);
 int     Net_JoinLobby(const char *masterAddr);
 
-// VibeBuild32 lobby file transfer (host pushes custom content to joiners)
+// NNBuild lobby file transfer (host pushes custom content to joiners)
 void    Net_AddNetFile(const char *path);
 void    Net_SendGameFiles(ENetPeer *peer);
 

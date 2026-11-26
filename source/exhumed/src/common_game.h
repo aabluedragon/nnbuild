@@ -37,7 +37,7 @@ extern "C" {
     extern int g_useCwd;
 
     #ifndef APPNAME
-    // Kexhumed is VibeBuild32's KEX-campaign runtime.  Keep the original
+    // Kexhumed is NNBuild's KEX-campaign runtime.  Keep the original
     // PCExhumed-derived source layout, but expose a distinct product identity
     // in the window title, user-data paths, and command-line help.
     #define APPNAME             "Kexhumed"

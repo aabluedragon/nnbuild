@@ -1,14 +1,14 @@
 //-------------------------------------------------------------------------
 //
-// VibeBuild32 multiplayer for Powerslave / Exhumed.
+// NNBuild multiplayer for Powerslave / Exhumed.
 //
 // PCExhumed shipped with its network layer stubbed out (network.cpp was empty
 // bodies), so this is the whole thing: the mmulti transport glue, a
 // fixed-delay deterministic lockstep input exchange, desync detection, and the
-// shared VibeBuild32 multiplayer feature set (masterserver advertise / lobby /
+// shared NNBuild multiplayer feature set (masterserver advertise / lobby /
 // NAT punch, host->joiner file transfer, dedicated headless server).
 //
-// The lockstep contract is the one in source/vibebuild32/NETCODE.md: every
+// The lockstep contract is the one in source/nnbuild/NETCODE.md: every
 // machine runs the identical sim, tick for tick, from the shared input stream.
 // Exhumed's sim is one GameMove() per tick reading sPlayerInput[0..N-1], which
 // makes the exchange simple: each machine publishes its own PlayerInput for a

@@ -1,4 +1,4 @@
-// Shared Duke-family GRP scanner used by Duke3D, VibeBuild32, and Redneck.
+// Shared Duke-family GRP scanner used by Duke3D, NNBuild, and Redneck.
 // The including file supplies game-local headers before including this body.
 
 #ifndef DUKE_GRP_INCLUDE_FULL_DUKE_GAMES

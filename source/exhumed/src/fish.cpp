@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "sound.h"
 #include "save.h"
 #include "kexinv.h"
-#include "kexbreak.h" // VibeBuild32: KEX fish attack sound
+#include "kexbreak.h" // NNBuild: KEX fish attack sound
 #include <assert.h>
 
 #define kMaxFishes  128

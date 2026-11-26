@@ -178,7 +178,7 @@ void netMasterUpdate(void);
 void netGetInput(void);
 void netPlayerQuit(int nPlayer);
 void netUpdate(void);
-void Net_SetAdvertise(const char *addr);  // VibeBuild32 masterserver/lobby advertise
+void Net_SetAdvertise(const char *addr);  // NNBuild masterserver/lobby advertise
 void Net_HostAdvertise(void);
 int  Net_QueryLobby(const char *masterAddr);
 int  Net_JoinLobby(const char *masterAddr);   // query+join first advertised server

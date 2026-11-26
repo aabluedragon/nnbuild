@@ -60,7 +60,7 @@ Weapon WeaponInfo[] = {
     { kSeqGrenade, { 0, 2, 3,  4, -1,  1,  0, 0, 0, 0, 0, 0 },  4, 0, 1, kTrue },
     { kSeqCobra,   { 0, 1, 2,  2, -1,  4,  0, 0, 0, 0, 0, 0 },  5, 0, 1, kTrue },
     { kSeqRavolt,  { 0, 1, 2,  3, -1,  4,  0, 0, 0, 0, 0, 0 },  6, 0, 1, kTrue },
-    // VibeBuild32: the Manacle. MANACLE.SEQ (kexmap.py build_manacle_seq):
+    // NNBuild: the Manacle. MANACLE.SEQ (kexmap.py build_manacle_seq):
     // 0 raise, 1 lower, 2 idle, 3 charge (held while fire is down),
     // 4 release (fires on its first frame). Ammo type 7, six shots.
     { kSeqManacle, { 0, 2, 3,  4, -1,  1,  0, 0, 0, 0, 0, 0 },  7, 0, 1, kTrue },
@@ -155,7 +155,7 @@ void InitWeapons()
     memset(nGrenadePlayer, 0, sizeof(nGrenadePlayer));
 }
 
-// VibeBuild32: the Manacle charges while fire is held -- one more bolt per
+// NNBuild: the Manacle charges while fire is held -- one more bolt per
 // twelve ticks, to eight -- and lets them all go on release.
 #define KEX_MANACLE_AMMO        6
 #define KEX_MANACLE_CHARGE_TICKS 12

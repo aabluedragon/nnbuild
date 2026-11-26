@@ -1,5 +1,5 @@
 // Shared Duke-family dynamic name table implementation.
-// Define DNAMES_EXTRA_VIBEBUILD32_SOUNDS / DNAMES_EXPOSE_DYN_TILE_LIST_SIZE /
+// Define DNAMES_EXTRA_NNBUILD_SOUNDS / DNAMES_EXPOSE_DYN_TILE_LIST_SIZE /
 // DNAMES_DISABLE_FLAMETHROWER_PICKUP before including to preserve per-game deltas.
 
 #ifdef USE_DNAMES
@@ -26,7 +26,7 @@ struct dynitem g_dynSoundList[] =
     { "CHAINGUN_FIRE",       &CHAINGUN_FIRE,      CHAINGUN_FIRE__ },
     { "COMM_RECOG",          &COMM_RECOG,         COMM_RECOG__ },
     { "DRON_RECOG",          &DRON_RECOG,         DRON_RECOG__ },
-#ifdef DNAMES_EXTRA_VIBEBUILD32_SOUNDS
+#ifdef DNAMES_EXTRA_NNBUILD_SOUNDS
     { "NEWBEAST_ROAM",       &NEWBEAST_ROAM,      NEWBEAST_ROAM__ },
     { "NEWBEAST_RECOG",      &NEWBEAST_RECOG,     NEWBEAST_RECOG__ },
     { "NEWBEAST_PAIN",       &NEWBEAST_PAIN,      NEWBEAST_PAIN__ },
@@ -48,7 +48,7 @@ struct dynitem g_dynSoundList[] =
     { "DUKE_JETPACK_ON",     &DUKE_JETPACK_ON,     DUKE_JETPACK_ON__ },
     { "DUKE_LAND",           &DUKE_LAND,           DUKE_LAND__ },
     { "DUKE_LAND_HURT",      &DUKE_LAND_HURT,      DUKE_LAND_HURT__ },
-#ifdef DNAMES_EXTRA_VIBEBUILD32_SOUNDS
+#ifdef DNAMES_EXTRA_NNBUILD_SOUNDS
     { "DUKE_KILLED2",        &DUKE_KILLED2,        DUKE_KILLED2__ },
     { "PRED_ROAM",           &PRED_ROAM,           PRED_ROAM__ },
     { "PRED_PAIN",           &PRED_PAIN,           PRED_PAIN__ },
@@ -821,7 +821,7 @@ int16_t CAT_FIRE            = CAT_FIRE__;
 int16_t CHAINGUN_FIRE       = CHAINGUN_FIRE__;
 int16_t COMM_RECOG          = COMM_RECOG__;
 int16_t DRON_RECOG          = DRON_RECOG__;
-#ifdef DNAMES_EXTRA_VIBEBUILD32_SOUNDS
+#ifdef DNAMES_EXTRA_NNBUILD_SOUNDS
 int16_t NEWBEAST_ROAM       = NEWBEAST_ROAM__;
 int16_t NEWBEAST_RECOG      = NEWBEAST_RECOG__;
 int16_t NEWBEAST_PAIN       = NEWBEAST_PAIN__;
@@ -843,7 +843,7 @@ int16_t DUKE_JETPACK_OFF    = DUKE_JETPACK_OFF__;
 int16_t DUKE_JETPACK_ON     = DUKE_JETPACK_ON__;
 int16_t DUKE_LAND           = DUKE_LAND__;
 int16_t DUKE_LAND_HURT      = DUKE_LAND_HURT__;
-#ifdef DNAMES_EXTRA_VIBEBUILD32_SOUNDS
+#ifdef DNAMES_EXTRA_NNBUILD_SOUNDS
 int16_t DUKE_KILLED2        = DUKE_KILLED2__;
 int16_t PRED_ROAM           = PRED_ROAM__;
 int16_t PRED_PAIN           = PRED_PAIN__;

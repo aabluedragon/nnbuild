@@ -1,6 +1,6 @@
 #pragma once
 //
-// VibeBuild32 unified multiplayer command-line flags.
+// NNBuild unified multiplayer command-line flags.
 //
 // Every game (Duke/SW/Blood/RR) accepts the SAME networking flags with the SAME
 // behavior; this header is the single definition of what each one does. Each game's
@@ -24,7 +24,7 @@
 // One help blurb, printed by every game's -help so the flags are discoverable and
 // documented in exactly one place.
 #define VB_NETARGS_HELP \
-"\nMultiplayer (VibeBuild32):\n" \
+"\nMultiplayer (NNBuild):\n" \
 "  --advertise / -ad <master>    host a server and register it with a masterserver\n" \
 "  --lobbylist / -ll <master>    list the servers a masterserver is advertising\n" \
 "  --joinlobby / -jl <master>    join the first server a masterserver is advertising\n" \
@@ -56,7 +56,7 @@ struct vb_netarg_ctx
 // (canonical forms: --long-name, --long-name=value, -short-name; old -long-name
 // spellings remain accepted). <next> is the
 // following argv token (or NULL). Returns argv tokens consumed:
-//   0 = <arg> is not a VibeBuild32 net flag (the caller handles it),
+//   0 = <arg> is not an NNBuild net flag (the caller handles it),
 //   1 = handled with no separate value (value-less flag, or an inline --flag=value),
 //   2 = handled and the separate <next> token was its value.
 static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char *next)

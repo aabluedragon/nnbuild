@@ -60,9 +60,3 @@ game's data files; NNBuild supplies the program that runs them.
 | Write my first mod | [Modding quick start](modding/quick-start.md) |
 | Look up a launch option | [Launch options](reference/command-line.md) |
 | Build the program myself | [Building from source](building/from-source.md) |
-
-## About the name
-
-NNBuild was called VibeBuild32 until recently. The program file is still named
-`vibebuild32`, and you will see the old name in some file names and messages.
-They are the same thing.

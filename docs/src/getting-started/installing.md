@@ -7,7 +7,7 @@ Getting the program is covered on the [Downloads](../downloads.md) page. This
 page explains where the game data goes, how to point NNBuild at it, and where
 NNBuild keeps its own files.
 
-The program file is named `vibebuild32` (`vibebuild32.exe` on Windows). The
+The program file is named `nnbuild` (`nnbuild.exe` on Windows). The
 examples on this site use that name.
 
 ## What you need
@@ -60,7 +60,7 @@ A folder set up for three games looks like this:
 
 ```text
 nnbuild/
-  vibebuild32
+  nnbuild
   duke3d/
     DUKE3D.GRP
   sw/
@@ -96,13 +96,13 @@ data is. All of them also let NNBuild work out which game you mean.
 | `-j <folder>` | An extra folder to search for files. |
 
 ```sh
-vibebuild32 --grp ~/games/duke3d/DUKE3D.GRP
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP
-vibebuild32 --game blood --game-dir ~/games/blood
+nnbuild --grp ~/games/duke3d/DUKE3D.GRP
+nnbuild --game sw --grp ~/games/sw/SW.GRP
+nnbuild --game blood --game-dir ~/games/blood
 ```
 
 ```text
-vibebuild32.exe --grp C:\Games\Duke3D\DUKE3D.GRP
+nnbuild.exe --grp C:\Games\Duke3D\DUKE3D.GRP
 ```
 
 Give full paths, as in the examples. NNBuild changes folder before the game
@@ -118,7 +118,7 @@ locations of the store versions. This search runs after the game has been
 chosen, so it is most useful when you start NNBuild with `--game`:
 
 ```sh
-vibebuild32 --game duke
+nnbuild --game duke
 ```
 
 The locations are listed per system below. If your copy is somewhere else, use
@@ -176,13 +176,13 @@ settings.
 
 | Games | Settings folder (Linux, macOS) | Folder under `%APPDATA%` (Windows, optional) | Settings file | Log file |
 | --- | --- | --- | --- | --- |
-| Duke Nukem 3D, World Tour, Ion Fury, NAM, NAPALM, WWII GI | `~/.config/vibebuild32` | `VibeBuild32` | `vibebuild32.cfg` | `vibebuild32.log` |
+| Duke Nukem 3D, World Tour, Ion Fury, NAM, NAPALM, WWII GI | `~/.config/nnbuild` | `NNBuild` | `nnbuild.cfg` | `nnbuild.log` |
 | Shadow Warrior | `~/.config/voidsw` | `VoidSW` | `voidsw.cfg` | `voidsw.log` |
 | Blood | `~/.config/notblood` | `NotBlood` | `notblood.cfg` | `notblood.log` |
 | Redneck Rampage | `~/.config/rednukem` | `Rednukem` | `rednukem.cfg` | `rednukem.log` |
 | Exhumed / PowerSlave | `~/.config/kexhumed` | `Kexhumed` | `kexhumed.cfg` | `kexhumed.log` |
 
-- The Duke Nukem 3D family also writes `vibebuild32_settings.cfg` next to its
+- The Duke Nukem 3D family also writes `nnbuild_settings.cfg` next to its
   settings file. It holds key bindings and console settings.
 - The log file is a plain text record of one run. It is written to the folder
   the game runs from, except on macOS as noted above. Look there first when

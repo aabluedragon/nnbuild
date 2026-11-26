@@ -41,7 +41,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "bullet.h"
 #include "save.h"
 #include "status.h"
-#include "kexbreak.h"   // VibeBuild32
+#include "kexbreak.h"   // NNBuild
 #include <string.h>
 #include <assert.h>
 
@@ -52,7 +52,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define kMaxWallFace	4096
 #define kMaxSlideData	128
 #define kMaxPoints		1024
-#define kMaxTraps		64     // VibeBuild32: COLONY carries 30 of the remaster's spawners
+#define kMaxTraps		64     // NNBuild: COLONY carries 30 of the remaster's spawners
 #define kMaxTrails		20
 #define kMaxTrailPoints	100
 #define kMaxWallFacePics   8
@@ -1618,7 +1618,7 @@ int BuildFireBall(int nSprite, int a, int b)
     return BuildTrap(nSprite, 1, a, b);
 }
 
-// VibeBuild32: the remaster's boulder spawner, a fireball trap that throws
+// NNBuild: the remaster's boulder spawner, a fireball trap that throws
 // the boulder bullet instead (no wall to light up: -1).
 int BuildBoulderTrap(int nSprite, int nSpeed)
 {
@@ -1958,7 +1958,7 @@ int BuildEnergyBlock(short nSector, int nKexChannel)
     {
         x += wall[startwall + i].x;
         y += wall[startwall + i].y;
-        if (nKexChannel < 0)        // VibeBuild32: the remaster's walls keep their own faces
+        if (nKexChannel < 0)        // NNBuild: the remaster's walls keep their own faces
         {
             wall[startwall + i].picnum = kClockSymbol16;
             wall[startwall + i].pal = 0;
@@ -1983,7 +1983,7 @@ int BuildEnergyBlock(short nSector, int nKexChannel)
 //	GrabTimeSlot(3);
 
     sprite[nSprite].z = sector[nextsector].floorz;
-    { int z; if (nKexChannel >= 0 && KexHold_BombFloor(nSector, &z)) sprite[nSprite].z = z; }   // VibeBuild32: the authored floor
+    { int z; if (nKexChannel >= 0 && KexHold_BombFloor(nSector, &z)) sprite[nSprite].z = z; }   // NNBuild: the authored floor
 
     // CHECKME - name of this variable?
     int nRepeat = (sprite[nSprite].z - sector[nSector].floorz) >> 8;
@@ -1991,14 +1991,14 @@ int BuildEnergyBlock(short nSector, int nKexChannel)
         nRepeat = 255;
     }
 
-    sprite[nSprite].xrepeat = nKexChannel >= 0 ? 1 : nRepeat;   // VibeBuild32: a bomb wall goes on one blast
+    sprite[nSprite].xrepeat = nKexChannel >= 0 ? 1 : nRepeat;   // NNBuild: a bomb wall goes on one blast
     sprite[nSprite].cstat = 0x8000;
     sprite[nSprite].xvel = 0;
     sprite[nSprite].yvel = 0;
     sprite[nSprite].zvel = 0;
     sprite[nSprite].extra = -1;
     sprite[nSprite].lotag = runlist_HeadRun() + 1;
-    sprite[nSprite].hitag = (int16_t)nKexChannel;   // VibeBuild32: the tag it fires and listens on, -1 in the DOS game
+    sprite[nSprite].hitag = (int16_t)nKexChannel;   // NNBuild: the tag it fires and listens on, -1 in the DOS game
     sprite[nSprite].owner = runlist_AddRunRec(sprite[nSprite].lotag - 1, nSprite, kRunEnergyBlock);
     if (nKexChannel >= 0)
         runlist_AddRunRec(sRunChannels[nKexChannel].a, nSprite, kRunEnergyBlock);   // siblings on the tag blow together
@@ -2044,7 +2044,7 @@ void ExplodeEnergyBlock(int nSprite)
     short nWalls = sector[nSector].wallnum;
 
     int i;
-    int const bKex = sprite[nSprite].hitag >= 0 && g_kexMode;   // VibeBuild32: a remaster bomb wall
+    int const bKex = sprite[nSprite].hitag >= 0 && g_kexMode;   // NNBuild: a remaster bomb wall
 
     for (i = 0; i < nWalls && !bKex; i++)
     {
@@ -2165,7 +2165,7 @@ void FuncEnergyBlock(int a, int nDamage, int nRun)
 
     switch (nMessage)
     {
-        case 0x10000:   // VibeBuild32: a sibling on the tag blew, or a script fired it
+        case 0x10000:   // NNBuild: a sibling on the tag blew, or a script fired it
         {
             if (g_kexMode && sprite[nSprite].hitag >= 0 && sector[sprite[nSprite].sectnum].extra == nSprite
                 && sRunChannels[sprite[nSprite].hitag].c)

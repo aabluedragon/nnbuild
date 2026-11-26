@@ -7,8 +7,8 @@ This page creates a script mod with the built-in generator, runs it, and explain
 Open a terminal in the folder you start the game from. Run one of these:
 
 ```sh
-./vibebuild32 --gen-ts my-mod     # TypeScript starter
-./vibebuild32 --gen-js my-mod     # JavaScript starter
+./nnbuild --gen-ts my-mod     # TypeScript starter
+./nnbuild --gen-js my-mod     # JavaScript starter
 ```
 
 Short forms: `-gts my-mod` and `-gjs my-mod`. The name can also be attached with `=`, for example `--gen-ts=my-mod`.
@@ -40,8 +40,8 @@ autojs/
         ├── launch.json
         ├── tasks.json
         ├── README.md
-        ├── vibebuild32-debug-adapter.js
-        └── vibebuild32-start-debug-adapter.js
+        ├── nnbuild-debug-adapter.js
+        └── nnbuild-start-debug-adapter.js
 ```
 
 With `--gen-js` you get `index.js` and `jsconfig.json` instead of `index.ts` and `tsconfig.json`. Everything else is the same.
@@ -53,7 +53,7 @@ The `.vscode` files are explained in [Debugging with VS Code](debugging-vscode.m
 `index.ts`:
 
 ```ts
-// VibeBuild32 auto-loads only index.ts (or index.js) from this project.
+// NNBuild auto-loads only index.ts (or index.js) from this project.
 // Optional debug-only launch args, for example:
 // /// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
 import { on, log } from 'vb';
@@ -89,7 +89,7 @@ on('frame', () => {
   "name": "vbjs-mod",
   "private": true,
   "version": "0.1.0",
-  "description": "VibeBuild32 auto-loaded JavaScript mod",
+  "description": "NNBuild auto-loaded JavaScript mod",
   "types": "./vb.d.ts",
   "scripts": { "check": "tsc --noEmit -p tsconfig.json" },
   "devDependencies": { "typescript": "^5.0.0" }
@@ -101,7 +101,7 @@ on('frame', () => {
 `index.js`:
 
 ```js
-// VibeBuild32 auto-loads only index.js (or index.ts) from this project.
+// NNBuild auto-loads only index.js (or index.ts) from this project.
 // Optional debug-only launch args, for example:
 // /// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
 // @ts-check
@@ -149,10 +149,10 @@ More ways to load scripts are listed in [Project layout](project-layout.md#how-a
 Start the game from the same folder, the one that contains `autojs/`:
 
 ```sh
-./vibebuild32 --game duke --grp /path/to/duke3d.grp
+./nnbuild --game duke --grp /path/to/duke3d.grp
 ```
 
-The game log shows these lines. The log is the file `vibebuild32.log` and the in-game console.
+The game log shows these lines. The log is the file `nnbuild.log` and the in-game console.
 
 ```text
 [js] loaded /home/me/games/autojs/my-mod/index.ts
@@ -215,5 +215,5 @@ vb.on('start', () => vb.log('hello'));
 You can also load one file directly with `--js`:
 
 ```sh
-./vibebuild32 --js ./hello.js
+./nnbuild --js ./hello.js
 ```

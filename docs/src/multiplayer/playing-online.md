@@ -108,7 +108,7 @@ Put the network options last. Everything after `--net` belongs to the
 connection.
 
 ```sh
-vibebuild32 --name DUKEFAN --net /n0 203.0.113.10:23513
+nnbuild --name DUKEFAN --net /n0 203.0.113.10:23513
 ```
 
 - `--name` sets your nickname for this run.
@@ -117,8 +117,8 @@ vibebuild32 --name DUKEFAN --net /n0 203.0.113.10:23513
   host name. Add `:port` when the host does not use port 23513.
 
 ```sh
-vibebuild32 --name DUKEFAN --net /n0 play.example.org:23600
-vibebuild32 --name DUKEFAN --net /n0 '[2001:db8::10]:23513'
+nnbuild --name DUKEFAN --net /n0 play.example.org:23600
+nnbuild --name DUKEFAN --net /n0 '[2001:db8::10]:23513'
 ```
 
 The quotes around the IPv6 address stop the shell from treating the square
@@ -128,7 +128,7 @@ If you run two copies of the game on one computer, give each copy its own
 local port with `/p`. The number must be from 1025 to 65534.
 
 ```sh
-vibebuild32 --name TESTER --net /p23514 /n0 127.0.0.1:23513
+nnbuild --name TESTER --net /p23514 /n0 127.0.0.1:23513
 ```
 
 While the game waits for the server, the log shows a line every three seconds
@@ -240,7 +240,7 @@ the one it runs from. A file with the same name and the same content is used
 even if it sits in another folder.
 
 Downloads are kept in a folder named `netcache` inside the folder the game
-runs from. On Linux and macOS that is `~/.config/vibebuild32` unless you start
+runs from. On Linux and macOS that is `~/.config/nnbuild` unless you start
 the game with `-usecwd`. A file that is already in the cache is not downloaded
 again.
 
@@ -400,8 +400,8 @@ At launch you can give the number or the name. Spaces, hyphens and capital
 letters in the name do not matter.
 
 ```sh
-vibebuild32 --skin pigcop --net /n0 203.0.113.10:23513
-vibebuild32 --skin "Assault Commander" --net /n0 203.0.113.10:23513
+nnbuild --skin pigcop --net /n0 203.0.113.10:23513
+nnbuild --skin "Assault Commander" --net /n0 203.0.113.10:23513
 ```
 
 ## Optional settings for your own game
@@ -411,7 +411,7 @@ vibebuild32 --skin "Assault Commander" --net /n0 203.0.113.10:23513
   see. Each player decides this for themselves.
 
   ```sh
-  vibebuild32 --zeroping --net /n0 203.0.113.10:23513
+  nnbuild --zeroping --net /n0 203.0.113.10:23513
   ```
 
 - `cl_preferipv6 1` makes the **JOIN GAME** list connect over IPv6 when a

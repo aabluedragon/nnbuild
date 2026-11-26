@@ -63,7 +63,7 @@ Things required to make savegames work:
 #include "player.h"
 #include "lists.h"
 #include "network.h"
-#include "netargs.h"   // VibeBuild32: unified multiplayer command-line flags
+#include "netargs.h"   // NNBuild: unified multiplayer command-line flags
 #include "vbjs.h"
 #include "pal.h"
 #include "fx_man.h"
@@ -653,7 +653,7 @@ TerminateGame(void)
 
 static void SW_CrossplayCaptureDukeMapEffectors(void);
 
-// Duke-side entry points (see source/vibebuild32/src/game.cpp).  These stay
+// Duke-side entry points (see source/nnbuild/src/game.cpp).  These stay
 // globally visible after the per-game symbol merge because Duke's objects are
 // not localized and the names are unique to the bridge.
 extern "C" int VB_DukeAI_CompileScripts(void);
@@ -16609,7 +16609,7 @@ static void SW_CrossplaySelfTestTick(void)
 //
 // Duke enemies are defined by Duke's CON scripts and actors.cpp, so the only
 // way for them to behave exactly like Duke is to run that code.  Duke's actor
-// module lives in the same binary (source/vibebuild32/src/crossplay_dukeai.cpp)
+// module lives in the same binary (source/nnbuild/src/crossplay_dukeai.cpp)
 // and operates on the shared engine sprite array, so the bridge hands the Duke
 // actor sprites over to it and runs one Duke actor tic per SW tic.
 //
@@ -18668,7 +18668,7 @@ static void SW_CrossplayZGuard(char const *segment)
     primed = 1;
 }
 
-// The other half of the door tracer in vibebuild32's actors.cpp: same sector,
+// The other half of the door tracer in nnbuild's actors.cpp: same sector,
 // same lines, so a bridged door can be diffed against Duke's own.
 void SW_CrossplayMoveForeignMapEffectors(void)
 {
@@ -22212,14 +22212,14 @@ void CommandLineHelp(char const * const * /*argv*/)
                 strcat(str, "\n");
             }
         }
-        strcat(str, VB_NETARGS_HELP);   // VibeBuild32: unified multiplayer flags
+        strcat(str, VB_NETARGS_HELP);   // NNBuild: unified multiplayer flags
         wm_msgbox("Shadow Warrior Help", "%s", str);
         Xfree(str);
     }
 }
 
 // Renamed from app_main so both games can live in one binary: the engine's
-// app_main is the game selector (vibebuild32/src/gameselect.cpp), which
+// app_main is the game selector (nnbuild/src/gameselect.cpp), which
 // dispatches here for Shadow Warrior.
 int32_t SW_app_main(int32_t argc, char const * const * argv)
 {
@@ -22229,7 +22229,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     void gameinput(void);
     int cnt = 0;
 
-    // VibeBuild32: shared multiplayer flags (advertise/lobbylist/netfile/headless/etc).
+    // NNBuild: shared multiplayer flags (advertise/lobbylist/netfile/headless/etc).
     // SW sets server mode via mmulti, so networkMode stays NULL here; -joinlobby (auto-join),
     // -punchto and -masteraddr are SW-specific and handled by their own branches below.
     vb_netarg_ctx const swNetArg = {
@@ -22240,7 +22240,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     };
     for (i=1; i<argc; i++)
     {
-        if (argv[i][0] != '-')   // VibeBuild32 modern args: dash only, no slash
+        if (argv[i][0] != '-')   // NNBuild modern args: dash only, no slash
             continue;
         // Option name with leading dashes stripped, so "-foo" and "--foo" both work.
         const char *o = (argv[i][1] == '-') ? argv[i] + 2 : argv[i] + 1;
@@ -22372,7 +22372,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     for (cnt = 1; cnt < argc; ++cnt)
     {
         char const * arg = argv[cnt];
-        if (*arg != '-')   // VibeBuild32 modern args: dash only, no slash
+        if (*arg != '-')   // NNBuild modern args: dash only, no slash
             continue;
         while (*arg == '-') ++arg;   // accept -foo and --foo
 
@@ -22418,7 +22418,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     SW_ScanGroups();
 
 #ifdef STARTUP_SETUP_WINDOW
-    // VibeBuild32: -nosetup (g_noSetup) also skips the forced first-run window
+    // NNBuild: -nosetup (g_noSetup) also skips the forced first-run window
     // (missing config, i<0), so `-game sw -nosetup` launches directly in the
     // unified binary without hand-seeding a config.
     if ((i < 0 && !g_noSetup) || CommandSetup || (ud_setup.ForceSetup && !g_noSetup))
@@ -22518,7 +22518,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
     {
         char const *arg = argv[cnt];
 
-        if (*arg != '-') continue;   // VibeBuild32 modern args: dash only, no slash
+        if (*arg != '-') continue;   // NNBuild modern args: dash only, no slash
 
         // Store arg in command line array!
         CON_StoreArg(arg);
@@ -22753,7 +22753,7 @@ int32_t SW_app_main(int32_t argc, char const * const * argv)
                     strcat(DemoFileName, ".dmo");
             }
         }
-        // VibeBuild32 canonical demo flags: --record / --playback [file] (cross-game names for -dr/-dp).
+        // NNBuild canonical demo flags: --record / --playback [file] (cross-game names for -dr/-dp).
         else if (Bstrncasecmp(arg, "record", 6) == 0)
         {
             DemoRecording = TRUE;

@@ -38,7 +38,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "lighting.h"
 #include "object.h"
 #include "save.h"
-#include "kexbreak.h"   // VibeBuild32: KexSound_Get
+#include "kexbreak.h"   // NNBuild: KexSound_Get
 
 static int KexBulletTile(int nType)
 {
@@ -743,7 +743,7 @@ bulletInfo BulletInfo[] = {
     { 40,  -1,  1500, -1, 63, 38, 4, 10, 40 },
     { 20,  -1,  2000, -1, 60, 12, 0,  0, -1 },
     { 5,   -1, 60000, -1, 31, 76, 0,  0, -1 },
-    // VibeBuild32: 17, the remaster's boulder (Proj_Boulder, damage 35) as the
+    // NNBuild: 17, the remaster's boulder (Proj_Boulder, damage 35) as the
     // trap fireball's twin -- same speed, poof and radius -- on BOULDER.SEQ.
     { 35,  -1,  1500, -1, kSeqBoulder, kSeqFirePoof, 4, 10, 40 },
     // 18, the Manacle's bolt: the arrow (whose SEQ the converter draws as the
@@ -1688,7 +1688,7 @@ int GetBulletSprite(int nBullet)
 }
 
 
-// VibeBuild32: Proj_Fireball and Proj_Boulder both play pbexplode.wav from
+// NNBuild: Proj_Fireball and Proj_Boulder both play pbexplode.wav from
 // their death animation. The exact KEX impact sequence is intentionally
 // silent so callback order stays explicit here.
 static void KexProjectileImpactSound(int x, int y, int z, int nSector)

@@ -1,12 +1,12 @@
 //-------------------------------------------------------------------------
 //
-// VibeBuild32 multiplayer for Powerslave / Exhumed.  See vbnet.h for the
-// overview; source/vibebuild32/NETCODE.md for the determinism rules this file
+// NNBuild multiplayer for Powerslave / Exhumed.  See vbnet.h for the
+// overview; source/nnbuild/NETCODE.md for the determinism rules this file
 // has to honour.
 //
 // Why this is written from scratch rather than ported: PCExhumed's network.cpp
 // is a set of empty function bodies.  Nothing of the original PowerSlave
-// serial/IPX code survived, so there was no netcode to graft the VibeBuild32
+// serial/IPX code survived, so there was no netcode to graft the NNBuild
 // stack onto -- only the *game-side* multiplayer scaffolding, which is intact
 // and is what makes this tractable: nNetStartSprite[] (map lotag 62) already
 // gives deathmatch starts, RestartPlayer() already spawns at them and paints
@@ -43,7 +43,7 @@
 #include "kexinv.h"
 #include "kexbreak.h"
 
-#include "netshared.h"   // VibeBuild32: shared masterserver client + file transfer
+#include "netshared.h"   // NNBuild: shared masterserver client + file transfer
 
 #include <stdio.h>
 
@@ -734,7 +734,7 @@ static int ExNet_WaitForRoster(void)
 
 // ---------------------------------------------------------------------------
 // Masterserver / lobby / NAT punch -- the same behaviour every other
-// VibeBuild32 game has; the shared halves live in netshared.h.
+// NNBuild game has; the shared halves live in netshared.h.
 // ---------------------------------------------------------------------------
 static const char *ExNet_MasterAddr(void) { return s_masterAddr[0] ? s_masterAddr : "127.0.0.1"; }
 
@@ -763,7 +763,7 @@ void ExNet_HostAdvertise(void)
     int const hostPlayer = ExNet_PlayerForSlot(connecthead);
     char const *name = hostPlayer >= 0 ? playerNames[hostPlayer] : "";
     int const advertisedPlayers = s_rosterReady ? s_activePlayers : 1;
-    VB_HostAdvertisePulse(1, name && name[0] ? name : "VibeBuild32 Powerslave server",
+    VB_HostAdvertisePulse(1, name && name[0] ? name : "NNBuild Powerslave server",
                           mmulti_getport(), advertisedPlayers, kMaxPlayers, map);
 }
 

@@ -1,7 +1,7 @@
 #ifndef __kexmenu_h__
 #define __kexmenu_h__
 
-// VibeBuild32: the Nightdive PowerSlave Exhumed menu, drawn with the remaster's
+// NNBuild: the Nightdive PowerSlave Exhumed menu, drawn with the remaster's
 // own art. Available only when that data is mounted (-kex); otherwise the
 // classic Build PowerSlave menu is used unchanged.
 int  KexMenu_Available(void);

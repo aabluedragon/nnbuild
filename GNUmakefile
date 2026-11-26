@@ -17,10 +17,10 @@ endif
 ### Platform and Toolchain Configuration
 include Common.mak
 
-# VibeBuild32 is the multi-game binary.  A plain `make vibebuild32` should
+# NNBuild is the multi-game binary.  A plain `make nnbuild` should
 # include every linked game by default; callers can still override any one with
 # WITH_SW=0, WITH_BLOOD=0, WITH_RR=0, or WITH_EXHUMED=0.
-ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
+ifneq (,$(filter nnbuild,$(MAKECMDGOALS)))
     WITH_SW ?= 1
     WITH_BLOOD ?= 1
     WITH_RR ?= 1
@@ -150,7 +150,7 @@ endif
 
 glad_cflags :=
 
-#### quickjs (VibeBuild32 JS scripting engine, quickjs-ng)
+#### quickjs (NNBuild JS scripting engine, quickjs-ng)
 
 quickjs := quickjs
 
@@ -745,35 +745,35 @@ endif
 
 #### NetDuke32
 
-vibebuild32 := vibebuild32
+nnbuild := nnbuild
 
-vibebuild32_game_ldflags :=
+nnbuild_game_ldflags :=
 
-vibebuild32_game_stripflags :=
+nnbuild_game_stripflags :=
 
-vibebuild32_root := $(source)/$(vibebuild32)
-vibebuild32_src := $(vibebuild32_root)/src
-vibebuild32_rsrc := $(vibebuild32_root)/rsrc
-vibebuild32_obj := $(obj)/$(vibebuild32)
+nnbuild_root := $(source)/$(nnbuild)
+nnbuild_src := $(nnbuild_root)/src
+nnbuild_rsrc := $(nnbuild_root)/rsrc
+nnbuild_obj := $(obj)/$(nnbuild)
 
-vibebuild32_cflags := -I$(vibebuild32_src) -I$(quickjs_inc) -I$(source)/glue -DVBJS
+nnbuild_cflags := -I$(nnbuild_src) -I$(quickjs_inc) -I$(source)/glue -DVBJS
 
-vibebuild32_game_deps := audiolib mact quickjs
+nnbuild_game_deps := audiolib mact quickjs
 
 ifeq ($(USE_DISCORDRPC), 1)
-    vibebuild32_game_deps += discordrpc
-    vibebuild32_cflags += -DDISCORD_RPC
+    nnbuild_game_deps += discordrpc
+    nnbuild_cflags += -DDISCORD_RPC
 endif
 
-vibebuild32_game := vibebuild32
+nnbuild_game := nnbuild
 
 ifneq (,$(APPBASENAME))
-    vibebuild32_game := $(APPBASENAME)
+    nnbuild_game := $(APPBASENAME)
 endif
 
-vibebuild32_game_proper := VibeBuild32
+nnbuild_game_proper := NNBuild
 
-vibebuild32_game_objs := \
+nnbuild_game_objs := \
     gameselect.cpp \
     actors.cpp \
     anim.cpp \
@@ -825,41 +825,41 @@ vibebuild32_game_objs := \
     vbjs_ts.cpp \
     vbjs_duke.cpp \
 
-vibebuild32_game_rsrc_objs :=
-vibebuild32_game_gen_objs :=
+nnbuild_game_rsrc_objs :=
+nnbuild_game_gen_objs :=
 
-vibebuild32_game_miscdeps :=
-vibebuild32_game_orderonlydeps :=
+nnbuild_game_miscdeps :=
+nnbuild_game_orderonlydeps :=
 
 ifeq (SDL2,$(RENDERTYPE)$(SDL_TARGET))
 ifneq (,$(filter $(PLATFORM),LINUX WINDOWS DARWIN BSD))
-    vibebuild32_cflags += -DVIBEBUILD_NATIVE_EDITOR
-    vibebuild32_native_sources := $(addprefix $(engine_src)/,build.cpp config.cpp) \
+    nnbuild_cflags += -DNNBUILD_NATIVE_EDITOR
+    nnbuild_native_sources := $(addprefix $(engine_src)/,build.cpp config.cpp) \
         $(addprefix $(duke3d_src)/,$(duke3d_editor_objs) $(duke3d_common_editor_objs))
-    vibebuild32_game_miscdeps += $(addprefix $(vibebuild32_obj)/native/,$(notdir $(vibebuild32_native_sources:.cpp=.$o)))
+    nnbuild_game_miscdeps += $(addprefix $(nnbuild_obj)/native/,$(notdir $(nnbuild_native_sources:.cpp=.$o)))
 endif
 endif
 
 ifeq ($(PLATFORM),DARWIN)
     ifeq ($(STARTUP_WINDOW),1)
-        vibebuild32_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
+        nnbuild_game_objs += GrpFile.game.mm GameListSource.game.mm startosx.game.mm
     endif
 endif
 
 ifeq ($(PLATFORM),WINDOWS)
-    vibebuild32_game_objs += winbits.cpp
-    vibebuild32_game_rsrc_objs += gameres.rc
+    nnbuild_game_objs += winbits.cpp
+    nnbuild_game_rsrc_objs += gameres.rc
     ifeq ($(STARTUP_WINDOW),1)
-        vibebuild32_game_objs += startwin.game.cpp
+        nnbuild_game_objs += startwin.game.cpp
     endif
 endif
 
 ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
-    vibebuild32_game_objs += startgtk.game.cpp
-    vibebuild32_game_gen_objs += game_banner.c
+    nnbuild_game_objs += startgtk.game.cpp
+    nnbuild_game_gen_objs += game_banner.c
 endif
 ifeq ($(RENDERTYPE),SDL)
-    vibebuild32_game_rsrc_objs += game_icon.c
+    nnbuild_game_rsrc_objs += game_icon.c
 endif
 
 #### Includes
@@ -892,7 +892,7 @@ games := \
     duke3d \
     kenbuild \
     sw \
-    vibebuild32 \
+    nnbuild \
 
 libraries := \
     audiolib \
@@ -922,7 +922,7 @@ roles := \
     game \
 
 # If blank string, substring not found.
-ifeq (,$(findstring vibebuild32,$(MAKECMDGOALS)))
+ifeq (,$(findstring nnbuild,$(MAKECMDGOALS)))
     roles += editor
 endif
 
@@ -970,11 +970,11 @@ ifneq ($(ELF2DOL),)
 endif
 endif
 
-# ---- WITH_SW: link Shadow Warrior (VoidSW) into the vibebuild32 binary --------
+# ---- WITH_SW: link Shadow Warrior (VoidSW) into the nnbuild binary --------
 # The SW game objects are prelinked (ld -r) into one relocatable object with
 # their game-internal symbols that also exist in Duke localized, so the two game
 # modules no longer collide. SW's own startup window is dropped (Duke's serves
-# both). See source/sw/UNIFY_WITH_VIBEBUILD32.md. macOS (arm64) for now.
+# both). See source/sw/UNIFY_WITH_NNBUILD.md. macOS (arm64) for now.
 # $(call MERGE_RULE,<game>,<prior-merge-objs>): prelink <game>'s game objects
 # ($(<game>merge_objs)) with every game-internal symbol that also exists in one of the
 # already-linked games (<prior-merge-objs>) localized, so the coexisting copies do not
@@ -1036,16 +1036,16 @@ endif
 endif
 
 ifeq ($(WITH_SW),1)
-vibebuild32_cflags += -DWITH_SW
+nnbuild_cflags += -DWITH_SW
 swmerge_objs := $(filter-out %GameListSource.game.$o %GrpFile.game.$o %StartupWinController.game.$o %startosx.game.$o %startwin.game.$o %startgtk.game.$o,$(addprefix $(sw_obj)/,$(addsuffix .$o,$(basename $(sw_game_objs)))))
-dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))
 
 $(eval $(call MERGE_RULE,sw,$(dukemerge_objs)))
 
-vibebuild32_game_miscdeps += $(obj)/sw_merged.o
+nnbuild_game_miscdeps += $(obj)/sw_merged.o
 endif
 
-# ---- WITH_BLOOD: link Blood (from NotBlood) into the vibebuild32 binary -------
+# ---- WITH_BLOOD: link Blood (from NotBlood) into the nnbuild binary -------
 # Same pattern as WITH_SW. Blood's game objects are prelinked (ld -r) with the
 # game-internal symbols that also exist in Duke or SW localized. Blood's own
 # Blood uses its native enet netcode (enet is built into our engine: build/src/enet.cpp).
@@ -1053,7 +1053,7 @@ endif
 # conditions), and Blood's startup window (Duke's serves all). Build with
 # WITH_SW=1 WITH_BLOOD=1. See source/blood/BLOOD_UNIFY.md. macOS (arm64) for now.
 ifeq ($(WITH_BLOOD),1)
-vibebuild32_cflags += -DWITH_BLOOD
+nnbuild_cflags += -DWITH_BLOOD
 blood := blood
 blood_root := $(source)/blood
 blood_src := $(blood_root)/src
@@ -1076,15 +1076,15 @@ blood_game_objs := \
     vb_compat.cpp \
 
 components += blood
-dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))
 bloodmerge_objs := $(addprefix $(blood_obj)/,$(addsuffix .$o,$(basename $(blood_game_objs))))
 
 $(eval $(call MERGE_RULE,blood,$(dukemerge_objs) $(swmerge_objs)))
 
-vibebuild32_game_miscdeps += $(obj)/blood_merged.o
+nnbuild_game_miscdeps += $(obj)/blood_merged.o
 endif
 
-# ---- WITH_RR: link Redneck Rampage (from Rednukem/NBlood) into vibebuild32 ----
+# ---- WITH_RR: link Redneck Rampage (from Rednukem/NBlood) into nnbuild ----
 # RR is a Duke-engine variant (eduke32 lineage, like our Duke code), so it compiles
 # against our engine cleanly; it collides heavily with our Duke code, so the ld -r
 # merge localizes ALL of the game-internal collisions (vs Duke/SW/Blood). Excludes
@@ -1092,7 +1092,7 @@ endif
 # (in_android/mdump/winbits) and the startup window (Duke's serves all). Build with
 # WITH_SW=1 WITH_BLOOD=1 WITH_RR=1. See source/rr/RR_UNIFY.md. macOS (arm64) for now.
 ifeq ($(WITH_RR),1)
-vibebuild32_cflags += -DWITH_RR
+nnbuild_cflags += -DWITH_RR
 rr := rr
 rr_root := $(source)/rr
 rr_src := $(rr_root)/src
@@ -1108,21 +1108,21 @@ rr_game_objs := \
     n64/reality_stubs.cpp \
 
 components += rr
-dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))
 rrmerge_objs := $(addprefix $(rr_obj)/,$(addsuffix .$o,$(basename $(rr_game_objs))))
 
 $(eval $(call MERGE_RULE,rr,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs)))
 
-vibebuild32_game_miscdeps += $(obj)/rr_merged.o
+nnbuild_game_miscdeps += $(obj)/rr_merged.o
 endif
 
-# ---- WITH_EXHUMED: link PCExhumed into vibebuild32 ---------------------------
+# ---- WITH_EXHUMED: link PCExhumed into nnbuild ---------------------------
 # PCExhumed comes from NBlood's source/exhumed tree. It is a separate Build-game
 # runtime, so it is prelinked exactly like SW/Blood/RR and its internal symbol
-# collisions are localized against the games already linked into VibeBuild32.
+# collisions are localized against the games already linked into NNBuild.
 # Startup-window objects are excluded; the shared launcher/selector owns startup.
 ifeq ($(WITH_EXHUMED),1)
-vibebuild32_cflags += -DWITH_EXHUMED
+nnbuild_cflags += -DWITH_EXHUMED
 exhumed := exhumed
 exhumed_root := $(source)/exhumed
 exhumed_src := $(exhumed_root)/src
@@ -1140,12 +1140,12 @@ exhumed_game_objs := \
     trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp kextactile.cpp \
 
 components += exhumed
-dukemerge_objs := $(addprefix $(vibebuild32_obj)/,$(addsuffix .$o,$(basename $(vibebuild32_game_objs))))
+dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))
 exhumedmerge_objs := $(addprefix $(exhumed_obj)/,$(addsuffix .$o,$(basename $(exhumed_game_objs))))
 
 $(eval $(call MERGE_RULE,exhumed,$(dukemerge_objs) $(swmerge_objs) $(bloodmerge_objs) $(rrmerge_objs)))
 
-vibebuild32_game_miscdeps += $(obj)/exhumed_merged.o
+nnbuild_game_miscdeps += $(obj)/exhumed_merged.o
 endif
 
 
@@ -1276,18 +1276,18 @@ endef
 $(foreach i,$(components),$(eval $(call OBJECTRULES,$i)))
 
 ifeq ($(PLATFORM),WINDOWS)
-$(vibebuild32_obj)/gameres.$o: $(vibebuild32_rsrc)/game_icon.ico
+$(nnbuild_obj)/gameres.$o: $(nnbuild_rsrc)/game_icon.ico
 endif
 
 define NATIVEEDITORRULE
-$(vibebuild32_obj)/native/$(notdir $(1:.cpp=.$o)): $(1) $(vibebuild32_src)/nativeeditorprefix.h
+$(nnbuild_obj)/native/$(notdir $(1:.cpp=.$o)): $(1) $(nnbuild_src)/nativeeditorprefix.h
 	$$(COMPILE_STATUS)
 	$$(call MKDIR,$$(dir $$@))
-	$$(RECIPE_IF) $$(COMPILER_CXX) -fno-lto -USTARTUP_WINDOW -DVIBEBUILD_NATIVE_EDITOR -include $$(vibebuild32_src)/nativeeditorprefix.h -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
+	$$(RECIPE_IF) $$(COMPILER_CXX) -fno-lto -USTARTUP_WINDOW -DNNBUILD_NATIVE_EDITOR -include $$(nnbuild_src)/nativeeditorprefix.h -c $$< -o $$@ $$(RECIPE_RESULT_COMPILE)
 endef
 
-include $(wildcard $(vibebuild32_obj)/native/*.d)
-$(foreach file,$(vibebuild32_native_sources),$(eval $(call NATIVEEDITORRULE,$(file))))
+include $(wildcard $(nnbuild_obj)/native/*.d)
+$(foreach file,$(nnbuild_native_sources),$(eval $(call NATIVEEDITORRULE,$(file))))
 
 
 ### Other special cases
@@ -1323,7 +1323,7 @@ cleantools:
 	-$(call RM,$(addsuffix $(EXESUFFIX),$($(subst clean,,$@)_targets)))
 	-$(call RMDIR,$($(subst clean,,$@)_obj))
 
-clean: cleanduke3d cleansw cleanvibebuild32 cleantools
+clean: cleanduke3d cleansw cleannnbuild cleantools
 	-$(call RMDIR,$(obj))
 	-$(call RM,$(ebacktrace_dll))
 	-$(call RM,$(voidwrap_lib))

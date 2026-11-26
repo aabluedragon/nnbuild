@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "compat.h"
 #include "sequence.h"
 
-#define kMaxWeapons		8      // VibeBuild32: the remaster's Manacle is the eighth
+#define kMaxWeapons		8      // NNBuild: the remaster's Manacle is the eighth
 
 enum
 {
@@ -38,7 +38,7 @@ enum
     kWeaponGrenade,
     kWeaponStaff,
     kWeaponRing,
-    kWeaponManacle,     // VibeBuild32: the remaster's eighth weapon (Kex mode)
+    kWeaponManacle,     // NNBuild: the remaster's eighth weapon (Kex mode)
     kWeaponMummified
 };
 

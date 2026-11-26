@@ -4,9 +4,6 @@ NNBuild has a map editor built into the game. You draw a room, press **F5**, and
 walk through it a moment later. This page explains what the editor makes, how
 to open it, and what each part of its window is for.
 
-Older guides call the program VibeBuild32. It is the same program, and the
-executable is still named `vibebuild32`.
-
 ## What you can make
 
 **Classic maps.** The editor opens and saves version 7 `.MAP` files, the map
@@ -68,14 +65,14 @@ Add `--editor` to start directly in the editor. To open a map at once, put a
 `.map` path straight after `--editor`.
 
 ```sh
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor "My Map.map"
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor "My Map.map"
 ```
 
 To open a project for editing, add `--project` with the project folder:
 
 ```sh
-./vibebuild32 --editor --project examples/ashline-relay
+./nnbuild --editor --project examples/ashline-relay
 ```
 
 The editor then opens the project's entry map. See [Projects](projects.md).

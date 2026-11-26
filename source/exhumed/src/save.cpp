@@ -32,7 +32,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "kexbreak.h"
 
 const char kSaveSig[] = "EXSV";
-const uint16_t kSaveVersion = 10008;   // VibeBuild32: all pitched, jointed KEX Cobra records are serialized
+const uint16_t kSaveVersion = 10008;   // NNBuild: all pitched, jointed KEX Cobra records are serialized
 static char const kNetworkSnapshotSig[] = "EXSN";
 // EXSN v6 retains every reusable body/chunk/gun allocator entry and all
 // revised KEX projectile records. A staging level's unwritten pool tail could

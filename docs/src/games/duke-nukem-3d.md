@@ -9,7 +9,7 @@ site works with it. This page also covers the official add-ons and
 | `--game` name | `duke` (World Tour: `worldtour`) |
 | Main data file | `DUKE3D.GRP` |
 | Folder NNBuild looks in first | `duke3d` (World Tour: `worldtour`) |
-| Settings and log | `vibebuild32.cfg`, `vibebuild32.log` |
+| Settings and log | `nnbuild.cfg`, `nnbuild.log` |
 
 ## Data files
 
@@ -53,14 +53,14 @@ full game it needs is found as well.
    window lets you choose. On the command line, `--gamegrp <file>` chooses.
 
 ```sh
-vibebuild32 --grp ~/games/duke3d/DUKE3D.GRP
+nnbuild --grp ~/games/duke3d/DUKE3D.GRP
 ```
 
 To start an add-on, name the add-on's own data file with `--gamegrp`. Keep
 the full game's `DUKE3D.GRP` in the same folder:
 
 ```sh
-vibebuild32 --gamegrp ~/games/duke3d/dukedc.grp
+nnbuild --gamegrp ~/games/duke3d/dukedc.grp
 ```
 
 Other games and total conversions can be made known to NNBuild with `.grpinfo`
@@ -70,19 +70,19 @@ files placed in a search folder.
 
 ```sh
 # Data in the duke3d subfolder, or an installed store copy
-vibebuild32 --game duke
+nnbuild --game duke
 
 # Straight into the game, no startup window, no intro
-vibebuild32 --game duke --skip-menu --skip-cinema
+nnbuild --game duke --skip-menu --skip-cinema
 
 # Episode 1, level 3, skill 3
-vibebuild32 --game duke --volume 1 --level 3 --skill 3
+nnbuild --game duke --volume 1 --level 3 --skill 3
 
 # A map file of your own
-vibebuild32 --game duke -map ~/maps/arena.map
+nnbuild --game duke -map ~/maps/arena.map
 
 # No monsters
-vibebuild32 --game duke --volume 1 --level 1 --monsters 0
+nnbuild --game duke --volume 1 --level 1 --monsters 0
 ```
 
 `--monsters <n>` turns monsters off when `n` is 0. A value of 1 or more turns
@@ -114,7 +114,7 @@ Put that folder at `worldtour` (or `world-tour`, or `duke3d_wt`) next to where
 you start NNBuild, or point at it:
 
 ```sh
-vibebuild32 --game worldtour --game-dir "/home/you/games/World Tour"
+nnbuild --game worldtour --game-dir "/home/you/games/World Tour"
 ```
 
 Details:
@@ -156,7 +156,7 @@ The Duke Nukem 3D runtime can load a Shadow Warrior level. Name Shadow Warrior
 as the source of the levels and give its data file:
 
 ```sh
-vibebuild32 --game duke --gamegrp ~/games/duke3d/DUKE3D.GRP \
+nnbuild --game duke --gamegrp ~/games/duke3d/DUKE3D.GRP \
     --game.levels sw --grp ~/games/sw/SW.GRP -map LEVELNAME.MAP
 ```
 

@@ -7,8 +7,8 @@ This page explains how the game finds scripts, how `import` and `require` find o
 | Way | Example | Notes |
 | --- | --- | --- |
 | Auto-loaded project | `autojs/my-mod/index.ts` | Loaded at every start. No option needed. |
-| `--js <file>` | `./vibebuild32 --js mods/test.js` | Short form `-js`. Can be given several times. `--js=<file>` also works. |
-| Bare path | `./vibebuild32 ./server.ts` | A command-line word that does not start with `-` and ends in `.js`, `.ts`, `.mjs`, `.mts`, `.cjs` or `.cts`. Duke runtime only; use `--js` for Shadow Warrior. |
+| `--js <file>` | `./nnbuild --js mods/test.js` | Short form `-js`. Can be given several times. `--js=<file>` also works. |
+| Bare path | `./nnbuild ./server.ts` | A command-line word that does not start with `-` and ends in `.js`, `.ts`, `.mjs`, `.mts`, `.cjs` or `.cts`. Duke runtime only; use `--js` for Shadow Warrior. |
 | Script attached to a map object | `Scripts/Station.js` in an editor project | A different model with its own hooks. See [Map script components](map-script-components.md). |
 
 ### Auto-loaded projects
@@ -52,7 +52,7 @@ An editor project can contain scripts in two forms:
 When the project is a folder, both forms run without extra options. When the project is a ZIP, scripts are treated as untrusted and do not run unless you pass `--allow-project-scripts`:
 
 ```sh
-./vibebuild32 --allow-project-scripts --project "/path/to/My Project.zip"
+./nnbuild --allow-project-scripts --project "/path/to/My Project.zip"
 ```
 
 Only pass this option for projects you trust. A script can read and write files and open network connections.

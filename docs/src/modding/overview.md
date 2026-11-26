@@ -2,7 +2,7 @@
 
 NNBuild can be modded in four ways. You can combine them.
 
-> The executable is called `vibebuild32`. Older texts and some messages call the program "VibeBuild32". It is the same program.
+> The program file is called `nnbuild` (`nnbuild.exe` on Windows). The examples here use that name.
 
 ## Kinds of mods
 
@@ -33,8 +33,8 @@ Scripts talk to the game through the `vb` module. They can also use a small set 
 Classic mods keep working. Pass the files on the command line:
 
 ```sh
-./vibebuild32 mymod.grp MYGAME.CON
-./vibebuild32 --grp mymod.zip --con MYGAME.CON
+./nnbuild mymod.grp MYGAME.CON
+./nnbuild --grp mymod.zip --con MYGAME.CON
 ```
 
 A bare file name ending in `.grp`, `.zip`, `.pk3`, `.con`, `.def`, `.map` or `.rts` is loaded as that kind of file. See [Launch options](../reference/command-line.md) for the full list.
@@ -43,7 +43,7 @@ A script mod can work together with a classic mod. It can read and write CON gam
 
 ### Editor projects and stand-alone games
 
-The map editor stores a project as a folder with a `vibebuild.project.json` file. A project can be played, edited, or exported as a ZIP. See [Projects and stand-alone games](../editor/projects.md).
+The map editor stores a project as a folder with a `nnbuild.project.json` file. A project can be played, edited, or exported as a ZIP. See [Projects and stand-alone games](../editor/projects.md).
 
 A project with *Modern Mode* turned on can attach scripts to sprites, sectors and walls. These scripts use a different, simpler model than normal script mods. See [Map script components](map-script-components.md).
 

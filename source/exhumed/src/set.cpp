@@ -32,9 +32,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "bullet.h"
 #include "set.h"
 #include "save.h"
-#include "kexbreak.h"   // VibeBuild32
+#include "kexbreak.h"   // NNBuild
 #include "kexinv.h"
-#include "sound.h"   // VibeBuild32
+#include "sound.h"   // NNBuild
 #include "player.h"
 #include <assert.h>
 

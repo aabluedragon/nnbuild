@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// The remaster's collectibles for VibeBuild32. See kexinv.h.
+// The remaster's collectibles for NNBuild. See kexinv.h.
 //
 //-------------------------------------------------------------------------
 #include "build.h"
@@ -20,7 +20,7 @@
 #include "move.h"
 #include "runlist.h"
 #include "menu.h"
-#include "kexbreak.h"   // VibeBuild32: KexSound_Get
+#include "kexbreak.h"   // NNBuild: KexSound_Get
 #include "kexmenu.h"
 #include "ramses.h"     // KexLanguage_Index/Code
 #include "save.h"

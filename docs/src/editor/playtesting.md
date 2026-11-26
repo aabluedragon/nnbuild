@@ -164,7 +164,7 @@ Plutonium.
 | Finding | What to do |
 | --- | --- |
 | Enable modern features or remove the script attachment. | The map has script components but Modern Mode is off. Turn it on, or remove the components. |
-| Script attachment requires VibeBuild32. Stock *game* plays the map without it. | A reminder. The script runs only in NNBuild. Other programs load the map without it. |
+| Script attachment requires NNBuild. Stock *game* plays the map without it. | A reminder. The script runs only in NNBuild. Other programs load the map without it. |
 | An attachment lost its map object. Reattach *script*. | The object the script was attached to is gone. Attach the script to an object again, or detach it in **Map settings**. |
 | Missing project script *script*. | The script file is not in the project. Add it, or detach it. |
 

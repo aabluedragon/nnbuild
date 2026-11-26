@@ -1,10 +1,10 @@
-// VibeBuild32 JavaScript scripting layer (QuickJS).
+// NNBuild JavaScript scripting layer (QuickJS).
 //
 // Public C API used by the game to drive an embedded QuickJS runtime: load a
 // user script via `-js file.js`, fire gameplay events into it, let it draw HUD
 // text, spawn actors, exchange multiplayer chat, read/write files, etc.
 //
-// The implementation lives per-game (source/vibebuild32/src/vbjs.cpp for Duke);
+// The implementation lives per-game (source/nnbuild/src/vbjs.cpp for Duke);
 // this header is the shared contract so other games can provide the same API.
 #pragma once
 #ifndef VBJS_H_

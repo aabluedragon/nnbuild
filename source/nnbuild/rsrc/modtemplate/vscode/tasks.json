@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [{
+    "label": "NNBuild: Start VS Code debug adapter",
+    "type": "process",
+    "command": "node",
+    "args": ["${workspaceFolder}/.vscode/nnbuild-start-debug-adapter.js", "--port", "4714"],
+    "options": { "env": { "NODE_OPTIONS": "" } }
+  }]
+}

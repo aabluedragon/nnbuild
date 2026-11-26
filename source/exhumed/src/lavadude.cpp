@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "player.h"
 #include "sound.h"
 #include "save.h"
-#include "kexbreak.h" // VibeBuild32: KEX Mantis death burst
+#include "kexbreak.h" // NNBuild: KEX Mantis death burst
 #include "kexinv.h"
 #include <assert.h>
 

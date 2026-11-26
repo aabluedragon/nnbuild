@@ -84,7 +84,7 @@ char surfType[kMaxTiles];
 signed char tileShade[kMaxTiles];
 short voxelIndex[kMaxTiles];
 
-// VibeBuild32: the eduke32 engine's artGetIndexedFileName() does POSITIONAL digit
+// NNBuild: the eduke32 engine's artGetIndexedFileName() does POSITIONAL digit
 // substitution on chars [5][6][7] of a literal "TILESNNN.ART" name — it does NOT
 // printf-expand "%03i". Passing the old "TILES%03i.ART" format produced the bogus
 // name "TILES000i.ART", so zero ART files loaded and the whole game rendered black.

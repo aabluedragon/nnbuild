@@ -3,7 +3,7 @@ obj/
 
 /eduke32
 /mapster32
-/vibebuild32
+/nnbuild
 /voidsw
 /wangulator
 /ekenbuild
@@ -95,3 +95,6 @@ project.xcworkspace/
 # Built documentation site and release archives
 /docs/book/
 /dist/
+
+# Python caches
+__pycache__/

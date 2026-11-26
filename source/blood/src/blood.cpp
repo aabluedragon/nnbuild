@@ -54,7 +54,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "mirrors.h"
 #include "music.h"
 #include "network.h"
-#include "netargs.h"   // VibeBuild32: unified multiplayer flag help text
+#include "netargs.h"   // NNBuild: unified multiplayer flag help text
 #include "osdcmds.h"
 #include "replace.h"
 #include "resource.h"
@@ -1487,27 +1487,27 @@ void ProcessFrame(void)
 SWITCH switches[] = {
     { "?", 0, 0 },
     { "help", 0, 0 },
-    { "h", 0, 0 },           // VibeBuild32: -h / --help
+    { "h", 0, 0 },           // NNBuild: -h / --help
     { "broadcast", 1, 0 },
-    { "advertise", 80, 1 },  // VibeBuild32: advertise this server to a masterserver
-    { "lobbylist", 81, 1 },  // VibeBuild32: query a masterserver's server list
-    { "joinlobby", 82, 1 },  // VibeBuild32: query masterserver + join first server
-    { "netfile", 83, 1 },    // VibeBuild32: host offers this file to joiners
-    { "headless", 84, 0 },   // VibeBuild32: windowless server (engine sets g_forceHeadless)
+    { "advertise", 80, 1 },  // NNBuild: advertise this server to a masterserver
+    { "lobbylist", 81, 1 },  // NNBuild: query a masterserver's server list
+    { "joinlobby", 82, 1 },  // NNBuild: query masterserver + join first server
+    { "netfile", 83, 1 },    // NNBuild: host offers this file to joiners
+    { "headless", 84, 0 },   // NNBuild: windowless server (engine sets g_forceHeadless)
     { "dedicated", 84, 0 },
     { "console", 84, 0 },
-    { "l", 4, 2 },           // VibeBuild32: -l / --level <level> or <episode> <level>
+    { "l", 4, 2 },           // NNBuild: -l / --level <level> or <episode> <level>
     { "map", 2, 1 },
     { "masterslave", 3, 0 },
     { "level", 4, 2 },
-    { "volume", 86, 1 },     // VibeBuild32 canonical: --volume <e> selects the episode
+    { "volume", 86, 1 },     // NNBuild canonical: --volume <e> selects the episode
     { "v", 86, 1 },
-    { "color", 87, 1 },      // VibeBuild32 shared player-colour selector
-    { "window", 88, 0 },     // VibeBuild32 shared video-mode selectors
+    { "color", 87, 1 },      // NNBuild shared player-colour selector
+    { "window", 88, 0 },     // NNBuild shared video-mode selectors
     { "fullscreen", 89, 0 },
     { "resolution", 90, 1 },
     { "nodudes", 5, 1 },
-    { "monsters", 85, 1 },   // VibeBuild32 canonical: --monsters <n> (0 = none, 1+ = skill)
+    { "monsters", 85, 1 },   // NNBuild canonical: --monsters <n> (0 = none, 1+ = skill)
     { "mnst", 85, 1 },
     //{ "playback", 6, 1 },
     //{ "record", 7, 1 },
@@ -1523,11 +1523,11 @@ SWITCH switches[] = {
     { "control", 16, 1 },
     { "vector", 17, 1 },
     { "quick", 18, 0 },
-    { "nologo", 18, 0 },   // VibeBuild32: canonical cross-game name for skip-intro (alias of -quick)
+    { "nologo", 18, 0 },   // NNBuild: canonical cross-game name for skip-intro (alias of -quick)
     //{ "getopt", 19, 1 },
     { "auto", 20, 0 },
     { "pname", 21, 1 },
-    { "name", 21, 1 },       // VibeBuild32: canonical cross-game name (player name)
+    { "name", 21, 1 },       // NNBuild: canonical cross-game name (player name)
     { "noresend", 22, 0 },
     { "silentaim", 23, 0 },
     { "nodemo", 25, 0 },
@@ -1678,7 +1678,7 @@ void PrintHelp(void)
     puts("-RFF          Specify an RFF file for Blood game resources");
     puts("-ini          Specify an INI file name (default is blood.ini)");
 #endif
-    fputs(VB_NETARGS_HELP, stdout);   // VibeBuild32: unified multiplayer flags
+    fputs(VB_NETARGS_HELP, stdout);   // NNBuild: unified multiplayer flags
     exit(0);
 }
 
@@ -1723,19 +1723,19 @@ void ParseOptions(void)
         case 1:
             gPacketMode = PACKETMODE_2;
             break;
-        case 80:  // VibeBuild32: -advertise <masteraddr>
+        case 80:  // NNBuild: -advertise <masteraddr>
             if (OptArgc >= 1) Net_SetAdvertise(OptArgv[0]);
             break;
-        case 81:  // VibeBuild32: -lobbylist <masteraddr>
+        case 81:  // NNBuild: -lobbylist <masteraddr>
             if (OptArgc >= 1) Net_QueryLobby(OptArgv[0]);
             break;
-        case 82:  // VibeBuild32: -joinlobby <masteraddr>
+        case 82:  // NNBuild: -joinlobby <masteraddr>
             if (OptArgc >= 1) Net_JoinLobby(OptArgv[0]);
             break;
-        case 83:  // VibeBuild32: -netfile <path> (host offers file to joiners)
+        case 83:  // NNBuild: -netfile <path> (host offers file to joiners)
             if (OptArgc >= 1) Net_AddNetFile(OptArgv[0]);
             break;
-        case 84:  // VibeBuild32: -headless/-dedicated/-console; engine already set
+        case 84:  // NNBuild: -headless/-dedicated/-console; engine already set
             break;  // g_forceHeadless from its early argv scan, so just accept it here
 
         case 21:
@@ -1755,7 +1755,7 @@ void ParseOptions(void)
             gPacketMode = PACKETMODE_2;
             break;
         case 4:
-            // VibeBuild32: --level accepts the canonical single-number form (level in the
+            // NNBuild: --level accepts the canonical single-number form (level in the
             // selected/first episode) as well as Blood's original "<episode> <level>" pair.
             if (OptArgc < 1)
                 ThrowError("Missing argument");
@@ -1765,13 +1765,13 @@ void ParseOptions(void)
             bUseInternalMap = 1;
             bNoDemo = 1;
             break;
-        case 86:  // VibeBuild32 canonical: --volume <e> selects the episode (Blood is episodic)
+        case 86:  // NNBuild canonical: --volume <e> selects the episode (Blood is episodic)
             if (OptArgc >= 1)
                 bUseInternalE = ClipRange(atoi(OptArgv[0]), 1, kMaxEpisodes)-1;
             bUseInternalMap = 1;
             bNoDemo = 1;
             break;
-        case 87:  // VibeBuild32 shared player-colour selector
+        case 87:  // NNBuild shared player-colour selector
             if (OptArgc >= 1)
                 gPlayerColorPreference = ClipRange(atoi(OptArgv[0]), 0, 7);
             break;
@@ -1813,7 +1813,7 @@ void ParseOptions(void)
         case 5:
             gGameOptions.nMonsterSettings = 0;
             break;
-        case 85:  // VibeBuild32: --monsters <n> / -mnst <n>; 0 = no monsters, 1+ = skill
+        case 85:  // NNBuild: --monsters <n> / -mnst <n>; 0 = no monsters, 1+ = skill
         {
             int const n = (OptArgc >= 1) ? (int)strtol(OptArgv[0], NULL, 0) : 0;  // 1-based: 0 = none, 1 = first skill
             if (n <= 0)
@@ -2222,7 +2222,7 @@ int Blood_app_main(int argc, char const * const * argv)
     ScanINIFiles();
 
 #ifdef STARTUP_SETUP_WINDOW
-    // VibeBuild32: -nosetup (gNoSetup) also skips the forced first-run window
+    // NNBuild: -nosetup (gNoSetup) also skips the forced first-run window
     // (missing config, readSetup<0) so `-game blood -nosetup` launches directly.
     if ((readSetup < 0 && !gNoSetup) || (!gNoSetup && (configversion != BYTEVERSION || gSetup.forcesetup)) || gCommandSetup)
     {
@@ -2418,7 +2418,7 @@ RESTART:
     gViewIndex = myconnectindex;
     gMe = gView = &gPlayer[myconnectindex];
     netBroadcastPlayerInfo(myconnectindex);
-    if (numplayers >= 2)   // VibeBuild32: only announce the wait when it's an actual network game
+    if (numplayers >= 2)   // NNBuild: only announce the wait when it's an actual network game
         LOG_F(INFO, "Waiting for network players!");
     netWaitForEveryone(0);
     if (gRestartGame)

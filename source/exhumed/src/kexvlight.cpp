@@ -1,4 +1,4 @@
-// VibeBuild32: the remaster's baked light field, for per-vertex shading.
+// NNBuild: the remaster's baked light field, for per-vertex shading.
 //
 // Kex bakes its lighting into the tile vertices -- one sample at every
 // 128-unit cell corner of every textured face -- and draws each face as a

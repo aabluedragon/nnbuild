@@ -51,19 +51,19 @@ title screen.
 
 ```sh
 # Data in the sw subfolder
-vibebuild32 --game sw --skip-menu
+nnbuild --game sw --skip-menu
 
 # Data somewhere else
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP --skip-menu --skip-cinema
+nnbuild --game sw --grp ~/games/sw/SW.GRP --skip-menu --skip-cinema
 
 # Start at level 4 on skill 3
-vibebuild32 --game sw --skip-menu --level 4 -s3
+nnbuild --game sw --skip-menu --level 4 -s3
 
 # A map file of your own (not with shareware data)
-vibebuild32 --game sw --skip-menu -map ~/maps/dojo.map
+nnbuild --game sw --skip-menu -map ~/maps/dojo.map
 
 # Wanton Destruction
-vibebuild32 --game sw --skip-menu -addon1
+nnbuild --game sw --skip-menu -addon1
 ```
 
 Useful options of this runtime:
@@ -89,10 +89,10 @@ data.
 
 ```sh
 # Host a 2-player game on UDP port 23513
-vibebuild32 --game sw --skip-menu -name Host -net /p23513 /n0:2
+nnbuild --game sw --skip-menu -name Host -net /p23513 /n0:2
 
 # Join it
-vibebuild32 --game sw --skip-menu -name Guest -net /n0 192.0.2.10:23513
+nnbuild --game sw --skip-menu -name Guest -net /n0 192.0.2.10:23513
 ```
 
 `-net` and everything after it must come last on the command line. The parts
@@ -109,10 +109,10 @@ Lobby options, written before `-net`:
 
 ```sh
 # Host and list the game on a lobby server
-vibebuild32 --game sw --skip-menu --advertise lobby.example.org -net /p23513 /n0:2
+nnbuild --game sw --skip-menu --advertise lobby.example.org -net /p23513 /n0:2
 
 # Join whatever that lobby server lists first
-vibebuild32 --game sw --skip-menu --joinlobby lobby.example.org
+nnbuild --game sw --skip-menu --joinlobby lobby.example.org
 ```
 
 The short forms `-ad` (for `--advertise`) and `-ll` (for `--lobbylist`) work
@@ -143,7 +143,7 @@ NAPALM and WWII GI. You play as Lo Wang, with Shadow Warrior's weapons, inside
 the other game's level.
 
 ```sh
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP \
+nnbuild --game sw --grp ~/games/sw/SW.GRP \
     --game.levels duke --grp ~/games/duke3d/DUKE3D.GRP \
     -map E1L1.MAP --skip-menu
 ```
@@ -164,7 +164,7 @@ data for the game named by `--game.levels`. Files of type `.grp`, `.zip`,
 `.pk3`, `.pk4` and `.ssi` are accepted.
 
 ```sh
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP \
+nnbuild --game sw --grp ~/games/sw/SW.GRP \
     --game.levels duke --grp ~/games/duke3d/DUKE3D.GRP --grp ~/games/duke3d/vacation.grp \
     -map VACA1.MAP --skip-menu
 ```
@@ -173,7 +173,7 @@ A single map file is played with `-map`, plus `-j <folder>` when it is not in
 a folder that is already searched:
 
 ```sh
-vibebuild32 --game sw --grp ~/games/sw/SW.GRP \
+nnbuild --game sw --grp ~/games/sw/SW.GRP \
     --game.levels duke --grp ~/games/duke3d/DUKE3D.GRP \
     -j ~/maps -map MYLEVEL.MAP --skip-menu
 ```

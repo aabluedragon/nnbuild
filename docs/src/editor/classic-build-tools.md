@@ -72,7 +72,7 @@ tools, leave the modern editor alone until you are back.
 Your classic work is not lost. The status line shows where the file is:
 
 ```text
-The native draft is available at /tmp/.vibemap-AbC123/draft.map
+The native draft is available at /tmp/.nnbmap-AbC123/draft.map
 ```
 
 The path on your machine will differ. You can open that file with **File →
@@ -96,15 +96,15 @@ Use `--build-editor`, with a map file if you like. This opens the classic
 tools directly, without the modern editor.
 
 ```sh
-./vibebuild32 --build-editor "My Map.map"
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --build-editor "My Map.map"
+./nnbuild --build-editor "My Map.map"
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --build-editor "My Map.map"
 ```
 
 To continue in the modern editor later, save the map as a classic version 7
 map and open it there:
 
 ```sh
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor "My Map.map"
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor "My Map.map"
 ```
 
 A build without the classic tools answers `--build-editor` with "This build

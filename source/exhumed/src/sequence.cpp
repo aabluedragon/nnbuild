@@ -156,30 +156,30 @@ const char *SeqNames[kMaxSEQFiles] =
   "grenbubb",
   "rochfire",
   "rat",
-  "boulder",      // VibeBuild32: written by the Kex converter; absent from the classic data
-  "manacle",      // VibeBuild32: likewise
-  "scorpion",     // VibeBuild32: likewise
-  "seedling",     // VibeBuild32: Queen's hatched scarab; likewise
-  "amunbomb",     // VibeBuild32: the remaster's world Amun bomb; likewise
-  "kexmuzzle",      // VibeBuild32: exact fireball-spawner shooting puff; likewise
-  "keximpact",      // VibeBuild32: exact fireball/boulder impact puff; likewise
-  "kexcobrared",    // VibeBuild32: exact red-cobra impact puff; likewise
-  "kexcobragreen",  // VibeBuild32: exact green-cobra impact puff; likewise
-  "kexcobractl",    // VibeBuild32: exact four-puff callback cadence; likewise
-  "kexanuimpact",   // VibeBuild32: exact Anubis-fireball death animation; likewise
-  "kexexplode",     // VibeBuild32: exact Fx_Explosion01 land effect; likewise
-  "kexwaterexp",    // VibeBuild32: exact Fx_Explosion01_Water effect; likewise
-  "kexvasepuff",    // VibeBuild32: exact ordinary-breakable puff; likewise
-  "kexammospawn",   // VibeBuild32: exact Fx_AmmoSpawn delayed orb; likewise
-  "kexhealthspawn", // VibeBuild32: exact Fx_HealthSpawn delayed orb; likewise
-  "kexgibdeath",    // VibeBuild32: exact Fx_Gibs01 delayed drop actor; likewise
-  "kexbirdfeather", // VibeBuild32: exact Obj_Bird_Feathers loop/fall actor; likewise
-  "kexwatersplash", // VibeBuild32: exact Fx_WaterSplash surface-crossing actor; likewise
-  "kexflame"        // VibeBuild32: exact Proj_Flame flight/sizzle actors; likewise
+  "boulder",      // NNBuild: written by the Kex converter; absent from the classic data
+  "manacle",      // NNBuild: likewise
+  "scorpion",     // NNBuild: likewise
+  "seedling",     // NNBuild: Queen's hatched scarab; likewise
+  "amunbomb",     // NNBuild: the remaster's world Amun bomb; likewise
+  "kexmuzzle",      // NNBuild: exact fireball-spawner shooting puff; likewise
+  "keximpact",      // NNBuild: exact fireball/boulder impact puff; likewise
+  "kexcobrared",    // NNBuild: exact red-cobra impact puff; likewise
+  "kexcobragreen",  // NNBuild: exact green-cobra impact puff; likewise
+  "kexcobractl",    // NNBuild: exact four-puff callback cadence; likewise
+  "kexanuimpact",   // NNBuild: exact Anubis-fireball death animation; likewise
+  "kexexplode",     // NNBuild: exact Fx_Explosion01 land effect; likewise
+  "kexwaterexp",    // NNBuild: exact Fx_Explosion01_Water effect; likewise
+  "kexvasepuff",    // NNBuild: exact ordinary-breakable puff; likewise
+  "kexammospawn",   // NNBuild: exact Fx_AmmoSpawn delayed orb; likewise
+  "kexhealthspawn", // NNBuild: exact Fx_HealthSpawn delayed orb; likewise
+  "kexgibdeath",    // NNBuild: exact Fx_Gibs01 delayed drop actor; likewise
+  "kexbirdfeather", // NNBuild: exact Obj_Bird_Feathers loop/fall actor; likewise
+  "kexwatersplash", // NNBuild: exact Fx_WaterSplash surface-crossing actor; likewise
+  "kexflame"        // NNBuild: exact Proj_Flame flight/sizzle actors; likewise
 };
 
 short SeqOffsets[kMaxSEQFiles];
-static uint8_t s_seqLoaded[kMaxSEQFiles];   // VibeBuild32: an optional SEQ that was actually there
+static uint8_t s_seqLoaded[kMaxSEQFiles];   // NNBuild: an optional SEQ that was actually there
 
 int seq_IsLoaded(int nSeq)
 {

@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 void InitSpider();
 int GetSpiderSprite(int nSpider);
-int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle, int bScorp = 0);   // VibeBuild32: bScorp draws it from SCORPION.SEQ
+int BuildSpider(int nSprite, int x, int y, int z, short nSector, int nAngle, int bScorp = 0);   // NNBuild: bScorp draws it from SCORPION.SEQ
 void FuncSpider(int a, int b, int nRun);
 int KexSpiderOwnsDeathDrop(int nSprite);
 int KexSpiderIdentityTest();

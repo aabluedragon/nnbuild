@@ -105,26 +105,26 @@ enum {
     kSeqGrenBubb,
     kSeqRochfire,
     kSeqRat,
-    kSeqBoulder,    // VibeBuild32: the remaster boulder trap; BOULDER.SEQ, optional
-    kSeqManacle,    // VibeBuild32: the remaster's Manacle weapon; MANACLE.SEQ, optional
-    kSeqScorpion,   // VibeBuild32: the remaster's scorpion, the spider's SEQ on its own tiles; optional
-    kSeqSeedling,   // VibeBuild32: Queen hatchling, the flyer SEQ on seedling tiles; optional
-    kSeqAmunBomb,   // VibeBuild32: remaster Amun-bomb world projectile; optional
-    kSeqKexMuzzle,      // VibeBuild32: fireball-spawner Fx_FireballShootPuff; optional
-    kSeqKexImpact,      // VibeBuild32: Fx_FireballExplode impact puff; optional
-    kSeqKexCobraRed,    // VibeBuild32: Fx_RedCobraExplode impact puff; optional
-    kSeqKexCobraGreen,  // VibeBuild32: Fx_GreenCobraExplode impact puff; optional
-    kSeqKexCobraCtl,    // VibeBuild32: timed four-puff cobra death callbacks; optional
-    kSeqKexAnuImpact,   // VibeBuild32: Proj_Anubis death animation; optional
-    kSeqKexExplosion,   // VibeBuild32: Fx_Explosion01 land explosion; optional
-    kSeqKexWaterExplosion, // VibeBuild32: Fx_Explosion01_Water; optional
-    kSeqKexVasePuff,       // VibeBuild32: Fx_VaseExplodePuff; optional
-    kSeqKexAmmoSpawn,      // VibeBuild32: Fx_AmmoSpawn delayed orb; optional
-    kSeqKexHealthSpawn,    // VibeBuild32: Fx_HealthSpawn delayed orb; optional
-    kSeqKexGibDeath,       // VibeBuild32: Fx_Gibs01 + delayed A_RandomItem; optional
-    kSeqKexBirdFeather,    // VibeBuild32: Obj_Bird_Feathers loop/fall actor; optional
-    kSeqKexWaterSplash,    // VibeBuild32: Fx_WaterSplash surface-crossing actor; optional
-    kSeqKexFlame           // VibeBuild32: Proj_Flame flight and sizzle actors; optional
+    kSeqBoulder,    // NNBuild: the remaster boulder trap; BOULDER.SEQ, optional
+    kSeqManacle,    // NNBuild: the remaster's Manacle weapon; MANACLE.SEQ, optional
+    kSeqScorpion,   // NNBuild: the remaster's scorpion, the spider's SEQ on its own tiles; optional
+    kSeqSeedling,   // NNBuild: Queen hatchling, the flyer SEQ on seedling tiles; optional
+    kSeqAmunBomb,   // NNBuild: remaster Amun-bomb world projectile; optional
+    kSeqKexMuzzle,      // NNBuild: fireball-spawner Fx_FireballShootPuff; optional
+    kSeqKexImpact,      // NNBuild: Fx_FireballExplode impact puff; optional
+    kSeqKexCobraRed,    // NNBuild: Fx_RedCobraExplode impact puff; optional
+    kSeqKexCobraGreen,  // NNBuild: Fx_GreenCobraExplode impact puff; optional
+    kSeqKexCobraCtl,    // NNBuild: timed four-puff cobra death callbacks; optional
+    kSeqKexAnuImpact,   // NNBuild: Proj_Anubis death animation; optional
+    kSeqKexExplosion,   // NNBuild: Fx_Explosion01 land explosion; optional
+    kSeqKexWaterExplosion, // NNBuild: Fx_Explosion01_Water; optional
+    kSeqKexVasePuff,       // NNBuild: Fx_VaseExplodePuff; optional
+    kSeqKexAmmoSpawn,      // NNBuild: Fx_AmmoSpawn delayed orb; optional
+    kSeqKexHealthSpawn,    // NNBuild: Fx_HealthSpawn delayed orb; optional
+    kSeqKexGibDeath,       // NNBuild: Fx_Gibs01 + delayed A_RandomItem; optional
+    kSeqKexBirdFeather,    // NNBuild: Obj_Bird_Feathers loop/fall actor; optional
+    kSeqKexWaterSplash,    // NNBuild: Fx_WaterSplash surface-crossing actor; optional
+    kSeqKexFlame           // NNBuild: Proj_Flame flight and sizzle actors; optional
 };
 
 struct actionSeq
@@ -138,7 +138,7 @@ extern short frames;
 extern short SeqBase[];
 extern short SeqSize[];
 extern short SeqOffsets[];
-int seq_IsLoaded(int nSeq);      // VibeBuild32: an optional SEQ that was actually there
+int seq_IsLoaded(int nSeq);      // NNBuild: an optional SEQ that was actually there
 
 extern short FrameFlag[];
 

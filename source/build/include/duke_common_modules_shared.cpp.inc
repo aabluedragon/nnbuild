@@ -1,7 +1,7 @@
-// Shared Duke/VibeBuild32 command module and search-path helpers.
+// Shared Duke/NNBuild command module and search-path helpers.
 //
 // Included from source/duke3d/src/common.cpp and
-// source/vibebuild32/src/common.cpp.
+// source/nnbuild/src/common.cpp.
 
 void G_CleanupSearchPaths(void)
 {

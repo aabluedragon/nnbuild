@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// The remaster's collectibles for VibeBuild32.
+// The remaster's collectibles for NNBuild.
 //
 // PowerSlave Exhumed carries the console game's inventory, which Build
 // PowerSlave never had: six artifacts that change how the player moves, eight

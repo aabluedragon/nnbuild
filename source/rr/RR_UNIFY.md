@@ -1,14 +1,14 @@
-# Redneck Rampage in the VibeBuild32 unified binary
+# Redneck Rampage in the NNBuild unified binary
 
 Redneck Rampage (plus Redneck-family data such as RRRA) is linked into the
-single `vibebuild32` binary as a fourth game, alongside Duke Nukem 3D, Shadow
+single `nnbuild` binary as a fourth game, alongside Duke Nukem 3D, Shadow
 Warrior and Blood. NAM-family games such as NAM, Napalm, and World War II GI
-are not a separate RR module in VibeBuild32; they reuse the Duke/NAM runtime
+are not a separate RR module in NNBuild; they reuse the Duke/NAM runtime
 through selector metadata and `-gamegrp` routing. Powerslave/Exhumed is also
 not RR code; it is linked as its own PCExhumed merged runtime. Build the unified
 binary with:
 
-    make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 vibebuild32
+    make WITH_SW=1 WITH_BLOOD=1 WITH_RR=1 nnbuild
 
 ## How it fits together
 
@@ -26,7 +26,7 @@ WITH_SW / WITH_BLOOD (see the `$(obj)/rr_merged.o` rule in `GNUmakefile`):
    copies never satisfy references from the other games and vice-versa.
 
 The three engine callbacks that every game defines are renamed in the RR source
-and dispatched from `source/vibebuild32/src/gameselect.cpp` on `g_activeGame == 3`:
+and dispatched from `source/nnbuild/src/gameselect.cpp` on `g_activeGame == 3`:
 
 | canonical (engine)   | RR symbol              | file                    |
 |----------------------|------------------------|-------------------------|

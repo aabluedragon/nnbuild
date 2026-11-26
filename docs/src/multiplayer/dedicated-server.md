@@ -32,7 +32,7 @@ A dedicated server has nobody at the keyboard, so always give it:
 - a game mode and a starting level.
 
 ```sh
-vibebuild32 --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 --net /p23513 /n0:8
+nnbuild --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 --net /p23513 /n0:8
 ```
 
 As on the hosting page, `--net` and what follows it must come last.
@@ -68,7 +68,7 @@ the order they appear on the command line, as soon as the server is up.
 Both options can be given more than once.
 
 ```sh
-vibebuild32 --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 \
+nnbuild --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 \
   --cmd-file startup.txt --cmd "echo Server ready" \
   --net /p23513 /n0:8
 ```
@@ -101,7 +101,7 @@ make timed announcements or to answer chat commands such as `!rules`. Give the
 script file on the command line, either by itself or after `--js`:
 
 ```sh
-vibebuild32 --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 \
+nnbuild --headless --startnow --name ARENA --coop 1 --volume 1 --level 1 \
   --js server.ts --net /p23513 /n0:8
 ```
 
@@ -121,7 +121,7 @@ The tools that matter for a server are `server_status` (role, port, slots and
 the list of connected players), `console_execute` (run a console command) and
 `console_output` (read recent console messages).
 
-If the environment variable `VIBEBUILD_MCP_TOKEN` is set, each HTTP request
+If the environment variable `NNBUILD_MCP_TOKEN` is set, each HTTP request
 must carry that value as a bearer token.
 
 [AI assistants and MCP](../editor/ai-and-mcp.md) describes MCP in NNBuild in
@@ -129,7 +129,7 @@ full.
 
 ## Logs
 
-- The server writes its log to `vibebuild32.log` in the folder it runs from.
+- The server writes its log to `nnbuild.log` in the folder it runs from.
   The file is started afresh each time the server starts. When the server
   restarts itself for a change of mod pack, it continues the same file.
 - The same lines are printed to the terminal, on standard error.
@@ -151,7 +151,7 @@ Wants=network-online.target
 [Service]
 User=nnbuild
 WorkingDirectory=/srv/nnbuild
-ExecStart=/srv/nnbuild/vibebuild32 -usecwd --game duke --headless --startnow --name "ARENA ONE" --coop 1 --volume 1 --level 1 --cmd-file startup.txt --net /p23513 /n0:8
+ExecStart=/srv/nnbuild/nnbuild -usecwd --game duke --headless --startnow --name "ARENA ONE" --coop 1 --volume 1 --level 1 --cmd-file startup.txt --net /p23513 /n0:8
 Restart=on-failure
 
 [Install]
@@ -186,7 +186,7 @@ Things to know:
   and the download cache in the working directory instead of the user's
   profile folder.
 - **The log goes to the journal.** systemd collects what the server prints.
-  The file `vibebuild32.log` in the working directory is written as well.
+  The file `nnbuild.log` in the working directory is written as well.
 
 ## Worked example
 
@@ -200,7 +200,7 @@ This example goes from an empty directory to a public server for Duke Nukem
    cd ~/nnbuild-server
    ```
 
-2. Unpack NNBuild into the directory, so that `vibebuild32` and the files that
+2. Unpack NNBuild into the directory, so that `nnbuild` and the files that
    came with it are there.
 
 3. Copy your game data into the directory.
@@ -234,7 +234,7 @@ This example goes from an empty directory to a public server for Duke Nukem
 6. Start the server.
 
    ```sh
-   ./vibebuild32 -usecwd --game duke --headless --startnow \
+   ./nnbuild -usecwd --game duke --headless --startnow \
      --name "ARENA ONE" --coop 1 --volume 1 --level 1 \
      --advertise lobby.example.org \
      --cmd-file startup.txt \
@@ -269,7 +269,7 @@ This example goes from an empty directory to a public server for Duke Nukem
 9. Join from another computer, by picking the server in **JOIN GAME** or with:
 
    ```sh
-   vibebuild32 --name DUKEFAN --net /n0 203.0.113.10:23513
+   nnbuild --name DUKEFAN --net /n0 203.0.113.10:23513
    ```
 
    Then type `listplayers` in the server's terminal to see the new player.

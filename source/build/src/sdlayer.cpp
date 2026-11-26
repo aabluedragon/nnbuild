@@ -1665,7 +1665,7 @@ void engineSetupImGui(void)
 
 #ifdef USE_OPENGL
     ImGui_ImplSDL2_InitForOpenGL(sdl_window, sdl_context);
-    // Keep the engine and detached VibeBuild DevTools compatible with OpenGL 2.1.
+    // Keep the engine and detached NNBuild DevTools compatible with OpenGL 2.1.
     ImGui_ImplOpenGL3_Init("#version 120");
 #endif
 
@@ -1861,7 +1861,7 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
 
     if (fs)
     {
-        // VibeBuild32: use desktop (borderless) fullscreen rather than exclusive mode-changing
+        // NNBuild: use desktop (borderless) fullscreen rather than exclusive mode-changing
         // fullscreen. On macOS/retina, exclusive fullscreen switches to a physical mode that may
         // not match the requested resolution, leaving the framebuffer letterboxed in a corner.
         // Desktop fullscreen always covers the whole screen; the render is scaled up to fill it.
@@ -1978,7 +1978,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         if (sdl_window)
             sdl_context = SDL_GL_CreateContext(sdl_window);
 
-        // VibeBuild32: VB_HIDE_WINDOW keeps an unattended test run off the
+        // NNBuild: VB_HIDE_WINDOW keeps an unattended test run off the
         // desktop -- the window is created hidden and never raised. Rendering
         // and screenshots go on in the offscreen backbuffer.
         if (sdl_window && getenv("VB_HIDE_WINDOW"))

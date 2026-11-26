@@ -30,13 +30,13 @@ and can be undone like anyone else's.
 2. The MCP client starts the adapter:
 
 ```sh
-./vibebuild32 --editor-mcp 127.0.0.1:23514 --name "Layout Assistant"
+./nnbuild --editor-mcp 127.0.0.1:23514 --name "Layout Assistant"
 ```
 
 The form of the command is:
 
 ```text
-vibebuild32 --editor-mcp [host[:port]] [--name name] [--mcp-http port]
+nnbuild --editor-mcp [host[:port]] [--name name] [--mcp-http port]
 ```
 
 | Part | Meaning | If left out |
@@ -66,7 +66,7 @@ full path of the program.
 {
   "mcpServers": {
     "nnbuild-live": {
-      "command": "/full/path/to/vibebuild32",
+      "command": "/full/path/to/nnbuild",
       "args": [
         "--editor-mcp", "127.0.0.1:23514",
         "--name", "Layout Assistant"
@@ -86,8 +86,8 @@ offers tools to read its state, type console commands, send input, and drive
 the editor and its projects.
 
 ```sh
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor --mcp-stdio
-./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor --mcp-http 8787
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor --mcp-stdio
+./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor --mcp-http 8787
 ```
 
 - With `--editor` the program starts in the editor. Without it, the assistant
@@ -126,7 +126,7 @@ To be sure that the right game starts, name it in one of these ways:
 {
   "mcpServers": {
     "nnbuild": {
-      "command": "/full/path/to/vibebuild32",
+      "command": "/full/path/to/nnbuild",
       "args": [
         "--game", "duke",
         "-gamegrp", "/path/to/DUKE3D.GRP",
@@ -145,7 +145,7 @@ Replace `duke` and the data file with those of the game you run.
 Start NNBuild yourself, with a token:
 
 ```sh
-VIBEBUILD_MCP_TOKEN=change-this-token ./vibebuild32 -gamegrp /path/to/DUKE3D.GRP --editor --mcp-http 8787
+NNBUILD_MCP_TOKEN=change-this-token ./nnbuild -gamegrp /path/to/DUKE3D.GRP --editor --mcp-http 8787
 ```
 
 Then point the client at the address and give it the same token:
@@ -180,8 +180,8 @@ login in front of it.
 
 | Variable | Effect |
 | --- | --- |
-| `VIBEBUILD_MCP_TOKEN` | When set, every request must carry the header `Authorization: Bearer` followed by this value. Other requests get the answer 401. |
-| `VIBEBUILD_MCP_ORIGIN` | One extra value that is allowed in the `Origin` header of a request. |
+| `NNBUILD_MCP_TOKEN` | When set, every request must carry the header `Authorization: Bearer` followed by this value. Other requests get the answer 401. |
+| `NNBUILD_MCP_ORIGIN` | One extra value that is allowed in the `Origin` header of a request. |
 
 **Token.** Without a token, any program on the same machine can call the
 tools. The tools can run console commands and write files, so set a token.
@@ -189,7 +189,7 @@ tools. The tools can run console commands and write files, so set a token.
 **Origin.** Web browsers add an `Origin` header to requests. NNBuild accepts a
 request with no `Origin` header. If the header is present, it must be
 `http://127.0.0.1:PORT`, `http://localhost:PORT`, or exactly the value of
-`VIBEBUILD_MCP_ORIGIN`. Other origins get the answer 403.
+`NNBUILD_MCP_ORIGIN`. Other origins get the answer 403.
 
 ### Limits
 
@@ -415,7 +415,7 @@ Game only. Reads the open project and the settings of the current map.
 | --- | --- |
 | `root` | The project folder. Empty when no project is open. |
 | `name`, `entry`, `target`, `modern` | The [project settings](projects.md#the-settings-file) |
-| `requires_vibebuild32` | `true` when Modern Mode is in effect |
+| `requires_nnbuild` | `true` when Modern Mode is in effect |
 | `compatibility_warning` | The Modern Mode warning text, when it applies |
 | `map` | The current map's `target`, `effective_target`, `modern` (−1 inherit, 0 off, 1 on), `effective_modern` and `scripts` |
 | `asset_count` | Number of files and folders in the project |

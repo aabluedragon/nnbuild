@@ -18,13 +18,13 @@ Most of this page describes the Duke Nukem 3D family.
 NNBuild itself is the lobby program. Start it with `-masterserver`:
 
 ```sh
-vibebuild32 --headless -masterserver
+nnbuild --headless -masterserver
 ```
 
 To use another port, write the port number directly after the option:
 
 ```sh
-vibebuild32 --headless -masterserver 23600
+nnbuild --headless -masterserver 23600
 ```
 
 - `-masterserver` is written with one dash.
@@ -36,7 +36,7 @@ vibebuild32 --headless -masterserver 23600
 The lobby listens on IPv4 and IPv6. When it starts it prints:
 
 ```text
-VibeBuild32 masterserver listening on UDP 23519 (IPv4:on IPv6:on)
+NNBuild masterserver listening on UDP 23519 (IPv4:on IPv6:on)
 ```
 
 After that it prints a line for each event:
@@ -54,7 +54,7 @@ masterserver: - 203.0.113.10:23513 "ARENA ONE" (going away)
 | `- ... (going away)` | A server said it was shutting down. |
 | `- ... (timed out)` | A server stopped reporting and was dropped. |
 
-The same lines are written to `vibebuild32.log` in the folder the lobby was
+The same lines are written to `nnbuild.log` in the folder the lobby was
 started in.
 
 Open the lobby's UDP port for incoming traffic in the machine's firewall, for
@@ -66,7 +66,7 @@ A host reports its match with `--advertise` (short `-ad`) and the lobby's
 address, placed before `--net`:
 
 ```sh
-vibebuild32 --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
+nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.example.org --net /n0:8
 ```
 
 The address can be a host name, an IPv4 address, or an IPv6 address in square
@@ -182,7 +182,7 @@ A join typed on the command line does not ask a lobby for help unless you name
 the lobby and the server:
 
 ```sh
-vibebuild32 --name DUKEFAN --punchtarget 203.0.113.10:23513 --masteraddr lobby.example.org --net /n0 203.0.113.10:23513
+nnbuild --name DUKEFAN --punchtarget 203.0.113.10:23513 --masteraddr lobby.example.org --net /n0 203.0.113.10:23513
 ```
 
 - `--punchtarget` (short `-pt`) is the server's address as the lobby lists it.
