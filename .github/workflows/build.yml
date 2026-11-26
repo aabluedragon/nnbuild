@@ -99,7 +99,8 @@ jobs:
       - name: Install dependencies
         run: brew install sdl2 flac libogg libvpx dylibbundler
       - name: Build
-        run: make -j"$(sysctl -n hw.ncpu)" vibebuild32 PRETTY_OUTPUT=0
+        # -k: report every compile error in one run, not just the first.
+        run: make -k -j"$(sysctl -n hw.ncpu)" vibebuild32 PRETTY_OUTPUT=0
       - name: Smoke test
         run: ./vibebuild32 --help
       - name: Package

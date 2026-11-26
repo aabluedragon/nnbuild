@@ -12,6 +12,7 @@
 # include <process.h>
 #else
 # include <fcntl.h>
+# include <signal.h>
 # include <sys/wait.h>
 # include <unistd.h>
 #endif
