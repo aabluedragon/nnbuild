@@ -440,6 +440,16 @@ else
     LTO := 1
 endif
 
+# VibeBuild32 prelinks each extra game with a relocatable link and then makes
+# clashing symbols local. That needs objects holding machine code, so link-time
+# optimisation is off for that target except on macOS, whose linker accepts
+# bitcode in a relocatable link.
+ifneq (,$(filter vibebuild32,$(MAKECMDGOALS)))
+    ifneq ($(PLATFORM),DARWIN)
+        override LTO := 0
+    endif
+endif
+
 ifeq (0,$(CLANG))
     ifeq (0,$(GCC_PREREQ_4))
         override LTO := 0

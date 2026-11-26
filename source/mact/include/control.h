@@ -179,6 +179,11 @@ extern uint64_t CONTROL_ButtonHeldState;
 
 extern LastSeenInput CONTROL_LastSeenInput;
 
+// Input preferences (cvars cl_mousesmooth, cl_joysmoothing, cl_swapjoysticks).
+extern bool CONTROL_MouseSmoothing;        // average each mouse delta with the previous one
+extern bool CONTROL_JoyLookSmoothing;      // low-pass the controller look axes
+extern bool CONTROL_GamepadSticksSwapped;  // exchange the left and right sticks
+
 
 // PROTOTYPES
 void CONTROL_MapKey( int32_t which, kb_scancode key1, kb_scancode key2 );

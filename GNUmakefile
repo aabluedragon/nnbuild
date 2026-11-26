@@ -977,15 +977,46 @@ endif
 # already-linked games (<prior-merge-objs>) localized, so the coexisting copies do not
 # collide in the combined binary. macOS/arm64: objcopy is unavailable, so this uses
 # ld -r + -unexported_symbols_list. Instantiated once per extra game below.
+MERGE_NM := $(CROSS)nm$(CROSS_SUFFIX)
+MERGE_LD := $(CROSS)ld$(CROSS_SUFFIX)
+MERGE_OBJCOPY := $(CROSS)objcopy$(CROSS_SUFFIX)
+
+ifeq ($(PLATFORM),DARWIN)
+# macOS: objcopy is unavailable, so this uses ld -r + -unexported_symbols_list.
+MERGE_ARCH := $(shell $(CC) -dumpmachine | sed -e 's/-.*//' -e 's/aarch64/arm64/')
+ifneq (,$(filter -arch,$(ARCH)))
+    MERGE_ARCH := $(word 2,$(ARCH))
+endif
 define MERGE_RULE
 $$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2)
 	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
 	@nm -g $(2) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
 	@nm -g $$($(1)merge_objs) 2>/dev/null | awk '$$$$2 ~ /^[TDBS]$$$$/{print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
 	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
-	ld -r -arch arm64 $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
-	ld -r -arch arm64 $$(obj)/$(1)_premerge.o -o $$@ -unexported_symbols_list $$(obj)/$(1)_hide.txt
+	ld -r -arch $(MERGE_ARCH) $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	ld -r -arch $(MERGE_ARCH) $$(obj)/$(1)_premerge.o -o $$@ -unexported_symbols_list $$(obj)/$(1)_hide.txt
 endef
+else
+# GNU toolchains (Linux, BSD, MinGW): relocatable link, then objcopy turns every
+# external definition that a prior game also defines into a local symbol.
+# Section groups are dissolved first (ELF) so that an inline function or vtable
+# belonging to this game is not discarded in favour of a same-named one from
+# another game.
+ifeq ($(PLATFORM),WINDOWS)
+    MERGE_LDFLAGS :=
+else
+    MERGE_LDFLAGS := --force-group-allocation
+endif
+define MERGE_RULE
+$$(obj)/$(1)_merged.o: $$($(1)merge_objs) $(2)
+	@echo "Merging $(1) objects (localizing game-internal collisions with prior games)..."
+	@$(MERGE_NM) -g --defined-only $(2) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_prior_strong.txt
+	@$(MERGE_NM) -g --defined-only $$($(1)merge_objs) 2>/dev/null | awk 'NF == 3 {print $$$$3}' | sort -u > $$(obj)/$(1)_strong.txt
+	@comm -12 $$(obj)/$(1)_prior_strong.txt $$(obj)/$(1)_strong.txt > $$(obj)/$(1)_hide.txt
+	$(MERGE_LD) -r $(MERGE_LDFLAGS) $$($(1)merge_objs) -o $$(obj)/$(1)_premerge.o
+	$(MERGE_OBJCOPY) --localize-symbols=$$(obj)/$(1)_hide.txt $$(obj)/$(1)_premerge.o $$@
+endef
+endif
 
 ifeq ($(WITH_SW),1)
 vibebuild32_cflags += -DWITH_SW

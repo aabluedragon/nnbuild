@@ -544,6 +544,50 @@ void CONFIG_SetDefaultKeys(const char (*keyptr)[kMaxGameFuncLen], bool lazy/*=fa
     }
 }
 
+// Restore the authored key, mouse and controller bindings for the current
+// mode. Used for a fresh configuration and by the remaster menu's reset.
+void CONFIG_ResetKexInputDefaults(void)
+{
+    CONFIG_SetDefaultKeys(g_kexMode ? kexkeydefaults : keydefaults);
+
+    memset(MouseFunctions, -1, sizeof(MouseFunctions));
+    memset(MouseDigitalFunctions, -1, sizeof(MouseDigitalFunctions));
+    memset(JoystickFunctions, -1, sizeof(JoystickFunctions));
+    memset(JoystickDigitalFunctions, -1, sizeof(JoystickDigitalFunctions));
+
+    CONTROL_MouseSensitivity = DEFAULTMOUSESENSITIVITY;
+
+    for (int i=0; i<MAXMOUSEBUTTONS; i++)
+    {
+        MouseFunctions[i][0] = CONFIG_FunctionNameToNum(mousedefaults[i]);
+        CONTROL_MapButton(MouseFunctions[i][0], i, 0, controldevice_mouse);
+        if (i>=4) continue;
+        MouseFunctions[i][1] = CONFIG_FunctionNameToNum(mouseclickeddefaults[i]);
+        CONTROL_MapButton(MouseFunctions[i][1], i, 1, controldevice_mouse);
+    }
+
+    for (int i=0; i<MAXMOUSEAXES; i++)
+    {
+        MouseDigitalFunctions[i][0] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i*2]);
+        MouseDigitalFunctions[i][1] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i*2+1]);
+        CONTROL_MapDigitalAxis(i, MouseDigitalFunctions[i][0], 0);
+        CONTROL_MapDigitalAxis(i, MouseDigitalFunctions[i][1], 1);
+    }
+
+    if (g_kexMode)
+    {
+        // The KEX cfg uses these as console names; configure them natively so
+        // a fresh session has the remaster's wheel behavior from the first run.
+        MouseFunctions[4][0] = gamefunc_Next_Weapon;
+        MouseFunctions[5][0] = gamefunc_Previous_Weapon;
+        CONTROL_MapButton(MouseFunctions[4][0], 4, 0, controldevice_mouse);
+        CONTROL_MapButton(MouseFunctions[5][0], 5, 0, controldevice_mouse);
+        CONTROL_BindKey(sc_F5, "screenshot", 1, KB_ScanCodeToString(sc_F5));
+    }
+
+    CONFIG_SetGameControllerDefaults();
+}
+
 void CONFIG_SetDefaults()
 {
     scripthandle = -1;
@@ -603,44 +647,7 @@ void CONFIG_SetDefaults()
     screensize = 0;
     nGamma = 2;
 
-    CONFIG_SetDefaultKeys(g_kexMode ? kexkeydefaults : keydefaults);
-
-    memset(MouseFunctions, -1, sizeof(MouseFunctions));
-    memset(MouseDigitalFunctions, -1, sizeof(MouseDigitalFunctions));
-    memset(JoystickFunctions, -1, sizeof(JoystickFunctions));
-    memset(JoystickDigitalFunctions, -1, sizeof(JoystickDigitalFunctions));
-
-    CONTROL_MouseSensitivity = DEFAULTMOUSESENSITIVITY;
-
-    for (int i=0; i<MAXMOUSEBUTTONS; i++)
-    {
-        MouseFunctions[i][0] = CONFIG_FunctionNameToNum(mousedefaults[i]);
-        CONTROL_MapButton(MouseFunctions[i][0], i, 0, controldevice_mouse);
-        if (i>=4) continue;
-        MouseFunctions[i][1] = CONFIG_FunctionNameToNum(mouseclickeddefaults[i]);
-        CONTROL_MapButton(MouseFunctions[i][1], i, 1, controldevice_mouse);
-    }
-
-    for (int i=0; i<MAXMOUSEAXES; i++)
-    {
-        MouseDigitalFunctions[i][0] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i*2]);
-        MouseDigitalFunctions[i][1] = CONFIG_FunctionNameToNum(mousedigitaldefaults[i*2+1]);
-        CONTROL_MapDigitalAxis(i, MouseDigitalFunctions[i][0], 0);
-        CONTROL_MapDigitalAxis(i, MouseDigitalFunctions[i][1], 1);
-    }
-
-    if (g_kexMode)
-    {
-        // The KEX cfg uses these as console names; configure them natively so
-        // a fresh session has the remaster's wheel behavior from the first run.
-        MouseFunctions[4][0] = gamefunc_Next_Weapon;
-        MouseFunctions[5][0] = gamefunc_Previous_Weapon;
-        CONTROL_MapButton(MouseFunctions[4][0], 4, 0, controldevice_mouse);
-        CONTROL_MapButton(MouseFunctions[5][0], 5, 0, controldevice_mouse);
-        CONTROL_BindKey(sc_F5, "screenshot", 1, KB_ScanCodeToString(sc_F5));
-    }
-
-    CONFIG_SetGameControllerDefaults();
+    CONFIG_ResetKexInputDefaults();
 
 #if 0
     FXVolume       = 128;

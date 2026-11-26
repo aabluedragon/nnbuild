@@ -94,6 +94,17 @@
 #define osdcmd_restartvid NativeEditor_osdcmd_restartvid
 #define tempbuf NativeEditor_tempbuf
 #define vm NativeEditor_vm
+// Names the native editor shares with the other game runtimes linked into the
+// same executable (Shadow Warrior, Blood, Redneck Rampage, Exhumed).
+#define Gv_GetVar NativeEditor_Gv_GetVar
+#define Gv_SetVar NativeEditor_Gv_SetVar
+#define MixRate NativeEditor_MixRate
+#define NumVoices NativeEditor_NumVoices
+#define setupfilename NativeEditor_setupfilename
+#define startang NativeEditor_startang
+#define startpos NativeEditor_startpos
+#define startsectnum NativeEditor_startsectnum
+#define zoom NativeEditor_zoom
 // Service MCP while the native editor is handling its own events and dialogs.
 #define handleevents NativeEditor_handleevents
 

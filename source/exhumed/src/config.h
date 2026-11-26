@@ -172,6 +172,7 @@ extern int32_t MAXCACHE1DSIZE;
 
 void CONFIG_SetDefaultKeys(const char(*keyptr)[kMaxGameFuncLen], bool lazy=false);
 void CONFIG_MapKey(int which, kb_scancode key1, kb_scancode oldkey1, kb_scancode key2, kb_scancode oldkey2);
+void CONFIG_ResetKexInputDefaults(void);
 int32_t CONFIG_FunctionNameToNum(const char* func);
 
 #endif

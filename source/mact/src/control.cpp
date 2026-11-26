@@ -41,6 +41,10 @@ LastSeenInput CONTROL_LastSeenInput;
 float CONTROL_MouseAxesSensitivity[2] = { DEFAULTMOUSESENSITIVITY, DEFAULTMOUSESENSITIVITY };
 float CONTROL_MouseSensitivity     = DEFAULTMOUSESENSITIVITY;
 float CONTROL_MouseSensitivityUnit = DEFAULTMOUSEUNIT;
+
+bool CONTROL_MouseSmoothing = false;
+bool CONTROL_JoyLookSmoothing = false;
+bool CONTROL_GamepadSticksSwapped = false;
 float CONTROL_JoySensitivityUnit   = DEFAULTJOYUNIT;
 
 static int32_t CONTROL_NumMouseButtons  = 0;
@@ -104,6 +108,18 @@ static void controlUpdateMouseState(ControlInfo *const info)
 
     vec2f_t finput = { input.x * CONTROL_MouseSensitivityUnit * CONTROL_MouseSensitivity * CONTROL_MouseAxesSensitivity[0],
                        input.y * CONTROL_MouseSensitivityUnit * CONTROL_MouseSensitivity * CONTROL_MouseAxesSensitivity[1] };
+
+    static vec2f_t lastMouse;
+    if (CONTROL_MouseSmoothing)
+    {
+        // Average this delta with the previous one to even out uneven polling.
+        vec2f_t const raw = finput;
+        finput.x = (raw.x + lastMouse.x) * .5f;
+        finput.y = (raw.y + lastMouse.y) * .5f;
+        lastMouse = raw;
+    }
+    else
+        lastMouse = finput;
 
     info->mousex = Blrintf(clamp(finput.x, -MAXSCALEDCONTROLVALUE, MAXSCALEDCONTROLVALUE));
     info->mousey = Blrintf(clamp(finput.y, -MAXSCALEDCONTROLVALUE, MAXSCALEDCONTROLVALUE));
@@ -472,9 +488,27 @@ static int controllerDigitizeAxis(int axis)
 
 static inline int32_t joydist(int x, int y) { return ksqrt(x * x + y * y); }
 
+// The physical axis that feeds logical axis `index`. On a game controller the
+// two sticks can be exchanged as a pair.
+static int controlSourceAxis(int index)
+{
+    if (!CONTROL_GamepadSticksSwapped || !joystick.isGameController)
+        return index;
+
+    switch (index)
+    {
+        case CONTROLLER_AXIS_LEFTX:  return CONTROLLER_AXIS_RIGHTX;
+        case CONTROLLER_AXIS_LEFTY:  return CONTROLLER_AXIS_RIGHTY;
+        case CONTROLLER_AXIS_RIGHTX: return CONTROLLER_AXIS_LEFTX;
+        case CONTROLLER_AXIS_RIGHTY: return CONTROLLER_AXIS_LEFTY;
+        default:                     return index;
+    }
+}
+
 static void controlUpdateAxisState(int index, ControlInfo *const info)
 {
-    int const  in  = joystick.pAxis[index];
+    int const  source = controlSourceAxis(index);
+    int const  in  = joystick.pAxis[source];
     auto &     a   = joyAxes[index];
     auto const out = &a.axis;
 
@@ -489,7 +523,7 @@ static void controlUpdateAxisState(int index, ControlInfo *const info)
     {
         // this assumes there are two sticks comprised of axes 0 and 1, and 2 and 3... because when isGameController is true, there are
         if (index <= CONTROLLER_AXIS_LEFTY || (joystick.isGameController && (index <= CONTROLLER_AXIS_RIGHTY)))
-            axisScaled10k = min(10000, joydist(joystick.pAxis[index & ~1], joystick.pAxis[index | 1]) * 10000 / 32767);
+            axisScaled10k = min(10000, joydist(joystick.pAxis[source & ~1], joystick.pAxis[source | 1]) * 10000 / 32767);
 
         if (axisScaled10k < a.deadzone)
             out->analog = 0;
@@ -503,6 +537,17 @@ static void controlUpdateAxisState(int index, ControlInfo *const info)
     int const invert = !!a.invert;
     int const clamped = Blrintf(clamp<float>(a.axis.analog * CONTROL_JoySensitivityUnit * a.sensitivity, -MAXSCALEDCONTROLVALUE, MAXSCALEDCONTROLVALUE));
     a.axis.analog  = (clamped ^ -invert) + invert;
+
+    if (CONTROL_JoyLookSmoothing && (a.mapping.analogmap == analog_turning || a.mapping.analogmap == analog_lookingupanddown))
+    {
+        // Low-pass the look axes: move half of the way to the new reading.
+        static int32_t smoothed[MAXJOYAXES];
+        if ((unsigned)index < ARRAY_SIZE(smoothed))
+        {
+            smoothed[index] = (smoothed[index] + a.axis.analog) / 2;
+            a.axis.analog = smoothed[index];
+        }
+    }
 
     switch (a.mapping.analogmap)
     {
@@ -731,6 +776,9 @@ bool CONTROL_Startup(controltype which, int32_t(*TimeFunction)(void), int32_t ti
         { "in_mouseunit",  "base mouse input unit",                   (void *)&CONTROL_MouseSensitivityUnit,    CVAR_FLOAT, 0, 1 },
         { "in_joyunit",    "base controller input unit",              (void *)&CONTROL_JoySensitivityUnit,      CVAR_FLOAT, 0, 1 },
         { "sensitivity",   "master mouse sensitivity multiplier",     (void *)&CONTROL_MouseSensitivity,        CVAR_FLOAT, 0, 100 },
+        { "cl_mousesmooth",   "smooth mouse movement between frames",      (void *)&CONTROL_MouseSmoothing,          CVAR_BOOL, 0, 1 },
+        { "cl_joysmoothing",  "smooth controller look movement",           (void *)&CONTROL_JoyLookSmoothing,        CVAR_BOOL, 0, 1 },
+        { "cl_swapjoysticks", "exchange the left and right controller sticks", (void *)&CONTROL_GamepadSticksSwapped, CVAR_BOOL, 0, 1 },
     };
 
     for (auto& cv : cvars_mact)
