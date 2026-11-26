@@ -3,6 +3,11 @@
 Ready-made builds are published on GitHub Releases. Each link below always
 points at the newest release.
 
+> **Disclaimer.** NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+> written by AI coding assistants. It is provided as is, with no warranty and no
+> liability of any kind. You use it at your own risk, and you are responsible
+> for how you use it.
+
 | System | Download | Needs |
 | --- | --- | --- |
 | Windows, 64-bit | [nnbuild-windows-x64.zip](https://github.com/aabluedragon/nnbuild/releases/latest/download/nnbuild-windows-x64.zip) | Windows 10 or later |

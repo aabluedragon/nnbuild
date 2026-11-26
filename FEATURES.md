@@ -232,6 +232,10 @@ Open **Map Editor** from the title menu.
 
 ## Good to know
 
+- NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+  written by AI coding assistants. It is provided as is, with no warranty and no
+  liability of any kind. You use it at your own risk, and you are responsible
+  for how you use it.
 - Joining a match that is already running needs the same kind of build as the
   host: a 64-bit player cannot join a 32-bit host mid-game, or the other way
   round. Use the 64-bit build unless your computer cannot run it.

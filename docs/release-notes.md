@@ -33,6 +33,10 @@ The full list is on the [Features](https://nnb.nukemnet.com/features.html) page.
 
 ## Good to know
 
+- **Disclaimer:** NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+  written by AI coding assistants. It is provided as is, with no warranty and no
+  liability of any kind. You use it at your own risk, and you are responsible
+  for how you use it.
 - The program file is named `vibebuild32`, the project's earlier name.
 - Joining a match that is already running needs the same kind of build as the
   host: a 64-bit player cannot join a 32-bit host mid-game, or the other way

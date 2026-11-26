@@ -18,6 +18,11 @@ NNBuild is free and open source. It is based on NetDuke32, part of the EDuke32
 family of community-made versions of the game. You bring your own copy of each
 game's data files; NNBuild supplies the program that runs them.
 
+> **Disclaimer.** NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+> written by AI coding assistants. It is provided as is, with no warranty and no
+> liability of any kind. You use it at your own risk, and you are responsible
+> for how you use it.
+
 ## What you can do with it
 
 <div class="nn-cards">

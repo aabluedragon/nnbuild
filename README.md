@@ -15,6 +15,13 @@ built-in map editor, and mods written in JavaScript or TypeScript.
 You bring your own copy of each game's data files; NNBuild supplies the program
 that runs them.
 
+## Disclaimer
+
+NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+written by AI coding assistants. It is provided as is, with no warranty and no
+liability of any kind. You use it at your own risk, and you are responsible
+for how you use it.
+
 ## What it adds
 
 - **Online play:** join a match that is already running, come back with your

@@ -43,6 +43,14 @@ Source code and new releases:
 
 The program file is named "vibebuild32" (the project's earlier name).
 
+DISCLAIMER
+----------
+
+NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
+written by AI coding assistants. It is provided as is, with no warranty and no
+liability of any kind. You use it at your own risk, and you are responsible
+for how you use it.
+
 NNBuild is free software, based on NetDuke32 and EDuke32. See gpl-2.0.txt and
 buildlic.txt for the licence terms.
 EOF
