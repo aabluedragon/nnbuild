@@ -44,10 +44,11 @@ The menu text names E1L1 as the starting level. To move to another level, open
 the console and use the `map` command, for example `map E1L3`. See
 [Administering a server](server-admin.md#change-the-level).
 
-**HOST INTERNET GAME** uses the lobby address in the console setting
-`cl_masterserver`. Until you change that setting it is `127.0.0.1`, your own
-computer, so set it first.
-[Playing online](playing-online.md#choose-a-lobby-server) shows how.
+**HOST INTERNET GAME** puts the match on the lobby in the console setting
+`cl_masterserver`. Until you change that setting it is the public lobby,
+`nnb.ms.nukemnet.com`, so everyone who opens **JOIN GAME** sees your match.
+[Playing online](playing-online.md#choose-a-lobby-server) shows how to use
+another lobby.
 
 Players on your local network join a **HOST LAN GAME** match by address: they
 choose **JOIN GAME**, then **Enter address manually...**, and type your

@@ -470,6 +470,7 @@ tools_targets := \
     map2stl \
     md2tool \
     mkpalette \
+    nnbuild-lobby \
     transpal \
     unpackssi \
     wad2art \

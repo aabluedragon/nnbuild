@@ -381,6 +381,9 @@ Notes:
   or with the `serverlist` console command. The address the menu asks is the
   console setting `cl_masterserver`. See
   [Console commands](console-commands.md#cl_masterserver).
+- The public lobby is `nnb.ms.nukemnet.com`. The menus use it unless another
+  lobby is named. `--advertise`, `--lobbylist` and `--joinlobby` always take
+  an address, so write it out: `--advertise nnb.ms.nukemnet.com`.
 - The name shown in the list is the host's player name (`-name`).
 
 ## Script mods

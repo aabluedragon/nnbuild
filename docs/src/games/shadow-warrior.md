@@ -124,7 +124,8 @@ players before the level starts.
 When Shadow Warrior runs as a network game, **New Game** opens the Network
 Game menu. Its **Browse Servers** entry shows the games on a lobby server and
 joins the one you pick. It asks the lobby server named with
-`-masteraddr <address>`, or this computer if that option was not given.
+`-masteraddr <address>`, or the public lobby `nnb.ms.nukemnet.com` if that
+option was not given.
 Joining from this list works on Linux and macOS.
 
 ## Script mods

@@ -281,15 +281,27 @@ Two local instances (server + client) on E1L1:
 ## 7b. Masterserver, lobby & STUN
 
 A standalone public directory + NAT-punch rendezvous, run with
-`nnbuild -masterserver [port]` (default **23519**). Own UDP protocol,
-independent of the game transport: 4-byte magic `"NBMS"` + 1 type byte.
+`nnbuild -masterserver [port]` (default **23519**) or as the separate program
+`nnbuild-lobby [port]` (`source/tools/src/nnbuild-lobby.cpp`, built with
+`make nnbuild-lobby`; it compiles `masterserver.cpp` and needs no SDL). Own UDP
+protocol, independent of the game transport: 4-byte magic `"NBMS"` + 1 type byte.
+
+The default lobby everywhere is `NNB_DEFAULT_MASTERSERVER`
+(`source/glue/nnbdefaults.h`), the public `nnb.ms.nukemnet.com`.
+
+- **Abuse limits** (server side, `ms_rate_ok` / `MS_MAX_PER_ADDR`): 60 packets
+  per 10 s per source address (IPv6: per /64), the rest dropped unanswered, so
+  a forged source address cannot use the big list answer to flood someone; 8
+  entries per address; names and maps reduced to printable ASCII.
 
 - **Advertise** (`MS_ADVERTISE`/`_STOP`): a host started with `-advertise <addr>`
   pulses name/gameport/players/map from `Net_HostAdvertise` each frame; the
   master keys the entry off the packet source. `-advertise` must precede `-net`.
-- **List** (`MS_LIST_REQ`/`_RESP`): the in-game **JOIN GAME** menu (menus.cpp
-  case 20020) and the `serverlist` console command call
-  `Masterserver_QueryList`.
+- **List** (`MS_LIST_REQ`/`_RESP`): the `serverlist` console command calls
+  `Masterserver_QueryList` (blocking). The in-game **JOIN GAME** menu
+  (menus.cpp case 20020) uses `Masterserver_QueryListBegin` / `...Poll`, which
+  run the same query on a worker thread so the menu never waits on DNS or the
+  lobby.
 - **STUN / hole-punch (IPv4 + IPv6)** (`MS_PUNCH_REQ` → `MS_PUNCH_NOTIFY` +
   `MS_STUN_RESP`, marker `"NBPH"`): when a client's direct connect stalls it
   sends `MS_PUNCH_REQ` **from its game socket** (`mmulti_sendraw_str`, so the
@@ -302,19 +314,30 @@ independent of the game transport: 4-byte magic `"NBMS"` + 1 type byte.
   6`). Both sides fire packets from the game socket to open the path; mmulti's
   normal handshake then connects. The join relaunch carries the master via
   `-masteraddr` so the connecting client punches through the same one.
-- **Join flow**: menu join → `Net_LaunchAddress` relaunches the process as a
-  client (`execv`) with `-net … host:port` + `-punchtarget host:port`. On
-  repeated failure (~28s) `Net_LaunchMenu` relaunches back with `-joinerror
-  <msg>`, which the JOIN menu shows in red.
+- **Join flow**: menu join → the **CONNECTING** screen (menus.cpp case 20022)
+  drives `Masterserver_JoinBegin` / `JoinPoll` / `JoinCancel`, a non-blocking
+  state machine polled once a frame. It opens an IPv4 and an IPv6 socket on
+  `NET_JOIN_PORT` (23530, the port the match will use, so an opened NAT path
+  carries over) and sends the **probe** `MMULTI_PROBE_QUERY` + 4 random bytes to
+  each listed address every 400 ms. The host's mmulti answers
+  `MMULTI_PROBE_REPLY` + the same bytes + its free-slot count, statelessly (no
+  slot is claimed, the answer is no bigger than the question). From 1.2 s on it
+  also sends `MS_PUNCH_REQ` to the lobby from the same sockets, per family.
+  Decision: IPv6 wins when it answers; after an IPv4 answer IPv6 gets
+  `MSJOIN_V6_GRACE_MS` (2.5 s) more; `cl_preferipv6 0` = first answer wins; no
+  free slot → "is full"; nothing in `MSJOIN_TIMEOUT_MS` (25 s) → back to the
+  list. Then `Net_LaunchAddress` relaunches the process as a client (`execv`)
+  with `-net … host:port` + `-punchtarget host:port`. If that connection still
+  fails (~28s) `Net_LaunchMenu` relaunches back with `-joinerror <msg>`.
+  A typed host name skips the screen (asking first would need a DNS wait).
 - The master and lobby handle **IPv4 and IPv6** (separate `AF_INET`/`AF_INET6`
   sockets; exact per-family `addrlen` — macOS rejects `sockaddr_storage` len for
   v4). A server advertises over **both** families when it can: `SetAdvertise`
   resolves the master's A + AAAA records, opens a v4 and v6 advertise socket, and
   tags each pulse with a random `serverId` so the master merges the two into one
   listing carrying both endpoints. IPv4 is mandatory; IPv6 is optional.
-- **The game transport (mmulti) itself is dual-stack** — see §7c. The lobby row
-  connects over IPv4 by default (always reachable), or IPv6 when `cl_preferipv6`
-  is set / it's the only address published.
+- **The game transport (mmulti) itself is dual-stack** — see §7c. Which address
+  of a lobby row is used is decided by the CONNECTING screen (above).
 
 ## 7c. IPv4 + IPv6 game transport (mmulti)
 

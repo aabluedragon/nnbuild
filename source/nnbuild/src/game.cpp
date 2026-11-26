@@ -9530,9 +9530,8 @@ static bool G_BeginMultiplayer()
                 {
                     startwin_settitle(APPNAME);
                     LOG_F(INFO, "Giving up on %s after %d retries; returning to menu", g_punchTargetAddr, retryNum);
-                    char err[128];
-                    Bsnprintf(err, sizeof(err), "Could not reach %s (offline or unreachable).", g_punchTargetAddr);
-                    Net_LaunchMenu(err);   // relaunches; does not return
+                    // Shown on the JOIN GAME screen, so it has to fit its width.
+                    Net_LaunchMenu("No answer from the server.");   // relaunches; does not return
                 }
             }
         }

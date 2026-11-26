@@ -1,9 +1,14 @@
 // NNBuild masterserver: a public lobby directory and dual-stack (IPv4/IPv6)
 // STUN / NAT hole-punch rendezvous. See masterserver.h.
 
+#include <chrono>
+#include <mutex>
+#include <thread>
+
 #include "masterserver.h"
 #include "compat.h"
 #include "baselayer.h"
+#include "mmulti.h"   // MMULTI_PROBE_QUERY / MMULTI_PROBE_REPLY
 
 #ifdef _WIN32
 # define WIN32_LEAN_AND_MEAN
@@ -43,6 +48,18 @@ enum
 #define MS_ENTRY_TTL_MS   30000   // drop a server not heard from in this long
 #define MS_MAX_ENTRIES    256
 #define MS_PKT            1400    // stay under the common path MTU
+
+// A lobby on the open internet gets abused. Two limits keep it harmless:
+//  - Each source address may send MS_RATE_MAX packets per MS_RATE_WINDOW_MS; the
+//    rest are dropped unanswered. A list answer is far larger than the request,
+//    so without this a forged source address would turn the lobby into a tool
+//    for flooding that address. Normal use is a few packets per ten seconds.
+//  - One address may hold MS_MAX_PER_ADDR entries, so one machine cannot fill
+//    the list.
+#define MS_RATE_WINDOW_MS 10000
+#define MS_RATE_MAX       60
+#define MS_RATE_SLOTS     2048
+#define MS_MAX_PER_ADDR   8
 
 // ---------------------------------------------------------------------------
 // small helpers
@@ -170,8 +187,10 @@ static void ms_addr_to_str(const struct sockaddr_storage *ss, int32_t overridePo
 
 // Resolve "host[:port]" (IPv4, [IPv6], or hostname) to a sockaddr usable from a
 // dual-stack IPv6 socket (IPv4 results come back as ::ffff:a.b.c.d). Returns 1
-// on success. defPort is used when the string carries no port.
-static int ms_resolve(const char *addr, int32_t defPort, struct sockaddr_storage *out)
+// on success. defPort is used when the string carries no port. aiFlags goes to
+// getaddrinfo: AI_NUMERICHOST accepts only a written-out address and so never
+// waits for a name server.
+static int ms_resolve_ex(const char *addr, int32_t defPort, struct sockaddr_storage *out, int aiFlags)
 {
     char host[256];
     Bstrncpyz(host, addr, sizeof(host));
@@ -205,12 +224,18 @@ static int ms_resolve(const char *addr, int32_t defPort, struct sockaddr_storage
     Bmemset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;    // native IPv4 or IPv6 (no IPv4-mapped; macOS won't send to those)
     hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = aiFlags;
     ms_netinit();
     if (getaddrinfo(host, port, &hints, &res) != 0 || !res)
         return 0;
     Bmemcpy(out, res->ai_addr, res->ai_addrlen);
     freeaddrinfo(res);
     return 1;
+}
+
+static int ms_resolve(const char *addr, int32_t defPort, struct sockaddr_storage *out)
+{
+    return ms_resolve_ex(addr, defPort, out, 0);
 }
 
 // Resolve "host[:port]" to its IPv4 and/or IPv6 endpoints (both, when the name
@@ -364,6 +389,64 @@ static int ms_putstr(uint8_t *buf, int *pos, int cap, const char *s)
     return 1;
 }
 
+// Same machine, whatever the port? IPv6 compares the first 64 bits, the part a
+// single site is given.
+static int ms_sameip(const struct sockaddr_storage *a, const struct sockaddr_storage *b)
+{
+    if (a->ss_family != b->ss_family) return 0;
+    if (a->ss_family == AF_INET6)
+    {
+        const struct sockaddr_in6 *x = (const struct sockaddr_in6 *)a, *y = (const struct sockaddr_in6 *)b;
+        return !Bmemcmp(&x->sin6_addr, &y->sin6_addr, 8);
+    }
+    const struct sockaddr_in *x = (const struct sockaddr_in *)a, *y = (const struct sockaddr_in *)b;
+    return x->sin_addr.s_addr == y->sin_addr.s_addr;
+}
+
+// The per-address packet budget (see MS_RATE_MAX). The table is indexed by a hash
+// of the address; two addresses landing on one slot simply share a window.
+struct ms_rate_t
+{
+    uint32_t key, windowStart, count;
+};
+static ms_rate_t g_rate[MS_RATE_SLOTS];
+
+static int ms_rate_ok(const struct sockaddr_storage *from, uint32_t now)
+{
+    uint32_t key = 2166136261u;
+    const uint8_t *bytes;
+    int len;
+    if (from->ss_family == AF_INET6)
+    {
+        bytes = ((const struct sockaddr_in6 *)from)->sin6_addr.s6_addr;
+        len = ms_is_v4mapped((const struct sockaddr_in6 *)from) ? 16 : 8;
+    }
+    else
+    {
+        bytes = (const uint8_t *)&((const struct sockaddr_in *)from)->sin_addr;
+        len = 4;
+    }
+    for (int i = 0; i < len; i++) key = (key ^ bytes[i]) * 16777619u;
+    if (!key) key = 1;
+
+    ms_rate_t *r = &g_rate[key % MS_RATE_SLOTS];
+    if (r->key != key || (now - r->windowStart) > MS_RATE_WINDOW_MS)
+    {
+        r->key = key;
+        r->windowStart = now;
+        r->count = 0;
+    }
+    return ++r->count <= MS_RATE_MAX;
+}
+
+// Names and map names come from strangers and end up in the log and on players'
+// screens: keep printable ASCII only.
+static void ms_clean(char *s)
+{
+    for (; *s; s++)
+        if ((unsigned char)*s < 32 || (unsigned char)*s > 126) *s = '?';
+}
+
 // Handle one validated (magic-checked) packet. Replies go out the socket the
 // request arrived on, so v4 stays v4 and v6 stays v6.
 static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sockaddr_storage *from, socklen_t fromlen)
@@ -383,16 +466,24 @@ static void ms_process(MS_SOCKET s, const uint8_t *buf, int n, const struct sock
         char name[32] = "", map[24] = "";
         ms_getstr(buf, n, &pos, name, sizeof(name));
         ms_getstr(buf, n, &pos, map, sizeof(map));
+        ms_clean(name);
+        ms_clean(map);
 
         // One logical server may advertise from both its IPv4 and IPv6 endpoint;
         // merge those by serverId into a single entry that carries both. Match an
         // existing entry by serverId, else claim a free slot.
-        int slot = -1, freeSlot = -1;
+        int slot = -1, freeSlot = -1, fromThisAddr = 0;
         for (int i = 0; i < MS_MAX_ENTRIES; i++)
         {
-            if (g_ent[i].used) { if (g_ent[i].serverId == serverId) { slot = i; break; } }
+            if (g_ent[i].used)
+            {
+                if (g_ent[i].serverId == serverId) { slot = i; break; }
+                if (ms_sameip(&g_ent[i].src4, from) || ms_sameip(&g_ent[i].src6, from)) fromThisAddr++;
+            }
             else if (freeSlot < 0) freeSlot = i;
         }
+        if (slot < 0 && fromThisAddr >= MS_MAX_PER_ADDR)
+            return;   // this address already lists as many servers as one address may
         if (slot < 0) slot = freeSlot;
         if (slot >= 0)
         {
@@ -574,7 +665,7 @@ void Masterserver_Run(int32_t port)
             struct sockaddr_storage from;
             socklen_t fromlen = sizeof(from);
             int n = (int)recvfrom(s, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
-            if (n >= 5 && !Bmemcmp(buf, MS_MAGIC, 4))
+            if (n >= 5 && !Bmemcmp(buf, MS_MAGIC, 4) && ms_rate_ok(&from, now))
                 ms_process(s, buf, n, &from, fromlen);
         }
     }
@@ -841,4 +932,305 @@ int32_t Masterserver_QueryList(const char *masterAddr, struct msserver_t *out, i
 
     ms_close(s);
     return got;
+}
+
+// ---------------------------------------------------------------------------
+// client side: the list, without blocking the caller
+// ---------------------------------------------------------------------------
+
+static std::mutex s_queryMutex;
+static int32_t s_queryGen = 0;    // identifies the newest query
+static int32_t s_queryDone = 0;   // the newest query has its answer
+static int32_t s_queryCount = 0;
+static struct msserver_t s_queryList[64];
+
+void Masterserver_QueryListBegin(const char *masterAddr)
+{
+    struct { char addr[256]; int32_t gen; } job;
+    Bstrncpyz(job.addr, masterAddr ? masterAddr : "", sizeof(job.addr));
+    {
+        std::lock_guard<std::mutex> lock(s_queryMutex);
+        job.gen = ++s_queryGen;
+        s_queryDone = 0;
+    }
+
+    std::thread([job]
+    {
+        struct msserver_t list[64];
+        int32_t const n = Masterserver_QueryList(job.addr, list, 64, 1500);
+
+        std::lock_guard<std::mutex> lock(s_queryMutex);
+        if (job.gen != s_queryGen)
+            return;   // a newer query replaced this one
+        if (n > 0) Bmemcpy(s_queryList, list, n * sizeof(list[0]));
+        s_queryCount = n;
+        s_queryDone = 1;
+    }).detach();
+}
+
+int32_t Masterserver_QueryListPoll(struct msserver_t *out, int32_t maxout, int32_t *count)
+{
+    std::lock_guard<std::mutex> lock(s_queryMutex);
+    if (!s_queryDone)
+        return 0;
+
+    int32_t n = s_queryCount;
+    if (n > maxout) n = maxout;
+    if (n > 0) Bmemcpy(out, s_queryList, n * sizeof(out[0]));
+    *count = n;
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// client side: reach a listed server over IPv4 and IPv6 at once
+// ---------------------------------------------------------------------------
+
+#define MSJOIN_GAME_PORT      23513  // a server address written without a port (mmulti's default)
+#define MSJOIN_PROBE_EVERY_MS 400    // repeat the question this often
+#define MSJOIN_HELP_FIRST_MS  1200   // then ask the lobby to open a path ...
+#define MSJOIN_HELP_EVERY_MS  3000   // ... and keep asking
+
+// One kind of address (IPv4 or IPv6) of the server being joined.
+struct ms_jointry_t
+{
+    MS_SOCKET sock;
+    int have;                       // there is an address of this kind to try
+    int ok;                         // the server answered over it
+    int full;                       // ... and said it has no free slot
+    uint32_t answeredAt;            // ms after the start
+    struct sockaddr_storage dst;    // the server
+    char str[128];                  // the same, as the list wrote it
+    struct sockaddr_storage lobby;  // the lobby's address of this kind
+    int haveLobby;
+};
+
+static struct
+{
+    int32_t state, prefer6, gen;
+    uint32_t start, lastProbe, lastHelp, endElapsed;
+    int32_t helpCount;
+    uint8_t nonce[4];
+    ms_jointry_t v4, v6;
+    char chosen[128];
+} s_join;
+
+// The lobby's addresses, written by the thread that looks its name up.
+static std::mutex s_joinMutex;
+static int32_t s_joinGen = 0;
+static struct sockaddr_storage s_joinLobby4, s_joinLobby6;
+static int s_joinLobbyHave4 = 0, s_joinLobbyHave6 = 0, s_joinLobbyReady = 0;
+
+static void ms_join_close(void)
+{
+    if (s_join.v4.have && s_join.v4.sock != (MS_SOCKET)INVALID_SOCKET) ms_close(s_join.v4.sock);
+    if (s_join.v6.have && s_join.v6.sock != (MS_SOCKET)INVALID_SOCKET) ms_close(s_join.v6.sock);
+    s_join.v4.sock = s_join.v6.sock = (MS_SOCKET)INVALID_SOCKET;
+}
+
+static void ms_join_open(ms_jointry_t *t, const char *addr, int family, int32_t localPort)
+{
+    t->sock = (MS_SOCKET)INVALID_SOCKET;
+    if (!addr[0] || !ms_resolve_ex(addr, MSJOIN_GAME_PORT, &t->dst, AI_NUMERICHOST) || t->dst.ss_family != family)
+        return;
+
+    // The match will use localPort. Asking from the same port means a path
+    // opened through a router now is still open then.
+    t->sock = ms_opensocket(family, localPort);
+    if (t->sock == (MS_SOCKET)INVALID_SOCKET)
+        t->sock = ms_opensocket(family, -1);
+    if (t->sock == (MS_SOCKET)INVALID_SOCKET)
+        return;
+
+    ms_setnonblock(t->sock);
+    Bstrncpyz(t->str, addr, sizeof(t->str));
+    t->have = 1;
+}
+
+void Masterserver_JoinCancel(void)
+{
+    if (s_join.state != MSJOIN_IDLE)
+        ms_join_close();
+    s_join.state = MSJOIN_IDLE;
+
+    std::lock_guard<std::mutex> lock(s_joinMutex);
+    ++s_joinGen;   // an unfinished lobby lookup now belongs to nobody
+}
+
+int32_t Masterserver_JoinBegin(const struct msserver_t *server, const char *masterAddr,
+                               int32_t localPort, int32_t preferIPv6)
+{
+    Masterserver_JoinCancel();
+    Bmemset(&s_join, 0, sizeof(s_join));
+    s_join.prefer6 = preferIPv6;
+
+    ms_join_open(&s_join.v4, server->addr, AF_INET, localPort);
+    ms_join_open(&s_join.v6, server->addr6, AF_INET6, localPort);
+    if (!s_join.v4.have && !s_join.v6.have)
+        return 0;
+
+    // The server repeats these four bytes in its answer, so an answer to an
+    // earlier attempt, or one somebody made up, is not taken for this one.
+    static uint32_t counter;
+    uint32_t const r = (ms_nowms() * 2654435761u) ^ ((uint32_t)(uintptr_t)&s_join >> 4) ^ (++counter * 40503u)
+                       ^ (uint32_t)std::chrono::steady_clock::now().time_since_epoch().count();
+    s_join.nonce[0] = (uint8_t)r; s_join.nonce[1] = (uint8_t)(r >> 8);
+    s_join.nonce[2] = (uint8_t)(r >> 16); s_join.nonce[3] = (uint8_t)(r >> 24);
+
+    s_join.start = ms_nowms();
+    s_join.state = MSJOIN_TRYING;
+
+    // Looking the lobby's name up can take a while, so it happens on the side.
+    // Until it is done, the direct questions go out without the lobby's help.
+    struct { char addr[256]; int32_t gen; } job;
+    Bstrncpyz(job.addr, masterAddr ? masterAddr : "", sizeof(job.addr));
+    {
+        std::lock_guard<std::mutex> lock(s_joinMutex);
+        job.gen = s_join.gen = ++s_joinGen;
+        s_joinLobbyReady = 0;
+    }
+    if (job.addr[0])
+        std::thread([job]
+        {
+            struct sockaddr_storage m4, m6;
+            int h4 = 0, h6 = 0;
+            ms_resolve_both(job.addr, MASTERSERVER_DEFAULT_PORT, &m4, &h4, &m6, &h6);
+
+            std::lock_guard<std::mutex> lock(s_joinMutex);
+            if (job.gen != s_joinGen)
+                return;
+            s_joinLobby4 = m4; s_joinLobbyHave4 = h4;
+            s_joinLobby6 = m6; s_joinLobbyHave6 = h6;
+            s_joinLobbyReady = 1;
+        }).detach();
+
+    return 1;
+}
+
+static void ms_join_read(ms_jointry_t *t, uint32_t elapsed)
+{
+    if (!t->have) return;
+    for (int guard = 0; guard < 16; guard++)
+    {
+        uint8_t buf[64];
+        struct sockaddr_storage from;
+        socklen_t fl = sizeof(from);
+        int const n = (int)recvfrom(t->sock, (char *)buf, sizeof(buf), 0, (struct sockaddr *)&from, &fl);
+        if (n <= 0)
+            break;
+        if (n == 9 && !Bmemcmp(buf, MMULTI_PROBE_REPLY, 4) && !Bmemcmp(buf + 4, s_join.nonce, 4) && !t->ok)
+        {
+            t->ok = 1;
+            t->full = (buf[8] == 0);
+            t->answeredAt = elapsed;
+        }
+    }
+}
+
+static void ms_join_ask(ms_jointry_t *t)
+{
+    if (!t->have || t->ok) return;
+    uint8_t q[8];
+    Bmemcpy(q, MMULTI_PROBE_QUERY, 4);
+    Bmemcpy(q + 4, s_join.nonce, 4);
+    sendto(t->sock, (const char *)q, sizeof(q), 0, (struct sockaddr *)&t->dst, ms_sslen(&t->dst));
+}
+
+// Ask the lobby to have the server send something our way first, which opens
+// the server's router for us. Sent from the socket that asks the server, so the
+// lobby sees the address the server has to open for.
+static int ms_join_help(ms_jointry_t *t)
+{
+    if (!t->have || t->ok || !t->haveLobby) return 0;
+    uint8_t out[160];
+    Bmemcpy(out, MS_MAGIC, 4);
+    out[4] = MS_PUNCH_REQ;
+    int op = 5;
+    ms_putstr(out, &op, sizeof(out), t->str);
+    sendto(t->sock, (const char *)out, op, 0, (struct sockaddr *)&t->lobby, ms_sslen(&t->lobby));
+    return 1;
+}
+
+int32_t Masterserver_JoinPoll(struct msjoin_t *status)
+{
+    if (s_join.state == MSJOIN_TRYING)
+    {
+        uint32_t const now = ms_nowms();
+        uint32_t const elapsed = now - s_join.start;
+
+        if (!s_join.v4.haveLobby && !s_join.v6.haveLobby)
+        {
+            std::lock_guard<std::mutex> lock(s_joinMutex);
+            if (s_joinLobbyReady && s_join.gen == s_joinGen)
+            {
+                s_join.v4.lobby = s_joinLobby4; s_join.v4.haveLobby = s_joinLobbyHave4;
+                s_join.v6.lobby = s_joinLobby6; s_join.v6.haveLobby = s_joinLobbyHave6;
+                s_joinLobbyReady = 0;
+            }
+        }
+
+        ms_join_read(&s_join.v4, elapsed);
+        ms_join_read(&s_join.v6, elapsed);
+
+        if (!s_join.lastProbe || (now - s_join.lastProbe) >= MSJOIN_PROBE_EVERY_MS)
+        {
+            s_join.lastProbe = now | 1;
+            ms_join_ask(&s_join.v4);
+            ms_join_ask(&s_join.v6);
+        }
+
+        if (elapsed >= MSJOIN_HELP_FIRST_MS && (!s_join.lastHelp || (now - s_join.lastHelp) >= MSJOIN_HELP_EVERY_MS))
+        {
+            int const sent = ms_join_help(&s_join.v4) + ms_join_help(&s_join.v6);
+            if (sent)
+            {
+                s_join.lastHelp = now | 1;
+                s_join.helpCount++;
+            }
+        }
+
+        const ms_jointry_t *win = NULL;
+        if (s_join.prefer6)
+        {
+            // IPv6 wins as soon as it answers. IPv4 wins once IPv6 has had its
+            // extra time, or at once when there is no IPv6 address to wait for.
+            if (s_join.v6.ok) win = &s_join.v6;
+            else if (s_join.v4.ok && (!s_join.v6.have || (elapsed - s_join.v4.answeredAt) >= MSJOIN_V6_GRACE_MS))
+                win = &s_join.v4;
+        }
+        else if (s_join.v4.ok) win = &s_join.v4;
+        else if (s_join.v6.ok) win = &s_join.v6;
+
+        if (win)
+        {
+            Bstrncpyz(s_join.chosen, win->str, sizeof(s_join.chosen));
+            s_join.state = win->full ? MSJOIN_FULL : MSJOIN_CONNECTED;
+        }
+        else if (elapsed >= MSJOIN_TIMEOUT_MS)
+            s_join.state = MSJOIN_FAILED;
+
+        if (s_join.state != MSJOIN_TRYING)
+        {
+            s_join.endElapsed = elapsed;
+            ms_join_close();   // the match needs this port next
+        }
+    }
+
+    if (status)
+    {
+        uint32_t const elapsed = (s_join.state == MSJOIN_TRYING) ? (ms_nowms() - s_join.start) : s_join.endElapsed;
+        Bmemset(status, 0, sizeof(*status));
+        status->state = s_join.state;
+        status->have4 = s_join.v4.have;  status->have6 = s_join.v6.have;
+        status->ok4 = s_join.v4.ok;      status->ok6 = s_join.v6.ok;
+        status->ms4 = (int32_t)s_join.v4.answeredAt;
+        status->ms6 = (int32_t)s_join.v6.answeredAt;
+        status->elapsedMs = (int32_t)elapsed;
+        status->lobbyRequests = s_join.helpCount;
+        if (s_join.state == MSJOIN_TRYING && s_join.prefer6 && s_join.v4.ok && s_join.v6.have && !s_join.v6.ok)
+            status->graceLeftMs = MSJOIN_V6_GRACE_MS - (int32_t)(elapsed - s_join.v4.answeredAt);
+        Bstrncpyz(status->addr4, s_join.v4.str, sizeof(status->addr4));
+        Bstrncpyz(status->addr6, s_join.v6.str, sizeof(status->addr6));
+        Bstrncpyz(status->chosen, s_join.chosen, sizeof(status->chosen));
+    }
+    return s_join.state;
 }

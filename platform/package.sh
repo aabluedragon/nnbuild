@@ -56,6 +56,8 @@ EOF
 case "$target" in
 linux-*)
     cp nnbuild eduke32.dat "$stage/"
+    # The lobby server as a program of its own, when it was built.
+    if [ -f nnbuild-lobby ]; then cp nnbuild-lobby "$stage/"; fi
     tar -C dist -czf "dist/$name.tar.gz" "$name"
     ls -l "dist/$name.tar.gz"
     ;;

@@ -19,9 +19,9 @@
 #include <sys/stat.h>
 #include <deque>
 
-// Masterserver the in-game lobby queries; overridable with the cl_masterserver
-// cvar. Defaults to localhost for local play/testing.
-char g_masterServerAddr[128] = "127.0.0.1";
+// Masterserver the in-game lobby queries and HOST INTERNET GAME reports to;
+// overridable with the cl_masterserver cvar. Defaults to the public lobby.
+char g_masterServerAddr[128] = NNB_DEFAULT_MASTERSERVER;
 
 // When a client is relaunched to join a specific server (from the lobby or a
 // manual address), this holds that server's "host:port" so the connection loop
@@ -34,9 +34,11 @@ char g_punchTargetAddr[128] = "";
 // being displayed.
 char g_joinErrorMsg[128] = "";
 
-// When set (cl_preferipv6), the lobby prefers a server's IPv6 address if it
-// published one. Off by default so IPv4-only clients always connect.
-int32_t g_netPreferIPv6 = 0;
+// Joining a listed server tries its IPv4 and IPv6 address at the same time.
+// When set (cl_preferipv6, the default), IPv6 is used if it answers, and gets a
+// little extra time to do so after IPv4 answered. When clear, the first answer
+// wins.
+int32_t g_netPreferIPv6 = 1;
 
 #ifndef _WIN32
 # include <poll.h>
@@ -3575,6 +3577,15 @@ void Net_LaunchAddress(const char *hostport)
     {
         if (!Bstrcasecmp(g_procArgv[i], "-net"))   // drop any existing net block (it runs to end of line)
             break;
+        // Drop what an earlier join left behind. A stale -joinerror would open
+        // the JOIN GAME screen on top of the match that is about to start.
+        if (!Bstrcasecmp(g_procArgv[i], "-joinerror") || !Bstrcasecmp(g_procArgv[i], "-punchtarget") ||
+            !Bstrcasecmp(g_procArgv[i], "-masteraddr"))
+        {
+            if (g_procArgv[i + 1])
+                i++;   // also skip its value
+            continue;
+        }
         newargv[n++] = g_procArgv[i];
     }
     // Remember the target so, if the direct connect stalls (server behind NAT),
@@ -3588,8 +3599,10 @@ void Net_LaunchAddress(const char *hostport)
         newargv[n++] = "-masteraddr";
         newargv[n++] = g_masterServerAddr;
     }
+    static char portArg[16];
+    Bsnprintf(portArg, sizeof(portArg), "/p%d", NET_JOIN_PORT);
     newargv[n++] = "-net";
-    newargv[n++] = "/p23530";       // a client source port distinct from the usual host port
+    newargv[n++] = portArg;
     newargv[n++] = "/n0";
     newargv[n++] = hostport;
     newargv[n]   = NULL;

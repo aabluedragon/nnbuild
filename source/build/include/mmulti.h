@@ -29,6 +29,15 @@ int mmulti_getslotip(int slot);
 // Full textual address of a slot ("a.b.c.d:port" or "[ipv6]:port"); "" if empty.
 void mmulti_getslotaddrstr(int slot, char *out, int outsize);
 int mmulti_getport(void);
+// "Are you there?" A player who can reach a host over IPv4 and over IPv6 asks
+// over both before choosing one. The question is MMULTI_PROBE_QUERY followed by
+// four bytes of the asker's choosing (8 bytes in all). The host answers from its
+// game socket with MMULTI_PROBE_REPLY, the same four bytes, and one byte holding
+// the number of free player slots (9 bytes). No player slot is used, and the
+// answer is no larger than the question.
+#define MMULTI_PROBE_QUERY "NBPQ"
+#define MMULTI_PROBE_REPLY "NBPR"
+
 // Open a NAT / firewall hole toward addr ("a.b.c.d:port" or "[ipv6]:port").
 void mmulti_punchto_str(const char *addr);
 // Send raw bytes from the game socket to addr (v4 or v6) - used to deliver

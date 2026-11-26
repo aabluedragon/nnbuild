@@ -56,7 +56,7 @@ Multiplayer menu uses.
 | [`spawn`](#spawn) | Host, or yourself in single player | Add an enemy or item. |
 | [`serverlist`](#serverlist) | Anyone | Print the games listed on a lobby server. |
 | [`cl_masterserver`](#cl_masterserver) | Each player | Which lobby server the menus use. |
-| [`cl_preferipv6`](#cl_preferipv6) | Each player | Prefer IPv6 addresses in the game list. |
+| [`cl_preferipv6`](#cl_preferipv6) | Each player | Prefer IPv6 when joining from the game list. |
 | [`skin`](#skin) | Each player | Appear as an enemy in multiplayer. |
 | [`cl_mousesmooth`](#cl_mousesmooth) | Each player | Smooth the mouse. |
 | [`cl_joysmoothing`](#cl_joysmoothing) | Each player | Smooth the controller. |
@@ -437,7 +437,8 @@ cl_masterserver <host[:port]>
 
 A setting with the address of the lobby server the menus use. **Join Game**
 reads its list from this address, and **Host Internet Game** lists your game
-there. The default is `127.0.0.1`. Without a port, 23519 is used.
+there. The default is the public lobby, `nnb.ms.nukemnet.com`. Without a
+port, 23519 is used.
 
 ```text
 cl_masterserver lobby.example.org
@@ -450,8 +451,10 @@ cl_masterserver lobby.example.org:24000
 cl_preferipv6 <0|1>
 ```
 
-A setting for the game list. When a game is listed with both an IPv4 and an
-IPv6 address, `1` connects over IPv6 and `0` over IPv4. The default is `0`.
+A setting for joining from the game list. NNBuild asks a listed game over its
+IPv4 and its IPv6 address at the same time. With `1`, the default, IPv6 is
+used when it answers, and it gets 2.5 more seconds to do so after IPv4
+answered. With `0`, the address that answers first is used.
 
 ## Player appearance
 

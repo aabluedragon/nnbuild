@@ -915,6 +915,63 @@ static void modval(int min, int max,int *p,int dainc,int damodify)
 
 // In-game lobby (masterserver) state.
 static char g_joinAddrBuf[64];
+
+// The server the CONNECTING screen is trying to reach, as shown to the player.
+static char s_joinName[48];
+
+// Start reaching a server picked in JOIN GAME and show the CONNECTING screen.
+// The screen asks the server over each of its addresses first; see
+// Masterserver_JoinBegin. That needs written-out addresses: a host name would
+// mean waiting for a name server, so one is joined the direct way instead.
+static void Menu_BeginJoin(const struct msserver_t *server)
+{
+    char const *shown = server->name[0] ? server->name : (server->addr[0] ? server->addr : server->addr6);
+
+    g_joinErrorMsg[0] = 0;
+    if (Masterserver_JoinBegin(server, g_masterServerAddr, NET_JOIN_PORT, g_netPreferIPv6))
+    {
+        Bstrncpyz(s_joinName, shown, sizeof(s_joinName));
+
+        // The key press that chose the server must not also choose CANCEL on
+        // the screen that opens now.
+        KB_ClearKeyDown(sc_Enter);
+        KB_ClearKeyDown(sc_kpad_Enter);
+        KB_ClearKeyDown(sc_Space);
+        KB_FlushKeyboardQueue();
+        ChangeToMenu(20022);
+    }
+    else if (server->addr[0])
+        Net_LaunchAddress(server->addr);
+    else if (server->addr6[0])
+        Net_LaunchAddress(server->addr6);
+}
+
+// An address for the small menu font, which has no square brackets:
+// "[2001:db8::1]:23513" becomes "2001:db8::1 port 23513". IPv4 stays as it is.
+static void Menu_AddressForDisplay(const char *addr, char *out, int32_t outsize)
+{
+    char const *close = (addr[0] == '[') ? Bstrchr(addr, ']') : NULL;
+    if (!close)
+    {
+        Bstrncpyz(out, addr, outsize);
+        return;
+    }
+    Bsnprintf(out, outsize, "%.*s%s%s", (int)(close - addr - 1), addr + 1,
+              close[1] == ':' ? " port " : "", close[1] == ':' ? close + 2 : "");
+}
+
+// The same for an address typed in JOIN BY ADDRESS.
+static void Menu_BeginJoinTyped(const char *typed)
+{
+    struct msserver_t server;
+    Bmemset(&server, 0, sizeof(server));
+
+    // More than one colon, or brackets: an IPv6 address.
+    char const *colon = Bstrchr(typed, ':');
+    bool const isV6 = typed[0] == '[' || (colon && Bstrchr(colon + 1, ':'));
+    Bstrncpyz(isV6 ? server.addr6 : server.addr, typed, sizeof(server.addr));
+    Menu_BeginJoin(&server);
+}
 // #define MENUHIGHLIGHT(x) probey==x?-(sintable[((int32_t)totalclock<<4)&2047]>>12):probey-x>=0?(probey-x)<<2:-((probey-x)<<2)
 
 #define SHX(X) 0
@@ -1580,9 +1637,21 @@ void M_DisplayMenus(void)
             menutext(160, 24, 0, 0, "JOIN GAME");
 
             static struct msserver_t s_list[12];
-            static int32_t s_count = -2;   // -2 = need to query, -1 = query failed, >=0 = results
+            // -2 = ask the lobby, -3 = waiting for its answer, -1 = no answer, >=0 = results
+            static int32_t s_count = -2;
             if (s_count == -2)
-                s_count = Masterserver_QueryList(g_masterServerAddr, s_list, 12, 1200);
+            {
+                // The answer arrives on a worker thread, so the menu keeps
+                // running however long the lobby or the name lookup takes.
+                Masterserver_QueryListBegin(g_masterServerAddr);
+                s_count = -3;
+            }
+            if (s_count == -3)
+            {
+                int32_t answered;
+                if (Masterserver_QueryListPoll(s_list, 12, &answered))
+                    s_count = answered;
+            }
 
             int32_t const nServers = (s_count > 0) ? (s_count > 12 ? 12 : s_count) : 0;
             int32_t const nItems = nServers + 2;   // + "enter address" + "refresh"
@@ -1595,7 +1664,8 @@ void M_DisplayMenus(void)
                 char line[96];
                 // Primary address is the mandatory IPv4; note when IPv6 is also
                 // available for the same server.
-                char const *shown = s_list[i].addr[0] ? s_list[i].addr : s_list[i].addr6;
+                char shown[128];
+                Menu_AddressForDisplay(s_list[i].addr[0] ? s_list[i].addr : s_list[i].addr6, shown, sizeof(shown));
                 char const *v6tag = (s_list[i].addr[0] && s_list[i].addr6[0]) ? " +v6"
                                   : (!s_list[i].addr[0] && s_list[i].addr6[0]) ? " v6" : "";
                 Bsnprintf(line, sizeof(line), "%-14.14s %2d/%-2d %-8.8s %s%s",
@@ -1609,7 +1679,9 @@ void M_DisplayMenus(void)
             if (g_joinErrorMsg[0])
                 mgametext(160, 138, g_joinErrorMsg, 0, 2 + 8 + 16);
 
-            if (s_count == -1)
+            if (s_count == -3)
+                mgametext(160, 150, "Asking the masterserver...", 0, 2 + 8 + 16);
+            else if (s_count == -1)
                 mgametext(160, 150, "Could not reach the masterserver.", 0, 2 + 8 + 16);
             else if (nServers == 0)
                 mgametext(160, 150, "No servers advertised.", 0, 2 + 8 + 16);
@@ -1620,17 +1692,73 @@ void M_DisplayMenus(void)
 
             if (x == -1) { s_count = -2; ChangeToMenu(20001); }
             else if (x >= 0 && x < nServers)
-            {
-                // Connect over IPv4 by default (always reachable); use IPv6 when
-                // the user prefers it and it's offered, or when it's the only
-                // address the server published.
-                char const *tgt = s_list[x].addr;
-                if ((g_netPreferIPv6 && s_list[x].addr6[0]) || !tgt[0])
-                    tgt = s_list[x].addr6;
-                if (tgt[0]) Net_LaunchAddress(tgt);
-            }
+                Menu_BeginJoin(&s_list[x]);   // tries the server's IPv4 and IPv6 address together
             else if (x == nServers) { g_joinAddrBuf[0] = 0; inputloc = 0; KB_FlushKeyboardQueue(); ChangeToMenu(20021); }
-            else if (x == nServers + 1) { s_count = -2; }   // refresh
+            else if (x == nServers + 1) { s_count = -2; g_joinErrorMsg[0] = 0; }   // refresh
+            break;
+        }
+
+        case 20022:   // CONNECTING - reaching the server picked in JOIN GAME
+        {
+            rotatesprite(160 << 16, 19 << 16, 65536L, 0, MENUBAR, 16, 0, 10, 0, 0, xdim - 1, ydim - 1);
+            menutext(160, 24, 0, 0, "CONNECTING");
+
+            // One step of the attempt per frame; nothing in it waits.
+            struct msjoin_t join;
+            int32_t const state = Masterserver_JoinPoll(&join);
+
+            mgametext(160, 50, s_joinName, 0, 2 + 8 + 16);
+
+            char line[160];
+            int32_t y = 70;
+            for (int32_t v6 = 1; v6 >= 0; v6--)
+            {
+                if (!(v6 ? join.have6 : join.have4))
+                    continue;
+                int32_t const answered = v6 ? join.ok6 : join.ok4;
+                char shown[128];
+                Menu_AddressForDisplay(v6 ? join.addr6 : join.addr4, shown, sizeof(shown));
+                if (answered)
+                    Bsnprintf(line, sizeof(line), "%s  %s  answered in %d ms", v6 ? "IPv6" : "IPv4",
+                              shown, v6 ? join.ms6 : join.ms4);
+                else
+                    Bsnprintf(line, sizeof(line), "%s  %s  no answer yet", v6 ? "IPv6" : "IPv4", shown);
+                minitextshade(40, y, line, answered ? 0 : 14, 0, 2 + 8 + 16);
+                y += 9;
+            }
+
+            if (join.graceLeftMs > 0)
+            {
+                int32_t const seconds = (join.graceLeftMs + 999) / 1000;
+                Bsnprintf(line, sizeof(line), "IPv4 answered. Giving IPv6 %d more second%s...", seconds, seconds == 1 ? "" : "s");
+            }
+            else if (join.lobbyRequests > 0)
+                Bsnprintf(line, sizeof(line), "Asking the masterserver to open a path...");
+            else
+                Bsnprintf(line, sizeof(line), "Asking the server...");
+            mgametext(160, 104, line, 0, 2 + 8 + 16);
+
+            Bsnprintf(line, sizeof(line), "%d of %d seconds", join.elapsedMs / 1000, MSJOIN_TIMEOUT_MS / 1000);
+            mgametext(160, 116, line, 0, 2 + 8 + 16);
+
+            x = M_Probe(160, 146, 0, 1);
+            menutext(160, 146, MENUHIGHLIGHT(0), 0, "CANCEL");
+
+            if (state == MSJOIN_CONNECTED)
+                Net_LaunchAddress(join.chosen);   // starts the match; does not return
+            else if (state == MSJOIN_FULL || state == MSJOIN_FAILED)
+            {
+                // Kept short: the line must fit the width of the screen.
+                Bsnprintf(g_joinErrorMsg, sizeof(g_joinErrorMsg), state == MSJOIN_FULL
+                          ? "%.28s is full." : "No answer from %.24s.", s_joinName);
+                Masterserver_JoinCancel();
+                ChangeToMenu(20020);
+            }
+            else if (x == -1 || x == 0)
+            {
+                Masterserver_JoinCancel();
+                ChangeToMenu(20020);
+            }
             break;
         }
 
@@ -1646,7 +1774,7 @@ void M_DisplayMenus(void)
             char ch = KB_GetCh();
             int32_t L = Bstrlen(g_joinAddrBuf);
             if (ch == asc_BackSpace) { if (L > 0) g_joinAddrBuf[L - 1] = 0; }
-            else if (ch == asc_Enter) { if (L > 0) Net_LaunchAddress(g_joinAddrBuf); }
+            else if (ch == asc_Enter) { if (L > 0) Menu_BeginJoinTyped(g_joinAddrBuf); }
             else if (ch == asc_Escape) { KB_ClearKeyDown(sc_Escape); ChangeToMenu(20020); }
             else if (ch >= 32 && ch < 127 && L < (int32_t)sizeof(g_joinAddrBuf) - 2)
             { g_joinAddrBuf[L] = ch; g_joinAddrBuf[L + 1] = 0; }

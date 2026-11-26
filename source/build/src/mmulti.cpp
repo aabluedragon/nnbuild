@@ -1138,6 +1138,26 @@ int mmulti_getpacket_sized(int *retother, unsigned char *bufptr, int capacity)
         //      char pak[leng];    //actual packet data :)
         //   }
         //   unsigned short crc16; //CRC16 of everything except crc16
+
+        // A player asking "are you there?" before joining (see mmulti.h). Only
+        // the host answers. This touches no player slot.
+        if (received == 8 && !memcmp(pakbuf, MMULTI_PROBE_QUERY, 4))
+        {
+            if (myconnectindex == connecthead)
+            {
+                int freeSlots = 0;
+                for (i = 1; i < numplayers; i++)
+                    if (!addr_valid(&otheraddr[i])) freeSlots++;
+
+                char reply[9];
+                memcpy(reply, MMULTI_PROBE_REPLY, 4);
+                memcpy(reply + 4, pakbuf + 4, 4);
+                reply[8] = (char)freeSlots;
+                netsendto(&snatchaddr, reply, sizeof(reply));
+            }
+            continue;
+        }
+
         if (received < 9)
             continue;
         k = 0;

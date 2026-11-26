@@ -8,7 +8,11 @@ The menus, the logs and the option names call it the **masterserver**. This
 manual calls it the lobby server.
 
 The lobby only keeps the list and passes on requests to connect. Game traffic
-never goes through it. Any community can run its own.
+never goes through it.
+
+NNBuild comes with a public lobby, **`nnb.ms.nukemnet.com`**. The menus use it
+until you name another one, so most players never have to think about lobbies.
+Any community can also run its own.
 
 Most of this page describes the Duke Nukem 3D family.
 [Other games](#other-games) lists what the other runtimes do.
@@ -58,7 +62,30 @@ The same lines are written to `nnbuild.log` in the folder the lobby was
 started in.
 
 Open the lobby's UDP port for incoming traffic in the machine's firewall, for
-IPv4 and for IPv6. Hosts and players must both be able to reach it.
+IPv4 and for IPv6. Hosts and players must both be able to reach it. Give the
+lobby's host name both an IPv4 (A) and an IPv6 (AAAA) record: hosts list their
+IPv6 address only with a lobby they can reach over IPv6.
+
+### The lobby as a program of its own
+
+`nnbuild-lobby` is the same lobby as a small separate program. It needs no
+game data and none of the display and sound libraries the game uses, which
+suits a server that only keeps the list. The Linux downloads contain it. To
+build it yourself, run `make nnbuild-lobby`.
+
+```sh
+nnbuild-lobby          # UDP port 23519
+nnbuild-lobby 23600    # another port
+```
+
+It writes the same lines as above, each with the date and time, to standard
+error. Run it under your usual service manager and as a user without special
+rights, for example with pm2:
+
+```sh
+pm2 start ./nnbuild-lobby --name nnbuild-lobby --interpreter none --uid nnbuild --gid nnbuild
+pm2 save
+```
 
 ## Put a match on the list
 
@@ -74,7 +101,9 @@ brackets. Add `:port` if the lobby does not listen on 23519, for example
 `lobby.example.org:23600`.
 
 A host started from the menu with **HOST INTERNET GAME** reports to the lobby
-in the console setting `cl_masterserver`.
+in the console setting `cl_masterserver`, which is the public lobby unless you
+changed it. To put a match started from the command line on the public lobby,
+write `--advertise nnb.ms.nukemnet.com`.
 
 The host sends its name, its game port, its player and slot numbers and the
 name of the current map. The lobby adds the address the report came from.
@@ -87,10 +116,11 @@ Players point their game at a lobby with the console setting `cl_masterserver`:
 cl_masterserver lobby.example.org
 ```
 
-- Until it is changed, the setting is `127.0.0.1`, the player's own computer.
+- Until it is changed, the setting is the public lobby, `nnb.ms.nukemnet.com`.
 - The setting is saved with the player's other settings.
 - **JOIN GAME** asks the lobby when the screen opens and again when you choose
-  **Refresh list**. It shows the first 12 matches.
+  **Refresh list**. It shows the first 12 matches. The menu keeps working
+  while it waits for the answer.
 
 [Playing online](playing-online.md#join-from-the-menu) describes the screen.
 
@@ -129,8 +159,12 @@ with `also IPv6:` follows. The command prints up to 64 matches.
   into one entry.
 - In **JOIN GAME**, an entry with both kinds of address is marked `+v6`, and an
   entry with only an IPv6 address is marked `v6`.
-- A player's game connects over IPv4 when an entry has an IPv4 address. Set
-  `cl_preferipv6 1` in the console to use the IPv6 address when there is one.
+- A player's game asks the server over both addresses at the same time and
+  joins over the one that works. IPv6 is preferred: it wins when it answers,
+  and after an answer over IPv4 it gets 2.5 more seconds. Set
+  `cl_preferipv6 0` in the console to take whichever answers first.
+  [Playing online](playing-online.md#the-connecting-screen) describes the
+  screen that shows this.
 
 ## Hole punching
 
@@ -145,14 +179,17 @@ it lets them in. The lobby's part is to tell the host where the player is.
 
 The steps:
 
-1. The player picks a match in **JOIN GAME**. The player's game tries to
-   connect to the listed address.
-2. While there is no answer, the player's game asks the lobby for help every
-   three seconds. It sends the request from the same port it uses for the
-   game.
+1. The player picks a match in **JOIN GAME**. The **CONNECTING** screen opens
+   and the player's game asks the server, over each listed address, whether
+   it is there.
+2. While there is no answer, the player's game asks the lobby for help, first
+   after about a second and then every three seconds. It sends the request
+   from the same port it will use for the game, once for each kind of address
+   the lobby can be reached over.
 3. The lobby tells the host the address and port the request came from.
 4. The host sends a small packet from its game port to that address.
-5. The player's game is still trying, and its next attempt gets through.
+5. The player's game is still asking, and its next question gets through. The
+   path stays open for the match that starts right after.
 
 Nothing has to be set up for this beyond the lobby itself. If the host can be
 reached directly, the first attempt succeeds and none of this is needed.
@@ -173,8 +210,11 @@ reached directly, the first attempt succeeds and none of this is needed.
   router uses a different one towards the host, the packet opens nothing.
 - **There is no relay.** If hole punching fails, the lobby does not carry the
   game instead. Forward the host's port.
-- **The attempt ends after about 30 seconds.** The player is then returned to
-  **JOIN GAME** with a message that the server could not be reached.
+- **The attempt ends after 25 seconds.** The player is then returned to
+  **JOIN GAME** with the message `No answer from <server>.`
+- **IPv6 needs the lobby on IPv6.** A router's firewall blocks unexpected
+  IPv6 packets just as it blocks IPv4 ones. The lobby can only open an IPv6
+  path when the player reaches the lobby over IPv6.
 
 ### From the command line
 
@@ -193,6 +233,12 @@ The menu adds both for you when you join from **JOIN GAME**.
 ## Limits of the list
 
 - A lobby holds up to 256 matches.
+- One internet address can have up to 8 matches on the list.
+- The lobby answers up to 60 packets in 10 seconds from one address and
+  ignores the rest. Ordinary play stays far below that. The limit stops a
+  public lobby from being misused to flood somebody else.
+- Names are limited to plain printable characters; anything else is shown as
+  `?`.
 - The list is sent to a player in one packet. A very long list is cut short.
 - **JOIN GAME** shows the first 12 matches and `serverlist` the first 64.
 - The lobby does not record which game a match is for. If a community plays
@@ -215,8 +261,9 @@ The menu adds both for you when you join from **JOIN GAME**.
 Notes:
 
 - Shadow Warrior's **Browse Servers** screen asks the lobby given at launch
-  with `--masteraddr <lobby>`, or `127.0.0.1` without it. Press Enter to join
-  and R to refresh.
+  with `--masteraddr <lobby>`, or the public lobby without it. Press Enter to
+  join and R to refresh. It joins over the IPv4 address and has no
+  **CONNECTING** screen.
 - For a join by address in Shadow Warrior and Exhumed, `--punchto <server>`
   and `--masteraddr <lobby>` ask the lobby for help, as `--punchtarget` and
   `--masteraddr` do in the Duke Nukem 3D family.

@@ -45,6 +45,15 @@ jobs:
             FLAC_LIBS="-l:libFLAC.a -l:libogg.a" VPX_LIBS="-l:libvpx.a"
       - name: Smoke test
         run: SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./nnbuild --help
+      - name: Build the lobby program
+        # The lobby server on its own, for machines that only keep the list.
+        # The same library options as the game, so nothing is compiled twice.
+        # The lobby uses none of those libraries and ends up without them.
+        run: |
+          make -j"$(nproc)" nnbuild-lobby PRETTY_OUTPUT=0 \
+            FLAC_LIBS="-l:libFLAC.a -l:libogg.a" VPX_LIBS="-l:libvpx.a"
+          ./nnbuild-lobby --help
+          ldd ./nnbuild-lobby
       - name: Package
         run: |
           case "$GITHUB_REF" in refs/tags/v*) export NNBUILD_VERSION="${GITHUB_REF_NAME#v}" ;; esac

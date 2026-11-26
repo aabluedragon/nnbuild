@@ -1341,7 +1341,7 @@ int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
     return n;
 }
 
-const char *Net_GetMasterAddr(void) { return s_swMasterAddr[0] ? s_swMasterAddr : "127.0.0.1"; }
+const char *Net_GetMasterAddr(void) { return s_swMasterAddr[0] ? s_swMasterAddr : NNB_DEFAULT_MASTERSERVER; }
 
 // The SW mmulti connection is established at startup from -net args, not from the
 // menu; the cleanest way to join a browser-picked server is to relaunch into that

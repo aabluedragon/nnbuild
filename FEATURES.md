@@ -36,13 +36,19 @@ what NNBuild adds on top of that, in plain language.
   launch commands.
 - **Game list.** Join Game shows the games people are hosting, with the server
   name, size and current map. Pick one to join, or type an address yourself.
-  The list comes from a lobby server, and NNBuild can run as that lobby server
-  too, so any community can keep its own list.
+  The list comes from a public lobby server that works out of the box.
+  NNBuild can run as a lobby server too, so any community can keep its own
+  list.
+- **Connecting screen.** After you pick a game, a screen shows how the
+  connection is going, and a Cancel button stops it. The game never freezes
+  while it waits.
 - **Fewer router headaches.** When a host sits behind a home router, the lobby
   server helps the two computers find each other. In many cases nobody has to
   change router settings.
 - **Old and new internet addresses.** Connections work over both the older
-  (IPv4) and newer (IPv6) kinds of internet address.
+  (IPv4) and newer (IPv6) kinds of internet address. When a game offers both,
+  NNBuild tries them at the same time and uses the one that works, preferring
+  the newer kind.
 - **Automatic downloads.** If a game uses a custom map or mod you don't have,
   it is sent to you when you join. Files you already have are recognized and
   are not downloaded again. You still need your own copy of the base game.

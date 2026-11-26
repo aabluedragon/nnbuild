@@ -19,6 +19,7 @@
 // linker symbols and each game keeps its own thin transport glue.
 //
 #include "compat.h"
+#include "nnbdefaults.h"   // NNB_DEFAULT_MASTERSERVER, the public lobby
 
 #ifdef __GNUC__
 # define MS_WEAK __attribute__((weak))

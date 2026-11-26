@@ -39,13 +39,15 @@ Some words used on this page:
 
 ## Choose a lobby server
 
-NNBuild asks one lobby server for the list of matches. Its address is the
-console setting `cl_masterserver`. Until you change it, the address is
-`127.0.0.1`, which is your own computer, so the list stays empty unless you
-run a lobby yourself.
+NNBuild asks one lobby server for the list of matches. Until you change it,
+that is the public lobby, `nnb.ms.nukemnet.com`, so the list works without any
+setup.
+
+The address is the console setting `cl_masterserver`. To use another lobby,
+for example one your community runs:
 
 1. Open the in-game console.
-2. Type the setting and the address your community uses:
+2. Type the setting and the lobby's address:
 
    ```text
    cl_masterserver lobby.example.org
@@ -70,14 +72,37 @@ Each row shows the server's name, the player and slot numbers the server
 reported, the map and the address. A row that ends in `+v6` also has an IPv6
 address. A row that ends in `v6` has only an IPv6 address.
 
-NNBuild then restarts itself as a player in that match. The window closes and
-opens again. This is normal.
+The list is fetched in the background. While NNBuild waits for the lobby, the
+screen shows `Asking the masterserver...` and the menu keeps working.
+
+### The CONNECTING screen
+
+After you pick a match, the **CONNECTING** screen opens. NNBuild first checks
+that the server can be reached, and the game keeps running while it does:
+
+- A server can have an IPv4 address, an IPv6 address, or both. NNBuild asks the
+  server over **both at the same time**. Each address has its own line, which
+  shows `no answer yet` or how long the answer took.
+- **IPv6 is preferred.** If the server answers over IPv6, that address is
+  used. If it answers over IPv4 first, the IPv6 attempt gets 2.5 more seconds;
+  after that IPv4 is used. The screen counts those seconds down.
+- When there is no answer after about a second, NNBuild also asks the lobby
+  to help it through the host's router. See
+  [hole punching](lobby-server.md#hole-punching).
+- **CANCEL** stops the attempt and returns to the list. Press Enter, click, or
+  press Esc.
+- With no answer after 25 seconds, NNBuild returns to the list with a message.
+
+As soon as an address is chosen, NNBuild restarts itself as a player in that
+match. The window closes and opens again. This is normal.
 
 Below the matches there are two more entries:
 
 - **Enter address manually...** opens **JOIN BY ADDRESS**. Type the address
   and port, then press Enter. Press Esc to go back. Use this for a match on
-  your local network, or for one that is not on the list.
+  your local network, or for one that is not on the list. A typed address
+  goes through the **CONNECTING** screen too. A typed host name is joined
+  directly, without that screen.
 
   ```text
   203.0.113.10:23513
@@ -92,12 +117,15 @@ The screen can also show these messages:
 
 | Message | Meaning |
 | --- | --- |
+| `Asking the masterserver...` | The list is being fetched. |
 | `Could not reach the masterserver.` | The lobby's address could not be looked up. Check `cl_masterserver`. |
 | `No servers advertised.` | The lobby's list is empty, or the lobby did not answer in time. |
-| `Could not reach <address> (offline or unreachable).` | You tried to join and nothing answered for about 30 seconds. NNBuild brought you back to this screen. |
+| `No answer from <server>.` | You tried to join and the server did not answer within 25 seconds. It is offline, or it cannot be reached from your network. |
+| `<server> is full.` | The server answered, and every player slot is taken. |
+| `No answer from the server.` | The server answered at first, but the match could not be joined within about 30 seconds. A server that has banned your address behaves like this. |
 
-A server that is full does not answer new players, and neither does a server
-that has banned your address. Both look the same as a server that is offline.
+The host has to run the same NNBuild release as you. An older host does not
+answer the question the **CONNECTING** screen asks.
 
 Ion Fury's main menu has no **MULTIPLAYER** entry. Join from the command line
 instead.
@@ -414,8 +442,9 @@ nnbuild --skin "Assault Commander" --net /n0 203.0.113.10:23513
   nnbuild --zeroping --net /n0 203.0.113.10:23513
   ```
 
-- `cl_preferipv6 1` makes the **JOIN GAME** list connect over IPv6 when a
-  server offers both kinds of address. Without it, IPv4 is used.
+- `cl_preferipv6` decides which address wins when a listed server answers
+  over both IPv6 and IPv4. With `1`, the default, IPv6 wins and is given a
+  moment to answer. With `0`, the first answer wins.
 
 ## Chat commands
 

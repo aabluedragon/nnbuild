@@ -736,7 +736,7 @@ static int ExNet_WaitForRoster(void)
 // Masterserver / lobby / NAT punch -- the same behaviour every other
 // NNBuild game has; the shared halves live in netshared.h.
 // ---------------------------------------------------------------------------
-static const char *ExNet_MasterAddr(void) { return s_masterAddr[0] ? s_masterAddr : "127.0.0.1"; }
+static const char *ExNet_MasterAddr(void) { return s_masterAddr[0] ? s_masterAddr : NNB_DEFAULT_MASTERSERVER; }
 
 void ExNet_HostAdvertise(void)
 {

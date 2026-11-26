@@ -162,8 +162,13 @@ extern char g_masterServerAddr[128];
 extern char g_punchTargetAddr[128];
 // Reason a previous join failed, shown once in the JOIN GAME menu; empty if none.
 extern char g_joinErrorMsg[128];
-// cl_preferipv6: lobby prefers a server's IPv6 address when it has one.
+// cl_preferipv6: joining a listed server uses IPv6 when it answers (see oldnet.cpp).
 extern int32_t g_netPreferIPv6;
+
+// The UDP port a player's game uses after joining from the menu: distinct from
+// the usual host port, so a host and a player can share one machine. The JOIN
+// GAME screen asks the server from this same port before the match starts.
+#define NET_JOIN_PORT 23530
 uint16_t Net_ConnectedMask(void);
 void Net_ApplyConnectedMask(uint16_t mask);
 void Net_RebuildConnectList(void);

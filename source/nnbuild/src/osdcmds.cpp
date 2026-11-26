@@ -426,7 +426,7 @@ static int osdcmd_serverlist(const osdfuncparm_t *parm)
 {
     // With no argument, ask the lobby server the Join Game menu uses.
     const char *master = (parm->numparms >= 1) ? parm->parms[0]
-                       : (g_masterServerAddr[0] ? g_masterServerAddr : "127.0.0.1");
+                       : (g_masterServerAddr[0] ? g_masterServerAddr : NNB_DEFAULT_MASTERSERVER);
     struct msserver_t list[64];
     int32_t n = Masterserver_QueryList(master, list, 64, 1500);
     if (n < 0) { OSD_Printf("serverlist: could not reach masterserver '%s'\n", master); return OSDCMD_OK; }
@@ -907,8 +907,8 @@ osdcvardata_t cvar[] =
     { "cl_idplayers", "cl_idplayers: enable/disable name display when aiming at opponents", (void*)&ud.idplayers, CVAR_BOOL, 0, 1 },
 
     { "cl_showcoords", "cl_showcoords: show your position in the game world", (void*)&ud.coords, CVAR_BOOL, 0, 1 },
-    { "cl_masterserver", "cl_masterserver: address (host[:port]) of the masterserver the in-game lobby queries", (void*)g_masterServerAddr, CVAR_STRING, 0, sizeof(g_masterServerAddr) },
-    { "cl_preferipv6", "cl_preferipv6: in the lobby, prefer a server's IPv6 address when it publishes one", (void*)&g_netPreferIPv6, CVAR_BOOL, 0, 1 },
+    { "cl_masterserver", "cl_masterserver: address (host[:port]) of the masterserver the in-game lobby queries and reports to", (void*)g_masterServerAddr, CVAR_STRING, 0, sizeof(g_masterServerAddr) },
+    { "cl_preferipv6", "cl_preferipv6: when a listed server answers over IPv6 and IPv4, join over IPv6 (0: over whichever answers first)", (void*)&g_netPreferIPv6, CVAR_BOOL, 0, 1 },
     { "cl_showweapons", "cl_showweapons: show weapons opponents are using", (void*)&ud.showweapons, CVAR_BOOL, 0, 1 },
 
     { "cl_viewbob", "cl_viewbob: enable/disable player head bobbing", (void*)&ud.viewbob, CVAR_BOOL, 0, 1 },

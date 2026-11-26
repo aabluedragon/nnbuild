@@ -92,6 +92,15 @@ Targets are `linux-x64`, `linux-arm64`, `windows-x64`, `windows-x86`,
 script needs `dylibbundler` (`brew install dylibbundler`) to carry the
 libraries inside the application bundle.
 
+## The lobby program
+
+`nnbuild-lobby` is the [lobby server](../multiplayer/lobby-server.md) as a
+small program of its own. It needs only the standard C and C++ libraries:
+
+```sh
+make nnbuild-lobby
+```
+
 ## The documentation site
 
 This site is in the `docs/` directory and is built with

@@ -5,24 +5,23 @@ other Build-engine games.
 
 ## New in this release
 
-This release only changes names. NNBuild now uses one name everywhere, and
-nothing from release 1.3.0 is read under its earlier name.
+- **A public lobby, built in.** NNBuild now uses the lobby
+  `nnb.ms.nukemnet.com` unless you name another one. **JOIN GAME** shows the
+  matches people host, and **HOST INTERNET GAME** puts yours on the list,
+  without any setup.
+- **A CONNECTING screen.** After you pick a match, NNBuild shows how the
+  connection is going and offers **CANCEL**. The game no longer waits
+  silently, and the list itself is fetched in the background.
+- **IPv6 and IPv4 together.** A match with both kinds of address is tried over
+  both at once. IPv6 is preferred and gets a few extra seconds; the address
+  that works is used. A full server is reported as full at once.
+- **The lobby as a small program.** The Linux downloads contain
+  `nnbuild-lobby`, the lobby server without the game, for machines that only
+  keep the list. A lobby now limits how many packets and matches one address
+  may send, so a public lobby cannot be misused to flood others.
 
-- **Program and files.** The program file is `nnbuild` (`nnbuild.exe` on
-  Windows). It reads and writes `nnbuild.cfg`, `nnbuild_settings.cfg`,
-  `nnbuild.log`, the `~/.config/nnbuild` folder on Linux and macOS, and
-  `nnbuild.project.json` in editor projects. To keep your settings and
-  projects from release 1.3.0, rename those files to these names.
-- **Scripts.** The script module and its global object are now `nnb`:
-  `import { on, log } from 'nnb'`. The generated declarations file is
-  `nnb.d.ts`, the component classes are `NNBComponent`, `NNBNode` and
-  `NNBPrefab`, and the debug directive is `/// nnbd.params="..."`. Change these
-  names in existing scripts, or generate the project again.
-- **Editor files.** A map's settings file is `<map>.nnbmap.json` and a prefab
-  ends in `.nnbprefab`. Rename existing files to match.
-- **Servers.** The lobby server and the games that use it must be the same
-  release. The two variables that protect the editor's web address are now
-  `NNBUILD_MCP_TOKEN` and `NNBUILD_MCP_ORIGIN`.
+Hosts and players need the same release: an older host does not answer the
+question the CONNECTING screen asks.
 
 ## Downloads
 
