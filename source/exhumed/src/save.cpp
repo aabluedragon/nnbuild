@@ -42,7 +42,7 @@ static int s_networkSnapshot;
 
 static char const *Exhumed_SaveTestFilename(void)
 {
-    char const *const overrideName = Bgetenv("VB_EX_SAVE_TEST_FILE");
+    char const *const overrideName = Bgetenv("NNB_EX_SAVE_TEST_FILE");
     return overrideName && overrideName[0] ? overrideName : "exsave";
 }
 

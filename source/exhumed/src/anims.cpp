@@ -158,7 +158,7 @@ int KexExplosion01_Spawn(int x, int y, int z, short nSector,
     if (nAnim < 0)
         return -2;
 
-    if (Bgetenv("VB_KEXEXPLOSION_PALETTE_TEST"))
+    if (Bgetenv("NNB_KEXEXPLOSION_PALETTE_TEST"))
         OSD_Printf("Kex explosion palette test: %s (%s sprite palette %d)\n",
                    sprite[GetAnimSprite(nAnim)].pal == 0 ? "PASS" : "FAIL",
                    bWater ? "water" : "land",
@@ -338,7 +338,7 @@ static bool KexBirdFeather_Tick(short nSprite, short nFrame)
 void KexBirdFeather_TestTick()
 {
     if (s_birdFeatherTest < 0)
-        s_birdFeatherTest = g_kexMode && Bgetenv("VB_KEX_BIRD_FEATHER_TEST") ? 1 : 0;
+        s_birdFeatherTest = g_kexMode && Bgetenv("NNB_KEX_BIRD_FEATHER_TEST") ? 1 : 0;
     if (!s_birdFeatherTest)
         return;
     s_birdFeatherTest = 0;
@@ -387,7 +387,7 @@ static void KexGibDeath_RandomItem(short nSprite)
 void KexGibDeath_TestTick()
 {
     if (s_gibDeathTest == -1)
-        s_gibDeathTest = g_kexMode && Bgetenv("VB_KEX_GIB_DEATH_TEST") ? 0 : -2;
+        s_gibDeathTest = g_kexMode && Bgetenv("NNB_KEX_GIB_DEATH_TEST") ? 0 : -2;
     if (s_gibDeathTest != 0)
         return;
 

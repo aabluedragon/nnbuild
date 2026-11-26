@@ -4,11 +4,11 @@ A map script component is a script file that the map editor attaches to an objec
 
 Use this model when behavior belongs to a place or an object in a level: a door, a hazard, a pickup, a terminal.
 
-> This is not the class-based component system. That one lives in code and uses `VBComponent` classes. See [Components](components.md). The two models are separate. A map script component is a module with exported functions, not a class.
+> This is not the class-based component system. That one lives in code and uses `NNBComponent` classes. See [Components](components.md). The two models are separate. A map script component is a module with exported functions, not a class.
 
 ## Requirements
 
-- An editor project: a folder with a `nnbuild.project.json` file. See [Projects and stand-alone games](../editor/projects.md).
+- An editor project: a folder with an `nnbuild.project.json` file. See [Projects and stand-alone games](../editor/projects.md).
 - **Modern Mode** turned on, for the project or for the map.
 - Script files inside the project folder. Allowed extensions: `.js`, `.ts`, `.mjs`, `.mts`.
 - A Duke runtime game.
@@ -64,9 +64,9 @@ export function onFixedUpdate(component: ComponentContext, deltaSeconds: number)
 
 The TypeScript template declares its own `ComponentContext` type, so it works in a project that has no declaration file.
 
-### Types in `vb.d.ts`
+### Types in `nnb.d.ts`
 
-The `vb.d.ts` file that the [mod generator](quick-start.md) writes also declares types for map script components:
+The `nnb.d.ts` file that the [mod generator](quick-start.md) writes also declares types for map script components:
 
 ```ts
 declare type MapComponentContext = {
@@ -86,7 +86,7 @@ declare type MapComponentModule = {
 
 `MapComponentContext` is the object every hook receives. `MapComponentModule` describes the functions a component file may export.
 
-The editor does not add `vb.d.ts` to a project. If you want these types in your code editor, copy `vb.d.ts` from a generated mod project into your project and include it in your editor's TypeScript settings. The game does not need the file.
+The editor does not add `nnb.d.ts` to a project. If you want these types in your code editor, copy `nnb.d.ts` from a generated mod project into your project and include it in your editor's TypeScript settings. The game does not need the file.
 
 ## Hooks
 
@@ -130,7 +130,7 @@ This is useful. One file can serve several objects that work together through sh
 
 ## What a component can use
 
-- The global `vb` object, or `import { … } from 'vb'`. The whole [`vb` API](api-reference.md) is available.
+- The global `nnb` object, or `import { … } from 'nnb'`. The whole [`nnb` API](api-reference.md) is available.
 - The other built-in modules and globals: `fs`, `cvar`, `fetch`, timers. See [Built-in modules](modules.md).
 - `import` of other files in the project with relative paths, for example `import { clamp } from './lib/math.js'`. Write the full file name.
 - TypeScript, within [the supported subset](project-layout.md#typescript-support-and-its-limits).
@@ -157,7 +157,7 @@ A sprite that the game removes while the level is still being set up never gets 
 
 ## How attachments are stored
 
-The editor saves attachments in a settings file next to the map, named `<map>.vbmap.json`:
+The editor saves attachments in a settings file next to the map, named `<map>.nnbmap.json`:
 
 ```json
 {
@@ -200,12 +200,12 @@ The file is attached to different kinds of objects. `onAttach` finds out what ea
 ```js
 function identify(component) {
     if (component.kind === "sector") {
-        switch (vb.getSector(component.index, "hitag")) {
+        switch (nnb.getSector(component.index, "hitag")) {
             case 20201: return "seal";
             case 20202: return "coolant";
         }
     } else if (component.kind === "sprite") {
-        switch (vb.getActor(component.index, "picnum")) {
+        switch (nnb.getActor(component.index, "picnum")) {
             case 3860: return "relay";
             case 3850: return "cell";
             case 3872: return "indicator";
@@ -220,14 +220,14 @@ export function onAttach(component) {
     component.state.role = role;
     component.state.elapsed = 0;
     component.state.phase = 0;
-    component.state.z = component.kind === "sprite" ? vb.getActor(component.index, "z") : 0;
-    if (role === "relay") vb.log("Ashline Relay online");
+    component.state.z = component.kind === "sprite" ? nnb.getActor(component.index, "z") : 0;
+    if (role === "relay") nnb.log("Ashline Relay online");
 }
 ```
 
 - A sector is recognized by its `hitag`, a number the level designer typed into the sector in the editor.
 - A sprite is recognized by its tile number (`picnum`).
-- The script uses the global `vb` object, so it needs no import.
+- The script uses the global `nnb` object, so it needs no import.
 
 This file is JavaScript. `switch` is fine here. In a `.ts` file use `if` / `else if`, because the game's TypeScript converter does not handle `case` labels.
 
@@ -262,7 +262,7 @@ export function onFixedUpdate(component, dt) {
         case "cell": updateCell(component); break;
         case "indicator":
             if (mission.gateOpen && component.state.phase === 0) {
-                vb.setActor(component.index, "picnum", 3878);
+                nnb.setActor(component.index, "picnum", 3878);
                 component.state.phase = 1;
             }
             break;
@@ -275,9 +275,9 @@ The power cell is a sprite. Until it is collected it floats up and down. When th
 
 ```js
 function playerNear(sprite, distance) {
-    if (vb.getPlayer(0, "cursectnum") !== vb.getActor(sprite, "sectnum")) return false;
-    const dx = vb.getActor(sprite, "x") - vb.getPlayer(0, "posx");
-    const dy = vb.getActor(sprite, "y") - vb.getPlayer(0, "posy");
+    if (nnb.getPlayer(0, "cursectnum") !== nnb.getActor(sprite, "sectnum")) return false;
+    const dx = nnb.getActor(sprite, "x") - nnb.getPlayer(0, "posx");
+    const dy = nnb.getActor(sprite, "y") - nnb.getPlayer(0, "posy");
     return dx * dx + dy * dy < distance * distance;
 }
 
@@ -285,13 +285,13 @@ function updateCell(component) {
     if (mission.cell) return;
     if (playerNear(component.index, 600)) {
         mission.cell = true;
-        vb.setActor(component.index, "cstat", 32768);
-        vb.sound(CELL_PICKUP);
-        vb.sound(SEAL_RELEASE);
+        nnb.setActor(component.index, "cstat", 32768);
+        nnb.sound(CELL_PICKUP);
+        nnb.sound(SEAL_RELEASE);
         signal("BLUE CELL ONLINE  /  UPLINK SEAL OPENING", 3.2);
-        vb.log("Ashline Relay: blue cell recovered");
+        nnb.log("Ashline Relay: blue cell recovered");
     } else {
-        vb.setActor(component.index, "z", component.state.z + Math.round(620 * Math.sin(component.state.elapsed * 5)));
+        nnb.setActor(component.index, "z", component.state.z + Math.round(620 * Math.sin(component.state.elapsed * 5)));
     }
 }
 ```
@@ -305,12 +305,12 @@ The seal is a sector. Another attachment of the same file watches `mission.cell`
 function updateSeal(component) {
     if (!mission.cell || mission.gateOpen) return;
     const index = component.index;
-    const current = vb.getSector(index, "ceilingz");
+    const current = nnb.getSector(index, "ceilingz");
     const next = Math.max(OPEN_CEILING, current - 832);
-    vb.setSector(index, "ceilingz", next);
+    nnb.setSector(index, "ceilingz", next);
     if (next === OPEN_CEILING) {
         mission.gateOpen = true;
-        vb.log("Ashline Relay: uplink seal open");
+        nnb.log("Ashline Relay: uplink seal open");
     }
 }
 ```
@@ -328,22 +328,22 @@ The uplink terminal is a sprite. It ends the mission:
 function updateUplink(component) {
     if (mission.transmitted || !mission.gateOpen || !playerNear(component.index, 860)) return;
     signal("USE THE UPLINK TERMINAL TO TRANSMIT", 0.35);
-    if (!(vb.getInput(0, "bits") & USE)) return;
+    if (!(nnb.getInput(0, "bits") & USE)) return;
     mission.transmitted = true;
-    vb.setActor(component.index, "picnum", 3875);
-    vb.sound(TRANSMIT);
+    nnb.setActor(component.index, "picnum", 3875);
+    nnb.sound(TRANSMIT);
     signal("TRANSMISSION COMPLETE", 3);
-    vb.setPlayer(0, "customexitsound", -1);
-    vb.setUserdef("eog", 1);
-    vb.setPlayer(0, "timebeforeexit", 90);
-    vb.log("Ashline Relay: transmission complete");
+    nnb.setPlayer(0, "customexitsound", -1);
+    nnb.setUserdef("eog", 1);
+    nnb.setPlayer(0, "timebeforeexit", 90);
+    nnb.log("Ashline Relay: transmission complete");
 }
 ```
 
 - It does nothing until the seal is open and the player is close.
-- `vb.getInput(0, "bits")` reads the keys player 0 holds. `USE` is `1 << 29`, the bit of the Use key.
-- `vb.setUserdef("eog", 1)` marks this level as the end of the game. After the level the game returns to the menu.
-- `vb.setPlayer(0, "timebeforeexit", 90)` starts the countdown that ends the level.
+- `nnb.getInput(0, "bits")` reads the keys player 0 holds. `USE` is `1 << 29`, the bit of the Use key.
+- `nnb.setUserdef("eog", 1)` marks this level as the end of the game. After the level the game returns to the menu.
+- `nnb.setPlayer(0, "timebeforeexit", 90)` starts the countdown that ends the level.
 
 ### The HUD in `onUpdate`
 
@@ -352,15 +352,15 @@ function updateUplink(component) {
 ```js
 export function onUpdate(component) {
     if (component.state.role !== "relay") return;
-    const health = Math.max(0, vb.getActor(vb.player().sprite, "extra"));
-    const ammo = vb.getPlayer(0, "ammo_amount", 1);
+    const health = Math.max(0, nnb.getActor(nnb.player().sprite, "extra"));
+    const ammo = nnb.getPlayer(0, "ammo_amount", 1);
     const objective = mission.transmitted ? "RELAY LINK ESTABLISHED"
         : mission.cell ? "02  /  REACH THE UPLINK AND TRANSMIT"
         : "01  /  RECOVER THE BLUE CELL IN COOLANT";
-    vb.drawText(710, 9, 23, objective, 0, -12);
-    vb.drawText(711, 9, 187, "SUIT " + health + "    PULSE " + ammo, 0, -12);
-    if (mission.messageTime > 0) vb.drawText(712, 9, 35, mission.message, 0, -14);
-    else vb.clearText(712);
+    nnb.drawText(710, 9, 23, objective, 0, -12);
+    nnb.drawText(711, 9, 187, "SUIT " + health + "    PULSE " + ammo, 0, -12);
+    if (mission.messageTime > 0) nnb.drawText(712, 9, 35, mission.message, 0, -14);
+    else nnb.clearText(712);
 }
 ```
 
@@ -371,7 +371,7 @@ HUD text stays on screen until it is cleared. The relay removes its three lines 
 ```js
 export function onDetach(component) {
     if (component.state.role !== "relay") return;
-    for (const id of [710, 711, 712]) vb.clearText(id);
+    for (const id of [710, 711, 712]) nnb.clearText(id);
 }
 ```
 
@@ -388,7 +388,7 @@ export function onDetach(component) {
 This component makes a sector's floor blink. `onAttach` returns a function that restores the original brightness.
 
 ```ts
-import { getSector, setSector } from 'vb';
+import { getSector, setSector } from 'nnb';
 
 export function onAttach(component: MapComponentContext) {
   if (component.kind !== 'sector') return;
@@ -406,7 +406,7 @@ export function onFixedUpdate(component: MapComponentContext, dt: number) {
 }
 ```
 
-`MapComponentContext` comes from `vb.d.ts`. The game removes the type when it loads the file, so the script also runs in a project without `vb.d.ts`.
+`MapComponentContext` comes from `nnb.d.ts`. The game removes the type when it loads the file, so the script also runs in a project without `nnb.d.ts`.
 
 The `kind` check matters. `component.index` is a sector number only when the script is attached to a sector.
 

@@ -129,7 +129,7 @@ Engine changes landed (all null/no-op defaults, zero Duke/SW regression):
 - baselayer.h mirror-render stubs (r_mirrormode*, MIRRORMODE, videoMirror*).
 - mact control stubs (JOYSTICK_SetSnapZone, CONTROL_GetAxisHeatMap,
   CONTROL_GetControllerAxisIsTwinAxisStick, mouseMoveToCenter) via
-  source/blood/src/vb_compat.cpp.
+  source/blood/src/nnb_compat.cpp.
 
 ## Historical remaining-to-running checklist (completed)
 A. Makefile: blood_obj + a WITH_BLOOD block mirroring WITH_SW (compile

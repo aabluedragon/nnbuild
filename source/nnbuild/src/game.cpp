@@ -47,9 +47,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "grpscan.h"
 #include "netcontent.h"
 #include "serverlevel.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "kplib.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 //#include "crc32.h"
 //#include "util_lib.h"
 #include "hightile.h"
@@ -1624,7 +1624,7 @@ void G_HandleSpecialKeys(void)
         G_UpdateScreenArea();
     }
 
-    // Same debug aid the SW crossplay bridge uses: VB_CP_CAPTURE=<frames> saves
+    // Same debug aid the SW crossplay bridge uses: NNB_CP_CAPTURE=<frames> saves
     // one screenshot that many frames in, so a Duke level under the Duke runtime
     // can be compared against the same level under a foreign runtime.
     {
@@ -1632,7 +1632,7 @@ void G_HandleSpecialKeys(void)
 
         if (autoCaptureFrames < 0)
         {
-            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            char const *const env = Bgetenv("NNB_CP_CAPTURE");
             autoCaptureFrames = env != NULL ? Batoi(env) : 0;
         }
 
@@ -2065,8 +2065,8 @@ void G_GameExit(const char *t)
     // Disconnect pumps events, including the network quit timeout.
     g_gameQuit = 0;
     MapEditor_Shutdown();
-    VBJS_FireSimple("beforeQuit");
-    VBJS_Shutdown();   // NNBuild: fire "shutdown" and tear down the JS runtime
+    NNBJS_FireSimple("beforeQuit");
+    NNBJS_Shutdown();   // NNBuild: fire "shutdown" and tear down the JS runtime
 
     // If we're an advertised host, tell the masterserver we're going away so our
     // listing is removed immediately instead of lingering until its TTL expires.
@@ -2735,7 +2735,7 @@ void G_DisplayRest(int smoothratio)
 
     G_PrintGameQuotes();
     G_PrintLevelName();
-    VBJS_DrawHUD();   // NNBuild: script-registered HUD text
+    NNBJS_DrawHUD();   // NNBuild: script-registered HUD text
 
     if (KB_KeyPressed(sc_Escape) && ud.overhead_on == 0
             && ud.show_help == 0
@@ -2775,7 +2775,7 @@ void G_DisplayRest(int smoothratio)
             else
                 ChangeToMenu(0);
 
-            VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
+            NNBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
             screenpeek = myconnectindex;
         }
     }
@@ -2936,9 +2936,9 @@ void G_DrawBackground(void)
     {
         // when not rendering a game, fullscreen wipe
 #define MENUTILE (!videoGetRenderMode()?MENUSCREEN:LOADSCREEN)
-        int const vbjsMenuTile = VBJS_MenuBackground();
+        int const nnbjsMenuTile = NNBJS_MenuBackground();
         int const defaultMenuTile = tilesiz[MENUTILE].x == 320 && tilesiz[MENUTILE].y == 200 ? MENUTILE : BIGHOLE;
-        int const selectedMenuTile = vbjsMenuTile >= 0 && tilesiz[vbjsMenuTile].x > 0 && tilesiz[vbjsMenuTile].y > 0 ? vbjsMenuTile : defaultMenuTile;
+        int const selectedMenuTile = nnbjsMenuTile >= 0 && tilesiz[nnbjsMenuTile].x > 0 && tilesiz[nnbjsMenuTile].y > 0 ? nnbjsMenuTile : defaultMenuTile;
 
         videoClearScreen(0);
 
@@ -3953,7 +3953,7 @@ static inline bool OnEvenGround(spritetype* pSprite, int32_t radius)
     return true;
 }
 
-extern int g_vbDukeWatchSprite;
+extern int g_nnbDukeWatchSprite;
 
 int A_Spawn(int spriteNum, int tileNum)
 {
@@ -3961,13 +3961,13 @@ int A_Spawn(int spriteNum, int tileNum)
         static int32_t watchTile = -2;
         if (watchTile == -2)
         {
-            char const *const env = Bgetenv("VB_CP_WATCH_TILE");
+            char const *const env = Bgetenv("NNB_CP_WATCH_TILE");
             watchTile = env != NULL ? Batoi(env) : -1;
         }
 
-        if (watchTile > 0 && g_vbDukeWatchSprite < 0 && spriteNum == -1 &&
+        if (watchTile > 0 && g_nnbDukeWatchSprite < 0 && spriteNum == -1 &&
             (unsigned)tileNum < MAXSPRITES && sprite[tileNum].picnum == watchTile)
-            g_vbDukeWatchSprite = tileNum;
+            g_nnbDukeWatchSprite = tileNum;
     }
 
     spritetype*  const pParent = (spriteNum >= 0) ? &sprite[spriteNum] : nullptr;
@@ -5953,7 +5953,7 @@ SPAWN_END:
         X_OnEvent(EVENT_SPAWN, newSprite, playerNum, pDist);
     }
 
-    VBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);   // NNBuild: spawn -> JS (filter by tile)
+    NNBJS_FireActor("actorSpawned", newSprite, spriteNum, sprite[newSprite].picnum);   // NNBuild: spawn -> JS (filter by tile)
 
     return newSprite;
 }
@@ -9219,8 +9219,8 @@ void G_UpdatePlayerFromMenu(void)
 void G_BackToMenu(void)
 {
     if (ud.gm & MODE_GAME)
-        VBJS_FireSimple("leftGame");
-    VBJS_ClearAttachments();
+        NNBJS_FireSimple("leftGame");
+    NNBJS_ClearAttachments();
     boardfilename[0] = 0;
 
     if (ud.recstat == 1)
@@ -9268,7 +9268,7 @@ static int G_EndOfLevel(void)
 
     if (ud.gm & MODE_EOL)
     {
-        VBJS_FireSimple("levelFinished");
+        NNBJS_FireSimple("levelFinished");
         G_CloseDemoWrite();
 
         if (p.player_par > 0 && (p.player_par < ud.playerbest || ud.playerbest < 0) && ud.display_bonus_screen == 1)
@@ -9296,7 +9296,7 @@ static int G_EndOfLevel(void)
                     G_DoOrderScreen();
                 }
                 ud.gm = MODE_MENU;
-                VBJS_FireSimple("leftGame");
+                NNBJS_FireSimple("leftGame");
                 ChangeToMenu(0);
                 probey = 0;
                 return 2;
@@ -9695,7 +9695,7 @@ int Duke_app_main(int32_t argc, char const* const* argv)
         }
     if (!DukeEditor::PrepareProjectLaunch(argc, argv))
         return EXIT_FAILURE;
-    VBJS_CaptureLaunchDir();
+    NNBJS_CaptureLaunchDir();
 
     bool const contentProbe = G_CheckCmdSwitch(argc, argv, "--content-probe");
     engineSetLogFile(contentProbe ? "content-probe.log" : APPBASENAME ".log", LOG_GAME_MAX,
@@ -9999,7 +9999,7 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     // Load autojs/<project>/index.{ts,js} as soon as its game and OSD bindings
     // are ready. Waiting for the first render callback made auto-loaded mods
     // appear only after the menu/game had already started.
-    VBJS_Init();
+    NNBJS_Init();
 
     if (CONTROL_Startup(controltype_keyboardandmouse, &GetTime, TICRATE))
     {
@@ -10108,7 +10108,7 @@ int Duke_app_main(int32_t argc, char const* const* argv)
             LOG_F(INFO, "Sound disabled.");
     }
 
-    VBJS_Init();
+    NNBJS_Init();
     if (!Mcp_Start())
         return EXIT_FAILURE;
 
@@ -10326,7 +10326,7 @@ MAIN_LOOP_RESTART:
         // And restore a reconnecting player's score once its GUID has arrived.
         Net_MasterCheckRestore();
         Net_PollPrivateCommands();
-        VBJS_DispatchCommands();
+        NNBJS_DispatchCommands();
         Net_CheckMapRotation();
         Net_RunServerLevelChange();
         if (!g_netLateJoiner || (ud.gm & MODE_GAME))
@@ -10351,7 +10351,7 @@ MAIN_LOOP_RESTART:
 
         if (engineFPSLimit())
         {
-            VBJS_RunFrame((ud.gm & MODE_GAME) && !(ud.gm & MODE_MENU) && !ud.pause_on);
+            NNBJS_RunFrame((ud.gm & MODE_GAME) && !(ud.gm & MODE_MENU) && !ud.pause_on);
             if (g_forceHeadless)
             {
                 // Headless console server: there is no video output at all, so
@@ -10741,8 +10741,8 @@ RECHECK:
         {
             // The title menu and demo playback run in this loop rather than the
             // main one, so scripts and the debugger are serviced here as well.
-            VBJS_RunFrame(0);
-            VBJS_DispatchCommands();
+            NNBJS_RunFrame(0);
+            NNBJS_DispatchCommands();
 
             if (foundemo == 0)
             {
@@ -10776,7 +10776,7 @@ RECHECK:
 
                 ud.gm |= MODE_MENU;
                 ChangeToMenu(0);
-                VBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
+                NNBJS_FireMenu("escapeMenuOpened", g_currentMenu, -1);
                 S_MenuSound();
             }
 
@@ -11050,7 +11050,7 @@ static int G_DoMoveThings(void)
     if (ud.pause_on == 0)
     {
         G_MoveWorld();
-        VBJS_RunFixedUpdate(double(TICSPERFRAME) / TICRATE);
+        NNBJS_RunFixedUpdate(double(TICSPERFRAME) / TICRATE);
     }
     // G_DoWorldSim() -------------------------
 
@@ -11335,11 +11335,11 @@ int GetTime(void)
 // the enemies must behave exactly like Duke's, which means running Duke's own
 // CON scripts and actor code rather than an approximation.  These entry points
 // bring up just the Duke state that the actor system needs; they are named
-// VB_DukeAI_* so they stay globally visible after the per-game symbol merge.
+// NNB_DukeAI_* so they stay globally visible after the per-game symbol merge.
 // See source/sw/DUKE_CROSSPLAY_BRIDGE.md.
 // ---------------------------------------------------------------------------
 
-extern "C" int VB_DukeAI_CompileScripts(void)
+extern "C" int NNB_DukeAI_CompileScripts(void)
 {
     static int compiled = 0;
 
@@ -11379,13 +11379,13 @@ extern "C" int VB_DukeAI_CompileScripts(void)
 // its episodes its own titles and carries a par time and a music track per
 // level.  All of that is already in Duke's `g_mapInfo` once the mod's CON has
 // compiled, so the host reads it from there instead of guessing.
-extern "C" int VB_DukeAI_VolumeCount(void)
+extern "C" int NNB_DukeAI_VolumeCount(void)
 {
-    VB_DukeAI_CompileScripts();
+    NNB_DukeAI_CompileScripts();
     return g_numVolumes > 0 ? g_numVolumes : 0;
 }
 
-extern "C" char const *VB_DukeAI_VolumeName(int const volumeNum)
+extern "C" char const *NNB_DukeAI_VolumeName(int const volumeNum)
 {
     if ((unsigned)volumeNum >= MAXVOLUMES)
         return NULL;
@@ -11393,7 +11393,7 @@ extern "C" char const *VB_DukeAI_VolumeName(int const volumeNum)
     return EpisodeNames[volumeNum][0] ? EpisodeNames[volumeNum] : NULL;
 }
 
-extern "C" int VB_DukeAI_LevelInfo(int const volumeNum, int const levelNum, char const **filename, char const **title,
+extern "C" int NNB_DukeAI_LevelInfo(int const volumeNum, int const levelNum, char const **filename, char const **title,
                                    char const **music, int *partime, int *designertime)
 {
     if ((unsigned)volumeNum >= MAXVOLUMES || (unsigned)levelNum >= MAXLEVELS)
@@ -11413,7 +11413,7 @@ extern "C" int VB_DukeAI_LevelInfo(int const volumeNum, int const levelNum, char
     return 1;
 }
 
-extern "C" int VB_DukeAI_MaxLevelsPerVolume(void) { return MAXLEVELS; }
+extern "C" int NNB_DukeAI_MaxLevelsPerVolume(void) { return MAXLEVELS; }
 
 // NNBuild crossplay: the tile a Duke actor should be drawn with.
 //
@@ -11423,7 +11423,7 @@ extern "C" int VB_DukeAI_MaxLevelsPerVolume(void) { return MAXLEVELS; }
 // viewer is standing.  A foreign runtime drawing these sprites itself therefore
 // has to ask for the same tile, or every enemy stands frozen on one frame.
 // This mirrors the actor case of G_DoSpriteAnimations().
-extern "C" int VB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY, int32_t camAng, uint16_t *cstat,
+extern "C" int NNB_DukeAI_DisplayPicnum(int spriteNum, int32_t camX, int32_t camY, int32_t camAng, uint16_t *cstat,
                                        int *viewtypeStep)
 {
     if (viewtypeStep != NULL)

@@ -420,7 +420,7 @@ bool WritePrefab(std::string const &root, std::string const &path, Prefab const 
 {
     if (!IsPrefabAsset(path) || !validPrefab(prefab))
     {
-        error = "Choose a .vbprefab path and sprites within the project target's map limits.";
+        error = "Choose a .nnbprefab path and sprites within the project target's map limits.";
         return false;
     }
     auto const file = assetLocation(root, path, true);

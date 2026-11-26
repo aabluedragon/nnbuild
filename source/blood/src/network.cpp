@@ -339,22 +339,22 @@ short netGetPacket(short *pSource, char *pMessage)
 // ===== Mid-game file transfer (ported from the SW/Duke version) ==============
 // Host streams joiner-needed files (extra files via -netfile) over Blood's own
 // netSendPacket, in two commands; the client dedups by size+CRC, writes missing
-// files, and mounts group files. Commands 240/241 (VB_FILE_HEADER/CHUNK) unused by
-// Blood. Wire constants + crc/byte helpers are shared in netshared.h (VB_*).
-static char     s_blNetFiles[VB_MAX_NETFILES][BMAX_PATH];
+// files, and mounts group files. Commands 240/241 (NNB_FILE_HEADER/CHUNK) unused by
+// Blood. Wire constants + crc/byte helpers are shared in netshared.h (NNB_*).
+static char     s_blNetFiles[NNB_MAX_NETFILES][BMAX_PATH];
 static int      s_blNetFileCount = 0;
-static vb_filerecv_t s_blRecv;   // incoming file reassembly (shared receiver, netshared.h)
+static nnb_filerecv_t s_blRecv;   // incoming file reassembly (shared receiver, netshared.h)
 
-void Net_AddNetFile(const char *path) { if (s_blNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_blNetFiles[s_blNetFileCount++], path, BMAX_PATH); }
+void Net_AddNetFile(const char *path) { if (s_blNetFileCount < NNB_MAX_NETFILES) Bstrncpyz(s_blNetFiles[s_blNetFileCount++], path, BMAX_PATH); }
 
-// Blood transport callback for the shared VB_SendFile: reliable send to one player.
+// Blood transport callback for the shared NNB_SendFile: reliable send to one player.
 static void Net_SendCbBlood(void *ctx, const void *buf, int len)
 {
     netSendPacket((int)(intptr_t)ctx, (char *)buf, len);
 }
 static void Net_SendFileBlood(int nDest, const char *name, int fileIndex, int fileTotal)
 {
-    VB_SendFile(Net_SendCbBlood, (void *)(intptr_t)nDest, name, fileIndex, fileTotal, VB_FILE_HEADER, VB_FILE_CHUNK, "Blood");
+    NNB_SendFile(Net_SendCbBlood, (void *)(intptr_t)nDest, name, fileIndex, fileTotal, NNB_FILE_HEADER, NNB_FILE_CHUNK, "Blood");
 }
 
 void Net_SendGameFiles(int nDest)  // host: send offered files to a joiner
@@ -364,7 +364,7 @@ void Net_SendGameFiles(int nDest)  // host: send offered files to a joiner
         Net_SendFileBlood(nDest, s_blNetFiles[i], i + 1, s_blNetFileCount);
 }
 
-// The file receiver (VB_RecvFileHeader/Chunk) + dedup check live in netshared.h.
+// The file receiver (NNB_RecvFileHeader/Chunk) + dedup check live in netshared.h.
 
 void netGetPackets(void)
 {
@@ -597,11 +597,11 @@ void netGetPackets(void)
         case 255:
             keystatus[1] = 1;
             break;
-        case VB_FILE_HEADER:   // NNBuild mid-game file transfer (host -> joiner)
-            VB_RecvFileHeader(&s_blRecv, (const uint8_t *)packet, "Blood");
+        case NNB_FILE_HEADER:   // NNBuild mid-game file transfer (host -> joiner)
+            NNB_RecvFileHeader(&s_blRecv, (const uint8_t *)packet, "Blood");
             break;
-        case VB_FILE_CHUNK:
-            VB_RecvFileChunk(&s_blRecv, (const uint8_t *)packet, "Blood");
+        case NNB_FILE_CHUNK:
+            NNB_RecvFileChunk(&s_blRecv, (const uint8_t *)packet, "Blood");
             break;
         }
     }
@@ -1354,8 +1354,8 @@ void netInitialize(bool bConsole)
                     else  // NNBuild: mid-game file transfer arrives on the GAME channel during join
                     {
                         const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;  // skip prepended sender index
-                        if (pkt[0] == VB_FILE_HEADER)      VB_RecvFileHeader(&s_blRecv, pkt, "Blood");
-                        else if (pkt[0] == VB_FILE_CHUNK)  VB_RecvFileChunk(&s_blRecv, pkt, "Blood");
+                        if (pkt[0] == NNB_FILE_HEADER)      NNB_RecvFileHeader(&s_blRecv, pkt, "Blood");
+                        else if (pkt[0] == NNB_FILE_CHUNK)  NNB_RecvFileChunk(&s_blRecv, pkt, "Blood");
                     }
                     enet_packet_destroy(event.packet);
                     break;
@@ -1412,17 +1412,17 @@ void netPostEPacket(ENetPacket *pEPacket)
 // netshared.h; only Blood's thin glue is below. See source/sw for the SW port.
 static char s_blMasterAddr[128] = "";  // masterserver used for -joinlobby / NAT punch
 
-void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }  // -advertise <masteraddr> (shared)
+void Net_SetAdvertise(const char *addr) { NNB_SetAdvertise(addr); }  // -advertise <masteraddr> (shared)
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
     char map[24];
     Bstrncpyz(map, gGameOptions.zLevelName[0] ? gGameOptions.zLevelName : "Blood", sizeof(map));
-    VB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Blood server",
+    NNB_HostAdvertisePulse(gNetMode == NETWORK_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Blood server",
                           gNetPort, gNetPlayers, gNetPlayers, map);
 }
 
-int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "Blood"); }  // -lobbylist (shared)
+int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "Blood"); }  // -lobbylist (shared)
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised
 // server, split its ip:port into Blood's gNetAddress/gNetPort, and become a client.
@@ -1434,14 +1434,14 @@ void Net_ClientPunch(void)
     if (!s_blMasterAddr[0] || gNetMode != NETWORK_CLIENT || !gNetENetClient)
         return;
     char target[64]; Bsnprintf(target, sizeof(target), "%s:%d", gNetAddress, gNetPort);
-    VB_SendPunch(s_blMasterAddr, target, gNetENetClient->socket, "Blood");
+    NNB_SendPunch(s_blMasterAddr, target, gNetENetClient->socket, "Blood");
 }
 
 int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_blMasterAddr, masterAddr, sizeof(s_blMasterAddr));  // remember for NAT punch
     char ep[48], name[32];
-    if (!VB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
+    if (!NNB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     char host[48]; Bstrncpyz(host, ep, sizeof(host));
     char *colon = strrchr(host, ':');   // "a.b.c.d:port" -> split on the last ':'
     if (colon) { *colon = 0; gNetPort = atoi(colon + 1); }
@@ -1555,8 +1555,8 @@ void netUpdate(void)
                     // (they arrive during the join/sync wait, before netGetPackets runs).
                     // Skip the sender-index byte netSendPacket prepends; our command is next.
                     const uint8_t *pkt = (const uint8_t *)event.packet->data + 1;
-                    if (pkt[0] == VB_FILE_HEADER)      { VB_RecvFileHeader(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
-                    else if (pkt[0] == VB_FILE_CHUNK)  { VB_RecvFileChunk(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
+                    if (pkt[0] == NNB_FILE_HEADER)      { NNB_RecvFileHeader(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
+                    else if (pkt[0] == NNB_FILE_CHUNK)  { NNB_RecvFileChunk(&s_blRecv, pkt, "Blood"); enet_packet_destroy(event.packet); }
                     else netPostEPacket(event.packet);
                     break;
                 }

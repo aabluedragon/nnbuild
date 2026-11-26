@@ -344,7 +344,7 @@ static void analyzesprites()
     }
 
     if (s_kexSpriteInterpolationTest < 0)
-        s_kexSpriteInterpolationTest = g_kexMode && Bgetenv("VB_KEX_SPRITE_INTERP_TEST") ? 0 : -2;
+        s_kexSpriteInterpolationTest = g_kexMode && Bgetenv("NNB_KEX_SPRITE_INTERP_TEST") ? 0 : -2;
 
     if (!g_kexMode || s_kexSpriteSmoothRatio >= 65536)
         return;

@@ -2,9 +2,9 @@
 //
 // Provides an embedded JS runtime driven by `-js file.js`:
 //   * ES modules (import/export), a CommonJS-style require(), and an `fs` module
-//   * a `vb` module/global: event listeners (vb.on), HUD text, actor spawning,
+//   * an `nnb` module/global: event listeners (nnb.on), HUD text, actor spawning,
 //     multiplayer chat, CON gamevar access
-//   * the game fires gameplay events into JS via the VBJS_Fire* C API.
+//   * the game fires gameplay events into JS via the NNBJS_Fire* C API.
 //
 // Game-specific bindings (spawn, gamevars, chat, HUD draw) are marked "Duke
 // binding" and are the seam to port this to the other games later.
@@ -47,42 +47,42 @@
 
 // ---- Platform layer: the few places where Windows differs from POSIX.
 #ifdef _WIN32
-static void vbjs_net_startup(void)
+static void nnbjs_net_startup(void)
 {
     static bool started;
     if (!started) { WSADATA data; started = WSAStartup(MAKEWORD(2, 2), &data) == 0; }
 }
-static int  vbjs_sock_close(int fd) { return closesocket((SOCKET)fd); }
-static void vbjs_sock_nonblocking(int fd) { u_long on = 1; ioctlsocket((SOCKET)fd, FIONBIO, &on); }
-static bool vbjs_sock_would_block(void) { return WSAGetLastError() == WSAEWOULDBLOCK; }
-static bool vbjs_sock_in_progress(void) { int const e = WSAGetLastError(); return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
-static int  vbjs_mkdir(const char *path) { return _mkdir(path); }
-static char *vbjs_realpath(const char *path, char *resolved) { return _fullpath(resolved, path, 1024); }
-# define VBJS_SHUT_WR SD_SEND
-# define VBJS_FD(fd) ((SOCKET)(fd))
+static int  nnbjs_sock_close(int fd) { return closesocket((SOCKET)fd); }
+static void nnbjs_sock_nonblocking(int fd) { u_long on = 1; ioctlsocket((SOCKET)fd, FIONBIO, &on); }
+static bool nnbjs_sock_would_block(void) { return WSAGetLastError() == WSAEWOULDBLOCK; }
+static bool nnbjs_sock_in_progress(void) { int const e = WSAGetLastError(); return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
+static int  nnbjs_mkdir(const char *path) { return _mkdir(path); }
+static char *nnbjs_realpath(const char *path, char *resolved) { return _fullpath(resolved, path, 1024); }
+# define NNBJS_SHUT_WR SD_SEND
+# define NNBJS_FD(fd) ((SOCKET)(fd))
 #else
-static void vbjs_net_startup(void) {}
-static int  vbjs_sock_close(int fd) { return close(fd); }
-static void vbjs_sock_nonblocking(int fd) { fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK); }
-static bool vbjs_sock_would_block(void) { return errno == EAGAIN || errno == EWOULDBLOCK; }
-static bool vbjs_sock_in_progress(void) { return errno == EINPROGRESS; }
-static int  vbjs_mkdir(const char *path) { return mkdir(path, 0755); }
-static char *vbjs_realpath(const char *path, char *resolved) { return realpath(path, resolved); }
-# define VBJS_SHUT_WR SHUT_WR
-# define VBJS_FD(fd) (fd)
+static void nnbjs_net_startup(void) {}
+static int  nnbjs_sock_close(int fd) { return close(fd); }
+static void nnbjs_sock_nonblocking(int fd) { fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK); }
+static bool nnbjs_sock_would_block(void) { return errno == EAGAIN || errno == EWOULDBLOCK; }
+static bool nnbjs_sock_in_progress(void) { return errno == EINPROGRESS; }
+static int  nnbjs_mkdir(const char *path) { return mkdir(path, 0755); }
+static char *nnbjs_realpath(const char *path, char *resolved) { return realpath(path, resolved); }
+# define NNBJS_SHUT_WR SHUT_WR
+# define NNBJS_FD(fd) (fd)
 #endif
 
 extern "C" {
 #include "quickjs.h"
 #include "quickjs-debugger.h"
 }
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "editorproject.h"
 #include "sjson.h"
 #include "baselayer.h"
 
 // ---- Duke game hooks (implemented at the bottom, kept together for porting) ----
-namespace vbjs_game {
+namespace nnbjs_game {
     void log(const char *s);                                  // console output into the game log
     int  spawn(int tile, int x, int y, int z, int owner);     // -> spriteNum, or -1
     void sendChat(const char *text);                          // broadcast a multiplayer/console message
@@ -102,7 +102,7 @@ namespace vbjs_game {
     void setMenuSelection(int selection);
     void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok);
     void runCommand(const char *cmd);                         // execute an OSD console/cvar command
-    // Generic CON struct access (kind = VBJS_ACTOR/PLAYER/... from vbjs.h).
+    // Generic CON struct access (kind = NNBJS_ACTOR/PLAYER/... from nnbjs.h).
     int  conGet(int kind, int index, const char *member, int parm2, int *ok);
     void conSet(int kind, int index, const char *member, int value, int parm2);
     int  conDefine(const char *name, int *ok);                // resolve a CON define/constant by name
@@ -122,8 +122,8 @@ namespace vbjs_game {
 // Which CON event numbers have a JS listener. Exposed as a plain global so the
 // engine's VM_HaveEvent() can OR it in inline (see gameexec.h): a CON event is
 // dispatched when a CON handler OR a JS listener wants it.
-extern "C" { unsigned char g_vbjsConEventListened[VBJS_MAXCONEVENTS]; }
-#define s_conEventListened g_vbjsConEventListened
+extern "C" { unsigned char g_nnbjsConEventListened[NNBJS_MAXCONEVENTS]; }
+#define s_conEventListened g_nnbjsConEventListened
 
 // ------------------------------------------------------------------------------
 
@@ -143,7 +143,7 @@ static std::set<int> s_deletedDuringLoad;
 static bool s_loadingLevel;
 static unsigned s_componentEpoch;
 static std::chrono::steady_clock::time_point s_lastComponentFrame;
-static constexpr char componentSuffix[] = "?vbcomponent=";
+static constexpr char componentSuffix[] = "?nnbcomponent=";
 static char  s_scriptDir[1024]  = {0};   // dir of the script currently being loaded (require base)
 static int   s_enabled = 0;
 static int   s_initTried = 0;            // guards a single init attempt
@@ -154,45 +154,45 @@ static int   s_gameStartedPending = 0;
 static int   s_gameSessionActive = 0;
 static int   s_fatalScriptError = 0;
 static int   s_genericMode = 0;
-struct vbjs_fs_callback_t { JSValue callback, value; int error, existsStyle; };
-static std::vector<vbjs_fs_callback_t> s_fsCallbacks;
+struct nnbjs_fs_callback_t { JSValue callback, value; int error, existsStyle; };
+static std::vector<nnbjs_fs_callback_t> s_fsCallbacks;
 
 // The shared runtime is also used by games that do not have Duke's logging
 // globals.  Keep their script diagnostics on the process log instead of
 // touching Duke's OSD state.
-static void vbjs_log(const char *message)
+static void nnbjs_log(const char *message)
 {
     if (s_genericMode)
     {
         initprintf("[js] %s\n", message ? message : "");
     }
-    else vbjs_game::log(message);
+    else nnbjs_game::log(message);
 }
 
-// UDP sockets are non-blocking and polled by VBJS_RunFrame.  That keeps all
+// UDP sockets are non-blocking and polled by NNBJS_RunFrame.  That keeps all
 // QuickJS calls on the game thread while preserving Node's event-driven dgram
 // model.
-struct vbjs_dgram_socket_t { int fd = -1; int family = AF_INET; JSValue listeners = JS_UNDEFINED; };
+struct nnbjs_dgram_socket_t { int fd = -1; int family = AF_INET; JSValue listeners = JS_UNDEFINED; };
 static JSClassID s_dgramSocketClass;
-static std::vector<vbjs_dgram_socket_t *> s_dgramSockets;
-struct vbjs_net_socket_t { int fd = -1; int connecting = 0; int closed = 0; JSValue listeners = JS_UNDEFINED; };
+static std::vector<nnbjs_dgram_socket_t *> s_dgramSockets;
+struct nnbjs_net_socket_t { int fd = -1; int connecting = 0; int closed = 0; JSValue listeners = JS_UNDEFINED; };
 static JSClassID s_netSocketClass;
-static std::vector<vbjs_net_socket_t *> s_netSockets;
-struct vbjs_fetch_result_t { JSValue resolve, reject; long status = 0; std::string body, error, url; std::unordered_map<std::string, std::string> headers; };
+static std::vector<nnbjs_net_socket_t *> s_netSockets;
+struct nnbjs_fetch_result_t { JSValue resolve, reject; long status = 0; std::string body, error, url; std::unordered_map<std::string, std::string> headers; };
 static pthread_mutex_t s_fetchMutex = PTHREAD_MUTEX_INITIALIZER;
-static std::deque<vbjs_fetch_result_t *> s_fetchReady;
+static std::deque<nnbjs_fetch_result_t *> s_fetchReady;
 static std::atomic<bool> s_fetchShuttingDown { false };
-struct vbjs_fetch_request_t { char *url; char *method; std::vector<uint8_t> body; std::vector<std::string> headers; vbjs_fetch_result_t *result; };
+struct nnbjs_fetch_request_t { char *url; char *method; std::vector<uint8_t> body; std::vector<std::string> headers; nnbjs_fetch_result_t *result; };
 static int   s_observedMenuOpen = -1;
 static int   s_observedMenuId = -1;
-// The game calls VBJS_RunFrame every rendered frame. Avoid crossing into
+// The game calls NNBJS_RunFrame every rendered frame. Avoid crossing into
 // QuickJS at all when no script has requested the high-frequency event.
 static int   s_frameEventListened = 0;
 static int   s_devtools = 0;
 static int   s_debug = 0;
 static int   s_debugPort = 8501;
-enum { VBJS_DEVTOOLS_LOGS = 12 };
-static char s_devtoolsLogs[VBJS_DEVTOOLS_LOGS][192];
+enum { NNBJS_DEVTOOLS_LOGS = 12 };
+static char s_devtoolsLogs[NNBJS_DEVTOOLS_LOGS][192];
 static int s_devtoolsLogCount = 0;
 static int s_devtoolsPaused = 0;
 static char s_devtoolsCurrentEvent[64];
@@ -201,14 +201,14 @@ static JSValue s_devtoolsEvent = JS_UNDEFINED;
 /* The engine pauses on the game thread, while the DevTools HTTP listener runs
  * independently.  This transport is the narrow, synchronized bridge between
  * them; no QuickJS object is ever touched from the listener thread. */
-struct vbjs_debug_transport_t
+struct nnbjs_debug_transport_t
 {
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     pthread_cond_t changed = PTHREAD_COND_INITIALIZER;
     std::deque<char> inbound, outbound[2]; // browser inspector, VS Code DAP bridge
     int closed = 0;
 };
-static vbjs_debug_transport_t s_debugTransport;
+static nnbjs_debug_transport_t s_debugTransport;
 // The debugger listener runs on its own thread.  Avoid taking the transport
 // mutex in every game frame when neither the browser inspector nor VS Code has
 // submitted a request.
@@ -219,64 +219,64 @@ static std::atomic<bool> s_debugClientSeen { false };
 static std::unordered_map<std::string, std::string> s_menuTextOverrides;
 static std::unordered_map<uint64_t, int> s_menuRoutes;
 
-static uint64_t vbjs_menu_route_key(int menu, int item)
+static uint64_t nnbjs_menu_route_key(int menu, int item)
 {
     return (uint64_t)(uint32_t)menu << 32 | (uint32_t)item;
 }
 
-extern "C" const char *VBJS_MenuText(const char *text)
+extern "C" const char *NNBJS_MenuText(const char *text)
 {
     if (!text) return text;
     auto const it = s_menuTextOverrides.find(text);
     return it == s_menuTextOverrides.end() ? text : it->second.c_str();
 }
 
-extern "C" int VBJS_MenuRoute(int fromMenu, int itemIndex, int requestedMenu)
+extern "C" int NNBJS_MenuRoute(int fromMenu, int itemIndex, int requestedMenu)
 {
-    auto it = s_menuRoutes.find(vbjs_menu_route_key(fromMenu, itemIndex));
-    if (it == s_menuRoutes.end()) it = s_menuRoutes.find(vbjs_menu_route_key(fromMenu, -1));
+    auto it = s_menuRoutes.find(nnbjs_menu_route_key(fromMenu, itemIndex));
+    if (it == s_menuRoutes.end()) it = s_menuRoutes.find(nnbjs_menu_route_key(fromMenu, -1));
     return it == s_menuRoutes.end() ? requestedMenu : it->second;
 }
 
-static size_t vbjs_debug_read(void *opaque, char *buffer, size_t length)
+static size_t nnbjs_debug_read(void *opaque, char *buffer, size_t length)
 {
-    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    nnbjs_debug_transport_t *transport = (nnbjs_debug_transport_t *)opaque;
     pthread_mutex_lock(&transport->mutex);
     while (transport->inbound.empty() && !transport->closed) pthread_cond_wait(&transport->changed, &transport->mutex);
     size_t n = 0; while (n < length && !transport->inbound.empty()) { buffer[n++] = transport->inbound.front(); transport->inbound.pop_front(); }
     pthread_mutex_unlock(&transport->mutex); return n;
 }
-static size_t vbjs_debug_write(void *opaque, const char *buffer, size_t length)
+static size_t nnbjs_debug_write(void *opaque, const char *buffer, size_t length)
 {
-    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    nnbjs_debug_transport_t *transport = (nnbjs_debug_transport_t *)opaque;
     pthread_mutex_lock(&transport->mutex); for (int client = 0; client < 2; ++client) for (size_t i = 0; i < length; ++i) transport->outbound[client].push_back(buffer[i]); pthread_cond_broadcast(&transport->changed); pthread_mutex_unlock(&transport->mutex); return length;
 }
-static size_t vbjs_debug_peek(void *opaque)
+static size_t nnbjs_debug_peek(void *opaque)
 {
-    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    nnbjs_debug_transport_t *transport = (nnbjs_debug_transport_t *)opaque;
     pthread_mutex_lock(&transport->mutex); size_t n = transport->inbound.size(); pthread_mutex_unlock(&transport->mutex); return n;
 }
-static void vbjs_debug_close(JSRuntime *, void *opaque)
+static void nnbjs_debug_close(JSRuntime *, void *opaque)
 {
-    vbjs_debug_transport_t *transport = (vbjs_debug_transport_t *)opaque;
+    nnbjs_debug_transport_t *transport = (nnbjs_debug_transport_t *)opaque;
     pthread_mutex_lock(&transport->mutex); transport->closed = 1; pthread_cond_broadcast(&transport->changed); pthread_mutex_unlock(&transport->mutex);
 }
 
-static void vbjs_devtools_log(const char *line)
+static void nnbjs_devtools_log(const char *line)
 {
     if (!s_devtools) return;
-    snprintf(s_devtoolsLogs[s_devtoolsLogCount % VBJS_DEVTOOLS_LOGS], sizeof(s_devtoolsLogs[0]), "%s", line ? line : "");
+    snprintf(s_devtoolsLogs[s_devtoolsLogCount % NNBJS_DEVTOOLS_LOGS], sizeof(s_devtoolsLogs[0]), "%s", line ? line : "");
     ++s_devtoolsLogCount;
 }
 
 // The set of scripts to load: -js files plus autojs/<name>/index.{ts,js}.
-struct vbjs_script_t { char path[1024]; };
-enum { VBJS_MAX_SCRIPTS = 64 };
-static vbjs_script_t s_scripts[VBJS_MAX_SCRIPTS];
+struct nnbjs_script_t { char path[1024]; };
+enum { NNBJS_MAX_SCRIPTS = 64 };
+static nnbjs_script_t s_scripts[NNBJS_MAX_SCRIPTS];
 static int s_scriptCount = 0;
 static char s_launchDir[1024];   // captured at app_main() before any chdir; holds autojs/
 
-static int vbjs_write_text(const char *path, const char *text)
+static int nnbjs_write_text(const char *path, const char *text)
 {
     FILE *f = fopen(path, "wb");
     if (!f) return -1;
@@ -284,7 +284,7 @@ static int vbjs_write_text(const char *path, const char *text)
     return failed ? -1 : 0;
 }
 
-static int vbjs_safe_project_name(const char *in, char *out, size_t outsz)
+static int nnbjs_safe_project_name(const char *in, char *out, size_t outsz)
 {
     if (!in || !in[0]) return 0;
     size_t n = 0;
@@ -300,11 +300,11 @@ static int vbjs_safe_project_name(const char *in, char *out, size_t outsz)
 }
 static char s_exeDir[1024];      // argv[0] directory; used by --gen-* template fallback.
 
-static void vbjs_add_script(const char *path)
+static void nnbjs_add_script(const char *path)
 {
-    if (!path || s_scriptCount >= VBJS_MAX_SCRIPTS) return;
+    if (!path || s_scriptCount >= NNBJS_MAX_SCRIPTS) return;
     char canonical[2048];
-    const char *storedPath = vbjs_realpath(path, canonical) ? canonical : path;
+    const char *storedPath = nnbjs_realpath(path, canonical) ? canonical : path;
     for (int i = 0; i < s_scriptCount; i++)
         if (!strcmp(s_scripts[i].path, storedPath)) return;   // dedupe
     snprintf(s_scripts[s_scriptCount++].path, sizeof(s_scripts[0].path), "%s", storedPath);
@@ -324,7 +324,7 @@ struct ScriptTimer
 static std::map<uint32_t, ScriptTimer> s_timers;
 static uint32_t s_nextTimer;
 
-static void vbjs_clear_timer(JSContext *ctx, uint32_t id)
+static void nnbjs_clear_timer(JSContext *ctx, uint32_t id)
 {
     auto const timer = s_timers.find(id);
     if (timer == s_timers.end())
@@ -359,24 +359,24 @@ static JSValue js_clear_timer(JSContext *ctx, JSValueConst, int argc, JSValueCon
     {
         if (JS_ToUint32(ctx, &id, argv[0]) < 0)
             return JS_EXCEPTION;
-        vbjs_clear_timer(ctx, id);
+        nnbjs_clear_timer(ctx, id);
     }
     return JS_UNDEFINED;
 }
 
 // JS-defined component classes/functions shared by the global, CommonJS, and
-// ES-module forms of `vb`.  They intentionally live in one closure so a
+// ES-module forms of `nnb`.  They intentionally live in one closure so a
 // component attached through any import style is visible everywhere.
 static JSValue s_componentExports = JS_UNDEFINED;
 
 // Script-registered HUD text, kept C-side so the draw hook is trivial.
-// (vbjs_text_t is declared in vbjs.h so the game-side draw code shares the layout.)
-enum { VBJS_MAX_TEXT = 64 };
-static vbjs_text_t s_text[VBJS_MAX_TEXT];
+// (nnbjs_text_t is declared in nnbjs.h so the game-side draw code shares the layout.)
+enum { NNBJS_MAX_TEXT = 64 };
+static nnbjs_text_t s_text[NNBJS_MAX_TEXT];
 
 // ---------------------------------------------------------------- utilities ---
 
-static char *vbjs_read_file(const char *path, size_t *out_len)
+static char *nnbjs_read_file(const char *path, size_t *out_len)
 {
     FILE *f = fopen(path, "rb");
     if (!f) return nullptr;
@@ -396,11 +396,11 @@ static char *vbjs_read_file(const char *path, size_t *out_len)
 // The VS Code files every generated project receives (launch and task
 // definitions, a short guide and the debug adapter). They are compiled in so
 // the generator works from any directory.
-#include "vbjs_templates.inc"
+#include "nnbjs_templates.inc"
 
-static char *vbjs_read_vscode_template(const char *file, size_t *out_len)
+static char *nnbjs_read_vscode_template(const char *file, size_t *out_len)
 {
-    for (auto const &tpl : k_vbjsVscodeTemplates)
+    for (auto const &tpl : k_nnbjsVscodeTemplates)
     {
         if (strcmp(tpl.name, file))
             continue;
@@ -416,13 +416,13 @@ static char *vbjs_read_vscode_template(const char *file, size_t *out_len)
     return nullptr;
 }
 
-// TypeScript -> JavaScript (implemented in vbjs_ts.cpp; strips type syntax so .ts runs).
-extern "C" char *vbjs_ts_to_js(const char *src, size_t *len);
+// TypeScript -> JavaScript (implemented in nnbjs_ts.cpp; strips type syntax so .ts runs).
+extern "C" char *nnbjs_ts_to_js(const char *src, size_t *len);
 
 // Read a source file; transpile it from TypeScript if it ends in .ts / .mts / .cts.
-static char *vbjs_load_source(const char *path, size_t *out_len)
+static char *nnbjs_load_source(const char *path, size_t *out_len)
 {
-    size_t len = 0; char *src = vbjs_read_file(path, &len);
+    size_t len = 0; char *src = nnbjs_read_file(path, &len);
     if (!src) return nullptr;
     size_t n = strlen(path);
     int isTs = (n >= 3 && (!strcasecmp(path + n - 3, ".ts") ||
@@ -430,7 +430,7 @@ static char *vbjs_load_source(const char *path, size_t *out_len)
     if (isTs)
     {
         size_t jslen = 0;
-        char *js = vbjs_ts_to_js(src, &jslen);
+        char *js = nnbjs_ts_to_js(src, &jslen);
         free(src);
         if (out_len) *out_len = jslen;
         return js;
@@ -440,7 +440,7 @@ static char *vbjs_load_source(const char *path, size_t *out_len)
 }
 
 // Resolve a (possibly relative) module/require path against the main script dir.
-static void vbjs_resolve(const char *name, char *out, size_t outsz)
+static void nnbjs_resolve(const char *name, char *out, size_t outsz)
 {
     if (name[0] == '/' || s_scriptDir[0] == 0)
         snprintf(out, outsz, "%s", name);
@@ -448,13 +448,13 @@ static void vbjs_resolve(const char *name, char *out, size_t outsz)
         snprintf(out, outsz, "%s/%s", s_scriptDir, name);
 }
 
-[[noreturn]] static void vbjs_fatal_error(const char *context, const char *message, const char *stack = nullptr)
+[[noreturn]] static void nnbjs_fatal_error(const char *context, const char *message, const char *stack = nullptr)
 {
     char summary[8192];
     snprintf(summary, sizeof(summary), "%s%s%s", context ? context : "JavaScript error", context ? ": " : "", message ? message : "(unknown JavaScript error)");
-    vbjs_log(summary);
-    vbjs_devtools_log(summary);
-    if (stack && stack[0]) { vbjs_log(stack); vbjs_devtools_log(stack); }
+    nnbjs_log(summary);
+    nnbjs_devtools_log(summary);
+    if (stack && stack[0]) { nnbjs_log(stack); nnbjs_devtools_log(stack); }
 
     // Native message boxes on macOS provide selectable/copyable message text.
     // Show this before ending the process: errors otherwise vanish into the
@@ -470,7 +470,7 @@ static void vbjs_resolve(const char *name, char *out, size_t outsz)
     exit(EXIT_FAILURE);
 }
 
-static void vbjs_dump_error(JSContext *ctx, const char *context = nullptr)
+static void nnbjs_dump_error(JSContext *ctx, const char *context = nullptr)
 {
     JSValue exc = JS_GetException(ctx);
     const char *msg = JS_ToCString(ctx, exc);
@@ -485,12 +485,12 @@ static void vbjs_dump_error(JSContext *ctx, const char *context = nullptr)
     }
     JS_FreeValue(ctx, stack);
     JS_FreeValue(ctx, exc);
-    vbjs_fatal_error(context ? context : "JavaScript error", message, stackText);
+    nnbjs_fatal_error(context ? context : "JavaScript error", message, stackText);
 }
 
 // QuickJS reports a bare `Promise.reject()` through this runtime hook instead
 // of JS_ExecutePendingJob().  Without it, an unhandled async failure vanishes.
-static void vbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValueConst reason, bool isHandled, void *)
+static void nnbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValueConst reason, bool isHandled, void *)
 {
     if (isHandled) return;
     const char *message = JS_ToCString(ctx, reason);
@@ -508,10 +508,10 @@ static void vbjs_promise_rejection_tracker(JSContext *ctx, JSValueConst, JSValue
         }
         JS_FreeValue(ctx, stack);
     }
-    vbjs_fatal_error("unhandled promise rejection", text, stackText);
+    nnbjs_fatal_error("unhandled promise rejection", text, stackText);
 }
 
-static void vbjs_pump_timers(JSContext *ctx)
+static void nnbjs_pump_timers(JSContext *ctx)
 {
     if (s_timers.empty())
         return;
@@ -533,10 +533,10 @@ static void vbjs_pump_timers(JSContext *ctx)
         if (timer->second.repeats)
             timer->second.due = now + timer->second.delay;
         else
-            vbjs_clear_timer(ctx, id);
+            nnbjs_clear_timer(ctx, id);
         JSValue result = JS_Call(ctx, values[0], JS_UNDEFINED, values.size() - 1, values.data() + 1);
         if (JS_IsException(result))
-            vbjs_dump_error(ctx);
+            nnbjs_dump_error(ctx);
         JS_FreeValue(ctx, result);
         for (auto value : values)
             JS_FreeValue(ctx, value);
@@ -558,14 +558,14 @@ static JSValue js_console_log(JSContext *ctx, JSValueConst, int argc, JSValueCon
         }
         if (off >= sizeof(line) - 1) break;
     }
-    vbjs_log(line);
-    vbjs_devtools_log(line);
+    nnbjs_log(line);
+    nnbjs_devtools_log(line);
     return JS_UNDEFINED;
 }
 
 // -------------------------------------------------------------- dgram module ---
 
-static void vbjs_dgram_remove(vbjs_dgram_socket_t *socket)
+static void nnbjs_dgram_remove(nnbjs_dgram_socket_t *socket)
 {
     for (auto it = s_dgramSockets.begin(); it != s_dgramSockets.end(); ++it)
         if (*it == socket) { s_dgramSockets.erase(it); break; }
@@ -573,15 +573,15 @@ static void vbjs_dgram_remove(vbjs_dgram_socket_t *socket)
 
 static void js_dgram_socket_finalizer(JSRuntime *rt, JSValue value)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque(value, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque(value, s_dgramSocketClass);
     if (!socket) return;
-    if (socket->fd >= 0) vbjs_sock_close(socket->fd);
-    vbjs_dgram_remove(socket);
+    if (socket->fd >= 0) nnbjs_sock_close(socket->fd);
+    nnbjs_dgram_remove(socket);
     JS_FreeValueRT(rt, socket->listeners);
     delete socket;
 }
 
-static JSValue js_dgram_emit(JSContext *ctx, vbjs_dgram_socket_t *socket, const char *event, int argc, JSValueConst *argv)
+static JSValue js_dgram_emit(JSContext *ctx, nnbjs_dgram_socket_t *socket, const char *event, int argc, JSValueConst *argv)
 {
     JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event);
     if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); return JS_UNDEFINED; }
@@ -592,7 +592,7 @@ static JSValue js_dgram_emit(JSContext *ctx, vbjs_dgram_socket_t *socket, const 
         if (JS_IsFunction(ctx, listener))
         {
             JSValue result = JS_Call(ctx, listener, JS_UNDEFINED, argc, argv);
-            if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram handler");
+            if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in dgram handler");
             JS_FreeValue(ctx, result);
         }
         JS_FreeValue(ctx, listener);
@@ -603,7 +603,7 @@ static JSValue js_dgram_emit(JSContext *ctx, vbjs_dgram_socket_t *socket, const 
 
 static JSValue js_dgram_on(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
     if (argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_ThrowTypeError(ctx, "socket.on(event, listener)");
     const char *event = JS_ToCString(ctx, argv[0]); if (!event) return JS_EXCEPTION;
@@ -631,7 +631,7 @@ static int js_dgram_resolve(JSContext *ctx, JSValueConst portValue, JSValueConst
 
 static JSValue js_dgram_bind(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
     if (argc < 1) return JS_ThrowTypeError(ctx, "socket.bind(port[, address][, callback])");
     int callback = argc > 1 && JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
@@ -640,7 +640,7 @@ static JSValue js_dgram_bind(JSContext *ctx, JSValueConst this_val, int argc, JS
     if (js_dgram_resolve(ctx, argv[0], host, socket->family, &address, &addressLength)) return JS_EXCEPTION;
     if (bind(socket->fd, (sockaddr *)&address, addressLength)) return JS_ThrowReferenceError(ctx, "dgram.bind: cannot bind socket");
     js_dgram_emit(ctx, socket, "listening", 0, nullptr);
-    if (callback >= 0) { JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram bind callback"); JS_FreeValue(ctx, result); }
+    if (callback >= 0) { JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in dgram bind callback"); JS_FreeValue(ctx, result); }
     return JS_DupValue(ctx, this_val);
 }
 
@@ -654,7 +654,7 @@ static int js_dgram_copy_bytes(JSContext *ctx, JSValueConst value, std::vector<u
 
 static JSValue js_dgram_send(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
     if (argc < 2) return JS_ThrowTypeError(ctx, "socket.send(message, port[, address][, callback])");
     int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
@@ -664,23 +664,23 @@ static JSValue js_dgram_send(JSContext *ctx, JSValueConst this_val, int argc, JS
     std::vector<uint8_t> data;
     if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
     int const sent = (int)sendto(socket->fd, (const char *)data.data(), (int)data.size(), 0, (sockaddr *)&address, addressLength);
-    if (callback >= 0) { JSValue args[1] = { sent < 0 ? JS_NewError(ctx) : JS_NULL }; JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 1, args); JS_FreeValue(ctx, args[0]); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram send callback"); JS_FreeValue(ctx, result); }
+    if (callback >= 0) { JSValue args[1] = { sent < 0 ? JS_NewError(ctx) : JS_NULL }; JSValue result = JS_Call(ctx, argv[callback], JS_UNDEFINED, 1, args); JS_FreeValue(ctx, args[0]); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in dgram send callback"); JS_FreeValue(ctx, result); }
     if (sent < 0) return JS_ThrowReferenceError(ctx, "dgram.send: cannot send datagram");
     return JS_UNDEFINED;
 }
 
 static JSValue js_dgram_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
-    if (socket->fd >= 0) { vbjs_sock_close(socket->fd); socket->fd = -1; js_dgram_emit(ctx, socket, "close", 0, nullptr); }
-    if (argc && JS_IsFunction(ctx, argv[0])) { JSValue result = JS_Call(ctx, argv[0], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in dgram close callback"); JS_FreeValue(ctx, result); }
+    if (socket->fd >= 0) { nnbjs_sock_close(socket->fd); socket->fd = -1; js_dgram_emit(ctx, socket, "close", 0, nullptr); }
+    if (argc && JS_IsFunction(ctx, argv[0])) { JSValue result = JS_Call(ctx, argv[0], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in dgram close callback"); JS_FreeValue(ctx, result); }
     return JS_UNDEFINED;
 }
 
 static JSValue js_dgram_address(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
 {
-    auto *socket = (vbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
+    auto *socket = (nnbjs_dgram_socket_t *)JS_GetOpaque2(ctx, this_val, s_dgramSocketClass);
     if (!socket) return JS_EXCEPTION;
     sockaddr_storage address {}; socklen_t length = sizeof(address);
     if (socket->fd < 0 || getsockname(socket->fd, (sockaddr *)&address, &length)) return JS_ThrowReferenceError(ctx, "dgram.address: socket is closed");
@@ -694,11 +694,11 @@ static JSValue js_dgram_createSocket(JSContext *ctx, JSValueConst, int argc, JSV
     const char *type = JS_ToCString(ctx, argv[0]); if (!type) return JS_EXCEPTION;
     int const family = !strcmp(type, "udp6") ? AF_INET6 : !strcmp(type, "udp4") ? AF_INET : 0; JS_FreeCString(ctx, type);
     if (!family) return JS_ThrowTypeError(ctx, "dgram.createSocket type must be 'udp4' or 'udp6'");
-    vbjs_net_startup();
-    auto *socket = new vbjs_dgram_socket_t; socket->family = family;
+    nnbjs_net_startup();
+    auto *socket = new nnbjs_dgram_socket_t; socket->family = family;
     socket->fd = (int)::socket(socket->family, SOCK_DGRAM, 0);
     if (socket->fd < 0) { delete socket; return JS_ThrowReferenceError(ctx, "dgram.createSocket: cannot create socket"); }
-    vbjs_sock_nonblocking(socket->fd); socket->listeners = JS_NewObject(ctx);
+    nnbjs_sock_nonblocking(socket->fd); socket->listeners = JS_NewObject(ctx);
     JSValue object = JS_NewObjectClass(ctx, s_dgramSocketClass); JS_SetOpaque(object, socket); s_dgramSockets.push_back(socket);
     if (argc > 1 && JS_IsFunction(ctx, argv[1]))
     {
@@ -709,7 +709,7 @@ static JSValue js_dgram_createSocket(JSContext *ctx, JSValueConst, int argc, JSV
     return object;
 }
 
-static void vbjs_dgram_poll(JSContext *ctx)
+static void nnbjs_dgram_poll(JSContext *ctx)
 {
     for (auto *socket : s_dgramSockets)
     {
@@ -717,7 +717,7 @@ static void vbjs_dgram_poll(JSContext *ctx)
         for (;;)
         {
             uint8_t data[65536]; sockaddr_storage from {}; socklen_t fromLength = sizeof(from); int const received = (int)recvfrom(socket->fd, (char *)data, sizeof(data), 0, (sockaddr *)&from, &fromLength);
-            if (received < 0) { if (!vbjs_sock_would_block()) { JSValue error = JS_NewError(ctx); js_dgram_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); } break; }
+            if (received < 0) { if (!nnbjs_sock_would_block()) { JSValue error = JS_NewError(ctx); js_dgram_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); } break; }
             char host[NI_MAXHOST] = "", service[NI_MAXSERV] = ""; getnameinfo((sockaddr *)&from, fromLength, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
             JSValue args[2] = { JS_NewUint8ArrayCopy(ctx, data, (size_t)received), JS_NewObject(ctx) }; JS_SetPropertyStr(ctx, args[1], "address", JS_NewString(ctx, host)); JS_SetPropertyStr(ctx, args[1], "port", JS_NewInt32(ctx, atoi(service))); JS_SetPropertyStr(ctx, args[1], "family", JS_NewString(ctx, from.ss_family == AF_INET6 ? "IPv6" : "IPv4")); JS_SetPropertyStr(ctx, args[1], "size", JS_NewInt32(ctx, (int)received)); js_dgram_emit(ctx, socket, "message", 2, args); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]);
         }
@@ -726,96 +726,96 @@ static void vbjs_dgram_poll(JSContext *ctx)
 
 // --------------------------------------------------------------- net module ---
 
-static void vbjs_net_remove(vbjs_net_socket_t *socket)
+static void nnbjs_net_remove(nnbjs_net_socket_t *socket)
 {
     for (auto it = s_netSockets.begin(); it != s_netSockets.end(); ++it)
         if (*it == socket) { s_netSockets.erase(it); break; }
 }
 static void js_net_socket_finalizer(JSRuntime *rt, JSValue value)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque(value, s_netSocketClass);
-    if (!socket) return; if (socket->fd >= 0) vbjs_sock_close(socket->fd); vbjs_net_remove(socket); JS_FreeValueRT(rt, socket->listeners); delete socket;
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque(value, s_netSocketClass);
+    if (!socket) return; if (socket->fd >= 0) nnbjs_sock_close(socket->fd); nnbjs_net_remove(socket); JS_FreeValueRT(rt, socket->listeners); delete socket;
 }
-static void js_net_emit(JSContext *ctx, vbjs_net_socket_t *socket, const char *event, int argc, JSValueConst *argv)
+static void js_net_emit(JSContext *ctx, nnbjs_net_socket_t *socket, const char *event, int argc, JSValueConst *argv)
 {
     JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event); if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); return; }
     int64_t length = 0; JS_GetLength(ctx, list, &length);
-    for (uint32_t i = 0; i < (uint64_t)length; ++i) { JSValue listener = JS_GetPropertyUint32(ctx, list, i); if (JS_IsFunction(ctx, listener)) { JSValue result = JS_Call(ctx, listener, JS_UNDEFINED, argc, argv); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net handler"); JS_FreeValue(ctx, result); } JS_FreeValue(ctx, listener); }
+    for (uint32_t i = 0; i < (uint64_t)length; ++i) { JSValue listener = JS_GetPropertyUint32(ctx, list, i); if (JS_IsFunction(ctx, listener)) { JSValue result = JS_Call(ctx, listener, JS_UNDEFINED, argc, argv); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in net handler"); JS_FreeValue(ctx, result); } JS_FreeValue(ctx, listener); }
     JS_FreeValue(ctx, list);
 }
 static JSValue js_net_on(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
     if (argc < 2 || !JS_IsFunction(ctx, argv[1])) return JS_ThrowTypeError(ctx, "socket.on(event, listener)");
     const char *event = JS_ToCString(ctx, argv[0]); if (!event) return JS_EXCEPTION;
     JSValue list = JS_GetPropertyStr(ctx, socket->listeners, event); if (JS_IsUndefined(list)) { JS_FreeValue(ctx, list); list = JS_NewArray(ctx); JS_SetPropertyStr(ctx, socket->listeners, event, JS_DupValue(ctx, list)); }
     int64_t length = 0; JS_GetLength(ctx, list, &length); JS_SetPropertyUint32(ctx, list, (uint32_t)length, JS_DupValue(ctx, argv[1])); JS_FreeValue(ctx, list); JS_FreeCString(ctx, event); return JS_DupValue(ctx, this_val);
 }
-static void js_net_close(JSContext *ctx, vbjs_net_socket_t *socket, int hadError)
+static void js_net_close(JSContext *ctx, nnbjs_net_socket_t *socket, int hadError)
 {
-    if (socket->closed) return; socket->closed = 1; if (socket->fd >= 0) { vbjs_sock_close(socket->fd); socket->fd = -1; } JSValue args[1] = { JS_NewBool(ctx, hadError) }; js_net_emit(ctx, socket, "close", 1, args); JS_FreeValue(ctx, args[0]);
+    if (socket->closed) return; socket->closed = 1; if (socket->fd >= 0) { nnbjs_sock_close(socket->fd); socket->fd = -1; } JSValue args[1] = { JS_NewBool(ctx, hadError) }; js_net_emit(ctx, socket, "close", 1, args); JS_FreeValue(ctx, args[0]);
 }
 static JSValue js_net_write(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
     if (!argc) return JS_ThrowTypeError(ctx, "socket.write(data[, callback])"); if (socket->closed) return JS_ThrowReferenceError(ctx, "net.Socket is closed");
     std::vector<uint8_t> data; if (js_dgram_copy_bytes(ctx, argv[0], &data)) return JS_EXCEPTION;
     int const written = (int)send(socket->fd, (const char *)data.data(), (int)data.size(), 0); int const failed = written < 0;
-    if (argc > 1 && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net write callback"); JS_FreeValue(ctx, result); }
+    if (argc > 1 && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in net write callback"); JS_FreeValue(ctx, result); }
     if (failed) { JSValue error = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &error); JS_FreeValue(ctx, error); return JS_FALSE; } return JS_TRUE;
 }
 static JSValue js_net_end(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION;
     if (argc && !JS_IsFunction(ctx, argv[0])) { JSValue result = js_net_write(ctx, this_val, 1, argv); if (JS_IsException(result)) return result; JS_FreeValue(ctx, result); }
-    if (!socket->closed) shutdown(socket->fd, VBJS_SHUT_WR); if (argc && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) vbjs_dump_error(ctx, "uncaught exception in net end callback"); JS_FreeValue(ctx, result); } return JS_DupValue(ctx, this_val);
+    if (!socket->closed) shutdown(socket->fd, NNBJS_SHUT_WR); if (argc && JS_IsFunction(ctx, argv[argc-1])) { JSValue result = JS_Call(ctx, argv[argc-1], JS_UNDEFINED, 0, nullptr); if (JS_IsException(result)) nnbjs_dump_error(ctx, "uncaught exception in net end callback"); JS_FreeValue(ctx, result); } return JS_DupValue(ctx, this_val);
 }
 static JSValue js_net_destroy(JSContext *ctx, JSValueConst this_val, int, JSValueConst *)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; js_net_close(ctx, socket, 0); return JS_DupValue(ctx, this_val);
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; js_net_close(ctx, socket, 0); return JS_DupValue(ctx, this_val);
 }
 static JSValue js_net_setNoDelay(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
-    auto *socket = (vbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; int enabled = 1; if (argc) enabled = JS_ToBool(ctx, argv[0]); setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&enabled, sizeof(enabled)); return JS_DupValue(ctx, this_val);
+    auto *socket = (nnbjs_net_socket_t *)JS_GetOpaque2(ctx, this_val, s_netSocketClass); if (!socket) return JS_EXCEPTION; int enabled = 1; if (argc) enabled = JS_ToBool(ctx, argv[0]); setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&enabled, sizeof(enabled)); return JS_DupValue(ctx, this_val);
 }
 static JSValue js_net_createConnection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (!argc) return JS_ThrowTypeError(ctx, "net.createConnection(port[, host][, callback])"); vbjs_net_startup(); int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
+    if (!argc) return JS_ThrowTypeError(ctx, "net.createConnection(port[, host][, callback])"); nnbjs_net_startup(); int callback = JS_IsFunction(ctx, argv[argc-1]) ? argc - 1 : -1;
     int32_t port = 0; if (JS_ToInt32(ctx, &port, argv[0]) || port < 1 || port > 65535) return JS_ThrowRangeError(ctx, "port must be between 1 and 65535");
     int freeHost = 0; const char *host = "127.0.0.1";
     if (argc > 1 && callback != 1) { host = JS_ToCString(ctx, argv[1]); freeHost = 1; if (!host) return JS_EXCEPTION; }
     char service[16]; snprintf(service, sizeof(service), "%d", port); addrinfo hints {}; hints.ai_socktype = SOCK_STREAM; hints.ai_family = AF_UNSPEC; addrinfo *result = nullptr; int const rc = getaddrinfo(host, service, &hints, &result); if (freeHost) JS_FreeCString(ctx, host);
     if (rc || !result) return JS_ThrowReferenceError(ctx, "net.createConnection: cannot resolve host");
-    auto *socket = new vbjs_net_socket_t; socket->fd = (int)::socket(result->ai_family, SOCK_STREAM, 0); if (socket->fd < 0) { freeaddrinfo(result); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot create socket"); }
-    vbjs_sock_nonblocking(socket->fd); int const connectResult = connect(socket->fd, result->ai_addr, (int)result->ai_addrlen); int const connectPending = connectResult && vbjs_sock_in_progress(); freeaddrinfo(result);
-    if (connectResult && !connectPending) { vbjs_sock_close(socket->fd); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot connect"); }
+    auto *socket = new nnbjs_net_socket_t; socket->fd = (int)::socket(result->ai_family, SOCK_STREAM, 0); if (socket->fd < 0) { freeaddrinfo(result); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot create socket"); }
+    nnbjs_sock_nonblocking(socket->fd); int const connectResult = connect(socket->fd, result->ai_addr, (int)result->ai_addrlen); int const connectPending = connectResult && nnbjs_sock_in_progress(); freeaddrinfo(result);
+    if (connectResult && !connectPending) { nnbjs_sock_close(socket->fd); delete socket; return JS_ThrowReferenceError(ctx, "net.createConnection: cannot connect"); }
     socket->connecting = connectResult != 0; socket->listeners = JS_NewObject(ctx); JSValue object = JS_NewObjectClass(ctx, s_netSocketClass); JS_SetOpaque(object, socket); s_netSockets.push_back(socket);
     if (callback >= 0) { JSValue args[2] = { JS_NewString(ctx, "connect"), JS_DupValue(ctx, argv[callback]) }; JSValue ignored = js_net_on(ctx, object, 2, args); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, args[0]); JS_FreeValue(ctx, args[1]); }
     return object;
 }
-static void vbjs_net_poll(JSContext *ctx)
+static void nnbjs_net_poll(JSContext *ctx)
 {
-    for (auto *socket : s_netSockets) { if (socket->closed) continue; if (socket->connecting) { fd_set writeSet; FD_ZERO(&writeSet); FD_SET(VBJS_FD(socket->fd), &writeSet); timeval timeout {}; int const ready = select(socket->fd + 1, nullptr, &writeSet, nullptr, &timeout); if (ready > 0) { int error = 0; socklen_t length = sizeof(error); getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, (char *)&error, &length); if (!error) { socket->connecting = 0; js_net_emit(ctx, socket, "connect", 0, nullptr); } else { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } } } if (socket->connecting) continue; for (;;) { uint8_t data[65536]; int const received = (int)recv(socket->fd, (char *)data, sizeof(data), 0); if (received > 0) { JSValue value = JS_NewUint8ArrayCopy(ctx, data, (size_t)received); js_net_emit(ctx, socket, "data", 1, &value); JS_FreeValue(ctx, value); continue; } if (!received) { js_net_emit(ctx, socket, "end", 0, nullptr); js_net_close(ctx, socket, 0); } else if (!vbjs_sock_would_block()) { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } break; } }
+    for (auto *socket : s_netSockets) { if (socket->closed) continue; if (socket->connecting) { fd_set writeSet; FD_ZERO(&writeSet); FD_SET(NNBJS_FD(socket->fd), &writeSet); timeval timeout {}; int const ready = select(socket->fd + 1, nullptr, &writeSet, nullptr, &timeout); if (ready > 0) { int error = 0; socklen_t length = sizeof(error); getsockopt(socket->fd, SOL_SOCKET, SO_ERROR, (char *)&error, &length); if (!error) { socket->connecting = 0; js_net_emit(ctx, socket, "connect", 0, nullptr); } else { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } } } if (socket->connecting) continue; for (;;) { uint8_t data[65536]; int const received = (int)recv(socket->fd, (char *)data, sizeof(data), 0); if (received > 0) { JSValue value = JS_NewUint8ArrayCopy(ctx, data, (size_t)received); js_net_emit(ctx, socket, "data", 1, &value); JS_FreeValue(ctx, value); continue; } if (!received) { js_net_emit(ctx, socket, "end", 0, nullptr); js_net_close(ctx, socket, 0); } else if (!nnbjs_sock_would_block()) { JSValue value = JS_NewError(ctx); js_net_emit(ctx, socket, "error", 1, &value); JS_FreeValue(ctx, value); js_net_close(ctx, socket, 1); } break; } }
 }
 
 // ------------------------------------- fetch (libcurl, or WinHTTP on Windows) ---
 
-static size_t vbjs_fetch_header(char *data, size_t size, size_t count, void *opaque)
+static size_t nnbjs_fetch_header(char *data, size_t size, size_t count, void *opaque)
 {
-    auto *result = (vbjs_fetch_result_t *)opaque; std::string line(data, size * count); size_t const colon = line.find(':');
+    auto *result = (nnbjs_fetch_result_t *)opaque; std::string line(data, size * count); size_t const colon = line.find(':');
     if (colon != std::string::npos) { std::string name = line.substr(0, colon), value = line.substr(colon + 1); while (!value.empty() && isspace((unsigned char)value.front())) value.erase(value.begin()); while (!value.empty() && isspace((unsigned char)value.back())) value.pop_back(); for (char &c : name) c = (char)tolower((unsigned char)c); result->headers[name] = value; }
     return size * count;
 }
 
 #ifdef _WIN32
-static std::wstring vbjs_widen(const std::string &text)
+static std::wstring nnbjs_widen(const std::string &text)
 {
     int const n = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), nullptr, 0);
     std::wstring out((size_t)n, L'\0');
     if (n) MultiByteToWideChar(CP_UTF8, 0, text.c_str(), (int)text.size(), &out[0], n);
     return out;
 }
-static std::string vbjs_narrow(const wchar_t *text, int length)
+static std::string nnbjs_narrow(const wchar_t *text, int length)
 {
     int const n = WideCharToMultiByte(CP_UTF8, 0, text, length, nullptr, 0, nullptr, nullptr);
     std::string out((size_t)n, '\0');
@@ -824,10 +824,10 @@ static std::string vbjs_narrow(const wchar_t *text, int length)
 }
 
 // Windows ships an HTTP client, so fetch needs no extra library there.
-static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
+static void nnbjs_fetch_perform(nnbjs_fetch_request_t *request)
 {
-    vbjs_fetch_result_t *result = request->result;
-    std::wstring const url = vbjs_widen(request->url);
+    nnbjs_fetch_result_t *result = request->result;
+    std::wstring const url = nnbjs_widen(request->url);
     wchar_t host[256] = L"", path[4096] = L"", extra[4096] = L"";
     URL_COMPONENTS parts {};
     parts.dwStructSize = sizeof(parts);
@@ -837,7 +837,7 @@ static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
     if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) { result->error = "fetch: invalid URL"; return; }
 
     std::wstring const target = std::wstring(path[0] ? path : L"/") + extra;
-    std::wstring const method = vbjs_widen(request->method ? request->method : "GET");
+    std::wstring const method = nnbjs_widen(request->method ? request->method : "GET");
     HINTERNET session = WinHttpOpen(L"NNBuild", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     HINTERNET connection = session ? WinHttpConnect(session, host, parts.nPort, 0) : nullptr;
     HINTERNET handle = connection ? WinHttpOpenRequest(connection, method.c_str(), target.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -848,7 +848,7 @@ static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
     {
         WinHttpSetTimeouts(handle, 10000, 10000, 30000, 30000);
         std::wstring headers;
-        for (auto const &header : request->headers) { headers += vbjs_widen(header); headers += L"\r\n"; }
+        for (auto const &header : request->headers) { headers += nnbjs_widen(header); headers += L"\r\n"; }
         DWORD const bodySize = (DWORD)request->body.size();
         BOOL const sent = WinHttpSendRequest(handle, headers.empty() ? WINHTTP_NO_ADDITIONAL_HEADERS : headers.c_str(), headers.empty() ? 0 : (DWORD)-1L,
                                              bodySize ? (LPVOID)request->body.data() : WINHTTP_NO_REQUEST_DATA, bodySize, bodySize, 0);
@@ -870,13 +870,13 @@ static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
                 std::wstring raw(rawSize / sizeof(wchar_t) + 1, L'\0');
                 if (WinHttpQueryHeaders(handle, WINHTTP_QUERY_RAW_HEADERS_CRLF, WINHTTP_HEADER_NAME_BY_INDEX, &raw[0], &rawSize, WINHTTP_NO_HEADER_INDEX))
                 {
-                    std::string const text = vbjs_narrow(raw.c_str(), (int)(rawSize / sizeof(wchar_t)));
+                    std::string const text = nnbjs_narrow(raw.c_str(), (int)(rawSize / sizeof(wchar_t)));
                     for (size_t start = 0; start < text.size(); )
                     {
                         size_t end = text.find("\r\n", start);
                         if (end == std::string::npos) end = text.size();
                         std::string line = text.substr(start, end - start);
-                        if (!line.empty()) vbjs_fetch_header(&line[0], 1, line.size(), result);
+                        if (!line.empty()) nnbjs_fetch_header(&line[0], 1, line.size(), result);
                         start = end + 2;
                     }
                 }
@@ -892,7 +892,7 @@ static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
             }
 
             wchar_t finalUrl[4096]; DWORD finalSize = sizeof(finalUrl);
-            if (WinHttpQueryOption(handle, WINHTTP_OPTION_URL, finalUrl, &finalSize)) result->url = vbjs_narrow(finalUrl, (int)wcslen(finalUrl));
+            if (WinHttpQueryOption(handle, WINHTTP_OPTION_URL, finalUrl, &finalSize)) result->url = nnbjs_narrow(finalUrl, (int)wcslen(finalUrl));
             else result->url = request->url;
         }
     }
@@ -901,15 +901,15 @@ static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
     if (session) WinHttpCloseHandle(session);
 }
 #else
-static size_t vbjs_fetch_write(char *data, size_t size, size_t count, void *opaque)
+static size_t nnbjs_fetch_write(char *data, size_t size, size_t count, void *opaque)
 {
-    auto *result = (vbjs_fetch_result_t *)opaque; result->body.append(data, size * count); return size * count;
+    auto *result = (nnbjs_fetch_result_t *)opaque; result->body.append(data, size * count); return size * count;
 }
 
 // libcurl entry points. macOS always has libcurl, so it is linked normally.
 // Elsewhere it is loaded on first use: a binary linked against one
 // distribution's libcurl does not start on another, and only fetch() needs it.
-namespace vbcurl {
+namespace nnbcurl {
 #ifdef __APPLE__
 static bool load(void) { static bool ready; if (!ready) { curl_global_init(CURL_GLOBAL_DEFAULT); ready = true; } return true; }
 static CURL *(*const easy_init)(void) = curl_easy_init;
@@ -967,26 +967,26 @@ static bool load(void)
 #endif
 }
 
-static void vbjs_fetch_perform(vbjs_fetch_request_t *request)
+static void nnbjs_fetch_perform(nnbjs_fetch_request_t *request)
 {
-    if (!vbcurl::load()) { request->result->error = "fetch: libcurl is not installed on this system"; return; }
-    CURL *curl = vbcurl::easy_init();
+    if (!nnbcurl::load()) { request->result->error = "fetch: libcurl is not installed on this system"; return; }
+    CURL *curl = nnbcurl::easy_init();
     if (!curl) request->result->error = "fetch: unable to create HTTP client";
     else
     {
-        curl_slist *headers = nullptr; for (auto const &header : request->headers) headers = vbcurl::slist_append(headers, header.c_str()); if (headers) vbcurl::easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        vbcurl::easy_setopt(curl, CURLOPT_URL, request->url); vbcurl::easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); vbcurl::easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); vbcurl::easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L); vbcurl::easy_setopt(curl, CURLOPT_WRITEFUNCTION, vbjs_fetch_write); vbcurl::easy_setopt(curl, CURLOPT_WRITEDATA, request->result); vbcurl::easy_setopt(curl, CURLOPT_HEADERFUNCTION, vbjs_fetch_header); vbcurl::easy_setopt(curl, CURLOPT_HEADERDATA, request->result);
-        if (request->method && strcmp(request->method, "GET")) vbcurl::easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
-        if (!request->body.empty()) { vbcurl::easy_setopt(curl, CURLOPT_POSTFIELDS, request->body.data()); vbcurl::easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)request->body.size()); }
-        CURLcode const code = vbcurl::easy_perform(curl); if (code != CURLE_OK) request->result->error = vbcurl::easy_strerror(code); else { char *effectiveUrl = nullptr; vbcurl::easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &request->result->status); vbcurl::easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl); if (effectiveUrl) request->result->url = effectiveUrl; } vbcurl::slist_free_all(headers); vbcurl::easy_cleanup(curl);
+        curl_slist *headers = nullptr; for (auto const &header : request->headers) headers = nnbcurl::slist_append(headers, header.c_str()); if (headers) nnbcurl::easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        nnbcurl::easy_setopt(curl, CURLOPT_URL, request->url); nnbcurl::easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); nnbcurl::easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); nnbcurl::easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L); nnbcurl::easy_setopt(curl, CURLOPT_WRITEFUNCTION, nnbjs_fetch_write); nnbcurl::easy_setopt(curl, CURLOPT_WRITEDATA, request->result); nnbcurl::easy_setopt(curl, CURLOPT_HEADERFUNCTION, nnbjs_fetch_header); nnbcurl::easy_setopt(curl, CURLOPT_HEADERDATA, request->result);
+        if (request->method && strcmp(request->method, "GET")) nnbcurl::easy_setopt(curl, CURLOPT_CUSTOMREQUEST, request->method);
+        if (!request->body.empty()) { nnbcurl::easy_setopt(curl, CURLOPT_POSTFIELDS, request->body.data()); nnbcurl::easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)request->body.size()); }
+        CURLcode const code = nnbcurl::easy_perform(curl); if (code != CURLE_OK) request->result->error = nnbcurl::easy_strerror(code); else { char *effectiveUrl = nullptr; nnbcurl::easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &request->result->status); nnbcurl::easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl); if (effectiveUrl) request->result->url = effectiveUrl; } nnbcurl::slist_free_all(headers); nnbcurl::easy_cleanup(curl);
     }
 }
 #endif
 
-static void *vbjs_fetch_thread(void *opaque)
+static void *nnbjs_fetch_thread(void *opaque)
 {
-    auto *request = (vbjs_fetch_request_t *)opaque;
-    vbjs_fetch_perform(request);
+    auto *request = (nnbjs_fetch_request_t *)opaque;
+    nnbjs_fetch_perform(request);
     free(request->url); free(request->method);
     pthread_mutex_lock(&s_fetchMutex);
     if (!s_fetchShuttingDown) s_fetchReady.push_back(request->result);
@@ -1015,13 +1015,13 @@ static JSValue js_fetch_headers_get(JSContext *ctx, JSValueConst this_val, int a
 static JSValue js_fetch(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (!argc) return JS_ThrowTypeError(ctx, "fetch(url[, options])"); const char *url = JS_ToCString(ctx, argv[0]); if (!url) return JS_EXCEPTION;
-    auto *result = new vbjs_fetch_result_t; JSValue resolving[2]; JSValue promise = JS_NewPromiseCapability(ctx, resolving); result->resolve = resolving[0]; result->reject = resolving[1]; auto *request = new vbjs_fetch_request_t {}; request->url = strdup(url); JS_FreeCString(ctx, url); request->result = result;
+    auto *result = new nnbjs_fetch_result_t; JSValue resolving[2]; JSValue promise = JS_NewPromiseCapability(ctx, resolving); result->resolve = resolving[0]; result->reject = resolving[1]; auto *request = new nnbjs_fetch_request_t {}; request->url = strdup(url); JS_FreeCString(ctx, url); request->result = result;
     if (argc > 1 && JS_IsObject(argv[1])) { JSValue method = JS_GetPropertyStr(ctx, argv[1], "method"), body = JS_GetPropertyStr(ctx, argv[1], "body"), headers = JS_GetPropertyStr(ctx, argv[1], "headers"); if (JS_IsString(method)) { const char *text = JS_ToCString(ctx, method); request->method = text ? strdup(text) : nullptr; if (text) JS_FreeCString(ctx, text); } if (!JS_IsUndefined(body) && !JS_IsNull(body) && js_dgram_copy_bytes(ctx, body, &request->body)) { JS_FreeValue(ctx, method); JS_FreeValue(ctx, body); JS_FreeValue(ctx, headers); free(request->url); free(request->method); delete request; JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; return JS_EXCEPTION; } if (JS_IsObject(headers)) { JSPropertyEnum *names = nullptr; uint32_t count = 0; if (!JS_GetOwnPropertyNames(ctx, &names, &count, headers, JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY)) { for (uint32_t i = 0; i < count; ++i) { char const *name = JS_AtomToCString(ctx, names[i].atom); JSValue value = JS_GetProperty(ctx, headers, names[i].atom); char const *text = JS_ToCString(ctx, value); if (name && text) request->headers.emplace_back(std::string(name) + ": " + text); if (name) JS_FreeCString(ctx, name); if (text) JS_FreeCString(ctx, text); JS_FreeValue(ctx, value); JS_FreeAtom(ctx, names[i].atom); } js_free(ctx, names); } } JS_FreeValue(ctx, method); JS_FreeValue(ctx, body); JS_FreeValue(ctx, headers); }
-    pthread_t thread; if (pthread_create(&thread, nullptr, vbjs_fetch_thread, request)) { free(request->url); free(request->method); delete request; JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; return JS_ThrowInternalError(ctx, "fetch: cannot create worker thread"); } pthread_detach(thread); return promise;
+    pthread_t thread; if (pthread_create(&thread, nullptr, nnbjs_fetch_thread, request)) { free(request->url); free(request->method); delete request; JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; return JS_ThrowInternalError(ctx, "fetch: cannot create worker thread"); } pthread_detach(thread); return promise;
 }
-static void vbjs_fetch_drain(JSContext *ctx)
+static void nnbjs_fetch_drain(JSContext *ctx)
 {
-    std::deque<vbjs_fetch_result_t *> ready; pthread_mutex_lock(&s_fetchMutex); ready.swap(s_fetchReady); pthread_mutex_unlock(&s_fetchMutex);
+    std::deque<nnbjs_fetch_result_t *> ready; pthread_mutex_lock(&s_fetchMutex); ready.swap(s_fetchReady); pthread_mutex_unlock(&s_fetchMutex);
     for (auto *result : ready) { JSValue argument; JSValue callback; if (!result->error.empty()) { argument = JS_NewError(ctx); JS_SetPropertyStr(ctx, argument, "message", JS_NewString(ctx, result->error.c_str())); callback = result->reject; } else { argument = JS_NewObject(ctx); JS_SetPropertyStr(ctx, argument, "status", JS_NewInt32(ctx, (int)result->status)); JS_SetPropertyStr(ctx, argument, "ok", JS_NewBool(ctx, result->status >= 200 && result->status < 300)); JS_SetPropertyStr(ctx, argument, "url", JS_NewString(ctx, result->url.c_str())); JS_SetPropertyStr(ctx, argument, "_body", JS_NewStringLen(ctx, result->body.data(), result->body.size())); JS_SetPropertyStr(ctx, argument, "_bytes", JS_NewUint8ArrayCopy(ctx, (const uint8_t *)result->body.data(), result->body.size())); JS_SetPropertyStr(ctx, argument, "text", JS_NewCFunction(ctx, js_fetch_text, "text", 0)); JS_SetPropertyStr(ctx, argument, "json", JS_NewCFunction(ctx, js_fetch_json, "json", 0)); JS_SetPropertyStr(ctx, argument, "arrayBuffer", JS_NewCFunction(ctx, js_fetch_arrayBuffer, "arrayBuffer", 0)); JSValue headers = JS_NewObject(ctx), values = JS_NewObject(ctx); for (auto const &header : result->headers) JS_SetPropertyStr(ctx, values, header.first.c_str(), JS_NewString(ctx, header.second.c_str())); JS_SetPropertyStr(ctx, headers, "_values", values); JS_SetPropertyStr(ctx, headers, "get", JS_NewCFunction(ctx, js_fetch_headers_get, "get", 1)); JS_SetPropertyStr(ctx, argument, "headers", headers); callback = result->resolve; } JSValue ignored = JS_Call(ctx, callback, JS_UNDEFINED, 1, &argument); JS_FreeValue(ctx, ignored); JS_FreeValue(ctx, argument); JS_FreeValue(ctx, result->resolve); JS_FreeValue(ctx, result->reject); delete result; }
 }
 
@@ -1047,7 +1047,7 @@ static JSValue js_fs_readFile_impl(JSContext *ctx, int argc, JSValueConst *argv,
     if (argc < 1) return JS_ThrowTypeError(ctx, "fs.readFile(path)");
     const char *path = JS_ToCString(ctx, argv[0]);
     if (!path) return JS_EXCEPTION;
-    size_t len = 0; char *buf = vbjs_read_file(path, &len);
+    size_t len = 0; char *buf = nnbjs_read_file(path, &len);
     JS_FreeCString(ctx, path);
     if (!buf) return JS_ThrowReferenceError(ctx, "fs.readFile: cannot open file");
     JSValue v = (legacyText || js_fs_text_encoding(ctx, argc, argv, 1))
@@ -1076,7 +1076,7 @@ static JSValue js_fs_writeImpl(JSContext *ctx, int argc, JSValueConst *argv, con
 static JSValue js_fs_writeFile (JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) { return js_fs_writeImpl(ctx, argc, argv, "wb"); }
 static JSValue js_fs_appendFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) { return js_fs_writeImpl(ctx, argc, argv, "ab"); }
 
-using vbjs_fs_function_t = JSValue (*)(JSContext *, JSValueConst, int, JSValueConst *);
+using nnbjs_fs_function_t = JSValue (*)(JSContext *, JSValueConst, int, JSValueConst *);
 
 static JSValue js_fs_exists(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
@@ -1107,7 +1107,7 @@ static JSValue js_fs_renameSync(JSContext *ctx, JSValueConst, int argc, JSValueC
 }
 static JSValue js_fs_mkdirSync(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (!argc) return JS_ThrowTypeError(ctx, "fs.mkdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; int const ok = vbjs_mkdir(path) == 0 || errno == EEXIST; JS_FreeCString(ctx, path); return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.mkdirSync: cannot create directory");
+    if (!argc) return JS_ThrowTypeError(ctx, "fs.mkdirSync(path[, options])"); const char *path = JS_ToCString(ctx, argv[0]); if (!path) return JS_EXCEPTION; int const ok = nnbjs_mkdir(path) == 0 || errno == EEXIST; JS_FreeCString(ctx, path); return ok ? JS_UNDEFINED : JS_ThrowReferenceError(ctx, "fs.mkdirSync: cannot create directory");
 }
 static JSValue js_fs_stat_isFile(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISREG(value)); }
 static JSValue js_fs_stat_isDirectory(JSContext *ctx, JSValueConst this_val, int, JSValueConst *) { JSValue mode = JS_GetPropertyStr(ctx, this_val, "_mode"); int32_t value = 0; JS_ToInt32(ctx, &value, mode); JS_FreeValue(ctx, mode); return JS_NewBool(ctx, S_ISDIR(value)); }
@@ -1123,7 +1123,7 @@ static JSValue js_fs_statSync(JSContext *ctx, JSValueConst, int argc, JSValueCon
 // Callback APIs are queued to the next engine tick. The file operation itself
 // is currently synchronous, but callbacks never run re-entrantly from the
 // JavaScript call that initiated them.
-static JSValue js_fs_callback_call(JSContext *ctx, int argc, JSValueConst *argv, vbjs_fs_function_t function, int existsStyle = 0)
+static JSValue js_fs_callback_call(JSContext *ctx, int argc, JSValueConst *argv, nnbjs_fs_function_t function, int existsStyle = 0)
 {
     if (argc < 2 || !JS_IsFunction(ctx, argv[argc - 1]))
         return JS_EXCEPTION;
@@ -1162,7 +1162,7 @@ static JSValue js_fs_rename_node(JSContext *ctx, JSValueConst, int argc, JSValue
 // The engine filesystem is synchronous, but expose it through genuine
 // JavaScript Promises so `await fs.promises.*()` has normal Promise/error
 // semantics and composes with the rest of a mod's async code.
-static JSValue js_fs_promise_call(JSContext *ctx, int argc, JSValueConst *argv, vbjs_fs_function_t function)
+static JSValue js_fs_promise_call(JSContext *ctx, int argc, JSValueConst *argv, nnbjs_fs_function_t function)
 {
     JSValue resolving[2];
     JSValue promise = JS_NewPromiseCapability(ctx, resolving);
@@ -1192,20 +1192,20 @@ static JSValue js_fs_promises_unlink(JSContext *ctx, JSValueConst, int argc, JSV
 static JSValue js_fs_promises_rename(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 { return js_fs_promise_call(ctx, argc, argv, js_fs_renameSync); }
 
-// ----------------------------------------------------------------- vb: events ---
+// ----------------------------------------------------------------- nnb: events ---
 
-static JSValue js_vb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
-        return JS_ThrowTypeError(ctx, "vb.on(event, handler)");
+        return JS_ThrowTypeError(ctx, "nnb.on(event, handler)");
     const char *ev = JS_ToCString(ctx, argv[0]);
     if (!ev) return JS_EXCEPTION;
     // The public API accepts both `STRAFELEFT` and `EVENT_STRAFELEFT`, but
     // engine dispatch always uses the canonical EVENT_* spelling. Store under
     // that spelling so the callback (and a source breakpoint inside it) is
     // actually reachable.
-    int const conEv = vbjs_game::eventNum(ev);
-    const char *eventKey = conEv >= 0 ? vbjs_game::eventName(conEv) : ev;
+    int const conEv = nnbjs_game::eventNum(ev);
+    const char *eventKey = conEv >= 0 ? nnbjs_game::eventName(conEv) : ev;
     JSValue arr = JS_GetPropertyStr(ctx, s_events, eventKey);
     if (!JS_IsArray(arr))
     {
@@ -1218,22 +1218,22 @@ static JSValue js_vb_on(JSContext *ctx, JSValueConst, int argc, JSValueConst *ar
     JS_SetPropertyUint32(ctx, arr, len, JS_DupValue(ctx, argv[1]));
     JS_FreeValue(ctx, arr);
     // If this is a CON event name, mark it so the CON dispatch hook fires it.
-    if (conEv >= 0 && conEv < VBJS_MAXCONEVENTS) s_conEventListened[conEv] = 1;
+    if (conEv >= 0 && conEv < NNBJS_MAXCONEVENTS) s_conEventListened[conEv] = 1;
     if (!strcmp(eventKey, "frame")) s_frameEventListened = 1;
     JS_FreeCString(ctx, ev);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 1) return JS_UNDEFINED;
     const char *ev = JS_ToCString(ctx, argv[0]);
     if (ev)
     {
-        int const conEv = vbjs_game::eventNum(ev);
-        const char *eventKey = conEv >= 0 ? vbjs_game::eventName(conEv) : ev;
+        int const conEv = nnbjs_game::eventNum(ev);
+        const char *eventKey = conEv >= 0 ? nnbjs_game::eventName(conEv) : ev;
         JS_SetPropertyStr(ctx, s_events, eventKey, JS_NewArray(ctx));
-        if (conEv >= 0 && conEv < VBJS_MAXCONEVENTS)
+        if (conEv >= 0 && conEv < NNBJS_MAXCONEVENTS)
             s_conEventListened[conEv] = 0;
         if (!strcmp(eventKey, "frame")) s_frameEventListened = 0;
         JS_FreeCString(ctx, ev);
@@ -1242,7 +1242,7 @@ static JSValue js_vb_off(JSContext *ctx, JSValueConst, int argc, JSValueConst *a
 }
 
 // Fire an event to every registered handler with the given args.
-static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
+static void nnbjs_fire(const char *event, int argc, JSValueConst *argv)
 {
     if (!s_ctx || s_devtoolsPaused) return;
     JSContext *ctx = s_ctx;
@@ -1264,7 +1264,7 @@ static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
             {
                 char context[128];
                 snprintf(context, sizeof(context), "uncaught exception in %s handler #%u (disabled)", event, i + 1);
-                vbjs_dump_error(ctx, context);
+                nnbjs_dump_error(ctx, context);
                 // An uncaught handler must not destabilize the game or throw on
                 // every subsequent frame/input event.  It remains visible in
                 // the logs and can be registered again after the mod is fixed.
@@ -1277,11 +1277,11 @@ static void vbjs_fire(const char *event, int argc, JSValueConst *argv)
     JS_FreeValue(ctx, arr);
 }
 
-// ----------------------------------------------------------------- vb: HUD ---
+// ----------------------------------------------------------------- nnb: HUD ---
 
-static JSValue js_vb_drawText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_drawText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 4) return JS_ThrowTypeError(ctx, "vb.drawText(id, x, y, text[, pal[, shade]])");
+    if (argc < 4) return JS_ThrowTypeError(ctx, "nnb.drawText(id, x, y, text[, pal[, shade]])");
     int32_t id = 0, x = 0, y = 0, pal = 0, shade = 0;
     JS_ToInt32(ctx, &id, argv[0]); JS_ToInt32(ctx, &x, argv[1]); JS_ToInt32(ctx, &y, argv[2]);
     if (argc > 4) JS_ToInt32(ctx, &pal, argv[4]);
@@ -1289,7 +1289,7 @@ static JSValue js_vb_drawText(JSContext *ctx, JSValueConst, int argc, JSValueCon
     const char *str = JS_ToCString(ctx, argv[3]);
     if (!str) return JS_EXCEPTION;
 
-    vbjs_text_t *slot = nullptr, *freeSlot = nullptr;
+    nnbjs_text_t *slot = nullptr, *freeSlot = nullptr;
     for (auto &t : s_text)
     {
         if (t.used && t.id == id) { slot = &t; break; }
@@ -1305,7 +1305,7 @@ static JSValue js_vb_drawText(JSContext *ctx, JSValueConst, int argc, JSValueCon
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_clearText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_clearText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t id = 0; int all = (argc < 1);
     if (!all) JS_ToInt32(ctx, &id, argv[0]);
@@ -1316,11 +1316,11 @@ static JSValue js_vb_clearText(JSContext *ctx, JSValueConst, int argc, JSValueCo
 // Explicit source-level breakpoint. This is intentionally cooperative: QuickJS-ng
 // has no debugger protocol, so the game pauses further JS dispatch at a safe frame
 // boundary and the ImGui inspector can examine globals/current event and resume it.
-static JSValue js_vb_breakpoint(JSContext *ctx, JSValueConst, int, JSValueConst *)
+static JSValue js_nnb_breakpoint(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
     if (s_devtools)
     {
-        snprintf(s_devtoolsCurrentEvent, sizeof(s_devtoolsCurrentEvent), "vb.breakpoint()");
+        snprintf(s_devtoolsCurrentEvent, sizeof(s_devtoolsCurrentEvent), "nnb.breakpoint()");
         JS_FreeValue(ctx, s_devtoolsEvent);
         s_devtoolsEvent = JS_UNDEFINED;
         s_devtoolsPaused = 1;
@@ -1328,9 +1328,9 @@ static JSValue js_vb_breakpoint(JSContext *ctx, JSValueConst, int, JSValueConst 
     return JS_UNDEFINED;
 }
 
-// -------------------------------------------------- vb: gameplay bindings ---
+// -------------------------------------------------- nnb: gameplay bindings ---
 
-static JSValue js_vb_spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t tile = 0, x = 0, y = 0, z = 0, owner = -1;
     if (argc > 0) JS_ToInt32(ctx, &tile, argv[0]);
@@ -1338,33 +1338,33 @@ static JSValue js_vb_spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst 
     if (argc > 2) JS_ToInt32(ctx, &y, argv[2]);
     if (argc > 3) JS_ToInt32(ctx, &z, argv[3]);
     if (argc > 4) JS_ToInt32(ctx, &owner, argv[4]);
-    return JS_NewInt32(ctx, vbjs_game::spawn(tile, x, y, z, owner));
+    return JS_NewInt32(ctx, nnbjs_game::spawn(tile, x, y, z, owner));
 }
 
 // Exact Duke actor APIs. Keep the native names and parameter order so scripts
 // can use the same calls as engine code when they need low-level control.
-static JSValue js_vb_A_Spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_A_Spawn(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 2) return JS_ThrowTypeError(ctx, "A_Spawn(spriteNum, tileNum)");
     int32_t spriteNum = 0, tileNum = 0;
     JS_ToInt32(ctx, &spriteNum, argv[0]); JS_ToInt32(ctx, &tileNum, argv[1]);
-    return JS_NewInt32(ctx, vbjs_game::A_Spawn(spriteNum, tileNum));
+    return JS_NewInt32(ctx, nnbjs_game::A_Spawn(spriteNum, tileNum));
 }
 
-static JSValue js_vb_A_InsertSprite(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_A_InsertSprite(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 13) return JS_ThrowTypeError(ctx, "A_InsertSprite(whatsect, s_x, s_y, s_z, s_pn, s_s, s_xr, s_yr, s_a, s_ve, s_zv, s_ow, s_ss)");
     int32_t values[13] = {};
     for (int i = 0; i < 13; ++i) JS_ToInt32(ctx, &values[i], argv[i]);
-    return JS_NewInt32(ctx, vbjs_game::A_InsertSprite(values[0], values[1], values[2], values[3], values[4], values[5], values[6],
+    return JS_NewInt32(ctx, nnbjs_game::A_InsertSprite(values[0], values[1], values[2], values[3], values[4], values[5], values[6],
                                                         values[7], values[8], values[9], values[10], values[11], values[12]));
 }
 
-static JSValue js_vb_sendMessage(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_sendMessage(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 1) return JS_UNDEFINED;
     const char *s = JS_ToCString(ctx, argv[0]);
-    if (s) { vbjs_game::sendChat(s); JS_FreeCString(ctx, s); }
+    if (s) { nnbjs_game::sendChat(s); JS_FreeCString(ctx, s); }
     return JS_UNDEFINED;
 }
 
@@ -1383,11 +1383,11 @@ static std::string commandName(char const *text)
     return name;
 }
 
-static JSValue js_vb_registerCommand(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_registerCommand(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     if (argc < 2 || !JS_IsFunction(ctx, argv[1]))
-        return JS_ThrowTypeError(ctx, "vb.registerCommand(name, handler)");
-    if (!vbjs_game::isServer())
+        return JS_ThrowTypeError(ctx, "nnb.registerCommand(name, handler)");
+    if (!nnbjs_game::isServer())
         return JS_ThrowTypeError(ctx, "Player commands must be registered on the server");
 
     char const *text = JS_ToCString(ctx, argv[0]);
@@ -1415,34 +1415,34 @@ static JSValue js_server_reply(JSContext *ctx, JSValueConst, int argc, JSValueCo
     char const *text = JS_ToCString(ctx, argv[0]);
     if (!text)
         return JS_EXCEPTION;
-    vbjs_game::sendPrivate(player, connection, text);
+    nnbjs_game::sendPrivate(player, connection, text);
     JS_FreeCString(ctx, text);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_getGamevar(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_getGamevar(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 1) return JS_ThrowTypeError(ctx, "vb.getGamevar(name[, spriteNum[, playerNum]])");
+    if (argc < 1) return JS_ThrowTypeError(ctx, "nnb.getGamevar(name[, spriteNum[, playerNum]])");
     const char *name = JS_ToCString(ctx, argv[0]);
     if (!name) return JS_EXCEPTION;
     int32_t sp = -1, pl = -1;
     if (argc > 1) JS_ToInt32(ctx, &sp, argv[1]);
     if (argc > 2) JS_ToInt32(ctx, &pl, argv[2]);
-    int ok = 0; int v = vbjs_game::getGamevar(name, sp, pl, &ok);
+    int ok = 0; int v = nnbjs_game::getGamevar(name, sp, pl, &ok);
     JS_FreeCString(ctx, name);
     return ok ? JS_NewInt32(ctx, v) : JS_UNDEFINED;
 }
 
-static JSValue js_vb_setGamevar(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_setGamevar(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.setGamevar(name, value[, spriteNum[, playerNum]])");
+    if (argc < 2) return JS_ThrowTypeError(ctx, "nnb.setGamevar(name, value[, spriteNum[, playerNum]])");
     const char *name = JS_ToCString(ctx, argv[0]);
     if (!name) return JS_EXCEPTION;
     int32_t val = 0, sp = -1, pl = -1;
     JS_ToInt32(ctx, &val, argv[1]);
     if (argc > 2) JS_ToInt32(ctx, &sp, argv[2]);
     if (argc > 3) JS_ToInt32(ctx, &pl, argv[3]);
-    vbjs_game::setGamevar(name, val, sp, pl);
+    nnbjs_game::setGamevar(name, val, sp, pl);
     JS_FreeCString(ctx, name);
     return JS_UNDEFINED;
 }
@@ -1453,7 +1453,7 @@ static JSValue js_cvar_run(JSContext *ctx, JSValueConst, int argc, JSValueConst 
     if (argc < 1) return JS_ThrowTypeError(ctx, "cvar.run(command)");
     const char *cmd = JS_ToCString(ctx, argv[0]);
     if (!cmd) return JS_EXCEPTION;
-    vbjs_game::runCommand(cmd);
+    nnbjs_game::runCommand(cmd);
     JS_FreeCString(ctx, cmd);
     return JS_UNDEFINED;
 }
@@ -1464,23 +1464,23 @@ static JSValue js_cvar_set(JSContext *ctx, JSValueConst, int argc, JSValueConst 
     if (argc < 2) return JS_ThrowTypeError(ctx, "cvar.set(name, value)");
     const char *name = JS_ToCString(ctx, argv[0]);
     const char *val  = JS_ToCString(ctx, argv[1]);
-    if (name && val) { char buf[512]; snprintf(buf, sizeof(buf), "%s %s", name, val); vbjs_game::runCommand(buf); }
+    if (name && val) { char buf[512]; snprintf(buf, sizeof(buf), "%s %s", name, val); nnbjs_game::runCommand(buf); }
     if (name) JS_FreeCString(ctx, name);
     if (val)  JS_FreeCString(ctx, val);
     return JS_UNDEFINED;
 }
 
-// Generic CON struct getters/setters. `magic` is the struct kind (VBJS_ACTOR, ...).
+// Generic CON struct getters/setters. `magic` is the struct kind (NNBJS_ACTOR, ...).
 // Args: index-based kinds -> (index, member[, parm2]); userdef -> (member[, parm2]).
 static JSValue js_con_get(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
 {
     int32_t index = 0, parm2 = 0; int ai = 0;
-    if (magic != VBJS_USERDEF) { if (argc < 2) return JS_ThrowTypeError(ctx, "getX(index, member)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
+    if (magic != NNBJS_USERDEF) { if (argc < 2) return JS_ThrowTypeError(ctx, "getX(index, member)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
     else if (argc < 1) return JS_ThrowTypeError(ctx, "getUserdef(member)");
     const char *member = JS_ToCString(ctx, argv[ai]);
     if (!member) return JS_EXCEPTION;
     if (argc > ai + 1) JS_ToInt32(ctx, &parm2, argv[ai + 1]);
-    int ok = 0; int v = vbjs_game::conGet(magic, index, member, parm2, &ok);
+    int ok = 0; int v = nnbjs_game::conGet(magic, index, member, parm2, &ok);
     JS_FreeCString(ctx, member);
     return ok ? JS_NewInt32(ctx, v) : JS_UNDEFINED;
 }
@@ -1488,104 +1488,104 @@ static JSValue js_con_get(JSContext *ctx, JSValueConst, int argc, JSValueConst *
 static JSValue js_con_set(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int magic)
 {
     int32_t index = 0, value = 0, parm2 = 0; int ai = 0;
-    if (magic != VBJS_USERDEF) { if (argc < 3) return JS_ThrowTypeError(ctx, "setX(index, member, value)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
+    if (magic != NNBJS_USERDEF) { if (argc < 3) return JS_ThrowTypeError(ctx, "setX(index, member, value)"); JS_ToInt32(ctx, &index, argv[0]); ai = 1; }
     else if (argc < 2) return JS_ThrowTypeError(ctx, "setUserdef(member, value)");
     const char *member = JS_ToCString(ctx, argv[ai]);
     if (!member) return JS_EXCEPTION;
     JS_ToInt32(ctx, &value, argv[ai + 1]);
     if (argc > ai + 2) JS_ToInt32(ctx, &parm2, argv[ai + 2]);
-    vbjs_game::conSet(magic, index, member, value, parm2);
+    nnbjs_game::conSet(magic, index, member, value, parm2);
     JS_FreeCString(ctx, member);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_sound(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_sound(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t num = 0, sprite = -1;
     if (argc > 0) JS_ToInt32(ctx, &num, argv[0]);
     if (argc > 1) JS_ToInt32(ctx, &sprite, argv[1]);
-    vbjs_game::sound(num, sprite);
+    nnbjs_game::sound(num, sprite);
     return JS_UNDEFINED;
 }
-static JSValue js_vb_shoot(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_shoot(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.shoot(sprite, tile)");
+    if (argc < 2) return JS_ThrowTypeError(ctx, "nnb.shoot(sprite, tile)");
     int32_t sprite = 0, tile = 0; JS_ToInt32(ctx, &sprite, argv[0]); JS_ToInt32(ctx, &tile, argv[1]);
-    return JS_NewInt32(ctx, vbjs_game::shoot(sprite, tile));
+    return JS_NewInt32(ctx, nnbjs_game::shoot(sprite, tile));
 }
-static JSValue js_vb_addAmmo(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_addAmmo(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 3) return JS_ThrowTypeError(ctx, "vb.addAmmo(player, weapon, amount)");
+    if (argc < 3) return JS_ThrowTypeError(ctx, "nnb.addAmmo(player, weapon, amount)");
     int32_t pl = 0, w = 0, amt = 0; JS_ToInt32(ctx, &pl, argv[0]); JS_ToInt32(ctx, &w, argv[1]); JS_ToInt32(ctx, &amt, argv[2]);
-    vbjs_game::addAmmo(pl, w, amt);
+    nnbjs_game::addAmmo(pl, w, amt);
     return JS_UNDEFINED;
 }
-static JSValue js_vb_addWeapon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_addWeapon(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.addWeapon(player, weapon[, switchTo])");
+    if (argc < 2) return JS_ThrowTypeError(ctx, "nnb.addWeapon(player, weapon[, switchTo])");
     int32_t pl = 0, w = 0, sw = 1; JS_ToInt32(ctx, &pl, argv[0]); JS_ToInt32(ctx, &w, argv[1]);
     if (argc > 2) JS_ToInt32(ctx, &sw, argv[2]);
-    vbjs_game::addWeapon(pl, w, sw);
+    nnbjs_game::addWeapon(pl, w, sw);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_define(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_define(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 1) return JS_ThrowTypeError(ctx, "vb.define(name)");
+    if (argc < 1) return JS_ThrowTypeError(ctx, "nnb.define(name)");
     const char *name = JS_ToCString(ctx, argv[0]);
     if (!name) return JS_EXCEPTION;
-    int ok = 0; int v = vbjs_game::conDefine(name, &ok);
+    int ok = 0; int v = nnbjs_game::conDefine(name, &ok);
     JS_FreeCString(ctx, name);
     return ok ? JS_NewInt32(ctx, v) : JS_UNDEFINED;
 }
 
-static JSValue js_vb_player(JSContext *ctx, JSValueConst, int, JSValueConst *)
+static JSValue js_nnb_player(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
-    int sp = vbjs_game::playerSprite();
+    int sp = nnbjs_game::playerSprite();
     JSValue o = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, o, "sprite", JS_NewInt32(ctx, sp));
     int x = 0, y = 0, z = 0, ok = 0;
-    if (sp >= 0) vbjs_game::spriteXYZ(sp, &x, &y, &z, &ok);
+    if (sp >= 0) nnbjs_game::spriteXYZ(sp, &x, &y, &z, &ok);
     JS_SetPropertyStr(ctx, o, "x", JS_NewInt32(ctx, x));
     JS_SetPropertyStr(ctx, o, "y", JS_NewInt32(ctx, y));
     JS_SetPropertyStr(ctx, o, "z", JS_NewInt32(ctx, z));
     return o;
 }
 
-static void vbjs_set_string(JSContext *ctx, JSValueConst object, const char *name, const char *value)
+static void nnbjs_set_string(JSContext *ctx, JSValueConst object, const char *name, const char *value)
 {
     JS_SetPropertyStr(ctx, object, name, value ? JS_NewString(ctx, value) : JS_UNDEFINED);
 }
 
 // A snapshot of real engine state.  Values are intentionally copied, so a
 // script can keep it without holding a pointer into mutable game structures.
-static JSValue js_vb_session(JSContext *ctx, JSValueConst, int, JSValueConst *)
+static JSValue js_nnb_session(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
     JSValue session = JS_NewObject(ctx);
-    int const host = vbjs_game::hostPlayer();
-    JS_SetPropertyStr(ctx, session, "started", JS_NewBool(ctx, vbjs_game::gameStarted()));
-    JS_SetPropertyStr(ctx, session, "skill", JS_NewInt32(ctx, vbjs_game::skill()));
-    JS_SetPropertyStr(ctx, session, "episode", JS_NewInt32(ctx, vbjs_game::episode()));
-    JS_SetPropertyStr(ctx, session, "level", JS_NewInt32(ctx, vbjs_game::level()));
-    JS_SetPropertyStr(ctx, session, "localPlayer", JS_NewInt32(ctx, vbjs_game::localPlayer()));
+    int const host = nnbjs_game::hostPlayer();
+    JS_SetPropertyStr(ctx, session, "started", JS_NewBool(ctx, nnbjs_game::gameStarted()));
+    JS_SetPropertyStr(ctx, session, "skill", JS_NewInt32(ctx, nnbjs_game::skill()));
+    JS_SetPropertyStr(ctx, session, "episode", JS_NewInt32(ctx, nnbjs_game::episode()));
+    JS_SetPropertyStr(ctx, session, "level", JS_NewInt32(ctx, nnbjs_game::level()));
+    JS_SetPropertyStr(ctx, session, "localPlayer", JS_NewInt32(ctx, nnbjs_game::localPlayer()));
     JS_SetPropertyStr(ctx, session, "hostPlayer", host >= 0 ? JS_NewInt32(ctx, host) : JS_UNDEFINED);
-    vbjs_set_string(ctx, session, "hostName", host >= 0 ? vbjs_game::playerName(host) : nullptr);
-    vbjs_set_string(ctx, session, "episodeName", vbjs_game::episodeName());
-    vbjs_set_string(ctx, session, "levelName", vbjs_game::levelName());
-    vbjs_set_string(ctx, session, "userMap", vbjs_game::userMap());
-    vbjs_set_string(ctx, session, "serverAddress", vbjs_game::connectedServer());
+    nnbjs_set_string(ctx, session, "hostName", host >= 0 ? nnbjs_game::playerName(host) : nullptr);
+    nnbjs_set_string(ctx, session, "episodeName", nnbjs_game::episodeName());
+    nnbjs_set_string(ctx, session, "levelName", nnbjs_game::levelName());
+    nnbjs_set_string(ctx, session, "userMap", nnbjs_game::userMap());
+    nnbjs_set_string(ctx, session, "serverAddress", nnbjs_game::connectedServer());
     JSValue players = JS_NewArray(ctx);
-    int const count = vbjs_game::playerCount();
+    int const count = nnbjs_game::playerCount();
     for (int ordinal = 0; ordinal < count; ++ordinal)
     {
-        int const index = vbjs_game::playerAt(ordinal);
+        int const index = nnbjs_game::playerAt(ordinal);
         if (index < 0) continue;
         JSValue player = JS_NewObject(ctx);
         JS_SetPropertyStr(ctx, player, "index", JS_NewInt32(ctx, index));
-        JS_SetPropertyStr(ctx, player, "sprite", JS_NewInt32(ctx, vbjs_game::playerSpriteAt(index)));
-        JS_SetPropertyStr(ctx, player, "isLocal", JS_NewBool(ctx, index == vbjs_game::localPlayer()));
+        JS_SetPropertyStr(ctx, player, "sprite", JS_NewInt32(ctx, nnbjs_game::playerSpriteAt(index)));
+        JS_SetPropertyStr(ctx, player, "isLocal", JS_NewBool(ctx, index == nnbjs_game::localPlayer()));
         JS_SetPropertyStr(ctx, player, "isHost", JS_NewBool(ctx, index == host));
-        const char *name = vbjs_game::playerName(index);
+        const char *name = nnbjs_game::playerName(index);
         JS_SetPropertyStr(ctx, player, "name", JS_NewString(ctx, name ? name : ""));
         JS_SetPropertyUint32(ctx, players, ordinal, player);
     }
@@ -1593,9 +1593,9 @@ static JSValue js_vb_session(JSContext *ctx, JSValueConst, int, JSValueConst *)
     return session;
 }
 
-static JSValue js_vb_setMenuText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_setMenuText(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
-    if (argc < 2) return JS_ThrowTypeError(ctx, "vb.setMenuText(original, replacement)");
+    if (argc < 2) return JS_ThrowTypeError(ctx, "nnb.setMenuText(original, replacement)");
     const char *original = JS_ToCString(ctx, argv[0]);
     const char *replacement = JS_ToCString(ctx, argv[1]);
     if (!original || !replacement) { if (original) JS_FreeCString(ctx, original); if (replacement) JS_FreeCString(ctx, replacement); return JS_EXCEPTION; }
@@ -1604,35 +1604,35 @@ static JSValue js_vb_setMenuText(JSContext *ctx, JSValueConst, int argc, JSValue
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_setMenuBackground(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_setMenuBackground(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t tile = -1;
     if (argc > 0 && !JS_IsNull(argv[0]) && !JS_IsUndefined(argv[0]) && JS_ToInt32(ctx, &tile, argv[0]))
         return JS_EXCEPTION;
-    vbjs_game::setMenuBackground(tile);
+    nnbjs_game::setMenuBackground(tile);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_currentMenu(JSContext *ctx, JSValueConst, int, JSValueConst *)
+static JSValue js_nnb_currentMenu(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
-    return JS_NewInt32(ctx, vbjs_game::currentMenu());
+    return JS_NewInt32(ctx, nnbjs_game::currentMenu());
 }
 
-static JSValue js_vb_openMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_openMenu(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t menu = 0;
     if (argc < 1 || JS_ToInt32(ctx, &menu, argv[0]))
-        return JS_ThrowTypeError(ctx, "vb.openMenu(menuId)");
-    vbjs_game::openMenu(menu);
+        return JS_ThrowTypeError(ctx, "nnb.openMenu(menuId)");
+    nnbjs_game::openMenu(menu);
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_setMenuRoute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_setMenuRoute(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t menu = 0, item = 0, destination = 0;
     if (argc < 3 || JS_ToInt32(ctx, &menu, argv[0]) || JS_ToInt32(ctx, &item, argv[1]))
-        return JS_ThrowTypeError(ctx, "vb.setMenuRoute(menuId, itemIndex, destination | null)");
-    uint64_t const key = vbjs_menu_route_key(menu, item);
+        return JS_ThrowTypeError(ctx, "nnb.setMenuRoute(menuId, itemIndex, destination | null)");
+    uint64_t const key = nnbjs_menu_route_key(menu, item);
     if (JS_IsNull(argv[2]) || JS_IsUndefined(argv[2]))
         s_menuRoutes.erase(key);
     else
@@ -1643,116 +1643,116 @@ static JSValue js_vb_setMenuRoute(JSContext *ctx, JSValueConst, int argc, JSValu
     return JS_UNDEFINED;
 }
 
-static JSValue js_vb_menuSelection(JSContext *ctx, JSValueConst, int, JSValueConst *)
+static JSValue js_nnb_menuSelection(JSContext *ctx, JSValueConst, int, JSValueConst *)
 {
-    return JS_NewInt32(ctx, vbjs_game::menuSelection());
+    return JS_NewInt32(ctx, nnbjs_game::menuSelection());
 }
 
-static JSValue js_vb_setMenuSelection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
+static JSValue js_nnb_setMenuSelection(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv)
 {
     int32_t selection = 0;
     if (argc < 1 || JS_ToInt32(ctx, &selection, argv[0]))
-        return JS_ThrowTypeError(ctx, "vb.setMenuSelection(index)");
-    vbjs_game::setMenuSelection(selection);
+        return JS_ThrowTypeError(ctx, "nnb.setMenuSelection(index)");
+    nnbjs_game::setMenuSelection(selection);
     return JS_UNDEFINED;
 }
 
-// --------------------------------------------------- vb/fs export helpers ---
+// --------------------------------------------------- nnb/fs export helpers ---
 
-static void vbjs_setup_components(JSContext *ctx)
+static void nnbjs_setup_components(JSContext *ctx)
 {
     // Keep this in JavaScript: user subclasses then have normal JS/TS class
     // semantics, while the lifecycle itself is driven by real engine events.
     static const char *source =
-        "(function(vb){\n"
+        "(function(nnb){\n"
         "  const entities = Object.create(null); let nextNodeId = 1;\n"
         "  const call = (component, name, ...args) => { const fn = component[name]; if (typeof fn === 'function') fn.apply(component, args); };\n"
-        "  class VBNode { constructor(){ this.id = nextNodeId++; this.name = 'Node ' + this.id; this.tag = 'Untagged'; this.destroyed = false; this._activeSelf = true; Object.defineProperty(this, 'activeSelf', { enumerable: true, get: () => this._activeSelf, set: active => setNodeActive(this, active) }); this.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }; }\n"
+        "  class NNBNode { constructor(){ this.id = nextNodeId++; this.name = 'Node ' + this.id; this.tag = 'Untagged'; this.destroyed = false; this._activeSelf = true; Object.defineProperty(this, 'activeSelf', { enumerable: true, get: () => this._activeSelf, set: active => setNodeActive(this, active) }); this.transform = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }; }\n"
         "    get activeInHierarchy(){ return !this.destroyed && this._activeSelf; } SetActive(active){ return setNodeActive(this, active); } AddComponent(type){ return attach(this, type); } GetComponent(type){ return getComponent(this, type); } GetComponents(type){ return getComponents(this, type); } Destroy(){ return destroyNode(this); } }\n"
-        "  const key = entity => entity instanceof VBNode ? 'node:' + entity.id : 'sprite:' + entity;\n"
+        "  const key = entity => entity instanceof NNBNode ? 'node:' + entity.id : 'sprite:' + entity;\n"
         "  const list = entity => entities[key(entity)] || (entities[key(entity)] = []);\n"
         "  const active = component => component.enabled && (!component.node || component.node.activeInHierarchy);\n"
         "  const entityOf = component => component.sprite >= 0 ? component.sprite : component.node;\n"
         "  const release = component => { if (active(component)) call(component, 'onDisable'); call(component, 'onDestroy'); trackUpdates(component, -1); component.sprite = -1; component.node = null; };\n"
-        "  class VBComponent { constructor(){ this.sprite = -1; this.node = null; this._enabled = true; Object.defineProperty(this, 'enabled', { enumerable: true, get: () => this._enabled, set: value => setComponentEnabled(this, value) }); Object.defineProperty(this, 'transform', { enumerable: true, get: () => this.node ? this.node.transform : undefined }); }\n"
+        "  class NNBComponent { constructor(){ this.sprite = -1; this.node = null; this._enabled = true; Object.defineProperty(this, 'enabled', { enumerable: true, get: () => this._enabled, set: value => setComponentEnabled(this, value) }); Object.defineProperty(this, 'transform', { enumerable: true, get: () => this.node ? this.node.transform : undefined }); }\n"
         "    get gameObject(){ return this.node; } get isActiveAndEnabled(){ return active(this); } GetComponent(type){ const entity = entityOf(this); return entity === null ? undefined : getComponent(entity, type); } GetComponents(type){ const entity = entityOf(this); return entity === null ? [] : getComponents(entity, type); } AddComponent(type){ const entity = entityOf(this); return entity === null ? undefined : attach(entity, type); } Destroy(){ const entity = entityOf(this); return entity === null ? false : detach(entity, this); }\n"
         "    awake(){} start(){} onSpawn(){} fixedUpdate(dt){} update(dt){} lateUpdate(dt){} onDestroy(){} onEnable(){} onDisable(){} }\n"
-        "  class VBPrefab { constructor(tile, ...components){ this.tile = tile; this.components = components; } }\n"
+        "  class NNBPrefab { constructor(tile, ...components){ this.tile = tile; this.components = components; } }\n"
         "  const updateNames = ['fixedUpdate', 'update', 'lateUpdate']; const updateCounts = { fixedUpdate: 0, update: 0, lateUpdate: 0 };\n"
-        "  const trackUpdates = (component, delta) => { for (const name of updateNames) if (component[name] !== VBComponent.prototype[name]) updateCounts[name] += delta; };\n"
+        "  const trackUpdates = (component, delta) => { for (const name of updateNames) if (component[name] !== NNBComponent.prototype[name]) updateCounts[name] += delta; };\n"
         "  function attach(entity, componentOrType) {\n"
-        "    if (!(entity instanceof VBNode) && (!Number.isInteger(entity) || entity < 0)) throw new TypeError('vb.attach(entity, component) requires a sprite or VBNode');\n"
-        "    if (entity instanceof VBNode && entity.destroyed) throw new Error('Cannot attach to a destroyed VBNode');\n"
+        "    if (!(entity instanceof NNBNode) && (!Number.isInteger(entity) || entity < 0)) throw new TypeError('nnb.attach(entity, component) requires a sprite or NNBNode');\n"
+        "    if (entity instanceof NNBNode && entity.destroyed) throw new Error('Cannot attach to a destroyed NNBNode');\n"
         "    const component = typeof componentOrType === 'function' ? new componentOrType() : componentOrType;\n"
-        "    if (!(component instanceof VBComponent)) throw new TypeError('Components must extend VBComponent');\n"
+        "    if (!(component instanceof NNBComponent)) throw new TypeError('Components must extend NNBComponent');\n"
         "    if (component.sprite >= 0 || component.node) throw new Error('Component is already attached');\n"
-        "    ensureComponentLifecycle(); component.sprite = entity instanceof VBNode ? -1 : entity; component.node = entity instanceof VBNode ? entity : null; trackUpdates(component, 1); if (updateNames.some(name => updateCounts[name])) ensureComponentLoop(); list(entity).push(component); call(component, 'awake'); if (active(component)) call(component, 'onEnable'); call(component, 'onSpawn'); call(component, 'start'); return component;\n"
+        "    ensureComponentLifecycle(); component.sprite = entity instanceof NNBNode ? -1 : entity; component.node = entity instanceof NNBNode ? entity : null; trackUpdates(component, 1); if (updateNames.some(name => updateCounts[name])) ensureComponentLoop(); list(entity).push(component); call(component, 'awake'); if (active(component)) call(component, 'onEnable'); call(component, 'onSpawn'); call(component, 'start'); return component;\n"
         "  }\n"
         "  function detach(entity, component) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return false; const index = components.indexOf(component); if (index < 0) return false; components.splice(index, 1); release(component); if (!components.length) delete entities[entityKey]; return true; }\n"
         "  function destroyComponents(entity) { const entityKey = key(entity), components = entities[entityKey]; if (!components) return; delete entities[entityKey]; for (const component of components.slice()) release(component); }\n"
         "  function getComponent(entity, type) { const components = entities[key(entity)] || []; return components.find(component => component instanceof type); }\n"
         "  function getComponents(entity, type) { const components = (entities[key(entity)] || []).slice(); return type ? components.filter(component => component instanceof type) : components; }\n"
         "  function setComponentEnabled(component, enabled) { enabled = !!enabled; if (component._enabled === enabled) return; const wasActive = active(component); component._enabled = enabled; if (wasActive && !active(component)) call(component, 'onDisable'); else if (!wasActive && active(component)) call(component, 'onEnable'); }\n"
-        "  function createPrefab(tile, ...components) { return new VBPrefab(tile, ...components); }\n"
-        "  function spawnPrefab(prefab, x, y, z, owner) { if (!(prefab instanceof VBPrefab)) throw new TypeError('spawnPrefab expects a VBPrefab'); const sprite = vb.spawn(prefab.tile, x, y, z, owner); if (sprite >= 0) for (const type of prefab.components) attach(sprite, type); return sprite; }\n"
-        "  function createNode(...components) { const node = new VBNode(); for (const type of components) attach(node, type); return node; }\n"
-        "  function setNodeActive(node, enabled) { if (!(node instanceof VBNode) || node.destroyed) return false; enabled = !!enabled; if (node._activeSelf === enabled) return true; const components = (entities[key(node)] || []).slice(); const wasActive = node.activeInHierarchy; node._activeSelf = enabled; for (const component of components) if (component.enabled) call(component, wasActive && !enabled ? 'onDisable' : !wasActive && enabled ? 'onEnable' : 'awake'); return true; }\n"
-        "  function destroyNode(node) { if (!(node instanceof VBNode) || node.destroyed) return false; destroyComponents(node); node.destroyed = true; return true; }\n"
-        "  const eachUpdate = (name, dt) => { const base = VBComponent.prototype[name]; for (const key of Object.keys(entities)) for (const component of entities[key].slice()) { const fn = component[name]; if (active(component) && fn !== base) fn.call(component, dt); } };\n"
+        "  function createPrefab(tile, ...components) { return new NNBPrefab(tile, ...components); }\n"
+        "  function spawnPrefab(prefab, x, y, z, owner) { if (!(prefab instanceof NNBPrefab)) throw new TypeError('spawnPrefab expects an NNBPrefab'); const sprite = nnb.spawn(prefab.tile, x, y, z, owner); if (sprite >= 0) for (const type of prefab.components) attach(sprite, type); return sprite; }\n"
+        "  function createNode(...components) { const node = new NNBNode(); for (const type of components) attach(node, type); return node; }\n"
+        "  function setNodeActive(node, enabled) { if (!(node instanceof NNBNode) || node.destroyed) return false; enabled = !!enabled; if (node._activeSelf === enabled) return true; const components = (entities[key(node)] || []).slice(); const wasActive = node.activeInHierarchy; node._activeSelf = enabled; for (const component of components) if (component.enabled) call(component, wasActive && !enabled ? 'onDisable' : !wasActive && enabled ? 'onEnable' : 'awake'); return true; }\n"
+        "  function destroyNode(node) { if (!(node instanceof NNBNode) || node.destroyed) return false; destroyComponents(node); node.destroyed = true; return true; }\n"
+        "  const eachUpdate = (name, dt) => { const base = NNBComponent.prototype[name]; for (const key of Object.keys(entities)) for (const component of entities[key].slice()) { const fn = component[name]; if (active(component) && fn !== base) fn.call(component, dt); } };\n"
         "  let componentLifecycleInstalled = false, componentLoopInstalled = false;\n"
-        "  function ensureComponentLifecycle() { if (componentLifecycleInstalled) return; componentLifecycleInstalled = true; vb.on('actorDestroyed', event => destroyComponents(event.sprite)); }\n"
+        "  function ensureComponentLifecycle() { if (componentLifecycleInstalled) return; componentLifecycleInstalled = true; nnb.on('actorDestroyed', event => destroyComponents(event.sprite)); }\n"
         "  function ensureComponentLoop() { if (componentLoopInstalled) return; componentLoopInstalled = true; let lastTime = 0, fixedAccum = 0;\n"
-        "    vb.on('frame', () => { const now = Date.now(), dt = lastTime ? Math.min((now - lastTime) / 1000, .25) : 0; lastTime = now;\n"
+        "    nnb.on('frame', () => { const now = Date.now(), dt = lastTime ? Math.min((now - lastTime) / 1000, .25) : 0; lastTime = now;\n"
         "      if (updateCounts.fixedUpdate) { fixedAccum = Math.min(fixedAccum + dt, .25); for (let steps = 0; fixedAccum >= 1 / 60 && steps < 4; ++steps) { eachUpdate('fixedUpdate', 1 / 60); fixedAccum -= 1 / 60; } }\n"
         "      if (updateCounts.update) eachUpdate('update', dt); if (updateCounts.lateUpdate) eachUpdate('lateUpdate', dt);\n"
         "    });\n"
         "  }\n"
-        "  return { VBComponent, VBNode, VBPrefab, attach, detach, getComponent, getComponents, setComponentEnabled, createNode, destroyNode, createPrefab, spawnPrefab };\n"
-        "})(vb)";
-    JSValue value = JS_Eval(ctx, source, strlen(source), "<vb-components>", JS_EVAL_TYPE_GLOBAL);
-    if (JS_IsException(value)) { vbjs_dump_error(ctx); return; }
+        "  return { NNBComponent, NNBNode, NNBPrefab, attach, detach, getComponent, getComponents, setComponentEnabled, createNode, destroyNode, createPrefab, spawnPrefab };\n"
+        "})(nnb)";
+    JSValue value = JS_Eval(ctx, source, strlen(source), "<nnb-components>", JS_EVAL_TYPE_GLOBAL);
+    if (JS_IsException(value)) { nnbjs_dump_error(ctx); return; }
     s_componentExports = value;
 }
 
-// Attach every vb function to the given object (used for both the module and the global).
-static void vbjs_define_vb(JSContext *ctx, JSValue target)
+// Attach every nnb function to the given object (used for both the module and the global).
+static void nnbjs_define_vb(JSContext *ctx, JSValue target)
 {
-    JS_SetPropertyStr(ctx, target, "on",          JS_NewCFunction(ctx, js_vb_on,          "on", 2));
-    JS_SetPropertyStr(ctx, target, "off",         JS_NewCFunction(ctx, js_vb_off,         "off", 1));
+    JS_SetPropertyStr(ctx, target, "on",          JS_NewCFunction(ctx, js_nnb_on,          "on", 2));
+    JS_SetPropertyStr(ctx, target, "off",         JS_NewCFunction(ctx, js_nnb_off,         "off", 1));
     JS_SetPropertyStr(ctx, target, "log",         JS_NewCFunction(ctx, js_console_log,    "log", 1));
-    JS_SetPropertyStr(ctx, target, "drawText",    JS_NewCFunction(ctx, js_vb_drawText,    "drawText", 4));
-    JS_SetPropertyStr(ctx, target, "clearText",   JS_NewCFunction(ctx, js_vb_clearText,   "clearText", 1));
-    JS_SetPropertyStr(ctx, target, "breakpoint",  JS_NewCFunction(ctx, js_vb_breakpoint,  "breakpoint", 0));
-    JS_SetPropertyStr(ctx, target, "spawn",       JS_NewCFunction(ctx, js_vb_spawn,       "spawn", 4));
-    JS_SetPropertyStr(ctx, target, "A_Spawn",     JS_NewCFunction(ctx, js_vb_A_Spawn,     "A_Spawn", 2));
-    JS_SetPropertyStr(ctx, target, "A_InsertSprite", JS_NewCFunction(ctx, js_vb_A_InsertSprite, "A_InsertSprite", 13));
-    JS_SetPropertyStr(ctx, target, "sendMessage", JS_NewCFunction(ctx, js_vb_sendMessage, "sendMessage", 1));
-    JS_SetPropertyStr(ctx, target, "registerCommand", JS_NewCFunction(ctx, js_vb_registerCommand, "registerCommand", 2));
-    JS_SetPropertyStr(ctx, target, "getGamevar",  JS_NewCFunction(ctx, js_vb_getGamevar,  "getGamevar", 1));
-    JS_SetPropertyStr(ctx, target, "setGamevar",  JS_NewCFunction(ctx, js_vb_setGamevar,  "setGamevar", 2));
-    JS_SetPropertyStr(ctx, target, "player",      JS_NewCFunction(ctx, js_vb_player,      "player", 0));
-    JS_SetPropertyStr(ctx, target, "session",     JS_NewCFunction(ctx, js_vb_session,     "session", 0));
-    JS_SetPropertyStr(ctx, target, "setMenuText", JS_NewCFunction(ctx, js_vb_setMenuText, "setMenuText", 2));
-    JS_SetPropertyStr(ctx, target, "setMenuBackground", JS_NewCFunction(ctx, js_vb_setMenuBackground, "setMenuBackground", 1));
-    JS_SetPropertyStr(ctx, target, "currentMenu", JS_NewCFunction(ctx, js_vb_currentMenu, "currentMenu", 0));
-    JS_SetPropertyStr(ctx, target, "openMenu", JS_NewCFunction(ctx, js_vb_openMenu, "openMenu", 1));
-    JS_SetPropertyStr(ctx, target, "setMenuRoute", JS_NewCFunction(ctx, js_vb_setMenuRoute, "setMenuRoute", 3));
-    JS_SetPropertyStr(ctx, target, "menuSelection", JS_NewCFunction(ctx, js_vb_menuSelection, "menuSelection", 0));
-    JS_SetPropertyStr(ctx, target, "setMenuSelection", JS_NewCFunction(ctx, js_vb_setMenuSelection, "setMenuSelection", 1));
+    JS_SetPropertyStr(ctx, target, "drawText",    JS_NewCFunction(ctx, js_nnb_drawText,    "drawText", 4));
+    JS_SetPropertyStr(ctx, target, "clearText",   JS_NewCFunction(ctx, js_nnb_clearText,   "clearText", 1));
+    JS_SetPropertyStr(ctx, target, "breakpoint",  JS_NewCFunction(ctx, js_nnb_breakpoint,  "breakpoint", 0));
+    JS_SetPropertyStr(ctx, target, "spawn",       JS_NewCFunction(ctx, js_nnb_spawn,       "spawn", 4));
+    JS_SetPropertyStr(ctx, target, "A_Spawn",     JS_NewCFunction(ctx, js_nnb_A_Spawn,     "A_Spawn", 2));
+    JS_SetPropertyStr(ctx, target, "A_InsertSprite", JS_NewCFunction(ctx, js_nnb_A_InsertSprite, "A_InsertSprite", 13));
+    JS_SetPropertyStr(ctx, target, "sendMessage", JS_NewCFunction(ctx, js_nnb_sendMessage, "sendMessage", 1));
+    JS_SetPropertyStr(ctx, target, "registerCommand", JS_NewCFunction(ctx, js_nnb_registerCommand, "registerCommand", 2));
+    JS_SetPropertyStr(ctx, target, "getGamevar",  JS_NewCFunction(ctx, js_nnb_getGamevar,  "getGamevar", 1));
+    JS_SetPropertyStr(ctx, target, "setGamevar",  JS_NewCFunction(ctx, js_nnb_setGamevar,  "setGamevar", 2));
+    JS_SetPropertyStr(ctx, target, "player",      JS_NewCFunction(ctx, js_nnb_player,      "player", 0));
+    JS_SetPropertyStr(ctx, target, "session",     JS_NewCFunction(ctx, js_nnb_session,     "session", 0));
+    JS_SetPropertyStr(ctx, target, "setMenuText", JS_NewCFunction(ctx, js_nnb_setMenuText, "setMenuText", 2));
+    JS_SetPropertyStr(ctx, target, "setMenuBackground", JS_NewCFunction(ctx, js_nnb_setMenuBackground, "setMenuBackground", 1));
+    JS_SetPropertyStr(ctx, target, "currentMenu", JS_NewCFunction(ctx, js_nnb_currentMenu, "currentMenu", 0));
+    JS_SetPropertyStr(ctx, target, "openMenu", JS_NewCFunction(ctx, js_nnb_openMenu, "openMenu", 1));
+    JS_SetPropertyStr(ctx, target, "setMenuRoute", JS_NewCFunction(ctx, js_nnb_setMenuRoute, "setMenuRoute", 3));
+    JS_SetPropertyStr(ctx, target, "menuSelection", JS_NewCFunction(ctx, js_nnb_menuSelection, "menuSelection", 0));
+    JS_SetPropertyStr(ctx, target, "setMenuSelection", JS_NewCFunction(ctx, js_nnb_setMenuSelection, "setMenuSelection", 1));
     JS_SetPropertyStr(ctx, target, "run",         JS_NewCFunction(ctx, js_cvar_run,       "run", 1));   // alias of cvar.run
-    JS_SetPropertyStr(ctx, target, "define",      JS_NewCFunction(ctx, js_vb_define,      "define", 1));
-    JS_SetPropertyStr(ctx, target, "sound",       JS_NewCFunction(ctx, js_vb_sound,      "sound", 1));
-    JS_SetPropertyStr(ctx, target, "shoot",       JS_NewCFunction(ctx, js_vb_shoot,      "shoot", 2));
-    JS_SetPropertyStr(ctx, target, "addAmmo",     JS_NewCFunction(ctx, js_vb_addAmmo,    "addAmmo", 3));
-    JS_SetPropertyStr(ctx, target, "addWeapon",   JS_NewCFunction(ctx, js_vb_addWeapon,  "addWeapon", 2));
+    JS_SetPropertyStr(ctx, target, "define",      JS_NewCFunction(ctx, js_nnb_define,      "define", 1));
+    JS_SetPropertyStr(ctx, target, "sound",       JS_NewCFunction(ctx, js_nnb_sound,      "sound", 1));
+    JS_SetPropertyStr(ctx, target, "shoot",       JS_NewCFunction(ctx, js_nnb_shoot,      "shoot", 2));
+    JS_SetPropertyStr(ctx, target, "addAmmo",     JS_NewCFunction(ctx, js_nnb_addAmmo,    "addAmmo", 3));
+    JS_SetPropertyStr(ctx, target, "addWeapon",   JS_NewCFunction(ctx, js_nnb_addWeapon,  "addWeapon", 2));
 
     // Generic CON struct data access — every member CON exposes, by name.
     struct { const char *get, *set; int kind; } const acc[] = {
-        { "getActor","setActor", VBJS_ACTOR }, { "getPlayer","setPlayer", VBJS_PLAYER },
-        { "getInput","setInput", VBJS_INPUT }, { "getSector","setSector", VBJS_SECTOR },
-        { "getWall","setWall", VBJS_WALL }, { "getProjectile","setProjectile", VBJS_PROJECTILE },
-        { "getActiveProjectile","setActiveProjectile", VBJS_ACTIVEPROJ },
-        { "getTileData","setTileData", VBJS_TILEDATA }, { "getUserdef","setUserdef", VBJS_USERDEF },
+        { "getActor","setActor", NNBJS_ACTOR }, { "getPlayer","setPlayer", NNBJS_PLAYER },
+        { "getInput","setInput", NNBJS_INPUT }, { "getSector","setSector", NNBJS_SECTOR },
+        { "getWall","setWall", NNBJS_WALL }, { "getProjectile","setProjectile", NNBJS_PROJECTILE },
+        { "getActiveProjectile","setActiveProjectile", NNBJS_ACTIVEPROJ },
+        { "getTileData","setTileData", NNBJS_TILEDATA }, { "getUserdef","setUserdef", NNBJS_USERDEF },
     };
     for (auto const &a : acc)
     {
@@ -1761,7 +1761,7 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
     }
     if (JS_IsObject(s_componentExports))
     {
-        static const char *names[] = { "VBComponent", "VBNode", "VBPrefab", "attach", "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode", "createPrefab", "spawnPrefab" };
+        static const char *names[] = { "NNBComponent", "NNBNode", "NNBPrefab", "attach", "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode", "createPrefab", "spawnPrefab" };
         for (auto name : names) JS_SetPropertyStr(ctx, target, name, JS_GetPropertyStr(ctx, s_componentExports, name));
     }
 
@@ -1777,23 +1777,23 @@ static void vbjs_define_vb(JSContext *ctx, JSValue target)
             "define", "sound", "shoot", "addAmmo", "addWeapon", "getActor", "setActor", "getPlayer",
             "setPlayer", "getInput", "setInput", "getSector", "setSector", "getWall", "setWall",
             "getProjectile", "setProjectile", "getActiveProjectile", "setActiveProjectile", "getTileData",
-            "setTileData", "getUserdef", "setUserdef", "VBComponent", "VBNode", "VBPrefab", "attach",
+            "setTileData", "getUserdef", "setUserdef", "NNBComponent", "NNBNode", "NNBPrefab", "attach",
             "detach", "getComponent", "getComponents", "setComponentEnabled", "createNode", "destroyNode",
             "createPrefab", "spawnPrefab"
         };
         for (auto name : unsupported)
             JS_SetPropertyStr(ctx, target, name, JS_NewCFunction(ctx,
                 [](JSContext *context, JSValueConst, int, JSValueConst *) -> JSValue {
-                    return JS_ThrowReferenceError(context, "This vb API is not supported by the active game");
+                    return JS_ThrowReferenceError(context, "This nnb API is not supported by the active game");
                 }, name, 0));
     }
 }
-static void vbjs_define_cvar(JSContext *ctx, JSValue target)
+static void nnbjs_define_cvar(JSContext *ctx, JSValue target)
 {
     JS_SetPropertyStr(ctx, target, "run", JS_NewCFunction(ctx, js_cvar_run, "run", 1));
     JS_SetPropertyStr(ctx, target, "set", JS_NewCFunction(ctx, js_cvar_set, "set", 2));
 }
-static void vbjs_define_fs(JSContext *ctx, JSValue target)
+static void nnbjs_define_fs(JSContext *ctx, JSValue target)
 {
     JS_SetPropertyStr(ctx, target, "readFile",   JS_NewCFunction(ctx, js_fs_readFile_node,   "readFile", 3));
     JS_SetPropertyStr(ctx, target, "writeFile",  JS_NewCFunction(ctx, js_fs_writeFile_node,  "writeFile", 4));
@@ -1819,24 +1819,24 @@ static void vbjs_define_fs(JSContext *ctx, JSValue target)
     JS_SetPropertyStr(ctx, promises, "rename", JS_NewCFunction(ctx, js_fs_promises_rename, "rename", 2));
     JS_SetPropertyStr(ctx, target, "promises", promises);
 }
-static void vbjs_define_dgram(JSContext *ctx, JSValue target)
+static void nnbjs_define_dgram(JSContext *ctx, JSValue target)
 {
     JS_SetPropertyStr(ctx, target, "createSocket", JS_NewCFunction(ctx, js_dgram_createSocket, "createSocket", 2));
 }
-static void vbjs_define_net(JSContext *ctx, JSValue target)
+static void nnbjs_define_net(JSContext *ctx, JSValue target)
 {
     JSValue connect = JS_NewCFunction(ctx, js_net_createConnection, "createConnection", 3);
     JS_SetPropertyStr(ctx, target, "createConnection", JS_DupValue(ctx, connect));
     JS_SetPropertyStr(ctx, target, "connect", connect);
 }
 
-// ES-module init for `import ... from 'vb'` / 'fs' (default + named exports).
-static const char *k_vb_exports[] = {
+// ES-module init for `import ... from 'nnb'` / 'fs' (default + named exports).
+static const char *k_nnb_exports[] = {
     "on","off","log","drawText","clearText","breakpoint","spawn","A_Spawn","A_InsertSprite","sendMessage","registerCommand","getGamevar","setGamevar","player","session","setMenuText","setMenuBackground","currentMenu","openMenu","setMenuRoute","menuSelection","setMenuSelection","run","define",
     "sound","shoot","addAmmo","addWeapon",
     "getActor","setActor","getPlayer","setPlayer","getInput","setInput","getSector","setSector","getWall","setWall",
     "getProjectile","setProjectile","getActiveProjectile","setActiveProjectile","getTileData","setTileData","getUserdef","setUserdef",
-    "VBComponent","VBNode","VBPrefab","attach","detach","getComponent","getComponents","setComponentEnabled","createNode","destroyNode","createPrefab","spawnPrefab",
+    "NNBComponent","NNBNode","NNBPrefab","attach","detach","getComponent","getComponents","setComponentEnabled","createNode","destroyNode","createPrefab","spawnPrefab",
 };
 static const char *k_fs_exports[] = { "readFile","writeFile","appendFile","exists","unlink","rename","readFileSync","writeFileSync","appendFileSync","existsSync","unlinkSync","renameSync","mkdirSync","readdirSync","statSync","promises" };
 static const char *k_fs_promises_exports[] = { "readFile","writeFile","appendFile","exists","unlink","rename" };
@@ -1844,37 +1844,37 @@ static const char *k_dgram_exports[] = { "createSocket" };
 static const char *k_net_exports[] = { "createConnection", "connect" };
 static const char *k_cvar_exports[] = { "run","set" };
 
-static int vb_module_init(JSContext *ctx, JSModuleDef *m)
+static int nnb_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue o = JS_NewObject(ctx); vbjs_define_vb(ctx, o);
-    for (auto n : k_vb_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
+    JSValue o = JS_NewObject(ctx); nnbjs_define_vb(ctx, o);
+    for (auto n : k_nnb_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
     return 0;
 }
 static int fs_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue o = JS_NewObject(ctx); vbjs_define_fs(ctx, o);
+    JSValue o = JS_NewObject(ctx); nnbjs_define_fs(ctx, o);
     for (auto n : k_fs_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
     return 0;
 }
 static int dgram_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue o = JS_NewObject(ctx); vbjs_define_dgram(ctx, o);
+    JSValue o = JS_NewObject(ctx); nnbjs_define_dgram(ctx, o);
     for (auto n : k_dgram_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
     return 0;
 }
 static int net_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue o = JS_NewObject(ctx); vbjs_define_net(ctx, o);
+    JSValue o = JS_NewObject(ctx); nnbjs_define_net(ctx, o);
     for (auto n : k_net_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
     return 0;
 }
 static int fs_promises_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue fs = JS_NewObject(ctx); vbjs_define_fs(ctx, fs);
+    JSValue fs = JS_NewObject(ctx); nnbjs_define_fs(ctx, fs);
     JSValue promises = JS_GetPropertyStr(ctx, fs, "promises");
     for (auto n : k_fs_promises_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, promises, n));
     JS_SetModuleExport(ctx, m, "default", promises);
@@ -1883,7 +1883,7 @@ static int fs_promises_module_init(JSContext *ctx, JSModuleDef *m)
 }
 static int cvar_module_init(JSContext *ctx, JSModuleDef *m)
 {
-    JSValue o = JS_NewObject(ctx); vbjs_define_cvar(ctx, o);
+    JSValue o = JS_NewObject(ctx); nnbjs_define_cvar(ctx, o);
     for (auto n : k_cvar_exports) JS_SetModuleExport(ctx, m, n, JS_GetPropertyStr(ctx, o, n));
     JS_SetModuleExport(ctx, m, "default", o);
     return 0;
@@ -1900,27 +1900,27 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
     if (!name) return JS_EXCEPTION;
 
     // Builtins are also require-able.
-    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
+    if (!strcmp(name, "nnb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
     {
         JSValue o = JS_NewObject(ctx);
-        if (!strcmp(name, "vb")) vbjs_define_vb(ctx, o);
-        else if (!strcmp(name, "fs") || !strcmp(name, "node:fs")) vbjs_define_fs(ctx, o);
-        else if (!strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises")) { vbjs_define_fs(ctx, o); JSValue promises = JS_GetPropertyStr(ctx, o, "promises"); JS_FreeValue(ctx, o); o = promises; }
-        else if (!strcmp(name, "dgram") || !strcmp(name, "node:dgram")) vbjs_define_dgram(ctx, o);
-        else if (!strcmp(name, "net") || !strcmp(name, "node:net")) vbjs_define_net(ctx, o);
-        else vbjs_define_cvar(ctx, o);
+        if (!strcmp(name, "nnb")) nnbjs_define_vb(ctx, o);
+        else if (!strcmp(name, "fs") || !strcmp(name, "node:fs")) nnbjs_define_fs(ctx, o);
+        else if (!strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises")) { nnbjs_define_fs(ctx, o); JSValue promises = JS_GetPropertyStr(ctx, o, "promises"); JS_FreeValue(ctx, o); o = promises; }
+        else if (!strcmp(name, "dgram") || !strcmp(name, "node:dgram")) nnbjs_define_dgram(ctx, o);
+        else if (!strcmp(name, "net") || !strcmp(name, "node:net")) nnbjs_define_net(ctx, o);
+        else nnbjs_define_cvar(ctx, o);
         JS_FreeCString(ctx, name);
         return o;
     }
 
-    char path[1024]; vbjs_resolve(name, path, sizeof(path));
+    char path[1024]; nnbjs_resolve(name, path, sizeof(path));
     JS_FreeCString(ctx, name);
 
     JSValue cached = JS_GetPropertyStr(ctx, s_requireCache, path);
     if (!JS_IsUndefined(cached)) return cached;
     JS_FreeValue(ctx, cached);
 
-    size_t len = 0; char *src = vbjs_load_source(path, &len);
+    size_t len = 0; char *src = nnbjs_load_source(path, &len);
     if (!src) return JS_ThrowReferenceError(ctx, "require: cannot find module '%s'", path);
 
     // CommonJS wrapper: (function(exports, module, require){ <src> }); return module.exports
@@ -1950,9 +1950,9 @@ static JSValue js_require(JSContext *ctx, JSValueConst, int argc, JSValueConst *
 
 // ------------------------------------------------------- ES module loader ---
 
-static char *vbjs_normalize(JSContext *ctx, const char *base, const char *name, void *)
+static char *nnbjs_normalize(JSContext *ctx, const char *base, const char *name, void *)
 {
-    if (!strcmp(name, "vb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
+    if (!strcmp(name, "nnb") || !strcmp(name, "fs") || !strcmp(name, "node:fs") || !strcmp(name, "fs/promises") || !strcmp(name, "node:fs/promises") || !strcmp(name, "dgram") || !strcmp(name, "node:dgram") || !strcmp(name, "net") || !strcmp(name, "node:net") || !strcmp(name, "cvar"))
         return js_strdup(ctx, name);
     // Files imported by components are shared within a level and reloaded on the next playtest.
     std::string importName(name);
@@ -1972,17 +1972,17 @@ static char *vbjs_normalize(JSContext *ctx, const char *base, const char *name, 
     if (slash != std::string::npos)
         return js_strdup(ctx, (baseName.substr(0, slash + 1) + name).c_str());
     char resolved[1024];
-    vbjs_resolve(name, resolved, sizeof(resolved));
+    nnbjs_resolve(name, resolved, sizeof(resolved));
     return js_strdup(ctx, resolved);
 }
 
-static JSModuleDef *vbjs_module_loader(JSContext *ctx, const char *module_name, void *)
+static JSModuleDef *nnbjs_module_loader(JSContext *ctx, const char *module_name, void *)
 {
     std::string path(module_name);
     auto const epoch = path.find(componentSuffix);
     if (epoch != std::string::npos)
         path.resize(epoch);
-    size_t len = 0; char *buf = vbjs_load_source(path.c_str(), &len);
+    size_t len = 0; char *buf = nnbjs_load_source(path.c_str(), &len);
     if (!buf) { JS_ThrowReferenceError(ctx, "could not load module '%s'", module_name); return nullptr; }
     JSValue fv = JS_Eval(ctx, buf, len, module_name, JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
     free(buf);
@@ -1994,7 +1994,7 @@ static JSModuleDef *vbjs_module_loader(JSContext *ctx, const char *module_name, 
 
 // ----------------------------------------------------------------- runtime ---
 
-static void vbjs_setup_context(JSContext *ctx)
+static void nnbjs_setup_context(JSContext *ctx)
 {
     s_events       = JS_NewObjectProto(ctx, JS_NULL);
     s_requireCache = JS_NewObjectProto(ctx, JS_NULL);
@@ -2039,27 +2039,27 @@ static void vbjs_setup_context(JSContext *ctx)
     JS_SetPropertyStr(ctx, g, "clearTimeout", JS_NewCFunction(ctx, js_clear_timer, "clearTimeout", 1));
     JS_SetPropertyStr(ctx, g, "clearInterval", JS_NewCFunction(ctx, js_clear_timer, "clearInterval", 1));
 
-    // Global require + a global `vb` object for compatibility with simple scripts.
-    // The preferred API is the explicit `vb` ES module.
+    // Global require + a global `nnb` object for compatibility with simple scripts.
+    // The preferred API is the explicit `nnb` ES module.
     JS_SetPropertyStr(ctx, g, "require", JS_NewCFunction(ctx, js_require, "require", 1));
-    JSValue vb = JS_NewObject(ctx); vbjs_define_vb(ctx, vb);
-    JS_SetPropertyStr(ctx, g, "vb", vb);
-    vbjs_setup_components(ctx);
+    JSValue nnb = JS_NewObject(ctx); nnbjs_define_vb(ctx, nnb);
+    JS_SetPropertyStr(ctx, g, "nnb", nnb);
+    nnbjs_setup_components(ctx);
     // The global object was created before the component kernel.  Decorate it
     // once the kernel has supplied the shared class/function identities.
-    JSValue globalVb = JS_GetPropertyStr(ctx, g, "vb");
-    vbjs_define_vb(ctx, globalVb);
-    JS_FreeValue(ctx, globalVb);
-    JSValue cvar = JS_NewObject(ctx); vbjs_define_cvar(ctx, cvar);
+    JSValue globalNnb = JS_GetPropertyStr(ctx, g, "nnb");
+    nnbjs_define_vb(ctx, globalNnb);
+    JS_FreeValue(ctx, globalNnb);
+    JSValue cvar = JS_NewObject(ctx); nnbjs_define_cvar(ctx, cvar);
     JS_SetPropertyStr(ctx, g, "cvar", cvar);
 
     JS_FreeValue(ctx, g);
 
     // native ES modules
-    JS_SetModuleLoaderFunc(s_rt, vbjs_normalize, vbjs_module_loader, nullptr);
-    JSModuleDef *mvb = JS_NewCModule(ctx, "vb", vb_module_init);
-    for (auto n : k_vb_exports) JS_AddModuleExport(ctx, mvb, n);
-    JS_AddModuleExport(ctx, mvb, "default");
+    JS_SetModuleLoaderFunc(s_rt, nnbjs_normalize, nnbjs_module_loader, nullptr);
+    JSModuleDef *mnnb = JS_NewCModule(ctx, "nnb", nnb_module_init);
+    for (auto n : k_nnb_exports) JS_AddModuleExport(ctx, mnnb, n);
+    JS_AddModuleExport(ctx, mnnb, "default");
     JSModuleDef *mfs = JS_NewCModule(ctx, "fs", fs_module_init);
     for (auto n : k_fs_exports) JS_AddModuleExport(ctx, mfs, n);
     JS_AddModuleExport(ctx, mfs, "default");
@@ -2093,11 +2093,11 @@ static void vbjs_setup_context(JSContext *ctx)
 
 extern "C" {
 
-int VBJS_IsEnabled(void) { return s_enabled; }
+int NNBJS_IsEnabled(void) { return s_enabled; }
 
-void VBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, sizeof(s_launchDir)); }
+void NNBJS_CaptureLaunchDir(void) { if (!s_launchDir[0]) getcwd(s_launchDir, sizeof(s_launchDir)); }
 
-void VBJS_SetExecutablePath(const char *path)
+void NNBJS_SetExecutablePath(const char *path)
 {
     if (!path || !path[0] || s_exeDir[0]) return;
 
@@ -2135,34 +2135,34 @@ void VBJS_SetExecutablePath(const char *path)
     }
 }
 
-void VBJS_SetGenericMode(int enabled) { s_genericMode = enabled != 0; }
+void NNBJS_SetGenericMode(int enabled) { s_genericMode = enabled != 0; }
 
-void VBJS_SetScriptPath(const char *path)
+void NNBJS_SetScriptPath(const char *path)
 {
     std::string source = path;
     std::replace(source.begin(), source.end(), '\\', '/');
     if (!source.empty() && source[0] != '/' && (source.size() < 2 || source[1] != ':') && s_launchDir[0])
         source = std::string(s_launchDir) + "/" + source;
     std::replace(source.begin(), source.end(), '\\', '/');
-    vbjs_add_script(source.c_str());
+    nnbjs_add_script(source.c_str());
 }
 
-void VBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; if (s_devtools) s_debug = 1; }
-int VBJS_DevtoolsEnabled(void) { return s_devtools; }
-void VBJS_SetDebug(int enabled) { s_debug = enabled != 0; }
-int VBJS_DebugEnabled(void) { return s_debug; }
-void VBJS_SetDebugPort(int port) { if (port > 0 && port <= 65535) s_debugPort = port; }
-int VBJS_DebugPort(void) { return s_debugPort; }
-void VBJS_DevtoolsPump(void)
+void NNBJS_SetDevtools(int enabled) { s_devtools = enabled != 0; if (s_devtools) s_debug = 1; }
+int NNBJS_DevtoolsEnabled(void) { return s_devtools; }
+void NNBJS_SetDebug(int enabled) { s_debug = enabled != 0; }
+int NNBJS_DebugEnabled(void) { return s_debug; }
+void NNBJS_SetDebugPort(int port) { if (port > 0 && port <= 65535) s_debugPort = port; }
+int NNBJS_DebugPort(void) { return s_debugPort; }
+void NNBJS_DevtoolsPump(void)
 {
     if (!s_ctx || !s_debuggerWorkPending.exchange(false, std::memory_order_acq_rel)) return;
     js_debugger_cooperate(s_ctx);
     // QuickJS processes one protocol message per cooperate call. Keep the
     // existing pacing when a client queued multiple requests, but stay idle
     // on the common no-debugger path.
-    if (vbjs_debug_peek(&s_debugTransport)) s_debuggerWorkPending.store(true, std::memory_order_release);
+    if (nnbjs_debug_peek(&s_debugTransport)) s_debuggerWorkPending.store(true, std::memory_order_release);
 }
-int VBJS_DevtoolsDebuggerSend(const char *json)
+int NNBJS_DevtoolsDebuggerSend(const char *json)
 {
     if (!json || !json[0]) return 0;
     size_t length = strlen(json); char header[10]; snprintf(header, sizeof(header), "%08x\n", (unsigned)(length + 1));
@@ -2173,7 +2173,7 @@ int VBJS_DevtoolsDebuggerSend(const char *json)
     s_debuggerWorkPending.store(true, std::memory_order_release);
     return 1;
 }
-int VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
+int NNBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
 {
     if (!out || outSize < 2) return 0;
     client = client == 1 ? 1 : 0;
@@ -2187,18 +2187,18 @@ int VBJS_DevtoolsDebuggerReceiveForClient(int client, char *out, int outSize)
     for (unsigned i = 0; i < length; ++i) { char c = s_debugTransport.outbound[client].front(); s_debugTransport.outbound[client].pop_front(); if (i < copied) out[i] = c; }
     out[copied] = 0; pthread_mutex_unlock(&s_debugTransport.mutex); return (int)copied;
 }
-int VBJS_DevtoolsDebuggerReceive(char *out, int outSize) { return VBJS_DevtoolsDebuggerReceiveForClient(0, out, outSize); }
-const char *VBJS_DevtoolsLog(int index)
+int NNBJS_DevtoolsDebuggerReceive(char *out, int outSize) { return NNBJS_DevtoolsDebuggerReceiveForClient(0, out, outSize); }
+const char *NNBJS_DevtoolsLog(int index)
 {
-    if (index < 0 || index >= VBJS_DEVTOOLS_LOGS || index >= s_devtoolsLogCount) return nullptr;
-    int first = s_devtoolsLogCount > VBJS_DEVTOOLS_LOGS ? s_devtoolsLogCount - VBJS_DEVTOOLS_LOGS : 0;
+    if (index < 0 || index >= NNBJS_DEVTOOLS_LOGS || index >= s_devtoolsLogCount) return nullptr;
+    int first = s_devtoolsLogCount > NNBJS_DEVTOOLS_LOGS ? s_devtoolsLogCount - NNBJS_DEVTOOLS_LOGS : 0;
     if (index + first >= s_devtoolsLogCount) return nullptr;
-    return s_devtoolsLogs[(first + index) % VBJS_DEVTOOLS_LOGS];
+    return s_devtoolsLogs[(first + index) % NNBJS_DEVTOOLS_LOGS];
 }
-int VBJS_DevtoolsPaused(void) { return s_devtoolsPaused; }
-void VBJS_DevtoolsResume(void) { s_devtoolsPaused = 0; }
-const char *VBJS_DevtoolsCurrentEvent(void) { return s_devtoolsCurrentEvent[0] ? s_devtoolsCurrentEvent : nullptr; }
-int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
+int NNBJS_DevtoolsPaused(void) { return s_devtoolsPaused; }
+void NNBJS_DevtoolsResume(void) { s_devtoolsPaused = 0; }
+const char *NNBJS_DevtoolsCurrentEvent(void) { return s_devtoolsCurrentEvent[0] ? s_devtoolsCurrentEvent : nullptr; }
+int NNBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
 {
     if (!out || outSize <= 0) return -1;
     out[0] = 0;
@@ -2206,7 +2206,7 @@ int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
     JSValue value;
     if (!strcmp(expression, "$event")) value = JS_DupValue(s_ctx, s_devtoolsEvent);
     else value = JS_Eval(s_ctx, expression, strlen(expression), "<devtools>", JS_EVAL_TYPE_GLOBAL);
-    if (JS_IsException(value)) { vbjs_dump_error(s_ctx); snprintf(out, (size_t)outSize, "<exception>"); return -1; }
+    if (JS_IsException(value)) { nnbjs_dump_error(s_ctx); snprintf(out, (size_t)outSize, "<exception>"); return -1; }
     JSValue json = JS_JSONStringify(s_ctx, value, JS_NULL, JS_UNDEFINED);
     const char *text = JS_IsException(json) || JS_IsUndefined(json) ? JS_ToCString(s_ctx, value) : JS_ToCString(s_ctx, json);
     snprintf(out, (size_t)outSize, "%s", text ? text : "undefined");
@@ -2216,25 +2216,25 @@ int VBJS_DevtoolsEvaluate(const char *expression, char *out, int outSize)
     return 0;
 }
 
-int VBJS_DevtoolsSourceCount(void) { return s_scriptCount; }
-const char *VBJS_DevtoolsSourcePath(int index) { return (unsigned)index < (unsigned)s_scriptCount ? s_scripts[index].path : nullptr; }
-int VBJS_DevtoolsReadSource(int index, char *out, int outSize)
+int NNBJS_DevtoolsSourceCount(void) { return s_scriptCount; }
+const char *NNBJS_DevtoolsSourcePath(int index) { return (unsigned)index < (unsigned)s_scriptCount ? s_scripts[index].path : nullptr; }
+int NNBJS_DevtoolsReadSource(int index, char *out, int outSize)
 {
     if (!out || outSize < 1 || (unsigned)index >= (unsigned)s_scriptCount) return 0;
-    size_t length = 0; char *source = vbjs_load_source(s_scripts[index].path, &length);
+    size_t length = 0; char *source = nnbjs_load_source(s_scripts[index].path, &length);
     if (!source) { out[0] = 0; return 0; }
     snprintf(out, outSize, "%s", source); free(source); return 1;
 }
 
-int VBJS_GenerateProject(const char *requestedName, int typescript)
+int NNBJS_GenerateProject(const char *requestedName, int typescript)
 {
-    VBJS_CaptureLaunchDir();
+    NNBJS_CaptureLaunchDir();
     if (!s_launchDir[0]) return -1;
 
     char name[96] = {0};
     if (requestedName)
     {
-        if (vbjs_safe_project_name(requestedName, name, sizeof(name)) != 0) return -1;
+        if (nnbjs_safe_project_name(requestedName, name, sizeof(name)) != 0) return -1;
     }
     else
     {
@@ -2249,28 +2249,28 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
 
     char autojs[1100], project[1200];
     snprintf(autojs, sizeof(autojs), "%s/autojs", s_launchDir);
-    if (vbjs_mkdir(autojs) != 0 && errno != EEXIST) return -1;
+    if (nnbjs_mkdir(autojs) != 0 && errno != EEXIST) return -1;
     snprintf(project, sizeof(project), "%s/%s", autojs, name);
-    if (vbjs_mkdir(project) != 0) return -1; // never overwrite a project
+    if (nnbjs_mkdir(project) != 0) return -1; // never overwrite a project
 
     char path[1400];
     const char *packageTs =
         "{\n"
-        "  \"name\": \"vbjs-mod\",\n"
+        "  \"name\": \"nnbjs-mod\",\n"
         "  \"private\": true,\n"
         "  \"version\": \"0.1.0\",\n"
         "  \"description\": \"NNBuild auto-loaded JavaScript mod\",\n"
-        "  \"types\": \"./vb.d.ts\",\n"
+        "  \"types\": \"./nnb.d.ts\",\n"
         "  \"scripts\": { \"check\": \"tsc --noEmit -p tsconfig.json\" },\n"
         "  \"devDependencies\": { \"typescript\": \"^5.0.0\" }\n"
         "}\n";
     const char *packageJs =
         "{\n"
-        "  \"name\": \"vbjs-mod\",\n"
+        "  \"name\": \"nnbjs-mod\",\n"
         "  \"private\": true,\n"
         "  \"version\": \"0.1.0\",\n"
         "  \"description\": \"NNBuild auto-loaded JavaScript mod\",\n"
-        "  \"types\": \"./vb.d.ts\",\n"
+        "  \"types\": \"./nnb.d.ts\",\n"
         "  \"scripts\": { \"check\": \"tsc --noEmit -p jsconfig.json\" },\n"
         "  \"devDependencies\": { \"typescript\": \"^5.0.0\" }\n"
         "}\n";
@@ -2281,13 +2281,13 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "    \"moduleResolution\": \"Bundler\", \"allowImportingTsExtensions\": true, \"strict\": true,\n"
         "    \"noEmit\": true, \"skipLibCheck\": true\n"
         "  },\n"
-        "  \"include\": [\"*.ts\", \"vb.d.ts\"]\n"
+        "  \"include\": [\"*.ts\", \"nnb.d.ts\"]\n"
         "}\n";
     const char *indexTs =
         "// NNBuild auto-loads only index.ts (or index.js) from this project.\n"
         "// Optional debug-only launch args, for example:\n"
-        "// /// vbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
-        "import { on, log } from 'vb';\n\n"
+        "// /// nnbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
+        "import { on, log } from 'nnb';\n\n"
         "let frames = 0;\n"
         "on('start', () => {\n"
         "  log('TypeScript mod loaded.');\n"
@@ -2299,33 +2299,33 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     const char *indexJs =
         "// NNBuild auto-loads only index.js (or index.ts) from this project.\n"
         "// Optional debug-only launch args, for example:\n"
-        "// /// vbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
+        "// /// nnbd.params=\"-gm duke -g ~/games/duke3da/duke3d.grp -sc\"\n"
         "// @ts-check\n"
-        "/** @type {typeof import('vb').default} */\n"
-        "const vb = require('vb');\n"
+        "/** @type {typeof import('nnb').default} */\n"
+        "const nnb = require('nnb');\n"
         "\n"
         "let frames = 0;\n"
-        "vb.on('start', () => {\n"
-        "  vb.log('JavaScript mod loaded.');\n"
+        "nnb.on('start', () => {\n"
+        "  nnb.log('JavaScript mod loaded.');\n"
         "});\n\n"
-        "vb.on('frame', () => {\n"
+        "nnb.on('frame', () => {\n"
         "  const breakpointProbe = `JavaScript frame ${++frames}`;\n"
-        "  if (frames % 60 === 0) vb.log(breakpointProbe);\n"
+        "  if (frames % 60 === 0) nnb.log(breakpointProbe);\n"
         "});\n";
     const char *jsconfig =
         "{\n"
         "  \"compilerOptions\": { \"target\": \"ES2020\", \"lib\": [\"ES2020\"], \"checkJs\": true, \"allowJs\": true, \"noEmit\": true, \"strict\": true },\n"
-        "  \"include\": [\"*.js\", \"vb.d.ts\"]\n"
+        "  \"include\": [\"*.js\", \"nnb.d.ts\"]\n"
         "}\n";
     const char *types =
         "// NNBuild embedded JavaScript API declarations.\n"
         "declare type ActorEvent = { sprite: number; owner: number; tile: number };\n"
-        "declare type VBVector3 = { x: number; y: number; z: number };\n"
-        "declare type VBTransform = { position: VBVector3; rotation: VBVector3; scale: VBVector3 };\n"
-        "declare class VBNode { readonly id: number; name: string; tag: string; readonly destroyed: boolean; readonly activeSelf: boolean; readonly activeInHierarchy: boolean; transform: VBTransform; SetActive(active: boolean): boolean; AddComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T; GetComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; GetComponents<T extends VBComponent>(type?: VBComponentConstructor<T>): T[]; Destroy(): boolean; }\n"
-        "declare abstract class VBComponent { sprite: number; node: VBNode | null; readonly gameObject: VBNode | null; readonly transform: VBTransform | undefined; enabled: boolean; readonly isActiveAndEnabled: boolean; GetComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; GetComponents<T extends VBComponent>(type?: VBComponentConstructor<T>): T[]; AddComponent<T extends VBComponent>(type: VBComponentConstructor<T>): T | undefined; Destroy(): boolean; awake(): void; start(): void; onSpawn(): void; fixedUpdate(dt: number): void; update(dt: number): void; lateUpdate(dt: number): void; onDestroy(): void; onEnable(): void; onDisable(): void; }\n"
-        "declare type VBComponentConstructor<T extends VBComponent = VBComponent> = new () => T;\n"
-        "declare class VBPrefab { readonly tile: number; readonly components: readonly VBComponentConstructor[]; }\n"
+        "declare type NNBVector3 = { x: number; y: number; z: number };\n"
+        "declare type NNBTransform = { position: NNBVector3; rotation: NNBVector3; scale: NNBVector3 };\n"
+        "declare class NNBNode { readonly id: number; name: string; tag: string; readonly destroyed: boolean; readonly activeSelf: boolean; readonly activeInHierarchy: boolean; transform: NNBTransform; SetActive(active: boolean): boolean; AddComponent<T extends NNBComponent>(type: NNBComponentConstructor<T>): T; GetComponent<T extends NNBComponent>(type: NNBComponentConstructor<T>): T | undefined; GetComponents<T extends NNBComponent>(type?: NNBComponentConstructor<T>): T[]; Destroy(): boolean; }\n"
+        "declare abstract class NNBComponent { sprite: number; node: NNBNode | null; readonly gameObject: NNBNode | null; readonly transform: NNBTransform | undefined; enabled: boolean; readonly isActiveAndEnabled: boolean; GetComponent<T extends NNBComponent>(type: NNBComponentConstructor<T>): T | undefined; GetComponents<T extends NNBComponent>(type?: NNBComponentConstructor<T>): T[]; AddComponent<T extends NNBComponent>(type: NNBComponentConstructor<T>): T | undefined; Destroy(): boolean; awake(): void; start(): void; onSpawn(): void; fixedUpdate(dt: number): void; update(dt: number): void; lateUpdate(dt: number): void; onDestroy(): void; onEnable(): void; onDisable(): void; }\n"
+        "declare type NNBComponentConstructor<T extends NNBComponent = NNBComponent> = new () => T;\n"
+        "declare class NNBPrefab { readonly tile: number; readonly components: readonly NNBComponentConstructor[]; }\n"
         "declare type ChatEvent = { player: number; text: string };\n"
         "declare type MenuEvent = { menu: number; previousMenu?: number };\n"
         "declare type ConEvent = { sprite: number; player: number; dist: number };\n"
@@ -2333,12 +2333,12 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare type SessionPlayer = { index: number; name: string; sprite: number; isLocal: boolean; isHost: boolean };\n"
         "declare type GameSession = { started: boolean; skill: number; episode: number; level: number; episodeName?: string; levelName?: string; userMap?: string; localPlayer: number; hostPlayer?: number; hostName?: string; serverAddress?: string; players: SessionPlayer[]; };\n"
         "declare type ConValue = number | undefined;\n"
-        "declare interface VBConsole { log(...args: unknown[]): void; error(...args: unknown[]): void; warn(...args: unknown[]): void; info(...args: unknown[]): void; }\n"
-        "declare interface VBHeaders { get(name: string): string | null; }\n"
-        "declare interface VBFetchResponse { readonly status: number; readonly ok: boolean; readonly url: string; readonly headers: VBHeaders; text(): Promise<string>; json<T = unknown>(): Promise<T>; arrayBuffer(): Promise<ArrayBuffer>; }\n"
-        "declare interface VBFetchOptions { method?: string; body?: string | Uint8Array; headers?: Record<string, string>; }\n"
-        "declare function fetch(url: string, options?: VBFetchOptions): Promise<VBFetchResponse>;\n"
-        "// Every CON EVENT_* name accepted by vb.on(). The prefix is optional at runtime.\n"
+        "declare interface NNBConsole { log(...args: unknown[]): void; error(...args: unknown[]): void; warn(...args: unknown[]): void; info(...args: unknown[]): void; }\n"
+        "declare interface NNBHeaders { get(name: string): string | null; }\n"
+        "declare interface NNBFetchResponse { readonly status: number; readonly ok: boolean; readonly url: string; readonly headers: NNBHeaders; text(): Promise<string>; json<T = unknown>(): Promise<T>; arrayBuffer(): Promise<ArrayBuffer>; }\n"
+        "declare interface NNBFetchOptions { method?: string; body?: string | Uint8Array; headers?: Record<string, string>; }\n"
+        "declare function fetch(url: string, options?: NNBFetchOptions): Promise<NNBFetchResponse>;\n"
+        "// Every CON EVENT_* name accepted by nnb.on(). The prefix is optional at runtime.\n"
         "declare type ConEventShortName =\n"
         "  | 'ACTIVATESWITCH' | 'AIMDOWN' | 'AIMUP' | 'ALTFIRE' | 'ALTWEAPON' | 'ANIMATESPRITES'\n"
         "  | 'BOTGETSPRITESCORE' | 'CHANGEWEAPON' | 'CHEATGETBOOT' | 'CHEATGETFIRSTAID' | 'CHEATGETHEAT'\n"
@@ -2361,24 +2361,24 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "  | 'WEAPKEY1' | 'WEAPKEY2' | 'WEAPKEY3' | 'WEAPKEY4' | 'WEAPKEY5' | 'WEAPKEY6'\n"
         "  | 'WEAPKEY7' | 'WEAPKEY8' | 'WEAPKEY9' | 'WEAPKEY10' | 'WORLD';\n"
         "declare type ConEventName = ConEventShortName | `EVENT_${ConEventShortName}`;\n"
-        "declare type VBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied' | 'gameStarted' | 'levelChanged' | 'levelFinished' | 'leftGame' | 'beforeQuit';\n"
-        "declare type VBEventName = VBLifecycleEventName | 'menuOpened' | 'menuClosed' | 'menuChanged' | 'escapeMenuOpened' | 'actorSpawned' | 'actorDestroyed' | 'chatMessage' | ConEventName;\n"
-        "declare type VBEventMap = {\n"
+        "declare type NNBLifecycleEventName = 'start' | 'shutdown' | 'frame' | 'playerDied' | 'gameStarted' | 'levelChanged' | 'levelFinished' | 'leftGame' | 'beforeQuit';\n"
+        "declare type NNBEventName = NNBLifecycleEventName | 'menuOpened' | 'menuClosed' | 'menuChanged' | 'escapeMenuOpened' | 'actorSpawned' | 'actorDestroyed' | 'chatMessage' | ConEventName;\n"
+        "declare type NNBEventMap = {\n"
         "  start: void; shutdown: void; frame: void; playerDied: void; gameStarted: void; levelChanged: void; levelFinished: void; leftGame: void; beforeQuit: void;\n"
         "  menuOpened: MenuEvent; menuClosed: MenuEvent; menuChanged: MenuEvent; escapeMenuOpened: MenuEvent;\n"
         "  actorSpawned: ActorEvent; actorDestroyed: ActorEvent; chatMessage: ChatEvent;\n"
         "} & { [K in ConEventName]: ConEvent };\n"
-        "declare interface VB {\n"
-        "  on<K extends VBEventName>(name: K, handler: (event: VBEventMap[K]) => void): void;\n"
+        "declare interface NNB {\n"
+        "  on<K extends NNBEventName>(name: K, handler: (event: NNBEventMap[K]) => void): void;\n"
         "  /** Supports engine/plugin events that are not part of the built-in event list. */\n"
         "  on(name: string, handler: (event?: unknown) => void): void;\n"
-        "  off<K extends VBEventName>(name?: K): void;\n"
+        "  off<K extends NNBEventName>(name?: K): void;\n"
         "  off(name?: string): void;\n"
         "  log(...args: unknown[]): void; drawText(id: number, x: number, y: number, text: string, pal?: number, shade?: number): void; clearText(id?: number): void; breakpoint(): void;\n"
         "  spawn(tile: number, x?: number, y?: number, z?: number, owner?: number): number;\n"
         "  A_Spawn(spriteNum: number, tileNum: number): number;\n"
         "  A_InsertSprite(whatsect: number, s_x: number, s_y: number, s_z: number, s_pn: number, s_s: number, s_xr: number, s_yr: number, s_a: number, s_ve: number, s_zv: number, s_ow: number, s_ss: number): number;\n"
-        "  VBComponent: typeof VBComponent; VBNode: typeof VBNode; VBPrefab: typeof VBPrefab; attach<T extends VBComponent>(entity: number | VBNode, component: T | VBComponentConstructor<T>): T; detach(entity: number | VBNode, component: VBComponent): boolean; getComponent<T extends VBComponent>(entity: number | VBNode, type: VBComponentConstructor<T>): T | undefined; getComponents<T extends VBComponent>(entity: number | VBNode, type?: VBComponentConstructor<T>): T[]; setComponentEnabled(component: VBComponent, enabled: boolean): void; createNode(...components: VBComponentConstructor[]): VBNode; destroyNode(node: VBNode): boolean; createPrefab(tile: number, ...components: VBComponentConstructor[]): VBPrefab; spawnPrefab(prefab: VBPrefab, x?: number, y?: number, z?: number, owner?: number): number;\n"
+        "  NNBComponent: typeof NNBComponent; NNBNode: typeof NNBNode; NNBPrefab: typeof NNBPrefab; attach<T extends NNBComponent>(entity: number | NNBNode, component: T | NNBComponentConstructor<T>): T; detach(entity: number | NNBNode, component: NNBComponent): boolean; getComponent<T extends NNBComponent>(entity: number | NNBNode, type: NNBComponentConstructor<T>): T | undefined; getComponents<T extends NNBComponent>(entity: number | NNBNode, type?: NNBComponentConstructor<T>): T[]; setComponentEnabled(component: NNBComponent, enabled: boolean): void; createNode(...components: NNBComponentConstructor[]): NNBNode; destroyNode(node: NNBNode): boolean; createPrefab(tile: number, ...components: NNBComponentConstructor[]): NNBPrefab; spawnPrefab(prefab: NNBPrefab, x?: number, y?: number, z?: number, owner?: number): number;\n"
         "  sendMessage(text: string): void; player(): Player; session(): GameSession; setMenuText(original: string, replacement: string): void; setMenuBackground(tile: number | null): void; currentMenu(): number; openMenu(menuId: number): void; setMenuRoute(menuId: number, itemIndex: number, destination: number | null): void; menuSelection(): number; setMenuSelection(index: number): void;\n"
         "  getGamevar(name: string, sprite?: number, player?: number): ConValue; setGamevar(name: string, value: number, sprite?: number, player?: number): void;\n"
         "  getActor(i: number, member: string, parm2?: number): ConValue; setActor(i: number, member: string, value: number, parm2?: number): void;\n"
@@ -2392,15 +2392,15 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare interface FSPromises { readFile(path: string, options?: unknown): Promise<string | Uint8Array>; writeFile(path: string, data: string, options?: unknown): Promise<void>; appendFile(path: string, data: string, options?: unknown): Promise<void>; exists(path: string): Promise<boolean>; unlink(path: string): Promise<void>; rename(oldPath: string, newPath: string): Promise<void>; }\n"
         "declare interface FS { readFile(path: string, options?: unknown): string | Uint8Array; readFile(path: string, options: unknown, callback: (error: Error | null, data?: string | Uint8Array) => void): void; readFile(path: string, callback: (error: Error | null, data?: string | Uint8Array) => void): void; writeFile(path: string, data: string): void; writeFile(path: string, data: string, options: unknown, callback: (error: Error | null) => void): void; writeFile(path: string, data: string, callback: (error: Error | null) => void): void; appendFile(path: string, data: string): void; appendFile(path: string, data: string, options: unknown, callback: (error: Error | null) => void): void; appendFile(path: string, data: string, callback: (error: Error | null) => void): void; exists(path: string): boolean; exists(path: string, callback: (exists: boolean) => void): void; readFileSync(path: string, options?: unknown): string | Uint8Array; writeFileSync(path: string, data: string, options?: unknown): void; appendFileSync(path: string, data: string, options?: unknown): void; existsSync(path: string): boolean; readonly promises: FSPromises; }\n"
         "declare interface CVar { run(command: string): void; set(name: string, value: unknown): void; }\n"
-        "declare const console: VBConsole; declare const vb: VB; declare const cvar: CVar;\n"
+        "declare const console: NNBConsole; declare const nnb: NNB; declare const cvar: CVar;\n"
         "declare interface DgramRemoteInfo { address: string; family: 'IPv4' | 'IPv6'; port: number; size: number; }\n"
         "declare interface DgramSocket { on(event: 'message', listener: (message: Uint8Array, rinfo: DgramRemoteInfo) => void): this; on(event: 'error', listener: (error: Error) => void): this; on(event: 'listening' | 'close', listener: () => void): this; bind(port: number, callback?: () => void): this; bind(port: number, address: string, callback?: () => void): this; send(message: string | Uint8Array, port: number, callback?: (error: Error | null) => void): void; send(message: string | Uint8Array, port: number, address: string, callback?: (error: Error | null) => void): void; close(callback?: () => void): void; address(): { address: string; family: 'IPv4' | 'IPv6'; port: number }; }\n"
         "declare interface Dgram { createSocket(type: 'udp4' | 'udp6', callback?: (message: Uint8Array, rinfo: DgramRemoteInfo) => void): DgramSocket; }\n"
         "declare interface NetSocket { on(event: 'connect' | 'end', listener: () => void): this; on(event: 'data', listener: (data: Uint8Array) => void): this; on(event: 'error', listener: (error: Error) => void): this; on(event: 'close', listener: (hadError: boolean) => void): this; write(data: string | Uint8Array, callback?: () => void): boolean; end(data?: string | Uint8Array, callback?: () => void): this; destroy(): this; setNoDelay(noDelay?: boolean): this; }\n"
         "declare interface Net { createConnection(port: number, callback?: () => void): NetSocket; createConnection(port: number, host: string, callback?: () => void): NetSocket; connect: Net['createConnection']; }\n"
-        "declare function require(name: 'vb'): VB; declare function require(name: 'fs'): FS; declare function require(name: 'dgram'): Dgram; declare function require(name: 'net'): Net; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
-        "declare module 'vb' { export { VBComponent, VBNode, VBPrefab }; export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, VBComponentConstructor, VBEventMap, VBEventName, VBLifecycleEventName, VBConsole, VBTransform, VBVector3 }; const api: VB; export default api; export const on: VB['on']; export const off: VB['off']; export const log: VB['log']; export const drawText: VB['drawText']; export const clearText: VB['clearText']; export const breakpoint: VB['breakpoint']; export const spawn: VB['spawn']; export const A_Spawn: VB['A_Spawn']; export const A_InsertSprite: VB['A_InsertSprite']; export const attach: VB['attach']; export const detach: VB['detach']; export const getComponent: VB['getComponent']; export const getComponents: VB['getComponents']; export const setComponentEnabled: VB['setComponentEnabled']; export const createNode: VB['createNode']; export const destroyNode: VB['destroyNode']; export const createPrefab: VB['createPrefab']; export const spawnPrefab: VB['spawnPrefab']; export const sendMessage: VB['sendMessage']; export const player: VB['player']; export const getGamevar: VB['getGamevar']; export const setGamevar: VB['setGamevar']; export const run: VB['run']; export const define: VB['define']; export const sound: VB['sound']; export const shoot: VB['shoot']; export const addAmmo: VB['addAmmo']; export const addWeapon: VB['addWeapon']; export const getActor: VB['getActor']; export const setActor: VB['setActor']; export const getPlayer: VB['getPlayer']; export const setPlayer: VB['setPlayer']; export const getInput: VB['getInput']; export const setInput: VB['setInput']; export const getSector: VB['getSector']; export const setSector: VB['setSector']; export const getWall: VB['getWall']; export const setWall: VB['setWall']; export const getProjectile: VB['getProjectile']; export const setProjectile: VB['setProjectile']; export const getActiveProjectile: VB['getActiveProjectile']; export const setActiveProjectile: VB['setActiveProjectile']; export const getTileData: VB['getTileData']; export const setTileData: VB['setTileData']; export const getUserdef: VB['getUserdef']; export const setUserdef: VB['setUserdef']; }\n"
-        "declare module 'vb' { export type { SessionPlayer, GameSession, MenuEvent }; export const session: VB['session']; export const setMenuText: VB['setMenuText']; export const setMenuBackground: VB['setMenuBackground']; export const currentMenu: VB['currentMenu']; export const openMenu: VB['openMenu']; export const setMenuRoute: VB['setMenuRoute']; export const menuSelection: VB['menuSelection']; export const setMenuSelection: VB['setMenuSelection']; }\n"
+        "declare function require(name: 'nnb'): NNB; declare function require(name: 'fs'): FS; declare function require(name: 'dgram'): Dgram; declare function require(name: 'net'): Net; declare function require(name: 'cvar'): CVar; declare function require(name: string): unknown;\n"
+        "declare module 'nnb' { export { NNBComponent, NNBNode, NNBPrefab }; export type { ActorEvent, ChatEvent, ConEvent, ConEventName, ConEventShortName, ConValue, Player, NNBComponentConstructor, NNBEventMap, NNBEventName, NNBLifecycleEventName, NNBConsole, NNBTransform, NNBVector3 }; const api: NNB; export default api; export const on: NNB['on']; export const off: NNB['off']; export const log: NNB['log']; export const drawText: NNB['drawText']; export const clearText: NNB['clearText']; export const breakpoint: NNB['breakpoint']; export const spawn: NNB['spawn']; export const A_Spawn: NNB['A_Spawn']; export const A_InsertSprite: NNB['A_InsertSprite']; export const attach: NNB['attach']; export const detach: NNB['detach']; export const getComponent: NNB['getComponent']; export const getComponents: NNB['getComponents']; export const setComponentEnabled: NNB['setComponentEnabled']; export const createNode: NNB['createNode']; export const destroyNode: NNB['destroyNode']; export const createPrefab: NNB['createPrefab']; export const spawnPrefab: NNB['spawnPrefab']; export const sendMessage: NNB['sendMessage']; export const player: NNB['player']; export const getGamevar: NNB['getGamevar']; export const setGamevar: NNB['setGamevar']; export const run: NNB['run']; export const define: NNB['define']; export const sound: NNB['sound']; export const shoot: NNB['shoot']; export const addAmmo: NNB['addAmmo']; export const addWeapon: NNB['addWeapon']; export const getActor: NNB['getActor']; export const setActor: NNB['setActor']; export const getPlayer: NNB['getPlayer']; export const setPlayer: NNB['setPlayer']; export const getInput: NNB['getInput']; export const setInput: NNB['setInput']; export const getSector: NNB['getSector']; export const setSector: NNB['setSector']; export const getWall: NNB['getWall']; export const setWall: NNB['setWall']; export const getProjectile: NNB['getProjectile']; export const setProjectile: NNB['setProjectile']; export const getActiveProjectile: NNB['getActiveProjectile']; export const setActiveProjectile: NNB['setActiveProjectile']; export const getTileData: NNB['getTileData']; export const setTileData: NNB['setTileData']; export const getUserdef: NNB['getUserdef']; export const setUserdef: NNB['setUserdef']; }\n"
+        "declare module 'nnb' { export type { SessionPlayer, GameSession, MenuEvent }; export const session: NNB['session']; export const setMenuText: NNB['setMenuText']; export const setMenuBackground: NNB['setMenuBackground']; export const currentMenu: NNB['currentMenu']; export const openMenu: NNB['openMenu']; export const setMenuRoute: NNB['setMenuRoute']; export const menuSelection: NNB['menuSelection']; export const setMenuSelection: NNB['setMenuSelection']; }\n"
         "declare module 'fs' { export type { FSPromises }; const api: FS; export default api; export const readFile: FS['readFile']; export const writeFile: FS['writeFile']; export const appendFile: FS['appendFile']; export const exists: FS['exists']; export const readFileSync: FS['readFileSync']; export const writeFileSync: FS['writeFileSync']; export const appendFileSync: FS['appendFileSync']; export const existsSync: FS['existsSync']; export const promises: FS['promises']; }\n"
         "declare module 'node:fs' { export * from 'fs'; import api from 'fs'; export default api; }\n"
         "declare module 'fs/promises' { import api from 'fs'; const promises: FSPromises; export default promises; export const readFile: FSPromises['readFile']; export const writeFile: FSPromises['writeFile']; export const appendFile: FSPromises['appendFile']; export const exists: FSPromises['exists']; export const unlink: FSPromises['unlink']; export const rename: FSPromises['rename']; }\n"
@@ -2412,8 +2412,8 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare module 'fs' { export const unlink: (path: string, callback?: (error: Error | null) => void) => void; export const rename: (oldPath: string, newPath: string, callback?: (error: Error | null) => void) => void; export const unlinkSync: (path: string) => void; export const renameSync: (oldPath: string, newPath: string) => void; }\n"
         "declare interface FS { unlink(path: string, callback?: (error: Error | null) => void): void; rename(oldPath: string, newPath: string, callback?: (error: Error | null) => void): void; unlinkSync(path: string): void; renameSync(oldPath: string, newPath: string): void; }\n"
         "declare type CommandRequest = { player: number; command: string; args: string; reply(text: string): void };\n"
-        "declare interface VB { registerCommand(name: string, handler: (request: CommandRequest) => string | void): void; }\n"
-        "declare module 'vb' { export type { CommandRequest }; export const registerCommand: VB['registerCommand']; }\n"
+        "declare interface NNB { registerCommand(name: string, handler: (request: CommandRequest) => string | void): void; }\n"
+        "declare module 'nnb' { export type { CommandRequest }; export const registerCommand: NNB['registerCommand']; }\n"
         "declare function setTimeout(callback: (...args: any[]) => void, delay?: number, ...args: any[]): number;\n"
         "declare function setInterval(callback: (...args: any[]) => void, delay?: number, ...args: any[]): number;\n"
         "declare function clearTimeout(id?: number): void;\n"
@@ -2424,17 +2424,17 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
         "declare type MapComponentContext = { kind: 'sprite' | 'sector' | 'wall'; index: number; map: string; state: Record<string, any> };\n"
         "declare type MapComponentModule = { onAttach?(component: MapComponentContext): void | (() => void); onUpdate?(component: MapComponentContext, deltaSeconds: number): void; onFixedUpdate?(component: MapComponentContext, deltaSeconds: number): void; onDetach?(component: MapComponentContext): void; };\n"
         "declare module 'cvar' { const api: CVar; export default api; export const run: CVar['run']; export const set: CVar['set']; }\n";
-    snprintf(path, sizeof(path), "%s/package.json", project); if (vbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
+    snprintf(path, sizeof(path), "%s/package.json", project); if (nnbjs_write_text(path, typescript ? packageTs : packageJs)) return -1;
     snprintf(path, sizeof(path), "%s/%sconfig.json", project, typescript ? "ts" : "js");
-    if (vbjs_write_text(path, typescript ? tsconfig : jsconfig)) return -1;
+    if (nnbjs_write_text(path, typescript ? tsconfig : jsconfig)) return -1;
     snprintf(path, sizeof(path), "%s/index.%s", project, typescript ? "ts" : "js");
-    if (vbjs_write_text(path, typescript ? indexTs : indexJs)) return -1;
-    snprintf(path, sizeof(path), "%s/vb.d.ts", project); if (vbjs_write_text(path, types)) return -1;
+    if (nnbjs_write_text(path, typescript ? indexTs : indexJs)) return -1;
+    snprintf(path, sizeof(path), "%s/nnb.d.ts", project); if (nnbjs_write_text(path, types)) return -1;
     // Bootstrap the exact VS Code DAP setup used by the bundled starter mod.
     // It works for either index.ts or index.js because the adapter receives
     // source paths directly from VS Code.
     char vscode[1400]; snprintf(vscode, sizeof(vscode), "%s/.vscode", project);
-    if (vbjs_mkdir(vscode) != 0) return -1;
+    if (nnbjs_mkdir(vscode) != 0) return -1;
     // The adapter is a single-use background task.  It exits when the DAP
     // client or the game exits, so a later VS Code launch never attaches to
     // stale state from an earlier run.
@@ -2442,10 +2442,10 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
     for (auto file : vscodeFiles)
     {
         char target[1400]; size_t length = 0;
-        char *contents = vbjs_read_vscode_template(file, &length);
+        char *contents = nnbjs_read_vscode_template(file, &length);
         if (!contents) return -1;
         snprintf(target, sizeof(target), "%s/%s", vscode, file);
-        int failed = vbjs_write_text(target, contents); free(contents);
+        int failed = nnbjs_write_text(target, contents); free(contents);
         if (failed) return -1;
     }
     fprintf(stdout, "Created %s project: %s\n", typescript ? "TypeScript" : "JavaScript", project);
@@ -2454,7 +2454,7 @@ int VBJS_GenerateProject(const char *requestedName, int typescript)
 
 // Scan <base>/autojs/<name>/index.{ts,js} — exactly one folder deep — and queue each
 // (full paths, since the game's CWD is elsewhere).
-static void vbjs_scan_autojs_in(const char *base)
+static void nnbjs_scan_autojs_in(const char *base)
 {
     if (!base || !base[0]) return;
     char adir[1024]; snprintf(adir, sizeof(adir), "%s/autojs", base);
@@ -2470,30 +2470,30 @@ static void vbjs_scan_autojs_in(const char *base)
         char ts[1300], js[1300]; struct stat s2;
         snprintf(ts, sizeof(ts), "%s/index.ts", sub);
         snprintf(js, sizeof(js), "%s/index.js", sub);
-        if      (stat(ts, &s2) == 0) vbjs_add_script(ts);   // TypeScript preferred
-        else if (stat(js, &s2) == 0) vbjs_add_script(js);
+        if      (stat(ts, &s2) == 0) nnbjs_add_script(ts);   // TypeScript preferred
+        else if (stat(js, &s2) == 0) nnbjs_add_script(js);
     }
     closedir(d);
 }
 
-static void vbjs_scan_autojs(void)
+static void nnbjs_scan_autojs(void)
 {
-    vbjs_scan_autojs_in(s_launchDir);   // the game's data/launch dir (holds autojs/)
+    nnbjs_scan_autojs_in(s_launchDir);   // the game's data/launch dir (holds autojs/)
     char cwd[1024];
     if (DukeEditor::ProjectAllowsAutoScripts() && getcwd(cwd, sizeof(cwd)) && strcmp(cwd, s_launchDir))
-        vbjs_scan_autojs_in(cwd);
+        nnbjs_scan_autojs_in(cwd);
 }
 
-static bool vbjs_create_context()
+static bool nnbjs_create_context()
 {
     s_fetchShuttingDown = false;
     s_rt = JS_NewRuntime();
-    if (!s_rt) { vbjs_log("[js] failed to create runtime"); return false; }
-    JS_SetHostPromiseRejectionTracker(s_rt, vbjs_promise_rejection_tracker, nullptr);
+    if (!s_rt) { nnbjs_log("[js] failed to create runtime"); return false; }
+    JS_SetHostPromiseRejectionTracker(s_rt, nnbjs_promise_rejection_tracker, nullptr);
     s_ctx = JS_NewContext(s_rt);
-    if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; vbjs_log("[js] failed to create context"); return false; }
+    if (!s_ctx) { JS_FreeRuntime(s_rt); s_rt = nullptr; nnbjs_log("[js] failed to create context"); return false; }
 
-    vbjs_setup_context(s_ctx);
+    nnbjs_setup_context(s_ctx);
     // -dbg exposes the localhost attach endpoint. -dt implies it and also
     // opens the visual inspector; ordinary mods incur no debugger overhead.
     if (s_debug)
@@ -2502,8 +2502,8 @@ static bool vbjs_create_context()
         s_debugTransport.closed = 0; s_debugTransport.inbound.clear(); s_debugTransport.outbound[0].clear(); s_debugTransport.outbound[1].clear();
         pthread_mutex_unlock(&s_debugTransport.mutex);
         s_debuggerWorkPending.store(false, std::memory_order_release);
-        js_debugger_attach(s_ctx, vbjs_debug_read, vbjs_debug_write, vbjs_debug_peek, vbjs_debug_close, &s_debugTransport);
-        VBJS_DevtoolsStartDebuggerBridge();
+        js_debugger_attach(s_ctx, nnbjs_debug_read, nnbjs_debug_write, nnbjs_debug_peek, nnbjs_debug_close, &s_debugTransport);
+        NNBJS_DevtoolsStartDebuggerBridge();
     }
     // VS Code has to attach and submit breakpoints after the runtime starts.
     // Hold both top-level module evaluation and the one-shot `start` callback
@@ -2519,19 +2519,19 @@ static bool vbjs_create_context()
     return true;
 }
 
-void VBJS_Init(void)
+void NNBJS_Init(void)
 {
     if (s_ctx || s_initTried) return;
     s_initTried = 1;
-    vbjs_scan_autojs();
+    nnbjs_scan_autojs();
     if (s_scriptCount == 0)
         return;
-    // Scripts are evaluated from VBJS_RunFrame once a debugger (if any) has
+    // Scripts are evaluated from NNBJS_RunFrame once a debugger (if any) has
     // had the chance to install its breakpoints; see s_startPending.
-    vbjs_create_context();
+    nnbjs_create_context();
 }
 
-static void vbjs_load_scripts(void)
+static void nnbjs_load_scripts(void)
 {
     for (int i = 0; i < s_scriptCount; i++)
     {
@@ -2541,8 +2541,8 @@ static void vbjs_load_scripts(void)
         char *slash = strrchr(s_scriptDir, '/');
         if (slash) *slash = 0; else s_scriptDir[0] = 0;
 
-        size_t len = 0; char *src = vbjs_load_source(path, &len);
-        if (!src) { char m[1100]; snprintf(m, sizeof(m), "could not read %s", path); vbjs_log(m); continue; }
+        size_t len = 0; char *src = nnbjs_load_source(path, &len);
+        if (!src) { char m[1100]; snprintf(m, sizeof(m), "could not read %s", path); nnbjs_log(m); continue; }
 
         JSValue r = JS_Eval(s_ctx, src, len, path, JS_EVAL_TYPE_MODULE);   // module so import/export work
         free(src);
@@ -2550,11 +2550,11 @@ static void vbjs_load_scripts(void)
         {
             char context[1200];
             snprintf(context, sizeof(context), "failed to load %s", path);
-            vbjs_dump_error(s_ctx, context);
+            nnbjs_dump_error(s_ctx, context);
         }
         else
         {
-            char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); vbjs_log(m);
+            char m[1100]; snprintf(m, sizeof(m), "loaded %s", path); nnbjs_log(m);
         }
         JS_FreeValue(s_ctx, r);
     }
@@ -2562,13 +2562,13 @@ static void vbjs_load_scripts(void)
     s_enabled = 1;
 }
 
-void VBJS_BeginLevelAttachments(void)
+void NNBJS_BeginLevelAttachments(void)
 {
-    VBJS_ClearAttachments();
+    NNBJS_ClearAttachments();
     s_loadingLevel = true;
 }
 
-void VBJS_EndLevelAttachments(void) { s_loadingLevel = false; }
+void NNBJS_EndLevelAttachments(void) { s_loadingLevel = false; }
 
 static JSValue componentFunction(JSValueConst module, const char *name)
 {
@@ -2579,17 +2579,17 @@ static JSValue componentFunction(JSValueConst module, const char *name)
     return JS_UNDEFINED;
 }
 
-void VBJS_ActivateAttachment(const char *script, const char *map, const char *kind, int index)
+void NNBJS_ActivateAttachment(const char *script, const char *map, const char *kind, int index)
 {
     auto const spriteIndex = strcmp(kind, "sprite") == 0 ? index : -1;
     if (spriteIndex >= 0 && s_deletedDuringLoad.count(spriteIndex))
     {
-        vbjs_game::log(("Component skipped for a sprite removed during map setup: " + std::to_string(index)).c_str());
+        nnbjs_game::log(("Component skipped for a sprite removed during map setup: " + std::to_string(index)).c_str());
         return;
     }
     if (!s_ctx)
     {
-        if (!vbjs_create_context())
+        if (!nnbjs_create_context())
             return;
         s_initTried = s_enabled = 1;
     }
@@ -2604,7 +2604,7 @@ void VBJS_ActivateAttachment(const char *script, const char *map, const char *ki
     auto const compiled = JS_Eval(s_ctx, body.c_str(), body.size(), name.c_str(), JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
     if (JS_IsException(compiled))
     {
-        vbjs_dump_error(s_ctx);
+        nnbjs_dump_error(s_ctx);
         return;
     }
     auto const module = static_cast<JSModuleDef *>(JS_VALUE_GET_PTR(compiled));
@@ -2613,13 +2613,13 @@ void VBJS_ActivateAttachment(const char *script, const char *map, const char *ki
     {
         if (!JS_IsException(result))
             JS_Throw(s_ctx, JS_PromiseResult(s_ctx, result));
-        vbjs_dump_error(s_ctx);
+        nnbjs_dump_error(s_ctx);
         JS_FreeValue(s_ctx, result);
         return;
     }
     if (JS_PromiseState(s_ctx, result) != JS_PROMISE_FULFILLED)
     {
-        vbjs_game::log((std::string("Component module must initialize synchronously: ") + script).c_str());
+        nnbjs_game::log((std::string("Component module must initialize synchronously: ") + script).c_str());
         JS_FreeValue(s_ctx, result);
         return;
     }
@@ -2642,7 +2642,7 @@ void VBJS_ActivateAttachment(const char *script, const char *map, const char *ki
         JS_FreeValue(s_ctx, attach);
         if (JS_IsException(cleanup))
         {
-            vbjs_dump_error(s_ctx);
+            nnbjs_dump_error(s_ctx);
             JS_FreeValue(s_ctx, instance.context);
             JS_FreeValue(s_ctx, component);
             return;
@@ -2666,7 +2666,7 @@ static void disposeComponent(ScriptComponent &instance)
             return;
         auto const result = JS_Call(s_ctx, fn, JS_UNDEFINED, argc, args);
         if (JS_IsException(result))
-            vbjs_dump_error(s_ctx);
+            nnbjs_dump_error(s_ctx);
         JS_FreeValue(s_ctx, result);
     };
     call(instance.dispose, 0, nullptr);
@@ -2675,7 +2675,7 @@ static void disposeComponent(ScriptComponent &instance)
         JS_FreeValue(s_ctx, value);
 }
 
-void VBJS_ClearAttachments(void)
+void NNBJS_ClearAttachments(void)
 {
     auto components = std::move(s_components);
     s_components.clear();
@@ -2687,7 +2687,7 @@ void VBJS_ClearAttachments(void)
     ++s_componentEpoch;
 }
 
-void VBJS_NotifySpriteDeleted(int spriteNum)
+void NNBJS_NotifySpriteDeleted(int spriteNum)
 {
     if (s_loadingLevel)
         s_deletedDuringLoad.insert(spriteNum);
@@ -2708,7 +2708,7 @@ static void updateComponents(JSValue ScriptComponent::*hook, double deltaSeconds
         auto const result = JS_Call(s_ctx, fn, JS_UNDEFINED, 2, args);
         if (JS_IsException(result))
         {
-            vbjs_dump_error(s_ctx);
+            nnbjs_dump_error(s_ctx);
             JS_FreeValue(s_ctx, fn);
             fn = JS_UNDEFINED;
         }
@@ -2723,30 +2723,30 @@ static void updateComponents(JSValue ScriptComponent::*hook, double deltaSeconds
     s_components.erase(removed, s_components.end());
 }
 
-void VBJS_RunFixedUpdate(double deltaSeconds)
+void NNBJS_RunFixedUpdate(double deltaSeconds)
 {
     if (!s_components.empty() && !s_devtoolsPaused)
         updateComponents(&ScriptComponent::fixedUpdate, deltaSeconds);
 }
 
-void VBJS_Shutdown(void)
+void NNBJS_Shutdown(void)
 {
     if (!s_ctx) return;
-    VBJS_ClearAttachments();
-    VBJS_FireSimple("shutdown");
+    NNBJS_ClearAttachments();
+    NNBJS_FireSimple("shutdown");
     while (!s_timers.empty())
-        vbjs_clear_timer(s_ctx, s_timers.begin()->first);
+        nnbjs_clear_timer(s_ctx, s_timers.begin()->first);
     JS_FreeValue(s_ctx, s_serverCommands);
 #ifdef __APPLE__
-    extern void VBJS_CocoaDevtoolsShutdown(void);
-    VBJS_CocoaDevtoolsShutdown();
+    extern void NNBJS_CocoaDevtoolsShutdown(void);
+    NNBJS_CocoaDevtoolsShutdown();
 #endif
-    VBJS_DevtoolsShutdownWindow();
+    NNBJS_DevtoolsShutdownWindow();
     // Detached libcurl workers must never publish JSValue handles after this
     // runtime has been destroyed. libcurl stays globally initialized until
     // process exit, which is required while those workers unwind.
     s_fetchShuttingDown = true;
-    vbjs_fetch_drain(s_ctx);
+    nnbjs_fetch_drain(s_ctx);
     for (auto &call : s_fsCallbacks) { JS_FreeValue(s_ctx, call.callback); JS_FreeValue(s_ctx, call.value); }
     s_fsCallbacks.clear();
     JS_FreeValue(s_ctx, s_events);
@@ -2758,15 +2758,15 @@ void VBJS_Shutdown(void)
     s_menuTextOverrides.clear(); s_menuRoutes.clear(); s_observedMenuOpen = -1; s_observedMenuId = -1;
 }
 
-void VBJS_RunFrame(int activeLevel)
+void NNBJS_RunFrame(int activeLevel)
 {
     if (!s_ctx)
     {
         if (s_initTried) return;
-        VBJS_Init();          // lazy: first frame is a safe point (game/engine are up)
-        if (!s_ctx) return;   // no scripts, or init failed; VBJS_Init set s_initTried so we won't retry
+        NNBJS_Init();          // lazy: first frame is a safe point (game/engine are up)
+        if (!s_ctx) return;   // no scripts, or init failed; NNBJS_Init set s_initTried so we won't retry
     }
-    VBJS_DevtoolsPump();
+    NNBJS_DevtoolsPump();
     if (s_startPending)
     {
         // A VS Code client installs source breakpoints before sending
@@ -2783,19 +2783,19 @@ void VBJS_RunFrame(int activeLevel)
             if (s_startWaitFrames < limit) { ++s_startWaitFrames; return; }
         }
         s_startPending = 0;
-        vbjs_load_scripts();
-        VBJS_FireSimple("start");
+        nnbjs_load_scripts();
+        NNBJS_FireSimple("start");
         if (s_gameStartedPending)
         {
             s_gameStartedPending = 0;
-            VBJS_FireSimple("gameStarted");
+            NNBJS_FireSimple("gameStarted");
         }
     }
     // Network events remain live while the visual debugger is paused, just as
     // they do in Node while a debugger is attached.
-    vbjs_dgram_poll(s_ctx);
-    vbjs_net_poll(s_ctx);
-    vbjs_fetch_drain(s_ctx);
+    nnbjs_dgram_poll(s_ctx);
+    nnbjs_net_poll(s_ctx);
+    nnbjs_fetch_drain(s_ctx);
     if (!activeLevel || s_devtoolsPaused)
         s_lastComponentFrame = {};
     if (s_devtoolsPaused) return;
@@ -2809,11 +2809,11 @@ void VBJS_RunFrame(int activeLevel)
     }
     if (!s_genericMode)
     {
-        int const menuOpen = vbjs_game::menuOpen();
+        int const menuOpen = nnbjs_game::menuOpen();
         if (s_observedMenuOpen >= 0 && s_observedMenuOpen != menuOpen)
-            VBJS_FireMenu(menuOpen ? "menuOpened" : "menuClosed", vbjs_game::currentMenu(), s_observedMenuId);
+            NNBJS_FireMenu(menuOpen ? "menuOpened" : "menuClosed", nnbjs_game::currentMenu(), s_observedMenuId);
         s_observedMenuOpen = menuOpen;
-        s_observedMenuId = vbjs_game::currentMenu();
+        s_observedMenuId = nnbjs_game::currentMenu();
     }
     for (auto &call : s_fsCallbacks)
     {
@@ -2821,12 +2821,12 @@ void VBJS_RunFrame(int activeLevel)
         if (call.existsStyle) args[argc++] = call.value;
         else { args[argc++] = call.error ? call.value : JS_NULL; if (!call.error) args[argc++] = call.value; }
         JSValue result = JS_Call(s_ctx, call.callback, JS_UNDEFINED, argc, args);
-        if (JS_IsException(result)) vbjs_dump_error(s_ctx, "uncaught exception in fs callback");
+        if (JS_IsException(result)) nnbjs_dump_error(s_ctx, "uncaught exception in fs callback");
         JS_FreeValue(s_ctx, result); JS_FreeValue(s_ctx, call.callback); JS_FreeValue(s_ctx, call.value);
     }
     s_fsCallbacks.clear();
-    if (s_frameEventListened) VBJS_FireSimple("frame");
-    vbjs_pump_timers(s_ctx);
+    if (s_frameEventListened) NNBJS_FireSimple("frame");
+    nnbjs_pump_timers(s_ctx);
     // Promise jobs are uncommon in an idle mod.  JS_ExecutePendingJob() also
     // performs this empty-queue test internally, but avoiding that heavier
     // call on every rendered frame keeps the no-work scripting path minimal.
@@ -2835,11 +2835,11 @@ void VBJS_RunFrame(int activeLevel)
         JSContext *c = nullptr;
         int result = 0;
         while ((result = JS_ExecutePendingJob(s_rt, &c)) > 0) {}
-        if (result < 0) vbjs_dump_error(c ? c : s_ctx, "unhandled promise rejection");
+        if (result < 0) nnbjs_dump_error(c ? c : s_ctx, "unhandled promise rejection");
     }
 }
 
-void VBJS_FireSimple(const char *event)
+void NNBJS_FireSimple(const char *event)
 {
     if (event && !strcmp(event, "gameStarted"))
     {
@@ -2853,21 +2853,21 @@ void VBJS_FireSimple(const char *event)
         if (event && !strcmp(event, "gameStarted")) s_gameStartedPending = 1;
         return;
     }
-    vbjs_fire(event, 0, nullptr);
+    nnbjs_fire(event, 0, nullptr);
 }
 
-void VBJS_FireMenu(const char *event, int menu, int previousMenu)
+void NNBJS_FireMenu(const char *event, int menu, int previousMenu)
 {
     if (!s_ctx) return;
     JSValue value = JS_NewObject(s_ctx);
     JS_SetPropertyStr(s_ctx, value, "menu", JS_NewInt32(s_ctx, menu));
     JS_SetPropertyStr(s_ctx, value, "previousMenu", previousMenu >= 0 ? JS_NewInt32(s_ctx, previousMenu) : JS_UNDEFINED);
     JSValueConst args[1] = { value };
-    vbjs_fire(event, 1, args);
+    nnbjs_fire(event, 1, args);
     JS_FreeValue(s_ctx, value);
 }
 
-void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile)
+void NNBJS_FireActor(const char *event, int spriteNum, int owner, int tile)
 {
     if (!s_ctx) return;
     JSValue o = JS_NewObject(s_ctx);
@@ -2875,24 +2875,24 @@ void VBJS_FireActor(const char *event, int spriteNum, int owner, int tile)
     JS_SetPropertyStr(s_ctx, o, "owner",  JS_NewInt32(s_ctx, owner));
     JS_SetPropertyStr(s_ctx, o, "tile",   JS_NewInt32(s_ctx, tile));   // picnum, for filtering
     JSValueConst args[1] = { o };
-    vbjs_fire(event, 1, args);
+    nnbjs_fire(event, 1, args);
     JS_FreeValue(s_ctx, o);
 }
 
-void VBJS_FireChat(const char *event, int playerNum, const char *text)
+void NNBJS_FireChat(const char *event, int playerNum, const char *text)
 {
     if (!s_ctx) return;
     JSValue o = JS_NewObject(s_ctx);
     JS_SetPropertyStr(s_ctx, o, "player", JS_NewInt32(s_ctx, playerNum));
     JS_SetPropertyStr(s_ctx, o, "text",   JS_NewString(s_ctx, text ? text : ""));
     JSValueConst args[1] = { o };
-    vbjs_fire(event, 1, args);
+    nnbjs_fire(event, 1, args);
     JS_FreeValue(s_ctx, o);
 }
 
-int VBJS_RunServerCommand(int player, uint32_t connection, const char *text)
+int NNBJS_RunServerCommand(int player, uint32_t connection, const char *text)
 {
-    if (!s_ctx || !vbjs_game::isServer())
+    if (!s_ctx || !nnbjs_game::isServer())
         return 0;
 
     auto const length = strcspn(text, " \t");
@@ -2916,7 +2916,7 @@ int VBJS_RunServerCommand(int player, uint32_t connection, const char *text)
     JS_SetPropertyStr(s_ctx, request, "reply", JS_NewCFunctionData(s_ctx, js_server_reply, 1, 0, 2, binding));
     JSValue result = JS_Call(s_ctx, handler, JS_UNDEFINED, 1, &request);
     if (JS_IsException(result))
-        vbjs_dump_error(s_ctx);
+        nnbjs_dump_error(s_ctx);
     else if (JS_IsString(result))
         js_server_reply(s_ctx, JS_UNDEFINED, 1, &result, 0, binding);
     JS_FreeValue(s_ctx, result);
@@ -2925,24 +2925,24 @@ int VBJS_RunServerCommand(int player, uint32_t connection, const char *text)
     return 1;
 }
 
-void VBJS_FireConEvent(int eventNum, int spriteNum, int playerNum, int dist)
+void NNBJS_FireConEvent(int eventNum, int spriteNum, int playerNum, int dist)
 {
-    if (!s_ctx || (unsigned)eventNum >= VBJS_MAXCONEVENTS || !s_conEventListened[eventNum]) return;
-    const char *name = vbjs_game::eventName(eventNum);
+    if (!s_ctx || (unsigned)eventNum >= NNBJS_MAXCONEVENTS || !s_conEventListened[eventNum]) return;
+    const char *name = nnbjs_game::eventName(eventNum);
     if (!name) return;
     JSValue o = JS_NewObject(s_ctx);
     JS_SetPropertyStr(s_ctx, o, "sprite", JS_NewInt32(s_ctx, spriteNum));
     JS_SetPropertyStr(s_ctx, o, "player", JS_NewInt32(s_ctx, playerNum));
     JS_SetPropertyStr(s_ctx, o, "dist",   JS_NewInt32(s_ctx, dist));
     JSValueConst args[1] = { o };
-    vbjs_fire(name, 1, args);
+    nnbjs_fire(name, 1, args);
     JS_FreeValue(s_ctx, o);
 }
 
-// VBJS_DrawHUD() and the vbjs_game::* bindings are implemented in vbjs_duke.cpp
+// NNBJS_DrawHUD() and the nnbjs_game::* bindings are implemented in nnbjs_duke.cpp
 // (they need the Duke game headers, which conflict with quickjs.h in one TU).
 
 // Expose the HUD text store to the game-side draw code.
-vbjs_text_t *VBJS_TextSlots(int *count) { if (count) *count = VBJS_MAX_TEXT; return s_text; }
+nnbjs_text_t *NNBJS_TextSlots(int *count) { if (count) *count = NNBJS_MAX_TEXT; return s_text; }
 
 } // extern "C"

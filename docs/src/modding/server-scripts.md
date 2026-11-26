@@ -37,7 +37,7 @@ A player types a line that starts with `!` into the normal chat box, for example
 Register a handler with `registerCommand`:
 
 ```ts
-import { registerCommand } from 'vb';
+import { registerCommand } from 'nnb';
 
 registerCommand('help', ({ reply }) => {
   reply('Commands: !help, !rules');
@@ -46,7 +46,7 @@ registerCommand('help', ({ reply }) => {
 registerCommand('rules', () => 'Play the objective and keep chat friendly.');
 ```
 
-The handler receives one object. In `vb.d.ts` its type is named `CommandRequest`:
+The handler receives one object. In `nnb.d.ts` its type is named `CommandRequest`:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ Rules and limits:
 `registerCommand` throws an error when the computer is not hosting a multiplayer game in master/slave mode. An error that nothing catches closes the game. If your script may also be loaded in single-player, on a client, or in a peer-to-peer game, catch the error:
 
 ```ts
-import { registerCommand, log } from 'vb';
+import { registerCommand, log } from 'nnb';
 
 try {
   registerCommand('rules', () => 'Play the objective and keep chat friendly.');
@@ -88,7 +88,7 @@ If the first `registerCommand` succeeds, the computer is the server. The complet
 `sendMessage(text)` on the host sends `text` to every player. It is shown as `Server: <text>`.
 
 ```ts
-import { sendMessage } from 'vb';
+import { sendMessage } from 'nnb';
 
 sendMessage('Welcome. Type !help for commands.');
 ```
@@ -102,7 +102,7 @@ To talk to one player, use `reply` inside a command handler.
 `setTimeout` and `setInterval` work on a server as everywhere else. They use real time and keep running across map changes.
 
 ```ts
-import { sendMessage } from 'vb';
+import { sendMessage } from 'nnb';
 
 const minute = 60_000;
 
@@ -118,7 +118,7 @@ See [Timers](modules.md#timers).
 `run(command)` runs a line as if the server operator had typed it into the console. `cvar.run` is the same function.
 
 ```ts
-import { run } from 'vb';
+import { run } from 'nnb';
 
 run('nextmap');           // advance to the next map of the rotation
 run('monsters off');      // remove all monsters
@@ -177,7 +177,7 @@ When the server changes to a different content pack, the server program restarts
 ```ts
 // server.ts
 // ./nnbuild --headless --startnow --js ./server.ts -net /p23513 /n0:8
-import { log, run, sendMessage, registerCommand, session } from 'vb';
+import { log, run, sendMessage, registerCommand, session } from 'nnb';
 import fs from 'fs';
 
 const MINUTE = 60_000;

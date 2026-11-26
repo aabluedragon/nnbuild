@@ -1678,7 +1678,7 @@ void PrintHelp(void)
     puts("-RFF          Specify an RFF file for Blood game resources");
     puts("-ini          Specify an INI file name (default is blood.ini)");
 #endif
-    fputs(VB_NETARGS_HELP, stdout);   // NNBuild: unified multiplayer flags
+    fputs(NNB_NETARGS_HELP, stdout);   // NNBuild: unified multiplayer flags
     exit(0);
 }
 

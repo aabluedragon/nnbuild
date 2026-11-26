@@ -49,8 +49,8 @@
 
 #include "vfs.h"
 #include "communityapi.h"
-#ifdef VBJS
-# include "vbjs.h"
+#ifdef NNBJS
+# include "nnbjs.h"
 #endif
 
 #define MICROPROFILE_IMPL
@@ -180,7 +180,7 @@ int32_t wm_msgbox(const char *name, const char *fmt, ...)
     // alert would otherwise sit above the hidden game window forever waiting
     // for input, so emit the same information to the log and keep the caller's
     // normal error/exit path moving.
-    if (getenv("VB_HIDE_WINDOW"))
+    if (getenv("NNB_HIDE_WINDOW"))
     {
         LOG_F(INFO, "Suppressed message box '%s': %s", name, buf);
         return 0;
@@ -235,7 +235,7 @@ int32_t wm_ynbox(const char *name, const char *fmt, ...)
 
     // Hidden unattended runs cannot answer a modal question.  Default to the
     // safe negative response and leave a diagnostic instead of blocking.
-    if (getenv("VB_HIDE_WINDOW"))
+    if (getenv("NNB_HIDE_WINDOW"))
     {
         LOG_F(INFO, "Suppressed question box '%s' (answering No): %s", name, buf);
         return 0;
@@ -1343,8 +1343,8 @@ static inline char grabmouse_low(char a)
     // per SDL_Window.  Once DevTools exists, allowing the game to enable it
     // makes the next DevTools click activate/capture the game window before
     // SDL can dispatch that click to the secondary window.
-# ifdef VBJS
-    if (a && VBJS_DevtoolsSuppressGameMouseCapture())
+# ifdef NNBJS
+    if (a && NNBJS_DevtoolsSuppressGameMouseCapture())
     {
         if (sdl_window)
             SDL_SetWindowGrab(sdl_window, SDL_FALSE);
@@ -1757,10 +1757,10 @@ int setvideomode_sdlcommonpost(int32_t x, int32_t y, int32_t c, int32_t fs, int3
     static int osx_didforeground = 0;
     if (!osx_didforeground && !g_forceHeadless)
     {
-        if (!getenv("VB_HIDE_WINDOW"))
+        if (!getenv("NNB_HIDE_WINDOW"))
             osx_foreground();
 # if SDL_MAJOR_VERSION >= 2
-        if (sdl_window && !getenv("VB_HIDE_WINDOW"))
+        if (sdl_window && !getenv("NNB_HIDE_WINDOW"))
             SDL_RaiseWindow(sdl_window);
 # endif
         osx_didforeground = 1;
@@ -1978,10 +1978,10 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
         if (sdl_window)
             sdl_context = SDL_GL_CreateContext(sdl_window);
 
-        // NNBuild: VB_HIDE_WINDOW keeps an unattended test run off the
+        // NNBuild: NNB_HIDE_WINDOW keeps an unattended test run off the
         // desktop -- the window is created hidden and never raised. Rendering
         // and screenshots go on in the offscreen backbuffer.
-        if (sdl_window && getenv("VB_HIDE_WINDOW"))
+        if (sdl_window && getenv("NNB_HIDE_WINDOW"))
             SDL_HideWindow(sdl_window);
 
         if (!sdl_window || !sdl_context)
@@ -2028,11 +2028,11 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
             SDL2_VIDEO_ERR("SDL_GetWindowSurface");
     }
 
-#ifdef VBJS
+#ifdef NNBJS
     // In -dt mode reserve the left side for the game from its first visible
     // frame.  The external DevTools window may take a moment to start, but
     // the game must not begin life on the right and then jump later.
-    if (!fullscreen && sdl_window && VBJS_DevtoolsEnabled())
+    if (!fullscreen && sdl_window && NNBJS_DevtoolsEnabled())
     {
         SDL_Rect usable;
         if (SDL_GetDisplayUsableBounds(display, &usable) == 0)
@@ -2052,9 +2052,9 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 #endif
 
     // Keep an interactive test launch out of the way without suppressing its
-    // window altogether.  Unlike VB_HIDE_WINDOW, this still gives the tester
+    // window altogether.  Unlike NNB_HIDE_WINDOW, this still gives the tester
     // a normal taskbar window that can be restored when they are ready.
-    if (sdl_window && getenv("VB_MINIMIZE_WINDOW") && !getenv("VB_HIDE_WINDOW"))
+    if (sdl_window && getenv("NNB_MINIMIZE_WINDOW") && !getenv("NNB_HIDE_WINDOW"))
         SDL_MinimizeWindow(sdl_window);
 
     return 0;
@@ -2652,10 +2652,10 @@ int32_t handleevents_pollsdl(void)
 
     while (SDL_PollEvent(&ev))
     {
-#ifdef VBJS
+#ifdef NNBJS
         // The detached JavaScript DevTools owns input targeted at its window;
         // never let those keystrokes or clicks control the game as well.
-        if (VBJS_DevtoolsProcessEvent(&ev))
+        if (NNBJS_DevtoolsProcessEvent(&ev))
         {
             // Any DevTools interaction must release relative mode immediately.
             // On Cocoa, waiting for the later focus event lets the game's
@@ -2668,7 +2668,7 @@ int32_t handleevents_pollsdl(void)
         // Do not let an input event with a missing/incorrect window ID reach
         // the game while Cocoa says DevTools owns focus.  This is the race
         // that otherwise re-enables Duke's relative mouse capture on click.
-        if (VBJS_DevtoolsOwnsInput() &&
+        if (NNBJS_DevtoolsOwnsInput() &&
             (ev.type == SDL_TEXTINPUT || ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP ||
              ev.type == SDL_MOUSEMOTION || ev.type == SDL_MOUSEBUTTONDOWN ||
              ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEWHEEL))
@@ -2718,13 +2718,13 @@ int32_t handleevents_pollsdl(void)
             case SDL_KEYDOWN:
             case SDL_KEYUP:
             {
-#ifdef VBJS
+#ifdef NNBJS
                 // Browser-equivalent DevTools shortcut: Command+Option+I on
                 // macOS focuses the detached external DevTools surface.
                 if (ev.key.type == SDL_KEYDOWN && ev.key.keysym.scancode == SDL_SCANCODE_I &&
                     (ev.key.keysym.mod & KMOD_GUI) && (ev.key.keysym.mod & KMOD_ALT))
                 {
-                    VBJS_DevtoolsFocus();
+                    NNBJS_DevtoolsFocus();
                     break;
                 }
 #endif

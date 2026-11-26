@@ -276,7 +276,7 @@ static void KexSpiderLeapTick(short nSpider, short nSprite, short nTarget)
 void KexSpiderLeap_TestTick()
 {
     if (s_spiderLeapTest < 0)
-        s_spiderLeapTest = g_kexMode && Bgetenv("VB_KEX_SPIDER_LEAP_TEST") ? 1 : 0;
+        s_spiderLeapTest = g_kexMode && Bgetenv("NNB_KEX_SPIDER_LEAP_TEST") ? 1 : 0;
     if (!s_spiderLeapTest)
         return;
     s_spiderLeapTest = 0;

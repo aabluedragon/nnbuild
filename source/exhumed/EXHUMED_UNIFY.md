@@ -52,7 +52,7 @@ unified binary:
   config blocked on a setup dialog this build does not ship for Exhumed. The
   first-run term now respects `g_noSetup`, matching SW, Blood and RR.
 - **No way to verify a run without a human at the keyboard.** `GameDisplay()`
-  honours `VB_CP_CAPTURE=<frames>`, the same debug hook SW and the Duke runtime
+  honours `NNB_CP_CAPTURE=<frames>`, the same debug hook SW and the Duke runtime
   use: it saves one screenshot that many drawn frames in.
 
 Verified on the Powerslave **demo** (`STUFF.DAT`, 15904838 bytes, CRC
@@ -77,7 +77,7 @@ infers the game from the basename and from the full/demo data-file signatures.
 PCExhumed shipped with its network layer stubbed out -- `network.cpp` was a set
 of empty function bodies, and nothing of the original PowerSlave serial/IPX code
 survived the port. So Powerslave multiplayer here is new code
-(`source/exhumed/src/vbnet.cpp` / `.h`) built on the same NNBuild stack the
+(`source/exhumed/src/nnbnet.cpp` / `.h`) built on the same NNBuild stack the
 other games use.
 
 What made it tractable is that the *game-side* multiplayer scaffolding was never
@@ -118,7 +118,7 @@ generation instead, and a peer counts as ready once its generation catches up.
 is supposed to determine -- every player's position, angle and health, plus the
 RNG cursor (`RandomGetSeed()`) and `totalmoves` -- after every tick, and
 publishes it every 8 ticks. A mismatch logs `Out Of Sync` once and shows it on
-the HUD. `VB_EXNET_DEBUG=<ticks>` traces the lockstep cursor (tick, CRC, publish
+the HUD. `NNB_EXNET_DEBUG=<ticks>` traces the lockstep cursor (tick, CRC, publish
 cursor, local position, health): without it a clean "no desyncs" result proves
 little, since a sim that never advanced also never disagrees.
 
@@ -214,7 +214,7 @@ the same meaning it has in the other games:
 Every flag above is accepted with one dash or two (`-name` / `--name`,
 `-joinlobby` / `--joinlobby`), and `--flag=value` works as well. This matters
 more than it looks: `--joinlobby` used to fall through to the shared
-`VB_NetArg()` handler, which accepted and silently swallowed it because Exhumed
+`NNB_NetArg()` handler, which accepted and silently swallowed it because Exhumed
 passes `NULL` for that hook, so the canonical spelling of the flag did nothing.
 
 `--lobbylist` prints the listing and then continues launching the game, exactly
@@ -240,7 +240,7 @@ level 1 (or to `-<n>` / `-map <file>` if given).
     -wnd -res640x480 -net /p23515 /n0 127.0.0.1:23513
 ```
 
-Confirm with `VB_EXNET_DEBUG=120` on both that the tick numbers advance and the
+Confirm with `NNB_EXNET_DEBUG=120` on both that the tick numbers advance and the
 CRCs at equal ticks are identical, and that neither log contains `Out Of Sync`.
 For a late join, all three logs should report the same CRC again from rebased
 tick 0 after the host logs its `EXSN` stream and each log reports that the
@@ -251,10 +251,10 @@ the same host. Its transport slot is reclaimed, rather than appended as another
 game player; the host and returner should again have equal CRCs from rebased
 tick 0 and neither log may contain `Out Of Sync`.
 For an all-player network-state round trip on the host, set
-`VB_EXNET_SNAPSHOT_FILE=/tmp/exhumed-world.exsn`; at tick 120 it writes an
+`NNB_EXNET_SNAPSHOT_FILE=/tmp/exhumed-world.exsn`; at tick 120 it writes an
 `EXSN` image, deliberately corrupts both active player records, reloads it, and
 logs `EXNET snapshot test: PASS` before lockstep continues. The ordinary
-`VB_KEXSAVE_TEST=1` path remains the separate `EXSV` campaign-save format.
+`NNB_KEXSAVE_TEST=1` path remains the separate `EXSV` campaign-save format.
 
 Masterserver / lobby path, all on one machine:
 
@@ -342,7 +342,7 @@ regressions.
 Kex teleport pads are bridged natively: event 71 is the stepped-on pad and
 the first matching event 72 supplies its destination. The player arrives at
 the source floor triangle's centre with their existing heading intact, exactly
-as Kex's `TeleportEvent()` does; `VB_KEXTELE_TEST=1` exercises that path on
+as Kex's `TeleportEvent()` does; `NNB_KEXTELE_TEST=1` exercises that path on
 `KEX_TEST_TELEPORT.MAP` without input.
 
 All 25 retail levels convert, keeping 97.7% of their sectors.
@@ -765,7 +765,7 @@ Face endpoints attached to a sector ceiling or floor retain that attachment at
 runtime. Lifts, touchplates, bomb sectors and floating platforms therefore open
 and close the appropriate vertical band instead of leaving a stale portal at
 its authored height. `kexverify.py` compares every emitted topology, bound and
-flag field, while `VB_KEX_PORTAL_TEST=1` selects each live face and verifies the
+flag field, while `NNB_KEX_PORTAL_TEST=1` selects each live face and verifies the
 temporary topology, masked art, applicable static reciprocal link and
 byte-for-byte restoration.
 KILENTRY passed all 179 faces, CAVERN_SAT passed after its signed floating-
@@ -855,10 +855,10 @@ geometry:
   / 16384 now, the save version is 10004 for the bigger per-sector tables
   it writes, and a level past the version-7 loader's limits is written
   with map version 8 (same layout on disk; `engineLoadBoard` keys the
-  limits on the version). No level is at the budget. `VB_KEXSAVE_TEST=1`
+  limits on the version). No level is at the budget. `NNB_KEXSAVE_TEST=1`
   saves at tick 100 and loads the save back at 160, comparing the player's
   sector and health -- MAGMA's 1060 sectors round-trip.
-  `VB_EX_SAVE_TEST_FILE=/tmp/.../snapshot` gives that same round-trip an exact
+  `NNB_EX_SAVE_TEST_FILE=/tmp/.../snapshot` gives that same round-trip an exact
   isolated file path, the form used for future network state snapshots.
   A sloped sector is cut along ITS contour, not the light's (a half with no
   level-line wall could not be tilted at all), its
@@ -911,7 +911,7 @@ anchored to map coordinates (never to the visible screen region), so baked
 lighting stays fixed to the geometry while the player moves. This avoids
 Build's coarse, sector-wide animated light flashes. The path is Kex-mode-only:
 classic maps retain their unchanged renderer and lighting.
-`VB_KEX_FLATLIGHT=1` remains a diagnostic override.
+`NNB_KEX_FLATLIGHT=1` remains a diagnostic override.
 
 ### The hit flash
 
@@ -930,9 +930,9 @@ none, so it drew in pal 0 -- `KexFlash_MakePal()` builds a lookup that maps
 every colour to the palette's whitest entry. The mark decays with
 `KexFlash_Tick()` beside the light tick.
 
-`VB_KEX_FLASHTEST=1` holds every creature and prop in the flash: COLONY_PSX's
+`NNB_KEX_FLASHTEST=1` holds every creature and prop in the flash: COLONY_PSX's
 mantis (hires) and CAVERN_PSX's mummy and vase (8-bit) all capture as white
-silhouettes. `VB_KEX_FLASH_AUDIT=1` traces the normal short marker instead;
+silhouettes. `NNB_KEX_FLASH_AUDIT=1` traces the normal short marker instead;
 direct creature hits, radial hits on Anubis, mummies and wasps, and fatal vase
 copies were all observed reaching the renderer.
 
@@ -1098,7 +1098,7 @@ bouncing Ra-fire orbs. Frames 5 and 8 emit another twenty each, while death
 frames 37 and 43 retain the two splash sounds. The FireActor height offset is
 converted through the same 16× Z and 6× world scales as other KEX projectiles.
 
-`VB_KEX_MANTIS_TEST=1` deterministically checks the 62-tick peek, 60-tick rise,
+`NNB_KEX_MANTIS_TEST=1` deterministically checks the 62-tick peek, 60-tick rise,
 common prefix, minimum two-volley Saturn path, five-shot PSX path, 24+21
 submerge/splash path, 53-tick destroy transition, callback masks, projectile
 recipes, tagged event, all three death bursts, and actor stats.
@@ -1106,7 +1106,7 @@ recipes, tagged event, all three death bursts, and actor stats.
 The camel is the remaster's level exit (lotag 60) and the checkpoint scarab
 its save point (lotag 59); both were standing around as decor.
 
-`VB_KEXBREAK_TEST=<ticks>` shatters every prop in the level that many ticks in,
+`NNB_KEXBREAK_TEST=<ticks>` shatters every prop in the level that many ticks in,
 which is how the shard and drop paths are exercised without a player. It also
 requires one successfully allocated exact z+32 puff for every ordinary
 instance before reporting its break-puff PASS line.
@@ -1276,7 +1276,7 @@ native ammo or health item made at the same point with the effect's scale and
 value. The shared flyer controller distinguishes Wasp (height 64), Bird
 (128), and Seedling (96); every other adapted enemy likewise uses its exact
 definition height. An older conversion without the two optional effect SEQs
-keeps the immediate native-pickup fallback. `VB_KEXDROP_ORB_TEST=1` exercises
+keeps the immediate native-pickup fallback. `NNB_KEXDROP_ORB_TEST=1` exercises
 both colors, both scales, the translucency and the delayed callback in a
 hidden runtime probe.
 
@@ -1291,7 +1291,7 @@ not the dead creature's height. The eleven shipped callers are Anubis and
 Sentry/Queen body at +64, Seedling at +32, and Bastet, Bird, Fish, Mummy,
 Spider, Scorpion and Wasp at +0. Their controllers all route through one
 save-safe native actor and suppress the lethal-hit fallback roll while that
-exact sequence is loaded. `VB_KEX_GIB_DEATH_TEST=1` checks both inherited
+exact sequence is loaded. `NNB_KEX_GIB_DEATH_TEST=1` checks both inherited
 scales, both representative offsets, fullbright rendering and the delayed
 effect-top callback.
 
@@ -1319,7 +1319,7 @@ and converting the callback speed into Build's 6x XY / 96x Z space. The exact
 Anubis, Sentry, Set, Selkis and Mummy recipes are respectively
 `4/96/16`, `4/96/24`, `50/192/16`, `2/144/64` and `2/96/12` for
 distance/height/speed. Queen's origin-launched seed and both Saturn/PSX Mantis
-fire paths use the same bridge. A deterministic `VB_KEX_PROJECTILE_TEST`
+fire paths use the same bridge. A deterministic `NNB_KEX_PROJECTILE_TEST`
 checks all eight launch paths without requiring a live boss encounter.
 
 The remaster flamethrower is also a real world-projectile weapon rather than
@@ -1350,7 +1350,7 @@ close-range test. Both source swings call `A_PlayerMelee(160, 20, 80, ...)`:
 the KEX-only bridge traces the current yaw and pitch from the puppet's
 80-unit-raised origin, clips the result to the authored 160-unit 3-D reach,
 and supplies 20 logical damage to the existing creature/prop damage path.
-Classic sword behavior remains untouched. `VB_KEX_WEAPON_TEST=1` reports the
+Classic sword behavior remains untouched. `NNB_KEX_WEAPON_TEST=1` reports the
 live range/damage/height contract, while the verifier reads both retail
 left/right callbacks and guards the native bridge.
 
@@ -1380,8 +1380,8 @@ perfect bounce, 120-tick expiry and `rafire_explode` impact effect. The
 classic controller remains the fallback for non-KEX data. Active Ra actors
 serialize with their source owner and motion state, and the projectile probe
 checks all eight launch phases without changing classic Exhumed behavior.
-`VB_KEXSAVE_TEST=1 VB_KEX_RA_SAVE_TEST=1 VB_KEX_COBRA_SAVE_TEST=1
-VB_KEX_RED_COBRA_SAVE_TEST=1` additionally saves and restores live Ra,
+`NNB_KEXSAVE_TEST=1 NNB_KEX_RA_SAVE_TEST=1 NNB_KEX_COBRA_SAVE_TEST=1
+NNB_KEX_RED_COBRA_SAVE_TEST=1` additionally saves and restores live Ra,
 green-Cobra and red-Cobra projectiles, checking their positions, owners,
 velocities, lifetimes, green/red joint chains and independent actor pitch.
 
@@ -1572,7 +1572,7 @@ converted to Build's down-positive Z. A suppressed callback leaves velocity
 unchanged. Its yaw chase uses the sampled vertical motion rather than the
 classic pitch-as-`zvel` routine. Old converted saves recognize the new
 save-safe state and restart at the equivalent global phase.
-`VB_KEX_WASP_BOB_TEST=1` validates the cosine phase, friction, 3D boundary
+`NNB_KEX_WASP_BOB_TEST=1` validates the cosine phase, friction, 3D boundary
 tests and Z inversion in a hidden runtime probe. The controller recognizes the
 exact loose sequence by its cadence and safely falls back to the stock layout
 when it is absent.
@@ -1608,7 +1608,7 @@ launch/check-ground leap and all 13 attack blocks, with the range check on
 frame 11 and hit on frame 12. All eight authored rotations are precomposited
 with a stable actor origin; the 45 Spider composites occupy tiles 20700-20744
 and the 48 Scorpion composites occupy 20900-20947. The files contain 291 and
-419 frames respectively. `VB_KEX_SPIDER_LEAP_TEST=1` validates the launch
+419 frames respectively. `NNB_KEX_SPIDER_LEAP_TEST=1` validates the launch
 normalization, source-rate friction/gravity bridge, check-ground threshold and
 the authored player/non-player target push-away boundaries in the hidden runtime
 probe.
@@ -1641,7 +1641,7 @@ strict boundary. This replaces the original controllers' inconsistent
 classic behavior remain unchanged. Its KEX trace also uses the centres of the
 logical source/puppet actors, as `CheckTargetSight` does, rather than the
 native sequence image heights, and applies the source's 1.04-radian forward
-cone to actors that lack `lookAllAround`. `VB_KEX_COMMON_ENEMY_TEST=1` includes
+cone to actors that lack `lookAllAround`. `NNB_KEX_COMMON_ENEMY_TEST=1` includes
 the exact inside/outside boundary probe and a reversible live-puppet
 forward-cone/centre-trace acquisition check.
 
@@ -1651,7 +1651,7 @@ locks the native KEX-only dimensions, range conversion, sound aliases, the
 58-slot Anubis, 62-slot Mummy, 57-slot Bastet, 49-slot Fish and both 48-slot
 Spider/Scorpion exact layouts, every private tile/DEF row and every generated
 composite PNG.
-`VB_KEX_COMMON_ENEMY_TEST=1` checks constructed sprites, Anubis'
+`NNB_KEX_COMMON_ENEMY_TEST=1` checks constructed sprites, Anubis'
 1/18/24/25/10/9/20/1 cadence and -8/-9 death threshold, the 6/14 and 12/13
 Spider/Scorpion movement/attack cadence, both four-tick death groups and their
 save-stable identity, the 16/1/13/39/35/1/9 Mummy cadence and death threshold,
@@ -1785,7 +1785,7 @@ joint controller does not use. This keeps earlier save records aligned. When an
 unmarked approximate-KEX save is loaded with the exact sequences, body phase
 health and actions, old egg forms, and snake actions are translated before the
 new controller runs; every action and frame is range-checked before indexing a
-sequence. `VB_KEXSAVE_TEST=1 VB_KEX_QUEEN_SAVE_TEST=1` performs a real save/load
+sequence. `NNB_KEXSAVE_TEST=1 NNB_KEX_QUEEN_SAVE_TEST=1` performs a real save/load
 round trip with all ten links alive and validates every restored id and health
 gate.
 
@@ -1832,9 +1832,9 @@ KEX sample, so arbitrary bounds such as 15 and 20000 remain even across the
 whole source range. Identity is mirrored in `sprite.hitag`, so the unchanged
 classic `Wasp` save struct can reconstruct bird, Wasp and Queen seedling
 records; older saves are recognized from the private tile ranges.
-`VB_KEX_FLYER_AUDIT=1` reports each identity's live stats and
-`VB_KEX_FLYER_TEST=1` validates seedling 1/6, bird 1/8/12/6 and Wasp 4/8/1/4
-cadence in an actual loaded level. `VB_KEX_BIRD_FLIGHT_TEST=1` is a hidden
+`NNB_KEX_FLYER_AUDIT=1` reports each identity's live stats and
+`NNB_KEX_FLYER_TEST=1` validates seedling 1/6, bird 1/8/12/6 and Wasp 4/8/1/4
+cadence in an actual loaded level. `NNB_KEX_BIRD_FLIGHT_TEST=1` is a hidden
 source-math probe for Bird's 60 Hz persistence, exact fractional turns and
 retreat ceiling gate.
 
@@ -1853,7 +1853,7 @@ one-frame leap. `ACTOR_MAP[12] = (105, 1)` selects that skin and
 on tiles 20900-20947. No old seven-frame compression or 7700-range
 retargeting remains. `seq_IsLoaded()` still provides a safe Spider-art
 fallback if the optional file is absent. Vase case 0 uses this same identity;
-`VB_KEXBREAK_TEST=10 VB_KEXBREAK_SCORPTEST=1` forces the callback for every
+`NNB_KEXBREAK_TEST=10 NNB_KEXBREAK_SCORPTEST=1` forces the callback for every
 ordinary prop and checks each spawned controller marker before reporting PASS.
 
 ### The mines
@@ -1877,8 +1877,8 @@ through the exploding pots' `KexBreak_Shatter`. The shared effect path chooses t
 21-tick scale-4 land actor or scale-2 water actor at z+32, with the authored
 sound, fullbright art and transient light before radial damage and Toggle-face
 opening. Being shot or blasted to zero starts the fuse instead of shattering.
-`VB_KEX_LOOKAT=0 VB_KEX_LOOKAT_TILE=<its
-tile>` (8761 in the current tables) with `VB_KEXBREAK_TEST=100000` logs
+`NNB_KEX_LOOKAT=0 NNB_KEX_LOOKAT_TILE=<its
+tile>` (8761 in the current tables) with `NNB_KEXBREAK_TEST=100000` logs
 the arming and the blast.
 
 A sound audit alongside (every `sounds/*.wav` the remaster's defs and
@@ -1891,16 +1891,16 @@ glass for ten ordinary vase types (eleven when the focused test maps add
 `blood_4` alias reaches `fleshbreak.wav`. `kexverify.py` derives and checks
 the retail 3/10/1/1 and focused-test 3/11/1/1 censuses directly from the
 actor and death-animation data; the runtime probe recognizes both while
-retaining the historic eleven-column 3/11/1/0 fallback. `VB_KEXBREAK_SOUND_TEST=1`
+retaining the historic eleven-column 3/11/1/0 fallback. `NNB_KEXBREAK_SOUND_TEST=1`
 checks that table at runtime and,
-with `VB_KEXBREAK_TEST`, checks every shattered instance's dispatch; hidden,
+with `NNB_KEXBREAK_TEST`, checks every shattered instance's dispatch; hidden,
 muted probes covered TOMB's glass, MARSH's flesh, MINES' wood, and their silent
 exploding props. The two explosive vase types preserve their authored sixteen
 `randomizeFrames` idle poses (a stable one-time selection per prop) and keep
 their five debris sprites in the following tile range, rather than rendering
 every instance as the first pose or accidentally selecting a shard. The
 14-column `kexbreak.txt` carries that intact-range count; old 13-column tables
-remain one-variant compatible. `VB_KEXBREAK_VARIANT_TEST=1` validates both
+remain one-variant compatible. `NNB_KEXBREAK_VARIANT_TEST=1` validates both
 source rows and all live props while a map loads. Their bouncy shards likewise
 keep the authored `glass01..03`,
 `wood01..03`, or `flesh01..03` floor-rebound family: KEX selects its variant
@@ -1910,8 +1910,8 @@ RNG. Unlike the original 75-slot DOS chunk ring, KEX tosses can overflow into
 disposable, marker-tagged sprites; this only activates after the classic pool
 is full, preserves the original allocator and save layout, and lets a
 same-tick chain of explosive vases retain every authored shard.
-`VB_KEX_TOSS_OVERFLOW_SAVE_TEST=1` plus an absolute
-`VB_KEX_OVERFLOW_SAVE_FILE` performs a hidden live-shard save/reload and
+`NNB_KEX_TOSS_OVERFLOW_SAVE_TEST=1` plus an absolute
+`NNB_KEX_OVERFLOW_SAVE_FILE` performs a hidden live-shard save/reload and
 cleanup audit. The remaining
 sounds with no Build counterpart get names
 no VOC carries -- `k_trans`, `k_mine`, `k_bould`, `k_bldhit`, `k_anmele`,
@@ -1985,12 +1985,12 @@ path; the incomplete branch goes directly to the bad ending. A converted
 repeatable pad can span several Build sectors. The complete set is disabled
 during release and rearmed four seconds later only after the player leaves it,
 preventing a split piece from starting a second cinematic during the first
-one's vanish. `VB_KEX_TOMBEND_AFTER_TEST=1` proves the delayed second pulse
+one's vanish. `NNB_KEX_TOMBEND_AFTER_TEST=1` proves the delayed second pulse
 under the hidden Ramses visual fixture.
 
 `kexverify.py` checks the 55/12/21/1 ranges, shared canvases, PNG/DEF coverage,
 and all 56 language/speech facial streams against their WAV rate and the runtime
-buffer. Hidden, dummy-audio `VB_KEXRAMSES_VISUAL_TEST=1` runs passed on both TOMB
+buffer. Hidden, dummy-audio `NNB_KEXRAMSES_VISUAL_TEST=1` runs passed on both TOMB
 and TOMBEND, including the seven-second body prelude and all four phase changes.
 
 The two remaining Kex travel actors now use the same pickup path: KILARENA's
@@ -2133,7 +2133,7 @@ floor is more than 5120 z units -- 320 world units, 53 Kex units -- above the
 feet. The remaster's player steps 66 (`Obj_Player`, `stepHeight 66`); 636
 portal steps across the levels lie between 53 and 70 units, every one of them
 a jump here. `Kex_PlayerStep()` is 70 Kex units (6720 z) in Kex mode and the
-original 5120 otherwise, at the three player calls. `VB_KEX_WALK=<ticks>`
+original 5120 otherwise, at the three player calls. `NNB_KEX_WALK=<ticks>`
 walks the player straight ahead for that long and logs where it gets to every
 hundred ticks, which is how this was tried: from the courtyard the walk now
 ends in sector 101, up the step.
@@ -2261,7 +2261,7 @@ The four KEX key doors likewise retain their source feedback: a missing key
 now maps its preserved Build key bit to `UseLockedDoor()`'s localization text,
 “You Need the Symbol of Power/Time/War/Earth,” rather than the generic classic
 message. This runs only in KEX mode; `TEST_DOOR` has the Power-key source case
-and `VB_KEXLOCK_TEST=1` routes an automated missing-key press through the real
+and `NNB_KEXLOCK_TEST=1` routes an automated missing-key press through the real
 sector-switch handler.
 
 `REMOTE_TRIGGER` deliberately is not another Build touchplate. The converter
@@ -2289,7 +2289,7 @@ of treating tag 2 (or any other tag) as a state index. The remaster's
 The type-23 `FLOOR_TRIGGER_PLATE` bridge also plays the remaster's
 actor-local `sounds/fplate.wav` exactly once when its plate begins sinking,
 before its tag+1 reset. The generated `k_fplate` alias keeps that sound KEX
-only; `VB_KEX_PLATE_SOUND_TEST=1` reports the live event-to-WAV binding in a
+only; `NNB_KEX_PLATE_SOUND_TEST=1` reports the live event-to-WAV binding in a
 hidden, muted test run.
 
 Both event and actor tags are signed `i16`. Values below -1 are real channels,
@@ -2307,7 +2307,7 @@ across the retail maps were previously read as solid floor -- nowhere in the
 game could you dive. Floors flagged lava (0x20) or slime (0x80) get Build's
 lotag 96 damage sprite.
 
-`VB_KEX_AIR_TEST=1` runs the native 60 Hz air updater through one exact
+`NNB_KEX_AIR_TEST=1` runs the native 60 Hz air updater through one exact
 unmasked drain period, the low-air gasp threshold, and surface recovery while
 restoring the live player state afterward. `KEX_TEST_WATER.MAP` is its focused
 hidden-run fixture.
@@ -2329,7 +2329,7 @@ so `_float_surfaces()` records every surviving ceiling/floor piece in
 and advances the exact two-degree cosine from `MoveThings()`, carrying actors
 that are actually standing on a moving floor. The retail maps contain 44
 movers and 98 converted surfaces; PEAK, TOMBEND and CAVERN_PSX pass the
-`VB_KEXFLOAT_TEST=1` one-cycle paired-geometry probe, covering split partners,
+`NNB_KEXFLOAT_TEST=1` one-cycle paired-geometry probe, covering split partners,
 runtime-random phases and both signed spawn offsets.
 
 SCRIPTED_MOVE is the last of the sector events, and it is used twice in the
@@ -2561,7 +2561,7 @@ Build keys a wall-texture flip off
 the same hitag (the trap's "mouth" lighting up), which in a converted map
 would catch a switch wall on the same channel in the same room, so in Kex
 mode the trap is built with -1 there. `kMaxTraps` went from 40 to 64: COLONY
-carries 30 spawners. `VB_KEX_TRAP_TEST=1` runs a no-projectile deterministic
+carries 30 spawners. `NNB_KEX_TRAP_TEST=1` runs a no-projectile deterministic
 probe over the loaded map's real factory groups, phase clocks, shot counts and
 an isolated stop event.
 
@@ -2623,7 +2623,7 @@ What they do, in Kex mode only:
   with all eight pieces and `badend-*.ogv` otherwise. In the KEX path, the
   incomplete branch now starts that bad ending as soon as Ramses finishes,
   matching `EndRamsesEvent()`'s `GetQuestItems() != 0xFF` test in the TOMBEND
-  script. `VB_KEX_SKIPMOVIES=1` is an unattended-test override that skips the
+  script. `NNB_KEX_SKIPMOVIES=1` is an unattended-test override that skips the
   title, intro, and either ending; ordinary KEX gameplay always plays them.
 - Ankhs: each raises the health ceiling by a fifth of the base, so all five
   double it -- `KexInv_MaxHealth()` is what the respawn, the healing caps,
@@ -2668,7 +2668,7 @@ not bounce: its first wall, actor, floor or ceiling impact runs the radius-512,
 `AMUNBOMB.SEQ` and tile 7848 directly from `projectiles/amun_bomb_idle`; both
 are optional and classic data keeps the original grenade lifecycle. The green
 Cobra Staff likewise uses its authored 512/100 non-opening death blast instead
-of the DOS 200/10 values. `VB_KEX_BOMB_TEST=1` validates charge, release-time
+of the DOS 200/10 values. `NNB_KEX_BOMB_TEST=1` validates charge, release-time
 ammo, spawn scale, velocity, gravity, no-fuse/no-bounce state and blast recipe.
 
 KILENTRY contains six artifact actor records stacked outside every sector.
@@ -2678,19 +2678,19 @@ script hand-out. The map tile base moved from 6000 to 8000: with the
 collectibles' sprites added the texture run from 6000 reached 6988, one level
 short of the menu art at 7000.
 
-Every unattended run takes `VB_HIDE_WINDOW=1 SDL_AUDIODRIVER=dummy` (the window is created hidden
+Every unattended run takes `NNB_HIDE_WINDOW=1 SDL_AUDIODRIVER=dummy` (the window is created hidden
 and never raised; rendering and screenshots go on offscreen),
-`-nosound -nomusic`, and `-usecwd -nosetup -cfg /tmp/.../vbtest.cfg` with an absolute temporary
+`-nosound -nomusic`, and `-usecwd -nosetup -cfg /tmp/.../nnbtest.cfg` with an absolute temporary
 config path. A capture-capable probe also sets
-`VB_SCREENSHOT_DIR=/tmp/.../screenshots`; game selection can change the working
-directory, and this post-cvar test-only override keeps `VB_CP_CAPTURE` and
+`NNB_SCREENSHOT_DIR=/tmp/.../screenshots`; game selection can change the working
+directory, and this post-cvar test-only override keeps `NNB_CP_CAPTURE` and
 unattended KEX menu screenshots out of the installed game-data directory.
 `-nomusic` now uses the same dashed option parsing as the other
 standard launch flags, keeps effects enabled when `-nosound` is absent, and
 prevents both level tracks and Theora movie audio from loading. Ramses dialogue
 remains a sound-effect path and is not suppressed by `-nomusic`. The live
 `mus_enabled` setting also stops a current soundtrack immediately without
-interrupting dialogue; `VB_KEX_MUSIC_STOP_TEST=1` proves the live transition
+interrupting dialogue; `NNB_KEX_MUSIC_STOP_TEST=1` proves the live transition
 against TOMB's real level track. Hidden runs
 also log and dismiss native message boxes (answering
 No to questions), so an unattended error cannot leave an invisible modal
@@ -2700,22 +2700,22 @@ the native first-run setup window. The explicit config matters because the game 
 `CONFIG_ReadSetup()`, and its cvars file follows it as `<name>_cvars.cfg`
 (`CONFIG_CvarsFilename()`), keeping the player's profile untouched. The
 unattended check is
-`VB_KEXINV_TEST=<ticks>`: that far into a level it
+`NNB_KEXINV_TEST=<ticks>`: that far into a level it
 takes every collectible the level holds as if walked over, logs the tally,
 then pages through the status screen screenshotting each page.
-Enemy-sequence smoke tests use `VB_KEX_FLYER_AUDIT=1` and
-`VB_KEX_FLYER_TEST=1`; the latter spawns a disposable protected seedling,
+Enemy-sequence smoke tests use `NNB_KEX_FLYER_AUDIT=1` and
+`NNB_KEX_FLYER_TEST=1`; the latter spawns a disposable protected seedling,
 checks all three flyer sequence contracts and authored stats, removes it, and
-restores the player's prior invincibility state. `VB_KEX_WASP_BOB_TEST=1` is a
+restores the player's prior invincibility state. `NNB_KEX_WASP_BOB_TEST=1` is a
 separate no-actor probe for Wasp's 60 Hz chase bob: it checks the source cosine
 phase, friction, exact full-3D/height gates and Build-Z conversion.
-Sentry probes use `VB_KEX_SENTRY_AUDIT=1` to log the first live actor's stats
-and exact-file detection, or `VB_KEX_SENTRY_TEST=1` to spawn a protected
+Sentry probes use `NNB_KEX_SENTRY_AUDIT=1` to log the first live actor's stats
+and exact-file detection, or `NNB_KEX_SENTRY_TEST=1` to spawn a protected
 disposable actor, force one attack and one pain cycle, verify the retail
 1/8/12/10 cadence, frame-6 shot/fullbright, frame-10 pain exit, dimensions and
 speed, then remove it and restore the player's invincibility.
-Set probes use `VB_KEX_SET_AUDIT=1` for live logical health, dimensions,
-health-scaled speed and exact-file detection. `VB_KEX_SET_TEST=1` spawns one
+Set probes use `NNB_KEX_SET_AUDIT=1` for live logical health, dimensions,
+health-scaled speed and exact-file detection. `NNB_KEX_SET_TEST=1` spawns one
 protected disposable Set and forces melee, soul-cast, pain and leap-start
 cycles; it verifies the 1/20/18/13/1/12/15/8/30/1 cadence, melee frames 8/17,
 soul frame 7, fullbright frame 9, launch frame 12, authored stats and internal
@@ -2761,7 +2761,7 @@ the remaster's bracelet wavs in `KEX_SOUNDS`). `seq_IsOptional()` lists
 "manacle" with "boulder" so classic data logs nothing about the missing
 file.
 
-`VB_KEXINV_TEST` finishes its sweep by giving the weapon, holding fire and
+`NNB_KEXINV_TEST` finishes its sweep by giving the weapon, holding fire and
 releasing, capturing the charge and release frames and logging
 `Kex manacle test: weapon 7 state 3, last release fired N bolts, ammo M`.
 
@@ -2828,14 +2828,14 @@ before the ending. `Obj_Camel` and `Obj_Ramses_Body` do not set `requestSave`,
 but the native map-transition commit itself updates the active slot; their
 destination and unlock changes are therefore saved as well.
 
-`VB_KEXCAMPAIGNSAVE_TEST=1` with an isolated `VB_KEXINV_SAVE_FILE` exercises
+`NNB_KEXCAMPAIGNSAVE_TEST=1` with an isolated `NNB_KEXINV_SAVE_FILE` exercises
 V1--V4 migration, relocated V5 map/unlock/play-time state, health staging and
-terminal round trips. `VB_KEXOVERWORLD_TEST=1` validates the fresh lock state and exact
-opening-node adjacency. `VB_KEXTRAVEL_TEST=1` on PEAK, `=22` on KILARENA, and
-`=63` on TOMBEND, plus `VB_KEXTRAVEL_TEST_SLOT`, drive the actual
+terminal round trips. `NNB_KEXOVERWORLD_TEST=1` validates the fresh lock state and exact
+opening-node adjacency. `NNB_KEXTRAVEL_TEST=1` on PEAK, `=22` on KILARENA, and
+`=63` on TOMBEND, plus `NNB_KEXTRAVEL_TEST_SLOT`, drive the actual
 pyramid/Ramses-body/chopper actor respectively, while
-`VB_KEXMENU_LOAD_TEST=<slot>` checks the two-file menu decode; tests can also
-isolate the classic backing path with `VB_EXHUMED_SAVE_FILE`.
+`NNB_KEXMENU_LOAD_TEST=<slot>` checks the two-file menu decode; tests can also
+isolate the classic backing path with `NNB_EXHUMED_SAVE_FILE`.
 
 **Two maps, one coordinate space.** The remaster ships both the original
 `gfx/overworld_orig.png` (640x512) and a repaint, `gfx/overworld.dds`
@@ -2876,7 +2876,7 @@ artifact-held load branch uses the script's `actor.Remove()` semantics -- no
 death timeline, drops, Selkis scorpions, corpse, or kill trigger -- then fires
 the exit immediately, as the remaster does. This also fixes the
 returning-player case, which previously removed the boss but left the exit
-closed. `VB_KEXBOSS_TEST=1`
+closed. `NNB_KEXBOSS_TEST=1`
 kills the boss at tick 60 and confirms the exit tag; `=2` grants an
 artifact and runs the immediate load rule on the two artifact boss maps.
 
@@ -2905,8 +2905,8 @@ the rest are three remaster rules the scripts do not spell out:
   channel 0, which every tag-0 effect shares.
 - **TOMB's 1020**, the message door beside Ramses' crypt and its script
   sector, opens when his speech ends (`KexScript_RamsesEnd`;
-  `VB_KEXRAMSES_TEST=1` calls it at tick 100 without the speech, and with
-  `VB_KEX_LOOKAT_TAG=1020` the door is seen to rise and hold).
+  `NNB_KEXRAMSES_TEST=1` calls it at tick 100 without the speech, and with
+  `NNB_KEX_LOOKAT_TAG=1020` the door is seen to rise and hold).
 
 Testing these turned up that none of the tag-past-1000 rules had ever
 reached their channel on six levels: the kexchan.txt row parser read the
@@ -2918,7 +2918,7 @@ through to `tag % 1000` and the boss and load rules on those levels were
 firing channel 0. The field is 32 wide now and an unresolved tag fires
 nothing, with a log line saying so.
 
-Watching the doors themselves (`VB_KEX_LOOKAT_TAG=<kex tag>` stands the
+Watching the doors themselves (`NNB_KEX_LOOKAT_TAG=<kex tag>` stands the
 player before the first sector on that tag's channel and logs its
 heights every ten ticks; the tags are read back from the map file, since
 `runlist_ProcessSectorTag` clears them) found two more:
@@ -2951,7 +2951,7 @@ heights every ten ticks; the tags are read back from the map file, since
   levels (SUNKEN's three, one each in GORGE, KILENTRY, MAGMA, MINES,
   SANCTUAR, two in SHRINE) blocked their passages from the start. The
   converter raises such a sector's ceiling to its highest neighbour's;
-  `VB_KEXKEY_TEST=1` with `VB_KEX_LOOKAT_TAG=2` on SUNKEN shows the door
+  `NNB_KEXKEY_TEST=1` with `NNB_KEX_LOOKAT_TAG=2` on SUNKEN shows the door
   standing open and descending once the key rule fires.
 - **The bomb walls were open passages, and blew as the finale's towers.**
   `EXPLODE` became Build's 35, the energy block, whose sector stands with
@@ -2968,8 +2968,8 @@ heights every ten ticks; the tags are read back from the map file, since
   on it (`FuncEnergyBlock` on the channel message), and does none of the
   towers bookkeeping, and settles whatever stood on the block onto the
   dropped floor (SETARENA hides team doll 16 inside one).
-  `VB_KEXEXPLODE_TEST=1` blows the first at tick 100;
-  with `VB_KEX_LOOKAT_TAG=668` SETARENA's sector 22 is seen to drop from
+  `NNB_KEXEXPLODE_TEST=1` blows the first at tick 100;
+  with `NNB_KEX_LOOKAT_TAG=668` SETARENA's sector 22 is seen to drop from
   its ceiling to its authored floor, all eleven going together.
 - **Every lift and every drop pad was untagged.** The same audit, run over
   the events whose Build mapping is guarded on a neighbour's height, found
@@ -2991,9 +2991,9 @@ heights every ten ticks; the tags are read back from the map file, since
   source tick. Thus CAVERN_PSX's 196/197 pair and all 14 independent PEAK
   pads change only their authored paired geometry, rather than trying to
   approximate the behavior with a lotag-6 elevator or a lotag-81 marker.
-  `VB_KEXPAD_TEST=1` runs the first pad through the complete descent/reset/
+  `NNB_KEXPAD_TEST=1` runs the first pad through the complete descent/reset/
   return cycle and checks that every paired surface stayed in lockstep;
-  `VB_KEXPAD_TEST=5200` targets PEAK's high-tag pad and also exercises the
+  `NNB_KEXPAD_TEST=5200` targets PEAK's high-tag pad and also exercises the
   generated `kexchan.txt` allocation.
 - **The War and Earth key doors asked for the wrong keys.** A key door's
   hitag thousands are a BITMASK of keys, not a number: the DOS maps carry
@@ -3012,8 +3012,8 @@ heights every ten ticks; the tags are read back from the map file, since
   (`KEX_TAG0`) for the event types that fire and listen on channels --
   plain doors, keys and lifts keep 0, since a shared channel would open
   every door in the level together -- and the engine's channel row holds a
-  32-bit tag for it. Standing on the first region (`VB_KEX_LOOKAT_TAG=100000
-  VB_KEX_LOOKAT_STAND=1`, which traces the door on the same channel) opens
+  32-bit tag for it. Standing on the first region (`NNB_KEX_LOOKAT_TAG=100000
+  NNB_KEX_LOOKAT_STAND=1`, which traces the door on the same channel) opens
   door 185. The tag-0 lifts (including TOMB's first barrel-area platform,
   KILENTRY's and TOMBEND's `FLOOR_LOWER_WAIT_RAISE`, and the
   `FLOOR_RAISE_WAIT_LOWER`s already covered) get a Kex-only sector-contact
@@ -3039,7 +3039,7 @@ heights every ten ticks; the tags are read back from the map file, since
   portal wall of the sector) and kept a sector's several events (six
   sectors carry two or more: THOTH's plate that is also a switch, a key
   door doubled with a plain one) instead of the last one only.
-  `VB_KEX_LOOKAT_PRESS=1` with `VB_KEX_LOOKAT_TAG=<tag>` presses the first
+  `NNB_KEX_LOOKAT_PRESS=1` with `NNB_KEX_LOOKAT_TAG=<tag>` presses the first
   wall switch on that tag's channel the way the use key does, 40 ticks
   after the look-at; PEAK's switch on 89 and THOTH's on 25 are seen to
   open their doors.
@@ -3060,7 +3060,7 @@ heights every ten ticks; the tags are read back from the map file, since
   Scepter holder. The per-Z `kexportal.txt` records carry their own texture and
   flags, so stacked grates and force fields no longer inherit whichever face
   happened to become the Build wall's static fallback.
-  `VB_KEX_LOOKAT_OVERPIC=<tile>` stands the player before a visible instance.
+  `NNB_KEX_LOOKAT_OVERPIC=<tile>` stands the player before a visible instance.
 - **Most of SUNKEN was dry.** Water, lava and slime come from the FACE
   flags (a floor face's 0x40 is a water link, 0x20 lava, 0x80 slime), and
   only a sector with an air face above it got the engine's water-side
@@ -3084,7 +3084,7 @@ heights every ten ticks; the tags are read back from the map file, since
   records them and `getzrange_filtered()` still traverses each neighbour but
   suppresses that neighbour's z candidates unless the actor origin is inside.
   The ordinary `getzrange()` ABI and every non-KEX map remain unchanged.
-  `VB_KEX_NOEDGE_TEST=1` measured 15 suppressed edge surfaces across CAVERN's
+  `NNB_KEX_NOEDGE_TEST=1` measured 15 suppressed edge surfaces across CAVERN's
   six marked sectors and 44 across SETARENA's seventeen; PEAK's unmarked map
   reported zero and stayed on the ordinary path.
 
@@ -3115,7 +3115,7 @@ The converter validates both actor definitions, every source frame, the
 sound/light callbacks, blank-frame placement and all known spawn recipes before
 writing output. `kexverify.py` independently checks those contracts, every
 generated tile/PNG and SEQ row, both sound aliases, and native call ordering.
-`VB_KEX_BOMB_TEST=1` also allocates both variants in-game and verifies their
+`NNB_KEX_BOMB_TEST=1` also allocates both variants in-game and verifies their
 sequence, +32 offset, scale, fullbright flag and aliases without displaying a
 test window or requiring audio.
 
@@ -3163,7 +3163,7 @@ restored, while a level restart recreates the original closed map.
 
 `kexverify.py` compares every face, closure, band, seam and dynamic portal
 binding against a fresh conversion of all 25 retail maps. The runtime
-`VB_KEX_TOGGLE_TEST=2` path opens every authored face through the real blast
+`NNB_KEX_TOGGLE_TEST=2` path opens every authored face through the real blast
 code and validates collision, hidden reverse art, height-selected bindings,
 vertical bunch membership and exact reciprocal seam edges. TOMB exercises 108
 wall bands and 11 vertical seams in that exhaustive test.
@@ -3224,7 +3224,7 @@ without claiming a different renderer setting is equivalent.
 Bindings offers every remaster movement, map, screenshot, weapon-cycle and eight
 numbered weapon action in five localized pages. It captures a native keyboard scan
 code, rebuilds any shared-key commands safely, and persists through the normal config.
-`VB_KEX_BINDINGS_TEST=1` performs that same screenshot-bind move in a hidden test
+`NNB_KEX_BINDINGS_TEST=1` performs that same screenshot-bind move in a hidden test
 run, proves sibling commands on both keys survived, and restores its temporary binds.
 Classic sessions retain their original seven-slot input packet and controls.
 "Exit to title screen" is a new return code (4) that the classic menu never
@@ -3237,7 +3237,7 @@ before each game tick and blended only into renderer `tsprite` copies: AI,
 collision, saves and network state retain their exact tick positions.  Sprite
 insertion and deletion invalidate that pose, and sector changes, teleports and
 large scripted jumps draw directly at their destination rather than blending
-through intervening geometry.  `VB_KEX_SPRITE_INTERP_TEST=1` proves that a
+through intervening geometry.  `NNB_KEX_SPRITE_INTERP_TEST=1` proves that a
 live renderer copy was blended at a fractional frame ratio without writing the
 authoritative sprite. This bridge is inactive outside `-kex`.
 

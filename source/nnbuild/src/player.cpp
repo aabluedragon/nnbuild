@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "gamedef.h"
 #include "sounds.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 int g_currentweapon;
 int g_gun_pos;
@@ -357,9 +357,9 @@ int32_t P_SkinReferenceTile(int32_t skin)
 
 enum
 {
-    VB_CROSSPLAY_VOICE_BASE = MAXSOUNDS - 768,
-    VB_CROSSPLAY_SW_BASE = VB_CROSSPLAY_VOICE_BASE,
-    VB_CROSSPLAY_IONFURY_BASE = VB_CROSSPLAY_VOICE_BASE + 64,
+    NNB_CROSSPLAY_VOICE_BASE = MAXSOUNDS - 768,
+    NNB_CROSSPLAY_SW_BASE = NNB_CROSSPLAY_VOICE_BASE,
+    NNB_CROSSPLAY_IONFURY_BASE = NNB_CROSSPLAY_VOICE_BASE + 64,
 };
 
 struct crossplay_voice_sound_t
@@ -391,7 +391,7 @@ static int32_t P_CrossplayVoiceSound(crossplay_voice_sound_t const *sounds, int3
         default: break;
     }
 
-    Bsprintf(name, "vb-crossplay://%s/%s", gamePrefix, sounds[pick].path);
+    Bsprintf(name, "nnb-crossplay://%s/%s", gamePrefix, sounds[pick].path);
     S_DefineSound(soundNum, name, 0, 0, 255, SF_TALK, 0, 1.0f);
     S_LoadSound(soundNum);
 
@@ -402,31 +402,31 @@ static int32_t P_CrossplayLoWangVoice(int32_t soundNum, int32_t playerDead)
 {
     static crossplay_voice_sound_t const pain[] =
     {
-        { VB_CROSSPLAY_SW_BASE + 0, ART_CROSSPLAY_GAME_SW, "CHOTO7.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 1, ART_CROSSPLAY_GAME_SW, "SWPAIN05.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 2, ART_CROSSPLAY_GAME_SW, "SWPAIN03.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 3, ART_CROSSPLAY_GAME_SW, "SWPAIN07.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 4, ART_CROSSPLAY_GAME_SW, "SWPAIN22.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 0, ART_CROSSPLAY_GAME_SW, "CHOTO7.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 1, ART_CROSSPLAY_GAME_SW, "SWPAIN05.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 2, ART_CROSSPLAY_GAME_SW, "SWPAIN03.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 3, ART_CROSSPLAY_GAME_SW, "SWPAIN07.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 4, ART_CROSSPLAY_GAME_SW, "SWPAIN22.VOC" },
     };
     static crossplay_voice_sound_t const dying[] =
     {
-        { VB_CROSSPLAY_SW_BASE + 5, ART_CROSSPLAY_GAME_SW, "SWYELL03.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 6, ART_CROSSPLAY_GAME_SW, "SWYELL05.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 7, ART_CROSSPLAY_GAME_SW, "SWYELL06.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 8, ART_CROSSPLAY_GAME_SW, "SWDIE02.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 5, ART_CROSSPLAY_GAME_SW, "SWYELL03.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 6, ART_CROSSPLAY_GAME_SW, "SWYELL05.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 7, ART_CROSSPLAY_GAME_SW, "SWYELL06.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 8, ART_CROSSPLAY_GAME_SW, "SWDIE02.VOC" },
     };
     static crossplay_voice_sound_t const talk[] =
     {
-        { VB_CROSSPLAY_SW_BASE + 9,  ART_CROSSPLAY_GAME_SW, "BADMAN04.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 10, ART_CROSSPLAY_GAME_SW, "COMEGET2.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 11, ART_CROSSPLAY_GAME_SW, "GHOP07.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 12, ART_CROSSPLAY_GAME_SW, "GOODDAY4.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 13, ART_CROSSPLAY_GAME_SW, "KILLU05.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 14, ART_CROSSPLAY_GAME_SW, "NATURAL4.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 15, ART_CROSSPLAY_GAME_SW, "NOHONOR6.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 16, ART_CROSSPLAY_GAME_SW, "SAYON09.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 17, ART_CROSSPLAY_GAME_SW, "TAKSAN1.VOC" },
-        { VB_CROSSPLAY_SW_BASE + 18, ART_CROSSPLAY_GAME_SW, "SNATCH01.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 9,  ART_CROSSPLAY_GAME_SW, "BADMAN04.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 10, ART_CROSSPLAY_GAME_SW, "COMEGET2.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 11, ART_CROSSPLAY_GAME_SW, "GHOP07.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 12, ART_CROSSPLAY_GAME_SW, "GOODDAY4.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 13, ART_CROSSPLAY_GAME_SW, "KILLU05.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 14, ART_CROSSPLAY_GAME_SW, "NATURAL4.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 15, ART_CROSSPLAY_GAME_SW, "NOHONOR6.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 16, ART_CROSSPLAY_GAME_SW, "SAYON09.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 17, ART_CROSSPLAY_GAME_SW, "TAKSAN1.VOC" },
+        { NNB_CROSSPLAY_SW_BASE + 18, ART_CROSSPLAY_GAME_SW, "SNATCH01.VOC" },
     };
 
     if (playerDead || soundNum == DUKE_SCREAM)
@@ -442,34 +442,34 @@ static int32_t P_CrossplayShellyVoice(int32_t soundNum, int32_t playerDead)
 {
     static crossplay_voice_sound_t const pain[] =
     {
-        { VB_CROSSPLAY_IONFURY_BASE + 0, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt01.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 1, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt02.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 2, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt03.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 3, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad01.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 4, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad02.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 5, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad03.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 0, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt01.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 1, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt02.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 2, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurt03.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 3, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad01.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 4, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad02.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 5, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtbad03.ogg" },
     };
     static crossplay_voice_sound_t const dying[] =
     {
-        { VB_CROSSPLAY_IONFURY_BASE + 6,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal01.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 7,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal02.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 8,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-01.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 9,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-02.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 10, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-07.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 11, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-08.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 12, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-09.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 6,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal01.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 7,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/pain/hurtfatal02.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 8,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-01.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 9,  ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/BS_Hurt_Noises-02.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 10, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-07.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 11, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-08.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 12, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/death/Z-BS_Hurt_Noises-09.ogg" },
     };
     static crossplay_voice_sound_t const talk[] =
     {
-        { VB_CROSSPLAY_IONFURY_BASE + 13, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_03.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 14, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_04.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 15, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_05.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 16, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_12.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 17, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_07.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 18, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_08.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 19, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_018_say_my_name_alt8.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 20, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_019_were_done_alt5.ogg" },
-        { VB_CROSSPLAY_IONFURY_BASE + 21, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_022_dance_fucker_dance.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 13, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_03.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 14, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_04.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 15, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_05.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 16, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Generic_Event_12.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 17, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_07.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 18, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/Reactionary_Kill_08.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 19, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_018_say_my_name_alt8.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 20, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_019_were_done_alt5.ogg" },
+        { NNB_CROSSPLAY_IONFURY_BASE + 21, ART_CROSSPLAY_GAME_IONFURY, "sounds/shelly/voiceover/shelly_022_dance_fucker_dance.ogg" },
     };
 
     if (playerDead || soundNum == DUKE_SCREAM)
@@ -3174,7 +3174,7 @@ static void P_HandleDeath(int snum)
             p->dead_flag = (512 - ((seed_krand(&g_random.player) & 1) << 10) + (seed_krand(&g_random.player) & 255) - 512) & 2047;
             if (p->dead_flag == 0)
                 p->dead_flag++;
-            VBJS_FireSimple("playerDied");   // NNBuild: player death -> JS
+            NNBJS_FireSimple("playerDied");   // NNBuild: player death -> JS
 
             if((s->cstat & 32768) == 0)
                 s->cstat = 0;

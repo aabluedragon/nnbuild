@@ -222,14 +222,14 @@ console is ready. The legacy `-c1`, `-c2`, and `-c3` game mode options still wor
 ```
 
 NNBuild runs local `.js` and `.ts` files as embedded QuickJS mods. Supply a
-file path directly or use `--js`. The `vb`, `cvar`, and `fs` modules are
+file path directly or use `--js`. The `nnb`, `cvar`, and `fs` modules are
 available in headless mode. Scripts can use CON events, gamevars, the gameplay
 bindings, and the console. Server-only world changes should use synchronized
 host commands such as `spawn` and `monsters`. JavaScript state and timers are
 initialized again on a pack change.
 
 ```ts
-import { registerCommand, sendMessage } from 'vb';
+import { registerCommand, sendMessage } from 'nnb';
 import cvar from 'cvar';
 
 const minute: number = 60_000;
@@ -282,7 +282,7 @@ Two local instances (server + client) on E1L1:
 
 A standalone public directory + NAT-punch rendezvous, run with
 `nnbuild -masterserver [port]` (default **23519**). Own UDP protocol,
-independent of the game transport: 4-byte magic `"VBMS"` + 1 type byte.
+independent of the game transport: 4-byte magic `"NBMS"` + 1 type byte.
 
 - **Advertise** (`MS_ADVERTISE`/`_STOP`): a host started with `-advertise <addr>`
   pulses name/gameport/players/map from `Net_HostAdvertise` each frame; the
@@ -291,7 +291,7 @@ independent of the game transport: 4-byte magic `"VBMS"` + 1 type byte.
   case 20020) and the `serverlist` console command call
   `Masterserver_QueryList`.
 - **STUN / hole-punch (IPv4 + IPv6)** (`MS_PUNCH_REQ` → `MS_PUNCH_NOTIFY` +
-  `MS_STUN_RESP`, marker `"VBPH"`): when a client's direct connect stalls it
+  `MS_STUN_RESP`, marker `"NBPH"`): when a client's direct connect stalls it
   sends `MS_PUNCH_REQ` **from its game socket** (`mmulti_sendraw_str`, so the
   master sees the real game endpoint), contacting the master over the **same
   family as the join target** (`MakePunchReq` picks v4/v6 to match). The master
@@ -353,7 +353,7 @@ Files: `source/nnbuild/src/masterserver.cpp` / `.h` (protocol + rendezvous),
 | `source/nnbuild/src/game.cpp` | sim loop `G_MoveLoop` / `G_DoMoveThings`, `movefifoplc` |
 | `source/nnbuild/src/premap.cpp` | `P_SpawnLateJoiner`, `P_RandomSpawnPoint` |
 | `source/nnbuild/src/osdcmds.cpp` | console commands (`map`, admin) |
-| `source/exhumed/src/vbnet.cpp` | the whole Powerslave/Exhumed netcode (see §10) |
+| `source/exhumed/src/nnbnet.cpp` | the whole Powerslave/Exhumed netcode (see §10) |
 | `source/glue/netshared.h`, `source/glue/netargs.h` | masterserver client, file transfer and the shared `--flag` set, used by every game |
 
 ---
@@ -372,7 +372,7 @@ Files: `source/nnbuild/src/masterserver.cpp` / `.h` (protocol + rendezvous),
 
 ---
 
-## 10. Powerslave / Exhumed (`source/exhumed/src/vbnet.cpp`)
+## 10. Powerslave / Exhumed (`source/exhumed/src/nnbnet.cpp`)
 
 PCExhumed shipped with `network.cpp` stubbed out (empty function bodies), so the
 Exhumed netcode is written from scratch rather than ported. It reuses this
@@ -419,7 +419,7 @@ Three things here are worth knowing before changing them:
      player had accumulated. Gather only when a tick's input is actually due
      (`ExNet_WantsInput()`); single-player has the same structure and gates the
      same way, on a tick boundary.
-2. **Files must land before `InstallEngine()`.** `VB_RecvFileChunk` mounts a
+2. **Files must land before `InstallEngine()`.** `NNB_RecvFileChunk` mounts a
    received GRP the moment it completes, so a joiner blocks in
    `ExNet_ReceiveGameFiles()` until the host's `EXNET_PT_FILES_DONE` arrives —
    if it mounted after the ART was read, a mod GRP would have no effect.

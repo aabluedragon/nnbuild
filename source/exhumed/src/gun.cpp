@@ -250,7 +250,7 @@ static int s_kexWeaponSelftest = -1;
 static void KexWeapon_RunSelftest(short nSprite)
 {
     if (s_kexWeaponSelftest < 0)
-        s_kexWeaponSelftest = g_kexMode && Bgetenv("VB_KEX_WEAPON_TEST") ? 1 : 0;
+        s_kexWeaponSelftest = g_kexMode && Bgetenv("NNB_KEX_WEAPON_TEST") ? 1 : 0;
     if (s_kexWeaponSelftest != 1)
         return;
 

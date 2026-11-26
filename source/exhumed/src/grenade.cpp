@@ -587,7 +587,7 @@ void FuncGrenade(int a, int UNUSED(nDamage), int nRun)
 void KexGrenade_TestTick()
 {
     if (s_kexGrenadeTest == -1)
-        s_kexGrenadeTest = g_kexMode && Bgetenv("VB_KEX_BOMB_TEST") ? 0 : -2;
+        s_kexGrenadeTest = g_kexMode && Bgetenv("NNB_KEX_BOMB_TEST") ? 0 : -2;
     if (s_kexGrenadeTest != 0)
         return;
 

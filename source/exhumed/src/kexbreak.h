@@ -190,7 +190,7 @@ void KexHud_PickupFlash(void);             // source blue 192-alpha overlay
 int  KexHud_DamageFlashAlpha(void);
 int  KexHud_PickupFlashAlpha(void);
 void KexHudFlash_Tick(void);
-void KexScript_BossTick(void);          // the VB_KEXBOSS_TEST hook
+void KexScript_BossTick(void);          // the NNB_KEXBOSS_TEST hook
 void KexScript_BossEvent(int nSprite, char const *why); // authored boss death callback
 void KexScript_ArtifactTaken(int nArtifact);   // fires tag 1000 + index
 void KexScript_RamsesEnd(void);         // TOMB's crypt door

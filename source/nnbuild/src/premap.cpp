@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "mapeditor.h"
 #include "editorproject.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "netcontent.h"
 #include "osd.h"
 
@@ -893,42 +893,42 @@ static void resetprestat(int snum,int g)
 
 enum
 {
-    VB_SW_ICON_STAR = 1793,
-    VB_SW_ICON_SHOTGUN = 1794,
-    VB_SW_ICON_LG_ROCKET = 1796,
-    VB_SW_ICON_UZI = 1797,
-    VB_SW_ICON_LG_UZI_AMMO = 1799,
-    VB_SW_ICON_MICRO_BATTERY = 1800,
-    VB_SW_ICON_SM_MEDKIT = 1802,
-    VB_SW_ICON_MEDKIT = 1803,
-    VB_SW_ICON_CLOAK = 1804,
-    VB_SW_ICON_FLASHBOMB = 1805,
-    VB_SW_ICON_UZIFLOOR = 1807,
-    VB_SW_ICON_CHEMBOMB = 1808,
-    VB_SW_ICON_NUKE = 1809,
-    VB_SW_ICON_BOOSTER = 1810,
-    VB_SW_ICON_RAIL_GUN = 1811,
-    VB_SW_ICON_RAIL_AMMO = 1812,
-    VB_SW_ICON_REPAIR_KIT = 1813,
-    VB_SW_ICON_GUARD_HEAD = 1814,
-    VB_SW_ICON_GRENADE_LAUNCHER = 1817,
-    VB_SW_ICON_MICRO_GUN = 1818,
-    VB_SW_ICON_HEAT_CARD = 1819,
-    VB_SW_ICON_HEART_LG_AMMO = 1820,
-    VB_SW_ICON_AUTORIOT = 1822,
-    VB_SW_ICON_LG_SHOTSHELL = 1823,
-    VB_SW_ICON_HEART = 1824,
-    VB_SW_ICON_CALTROPS = 1829,
-    VB_SW_ICON_LG_GRENADE = 1831,
-    VB_SW_ICON_LG_MINE = 1842,
-    VB_SW_ICON_ROCKET = 1843,
-    VB_SW_ICON_NIGHT_VISION = 3031,
-    VB_SW_ICON_ARMOR = 3030,
-    VB_SW_ICON_FIREBALL_LG_AMMO = 3035,
-    VB_SW_BLUE_CARD = 1767,
-    VB_SW_RED_CARD = 1771,
-    VB_SW_GREEN_CARD = 1775,
-    VB_SW_YELLOW_CARD = 1779,
+    NNB_SW_ICON_STAR = 1793,
+    NNB_SW_ICON_SHOTGUN = 1794,
+    NNB_SW_ICON_LG_ROCKET = 1796,
+    NNB_SW_ICON_UZI = 1797,
+    NNB_SW_ICON_LG_UZI_AMMO = 1799,
+    NNB_SW_ICON_MICRO_BATTERY = 1800,
+    NNB_SW_ICON_SM_MEDKIT = 1802,
+    NNB_SW_ICON_MEDKIT = 1803,
+    NNB_SW_ICON_CLOAK = 1804,
+    NNB_SW_ICON_FLASHBOMB = 1805,
+    NNB_SW_ICON_UZIFLOOR = 1807,
+    NNB_SW_ICON_CHEMBOMB = 1808,
+    NNB_SW_ICON_NUKE = 1809,
+    NNB_SW_ICON_BOOSTER = 1810,
+    NNB_SW_ICON_RAIL_GUN = 1811,
+    NNB_SW_ICON_RAIL_AMMO = 1812,
+    NNB_SW_ICON_REPAIR_KIT = 1813,
+    NNB_SW_ICON_GUARD_HEAD = 1814,
+    NNB_SW_ICON_GRENADE_LAUNCHER = 1817,
+    NNB_SW_ICON_MICRO_GUN = 1818,
+    NNB_SW_ICON_HEAT_CARD = 1819,
+    NNB_SW_ICON_HEART_LG_AMMO = 1820,
+    NNB_SW_ICON_AUTORIOT = 1822,
+    NNB_SW_ICON_LG_SHOTSHELL = 1823,
+    NNB_SW_ICON_HEART = 1824,
+    NNB_SW_ICON_CALTROPS = 1829,
+    NNB_SW_ICON_LG_GRENADE = 1831,
+    NNB_SW_ICON_LG_MINE = 1842,
+    NNB_SW_ICON_ROCKET = 1843,
+    NNB_SW_ICON_NIGHT_VISION = 3031,
+    NNB_SW_ICON_ARMOR = 3030,
+    NNB_SW_ICON_FIREBALL_LG_AMMO = 3035,
+    NNB_SW_BLUE_CARD = 1767,
+    NNB_SW_RED_CARD = 1771,
+    NNB_SW_GREEN_CARD = 1775,
+    NNB_SW_YELLOW_CARD = 1779,
 };
 
 static int32_t G_CrossplayIsDukeLikeGame(int32_t game)
@@ -950,11 +950,11 @@ static int16_t G_CrossplayShadowWarriorCardPalette(int16_t sourcePicnum)
 {
     switch (sourcePicnum)
     {
-    case VB_SW_RED_CARD:
+    case NNB_SW_RED_CARD:
         return 21;
-    case VB_SW_YELLOW_CARD:
+    case NNB_SW_YELLOW_CARD:
         return 23;
-    case VB_SW_GREEN_CARD:
+    case NNB_SW_GREEN_CARD:
         return 11;
     default:
         return 0;
@@ -968,78 +968,78 @@ static int16_t G_CrossplayShadowWarriorPickupToDuke(int16_t sourcePicnum, int32_
 
     switch (sourcePicnum)
     {
-    case VB_SW_ICON_SM_MEDKIT:
+    case NNB_SW_ICON_SM_MEDKIT:
         return SIXPAK;
-    case VB_SW_ICON_MEDKIT:
-    case VB_SW_ICON_REPAIR_KIT:
+    case NNB_SW_ICON_MEDKIT:
+    case NNB_SW_ICON_REPAIR_KIT:
         return FIRSTAID;
-    case VB_SW_ICON_BOOSTER:
+    case NNB_SW_ICON_BOOSTER:
         return ATOMICHEALTH;
-    case VB_SW_ICON_ARMOR:
+    case NNB_SW_ICON_ARMOR:
         return SHIELD;
-    case VB_SW_ICON_HEAT_CARD:
-    case VB_SW_ICON_NIGHT_VISION:
+    case NNB_SW_ICON_HEAT_CARD:
+    case NNB_SW_ICON_NIGHT_VISION:
         return HEATSENSOR;
-    case VB_SW_ICON_CLOAK:
+    case NNB_SW_ICON_CLOAK:
         return HOLODUKE;
-    case VB_SW_BLUE_CARD:
-    case VB_SW_RED_CARD:
-    case VB_SW_GREEN_CARD:
-    case VB_SW_YELLOW_CARD:
+    case NNB_SW_BLUE_CARD:
+    case NNB_SW_RED_CARD:
+    case NNB_SW_GREEN_CARD:
+    case NNB_SW_YELLOW_CARD:
         *pal = G_CrossplayShadowWarriorCardPalette(sourcePicnum);
         return ACCESSCARD;
 
-    case VB_SW_ICON_STAR:
+    case NNB_SW_ICON_STAR:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return FIRSTGUNSPRITE;
-    case VB_SW_ICON_SHOTGUN:
+    case NNB_SW_ICON_SHOTGUN:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return SHOTGUNSPRITE;
-    case VB_SW_ICON_UZI:
-    case VB_SW_ICON_UZIFLOOR:
-    case VB_SW_ICON_AUTORIOT:
+    case NNB_SW_ICON_UZI:
+    case NNB_SW_ICON_UZIFLOOR:
+    case NNB_SW_ICON_AUTORIOT:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return CHAINGUNSPRITE;
-    case VB_SW_ICON_MICRO_GUN:
-    case VB_SW_ICON_ROCKET:
-    case VB_SW_ICON_LG_ROCKET:
+    case NNB_SW_ICON_MICRO_GUN:
+    case NNB_SW_ICON_ROCKET:
+    case NNB_SW_ICON_LG_ROCKET:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return RPGSPRITE;
-    case VB_SW_ICON_GRENADE_LAUNCHER:
-    case VB_SW_ICON_CHEMBOMB:
-    case VB_SW_ICON_FLASHBOMB:
+    case NNB_SW_ICON_GRENADE_LAUNCHER:
+    case NNB_SW_ICON_CHEMBOMB:
+    case NNB_SW_ICON_FLASHBOMB:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return HEAVYHBOMB;
-    case VB_SW_ICON_LG_MINE:
-    case VB_SW_ICON_CALTROPS:
+    case NNB_SW_ICON_LG_MINE:
+    case NNB_SW_ICON_CALTROPS:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return TRIPBOMBSPRITE;
-    case VB_SW_ICON_RAIL_GUN:
-    case VB_SW_ICON_GUARD_HEAD:
-    case VB_SW_ICON_HEART:
+    case NNB_SW_ICON_RAIL_GUN:
+    case NNB_SW_ICON_GUARD_HEAD:
+    case NNB_SW_ICON_HEART:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return SHRINKERSPRITE;
-    case VB_SW_ICON_NUKE:
+    case NNB_SW_ICON_NUKE:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return DEVISTATORSPRITE;
 
-    case VB_SW_ICON_LG_UZI_AMMO:
+    case NNB_SW_ICON_LG_UZI_AMMO:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return AMMO;
-    case VB_SW_ICON_LG_SHOTSHELL:
+    case NNB_SW_ICON_LG_SHOTSHELL:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return SHOTGUNAMMO;
-    case VB_SW_ICON_MICRO_BATTERY:
+    case NNB_SW_ICON_MICRO_BATTERY:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return RPGAMMO;
-    case VB_SW_ICON_LG_GRENADE:
+    case NNB_SW_ICON_LG_GRENADE:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return HBOMBAMMO;
-    case VB_SW_ICON_RAIL_AMMO:
+    case NNB_SW_ICON_RAIL_AMMO:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return CRYSTALAMMO;
-    case VB_SW_ICON_FIREBALL_LG_AMMO:
-    case VB_SW_ICON_HEART_LG_AMMO:
+    case NNB_SW_ICON_FIREBALL_LG_AMMO:
+    case NNB_SW_ICON_HEART_LG_AMMO:
         *domain = ART_CROSSPLAY_DOMAIN_WEAPONS;
         return DEVISTATORAMMO;
     default:
@@ -1300,7 +1300,7 @@ static void prelevel(char g)
     // Reference dump for the SW crossplay bridge: what Duke's own spawn leaves
     // on every map sprite.  A_Spawn(-1,i) keeps the map's sprite index, so this
     // diffs line-by-line against the bridge's dump of the same level.
-    if (Bgetenv("VB_CP_CSTAT_DUMP") != NULL)
+    if (Bgetenv("NNB_CP_CSTAT_DUMP") != NULL)
         for (i=0; i < MAXSPRITES; i++)
             if (sprite[i].statnum < MAXSTATUS)
                 OSD_Printf("CSTATDUMP spr=%d tile=%d cstat=%d stat=%d x=%d y=%d z=%d\n",
@@ -2150,7 +2150,7 @@ int G_EnterLevel(int g)
     int16_t playerAngle;
 
     char levelName[BMAX_PATH];
-    VBJS_BeginLevelAttachments();
+    NNBJS_BeginLevelAttachments();
 
     if (!VOLUMEONE && G_HaveUserMap())
     {
@@ -2301,13 +2301,13 @@ int G_EnterLevel(int g)
     }
 
     DukeEditor::ActivateLaunchProjectScripts();
-    VBJS_EndLevelAttachments();
+    NNBJS_EndLevelAttachments();
     if (currentboardfilename[0])
         OSD_Printf(OSDTEXT_YELLOW "User map: %s\n", currentboardfilename);
     else
         OSD_Printf(OSDTEXT_YELLOW "E%dL%d: %s\n",ud.volume_number+1,ud.level_number+1,m.name);
-    VBJS_FireSimple("gameStarted");
-    VBJS_FireSimple("levelChanged");
+    NNBJS_FireSimple("gameStarted");
+    NNBJS_FireSimple("levelChanged");
     return 0;
 }
 

@@ -39,14 +39,14 @@ After a `-net` option, a bare path is only treated as a script if the file exist
 - Scripts from `--js` and bare paths are loaded first, in command-line order. Auto-loaded projects follow, in the order the operating system lists the folders. Do not rely on the order between two auto-loaded mods.
 - A file is loaded only once, even if it is named twice.
 - At most 64 entry scripts are loaded.
-- All scripts run in one JavaScript runtime. They share the global object, the `vb` event handlers and the HUD text ids. Each entry file is its own module, so top-level `const` and `let` names do not collide.
+- All scripts run in one JavaScript runtime. They share the global object, the `nnb` event handlers and the HUD text ids. Each entry file is its own module, so top-level `const` and `let` names do not collide.
 - Scripts are loaded once per launch. There is no hot reload.
 
 ### Scripts in an editor project
 
 An editor project can contain scripts in two forms:
 
-- **Script components** attached to sprites, sectors and walls. They are listed in the map's settings file (`<map>.vbmap.json`) and need Modern Mode. See [Map script components](map-script-components.md).
+- **Script components** attached to sprites, sectors and walls. They are listed in the map's settings file (`<map>.nnbmap.json`) and need Modern Mode. See [Map script components](map-script-components.md).
 - An `autojs/` folder inside a stand-alone project. It is scanned as described above.
 
 When the project is a folder, both forms run without extra options. When the project is a ZIP, scripts are treated as untrusted and do not run unless you pass `--allow-project-scripts`:
@@ -63,7 +63,7 @@ Every entry file is loaded as an ES module. This applies to all extensions, incl
 
 - `import` and `export` work.
 - The code runs in strict mode.
-- These globals exist without an import: `vb`, `cvar`, `console`, `fetch`, `require`, `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`.
+- These globals exist without an import: `nnb`, `cvar`, `console`, `fetch`, `require`, `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`.
 - `fs`, `dgram` and `net` are not globals. Import or require them.
 
 ## Module resolution
@@ -72,13 +72,13 @@ Every entry file is loaded as an ES module. This applies to all extensions, incl
 
 These names always refer to built-in modules:
 
-`vb`, `cvar`, `fs`, `node:fs`, `fs/promises`, `node:fs/promises`, `dgram`, `node:dgram`, `net`, `node:net`
+`nnb`, `cvar`, `fs`, `node:fs`, `fs/promises`, `node:fs/promises`, `dgram`, `node:dgram`, `net`, `node:net`
 
 Each has named exports and a default export:
 
 ```ts
-import { on, log } from 'vb';      // named
-import vb from 'vb';               // default: one object with everything
+import { on, log } from 'nnb';      // named
+import nnb from 'nnb';              // default: one object with everything
 import fs from 'fs';
 ```
 
@@ -103,7 +103,7 @@ import { table } from '../shared/table.js';
 `require` is a global function.
 
 ```js
-const vb = require('vb');
+const nnb = require('nnb');
 const fs = require('fs');
 const util = require('./util.js');
 ```
@@ -136,7 +136,7 @@ The converter works on text patterns. Some valid TypeScript is converted wrongly
 | Return types | `function f(): void {}`, `(x: number): number => x * 2` |
 | `interface` declarations | `interface P { x: number; y: number }` |
 | Simple `type` aliases | <code>type Id = number &#124; string;</code> |
-| `import type …` on one line, and `export type …` on one line with no `;` before its end | `import type { ActorEvent } from 'vb';` |
+| `import type …` on one line, and `export type …` on one line with no `;` before its end | `import type { ActorEvent } from 'nnb';` |
 | `as` casts, `as const`, non-null `!` after a name, `)` or `]` | `value as string`, `list[0]!.name` |
 | `public`, `private`, `protected`, `readonly`, `override` on class members, and `abstract class` | `private readonly max = 3;` |
 | Class fields with types, optional fields | `count: number = 0; hp?: number;` |
@@ -154,7 +154,7 @@ These produce a syntax error when the game loads the file, unless noted.
 | --- | --- |
 | A type annotation on `const` or `let` directly inside an arrow function body: `() => { const n: number = 1; }` | Leave the annotation out, use a cast, or use a `function`. Annotations in the parameter list and in nested blocks are fine. |
 | `switch` statements: the `:` after `case x` and `default` is taken for a type. Statement labels have the same problem. | `if` / `else if` |
-| `import * as name from …` | A default import: `import vb from 'vb';` |
+| `import * as name from …` | A default import: `import nnb from 'nnb';` |
 | `import { type X, y }` | A separate `import type { X }` line |
 | `export interface …`, and `export type …` that spans lines or contains `;` | Do not export types. Keep them in the file that uses them, or in a `.d.ts` file. |
 | A `type` alias whose object type contains a function type followed by more members | An `interface`, or method syntax: `reply(text: string): void` |
@@ -176,7 +176,7 @@ These are the dangerous cases. The file loads, but it does something else than y
 | `return !ok;` | `return ok;` | `return (!ok);` |
 | `return { a: 1, b: 2 };` | `return { a, b };` | `return ({ a: 1, b: 2 });` |
 | `const { a: b } = obj;` | `const { a } = obj;` | `const b = obj.a;` |
-| `import { on as listen } from 'vb';` | `import { on } from 'vb';` | Import `on` and use that name. |
+| `import { on as listen } from 'nnb';` | `import { on } from 'nnb';` | Import `on` and use that name. |
 | `/^(\w+):(.*)$/` | `/^(\w+)$/` | `new RegExp('^(\\w+):(.*)$')` |
 | `a < b && c > (d)` | `a (d)` | `c > (d) && a < b`, or leave out the parentheses after `>` |
 
@@ -204,24 +204,24 @@ None of these files is read by the game. They exist for your editor and for the 
 
 | File | Role |
 | --- | --- |
-| `vb.d.ts` | Type declarations for the `vb` module, the built-in modules, the globals, and map script components. Your editor uses it for completion and type errors. |
-| `tsconfig.json` | TypeScript projects. Tells the editor and `tsc` to check `*.ts` and `vb.d.ts`, to target ES2020, and to produce no output (`noEmit`). `allowImportingTsExtensions` lets you write `import './util.ts'`, which the game requires. |
-| `jsconfig.json` | JavaScript projects. Turns on type checking of `.js` files (`checkJs`) against `vb.d.ts`. |
+| `nnb.d.ts` | Type declarations for the `nnb` module, the built-in modules, the globals, and map script components. Your editor uses it for completion and type errors. |
+| `tsconfig.json` | TypeScript projects. Tells the editor and `tsc` to check `*.ts` and `nnb.d.ts`, to target ES2020, and to produce no output (`noEmit`). `allowImportingTsExtensions` lets you write `import './util.ts'`, which the game requires. |
+| `jsconfig.json` | JavaScript projects. Turns on type checking of `.js` files (`checkJs`) against `nnb.d.ts`. |
 | `package.json` | Lets you run `npm install` and `npm run check`. Only needed for the type check. |
 | `.vscode/` | Debugger setup. See [Debugging with VS Code](debugging-vscode.md). |
 
 Both configuration files only include files in the project folder itself (`*.ts` or `*.js`). If you put code in sub-folders, add them to `include`.
 
-### Where `vb.d.ts` differs from the game
+### Where `nnb.d.ts` differs from the game
 
-`vb.d.ts` is written by the generator. It is a copy of a text stored in the game. It declares the `vb` module, the built-in modules, `fetch`, the timers, and the types for [map script components](map-script-components.md) (`MapComponentContext` and `MapComponentModule`).
+`nnb.d.ts` is written by the generator. It is a copy of a text stored in the game. It declares the `nnb` module, the built-in modules, `fetch`, the timers, and the types for [map script components](map-script-components.md) (`MapComponentContext` and `MapComponentModule`).
 
 In a few details the declarations do not match what the game does:
 
-| `vb.d.ts` says | The game does |
+| `nnb.d.ts` says | The game does |
 | --- | --- |
-| 112 CON event names are known. | All 165 names work. For the other 53 the type check gives the handler an untyped argument. See [Events](events.md#names-missing-from-vbdts). |
-| `VBNode.activeSelf` is read-only. | It can be assigned. Assigning it is the same as calling `SetActive`. In TypeScript call `SetActive`. |
-| `new VBPrefab()` takes no arguments. | `new VBPrefab(tile, ...components)` works. Use `createPrefab`, which is declared correctly. |
+| 112 CON event names are known. | All 165 names work. For the other 53 the type check gives the handler an untyped argument. See [Events](events.md#names-missing-from-nnbdts). |
+| `NNBNode.activeSelf` is read-only. | It can be assigned. Assigning it is the same as calling `SetActive`. In TypeScript call `SetActive`. |
+| `new NNBPrefab()` takes no arguments. | `new NNBPrefab(tile, ...components)` works. Use `createPrefab`, which is declared correctly. |
 | `getSector`, `setSector`, `getWall`, `setWall` and the projectile and tile data functions accept an extra `parm2` argument. | The argument is ignored for these functions. Only actor, player and userdef members use it. |
-| `require` is typed for `'vb'`, `'fs'`, `'dgram'`, `'net'` and `'cvar'`. | `'fs/promises'` and the `node:` names also work, but the type check sees their result as `unknown`. Use `import` for them. |
+| `require` is typed for `'nnb'`, `'fs'`, `'dgram'`, `'net'` and `'cvar'`. | `'fs/promises'` and the `node:` names also work, but the type check sees their result as `unknown`. Use `import` for them. |

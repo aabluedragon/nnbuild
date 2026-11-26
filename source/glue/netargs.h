@@ -5,7 +5,7 @@
 // Every game (Duke/SW/Blood/RR) accepts the SAME networking flags with the SAME
 // behavior; this header is the single definition of what each one does. Each game's
 // own arg parser (they use different frameworks) just detects a token and forwards
-// it here via VB_NetArg(); the action lives in one place.
+// it here via NNB_NetArg(); the action lives in one place.
 //
 //   --advertise/-ad <master>  host a listen server and register it with a masterserver
 //   --lobbylist/-ll <master>  print the servers a masterserver is advertising
@@ -23,7 +23,7 @@
 
 // One help blurb, printed by every game's -help so the flags are discoverable and
 // documented in exactly one place.
-#define VB_NETARGS_HELP \
+#define NNB_NETARGS_HELP \
 "\nMultiplayer (NNBuild):\n" \
 "  --advertise / -ad <master>    host a server and register it with a masterserver\n" \
 "  --lobbylist / -ll <master>    list the servers a masterserver is advertising\n" \
@@ -36,7 +36,7 @@
 "  --wait / -w                   dedicated: hold in the lobby instead of auto-starting\n" \
 "  (options also accept --flag=value; old -long-name spellings remain compatible)\n"
 
-struct vb_netarg_ctx
+struct nnb_netarg_ctx
 {
     int *networkMode;                 // set to serverMode for host flags, clientMode for -joinlobby
     int  serverMode, clientMode;
@@ -59,7 +59,7 @@ struct vb_netarg_ctx
 //   0 = <arg> is not an NNBuild net flag (the caller handles it),
 //   1 = handled with no separate value (value-less flag, or an inline --flag=value),
 //   2 = handled and the separate <next> token was its value.
-static inline int VB_NetArg(const vb_netarg_ctx *cx, const char *arg, const char *next)
+static inline int NNB_NetArg(const nnb_netarg_ctx *cx, const char *arg, const char *next)
 {
     while (*arg == '-') arg++;                         // accept -flag and --flag alike
 

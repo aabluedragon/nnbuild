@@ -443,7 +443,7 @@ void mmulti_punchto_str(const char *addr)
 {
     struct sockaddr_in6 a;
     if (!addr || !resolve_peer(addr, htons((unsigned short)NETPORT), &a)) return;
-    static const char punch[5] = { 'V', 'B', 'P', 'H', 0 };
+    static const char punch[5] = { 'N', 'B', 'P', 'H', 0 };
     netsendto(&a, punch, sizeof(punch));
 }
 
@@ -618,7 +618,7 @@ static void initmultiplayers_reset(void)
 
 // Canonical ordering of endpoints (address bytes, then port) so a sorted roster is the
 // same on every participant regardless of the order the addresses were typed.
-static int vb_addr_cmp(const void *pa, const void *pb)
+static int nnb_addr_cmp(const void *pa, const void *pb)
 {
     const struct sockaddr_in6 *a = (const struct sockaddr_in6 *)pa, *b = (const struct sockaddr_in6 *)pb;
     int const c = memcmp(&a->sin6_addr, &b->sin6_addr, sizeof(a->sin6_addr));
@@ -628,7 +628,7 @@ static int vb_addr_cmp(const void *pa, const void *pb)
 
 // Is <a> this machine on our listen port? (loopback for same-box testing, or one of the
 // local interface addresses for LAN). Lets us find "self" in an order-independent roster.
-static int vb_addr_is_local(const struct sockaddr_in6 *a, int listenPort)
+static int nnb_addr_is_local(const struct sockaddr_in6 *a, int listenPort)
 {
     if ((int)ntohs(a->sin6_port) != listenPort) return 0;
     if (IN6_IS_ADDR_LOOPBACK(&a->sin6_addr)) return 1;
@@ -757,13 +757,13 @@ int initmultiplayersparms(int argc, const char * const *argv)
     {
         int self = -1;
         for (int r = 0; r < rosterCnt; r++)
-            if (vb_addr_is_local(&roster[r], portnum)) { self = r; break; }
+            if (nnb_addr_is_local(&roster[r], portnum)) { self = r; break; }
         if (self >= 0)
         {
-            qsort(roster, rosterCnt, sizeof(roster[0]), vb_addr_cmp);
+            qsort(roster, rosterCnt, sizeof(roster[0]), nnb_addr_cmp);
             self = -1;
             for (int r = 0; r < rosterCnt; r++)
-                if (vb_addr_is_local(&roster[r], portnum)) { self = r; break; }
+                if (nnb_addr_is_local(&roster[r], portnum)) { self = r; break; }
             myconnectindex = self;
             if (rosterCnt > numplayers) numplayers = rosterCnt;
             for (int r = 0; r < rosterCnt; r++)

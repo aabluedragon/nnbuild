@@ -72,7 +72,7 @@ static char const *KexLockedDoor_Message(uint16_t keyMask)
     return NULL;
 }
 
-// VB_KEXLOCK_TEST sends one real missing-key press through FuncSwPressSector
+// NNB_KEXLOCK_TEST sends one real missing-key press through FuncSwPressSector
 // during its normal 0x10000 setup run. It is test-only and remains disabled
 // for every regular KEX and classic map.
 static int s_kexLockedDoorTest = -1;
@@ -501,7 +501,7 @@ void FuncSwPressSector(int a, int UNUSED(b), int nRun)
 
             SwitchData[nSwitch].field_C = runlist_AddRunRec(sector[nSector].lotag - 1, RunData[nRun].nVal, RunData[nRun].nRef);
             if (s_kexLockedDoorTest < 0)
-                s_kexLockedDoorTest = g_kexMode && Bgetenv("VB_KEXLOCK_TEST") ? 1 : 0;
+                s_kexLockedDoorTest = g_kexMode && Bgetenv("NNB_KEXLOCK_TEST") ? 1 : 0;
             if (s_kexLockedDoorTest && SwitchData[nSwitch].field_12
                 && (PlayerList[nLocalPlayer].keys & SwitchData[nSwitch].field_12) != SwitchData[nSwitch].field_12)
             {
@@ -528,7 +528,7 @@ void FuncSwPressSector(int a, int UNUSED(b), int nRun)
 
                     char const * const message = KexLockedDoor_Message(SwitchData[nSwitch].field_12);
                     StatusMessage(300, "%s", message ? message : "YOU NEED THE KEY FOR THIS DOOR");
-                    if (Bgetenv("VB_KEXLOCK_TEST"))
+                    if (Bgetenv("NNB_KEXLOCK_TEST"))
                         OSD_Printf("Kex locked-door test: %s (mask %x -> %s)\n",
                                    message ? "PASS" : "FAIL", SwitchData[nSwitch].field_12,
                                    message ? message : "missing");

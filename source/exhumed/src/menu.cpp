@@ -58,7 +58,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 static char const *menu_SaveFileName(void)
 {
-    char const *const overrideName = Bgetenv("VB_EXHUMED_SAVE_FILE");
+    char const *const overrideName = Bgetenv("NNB_EXHUMED_SAVE_FILE");
     return overrideName && overrideName[0] ? overrideName : kSaveFileName;
 }
 

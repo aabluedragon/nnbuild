@@ -534,7 +534,7 @@ static bool KexMenu_UseControllerPrompts(void)
     // has no physical controller from which to establish that state, but must
     // still be able to render-check KEX's authored generic controller art.
     return CONTROL_LastSeenInput == LastSeenInput::Joystick
-        || Bgetenv("VB_KEX_MENU_CONTROLLER_PROMPTS") != NULL;
+        || Bgetenv("NNB_KEX_MENU_CONTROLLER_PROMPTS") != NULL;
 }
 
 // The hint bar occupies KEX's compact lower black strip, leaving the side art
@@ -646,7 +646,7 @@ enum { kKexKeyNone = 0, kKexKeyUp, kKexKeyDown, kKexKeyLeft, kKexKeyRight, kKexK
 
 // A headless visual sweep can follow real menu transitions without taking
 // control of a developer's keyboard or visible test window.  For example,
-// VB_KEX_MENU_SCRIPT=DDDE moves Main -> Credits.  This bypasses normal input
+// NNB_KEX_MENU_SCRIPT=DDDE moves Main -> Credits.  This bypasses normal input
 // only when explicitly set, and leaves a few rendered frames between commands
 // so the ordinary frame-capture hook can sample the settled destination page.
 static int KexMenu_ScriptedKey(void)
@@ -656,7 +656,7 @@ static int KexMenu_ScriptedKey(void)
 
     if (!initialized)
     {
-        script = Bgetenv("VB_KEX_MENU_SCRIPT");
+        script = Bgetenv("NNB_KEX_MENU_SCRIPT");
         initialized = 1;
     }
     if (!script || !script[cursor] || ++cooldown < 4)
@@ -2591,13 +2591,13 @@ static void KexMenu_SetBinding(KexBinding const &binding, kb_scancode scan)
     CONFIG_MapKey(binding.gamefunc, scan, oldPrimary, oldSecondary, oldSecondary);
 }
 
-// VB_KEX_BINDINGS_TEST=1 moves the screenshot command between two deliberately
+// NNB_KEX_BINDINGS_TEST=1 moves the screenshot command between two deliberately
 // shared bindings, confirms the unrelated commands remain intact, then restores
 // every touched command string. It runs only after the real config is loaded.
 static void KexMenu_RunBindingSelftest(void)
 {
     static int done = 0;
-    if (done || !Bgetenv("VB_KEX_BINDINGS_TEST"))
+    if (done || !Bgetenv("NNB_KEX_BINDINGS_TEST"))
         return;
     done = 1;
 
@@ -3244,7 +3244,7 @@ void KexMenu_TitleHold(void)
     // Headless visual checks need the menu that follows this splash, not an
     // injected key event aimed at a user-visible game window.  This is an
     // opt-in test hook; normal launches retain the native Press Start hold.
-    if (Bgetenv("VB_KEX_SKIP_TITLE_HOLD"))
+    if (Bgetenv("NNB_KEX_SKIP_TITLE_HOLD"))
         return;
 
     // The title track carries the menu behind this screen too; starting a
@@ -3378,7 +3378,7 @@ static void KexMenu_UnlockCompletedLevel(int nLevel)
 
 static void KexMenu_RunWorldSelftest(void)
 {
-    if (s_worldSelftestDone || !Bgetenv("VB_KEXOVERWORLD_TEST"))
+    if (s_worldSelftestDone || !Bgetenv("NNB_KEXOVERWORLD_TEST"))
         return;
     s_worldSelftestDone = 1;
 
@@ -4062,7 +4062,7 @@ void KexMenu_Status(bool weaponWheel)
                 sel = i;
     }
 
-    // Unattended (VB_KEXINV_TEST): hold each page for a moment, screenshot it,
+    // Unattended (NNB_KEXINV_TEST): hold each page for a moment, screenshot it,
     // move on, and leave after the last.
     int const autoFrames = KexInv_TestActive() ? 30 : 0;
     int frame = 0, shown = 0;

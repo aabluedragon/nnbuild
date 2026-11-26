@@ -160,9 +160,9 @@ Instead, the Duke actor system itself runs inside the SW session:
 
 - `source/nnbuild/src/crossplay_dukeai.cpp` brings up the Duke state the
   actor system needs (one allocated player, compiled CON scripts, enemy flag
-  tables) and exposes a `VB_DukeAI_*` API.  Duke's objects are not symbol
+  tables) and exposes an `NNB_DukeAI_*` API.  Duke's objects are not symbol
   localized by the per-game merge, so SW can call into them directly.
-- `VB_DukeAI_MoveActorsOnly()` (in `actors.cpp`) runs only the actor half of
+- `NNB_DukeAI_MoveActorsOnly()` (in `actors.cpp`) runs only the actor half of
   Duke's world tic; the SW bridge keeps owning the player, sectors and
   effectors.
 - The SW side hands Duke every adoptable map sprite at load time, straight off
@@ -183,7 +183,7 @@ because both games disagree about what it means:
 The player is mirrored into Duke each tic (position, sector, angle) and its
 sprite is presented as Duke's own `APLAYER` with a large health pool; whatever
 Duke's actors take off that pool is applied to the SW player.  SW weapon hits
-go the other way through `VB_DukeAI_DamageActor()`, which fills in the same
+go the other way through `NNB_DukeAI_DamageActor()`, which fills in the same
 `actor_t` fields Duke's own weapons do, so pain, knockback, gibbing and death
 are Duke's.
 
@@ -194,7 +194,7 @@ What this gets right by construction, rather than by tuning:
 - Duke's wake logic, movement, attack cadence, projectiles and death;
 - Duke's sprite animation.  Duke never animates by changing `sprite[].picnum`;
   the drawn tile comes from the actor's CON action and the viewer's angle, so
-  the bridge asks Duke for it via `VB_DukeAI_DisplayPicnum()`.  Without that,
+  the bridge asks Duke for it via `NNB_DukeAI_DisplayPicnum()`.  Without that,
   every enemy stands frozen on one frame.  Duke also steps back through frames
   whose art is missing; that test must be applied to the tile *after* it is
   remapped into the host's tile space, because Duke tile numbers mean something
@@ -245,24 +245,24 @@ into the beam does, and Duke's spawn rule is what makes a narrow charge
 (`xrepeat <= 8`) invisible while still explosive.  Map authors rely on that to
 hide charges inside vents and walls.
 
-`VB_CP_DUKEAI=0` falls back to the bridge's older approximation.
+`NNB_CP_DUKEAI=0` falls back to the bridge's older approximation.
 
 ## Automated verification
 
 The suite runs in **phase groups**, because its phases shared one level and a
 later phase saw whatever the earlier ones had destroyed -- tripmines were being
 blown up before they could be tested, and reordering the phases only moved the
-problem to a different phase.  `VB_CP_SELFTEST` selects a group, and the sweep
+problem to a different phase.  `NNB_CP_SELFTEST` selects a group, and the sweep
 runs the game once per group so each starts from a pristine level:
 
 ```sh
 for group in actors world destruct tripmines; do
-    VB_CP_SELFTEST=$group ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+    NNB_CP_SELFTEST=$group ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
         -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 done
 ```
 
-`VB_CP_SELFTEST=1` still runs every group in one pass, which is convenient but
+`NNB_CP_SELFTEST=1` still runs every group in one pass, which is convenient but
 carries the cross-phase contamination this split exists to avoid.
 
 Isolating the groups also settled several long-standing "failures" as artifacts
@@ -276,19 +276,19 @@ checks tell the truth:
   goes again once the hold expires (measured gaps are ~101 tics).
 
 
-The bridge has a self-test harness, enabled with `VB_CP_SELFTEST=1`, that drives
+The bridge has a self-test harness, enabled with `NNB_CP_SELFTEST=1`, that drives
 the local player through the systems captured from the Duke map and prints one
 `CPTEST` line per checked behavior before quitting:
 
 ```sh
-VB_CP_SELFTEST=1 ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+NNB_CP_SELFTEST=1 ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
     -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
 It covers Duke actors (engagement, attacks, animation frames, frame/art
 resolution, sounds, death by SW direct hits and by explosions), teleporters (fires exactly once, no ping-pong), trains (player carry
 slip), breakables, explosives, doors/rotators/lifts, and tripmine beams and
-detonation.  `VB_CP_CAPTURE=<frames>` saves one screenshot that many frames in,
+detonation.  `NNB_CP_CAPTURE=<frames>` saves one screenshot that many frames in,
 under both the SW and Duke runtimes, so a Duke level can be compared against
 itself across runtimes.
 
@@ -403,11 +403,11 @@ Fixed since:
   was the user-reported "trooper spins around itself in the box", and it evaded
   every map-sprite audit because it only exists after a trigger fires mid-game.
   `SW_CrossplaySpawnDukeRespawnedSprite` now adopts enemy tiles into Duke AI
-  (falling back to the old path only if adoption fails), `VB_CP_FIRE_RESPAWNS=1`
+  (falling back to the old path only if adoption fails), `NNB_CP_FIRE_RESPAWNS=1`
   fires all captured triggers for testing, and the harness gained a
   `no-old-layer-actors` invariant so no actor can silently run the
   approximation again.  Diagnosed from a player session recording
-  (`VB_CP_WATCH_AREA=1`): the spinner was sprite 525, original tile 1725, in a
+  (`NNB_CP_WATCH_AREA=1`): the spinner was sprite 525, original tile 1725, in a
   reused slot -- owned=0, behavior flags ACTOR|ALIVE.
 
 - **FIREEXT is supported rather than excluded.**  It was previously left out
@@ -415,7 +415,7 @@ Fixed since:
   SE effectors the host runs, so a Duke-owned one would explode without
   triggering anything -- the same trap the charges themselves fell into.  The
   fix is a seam rather than an exclusion: Duke reaches all of that machinery by
-  hitag, so `VB_DukeAI_SetMapTriggerHook()` hands the host that hitag at Duke's
+  hitag, so `NNB_DukeAI_SetMapTriggerHook()` hands the host that hitag at Duke's
   `DETONATE`, and the host arms its own charges and fires its own effectors.
   Any future adopted tile that reaches `DETONATE` is covered by the same hook.
   A `duke-actor-map-trigger` check keeps it honest.
@@ -503,7 +503,7 @@ Fixed since:
   respawn adoption test asked "is this an enemy tile", but a tile can have a
   plain `actor` block and still be a real Duke actor: E3L6's LIZMANSTAYPUT turns
   itself into a LIZMAN via `cactor` on its first tic, so an enemy-tile test left
-  it on the approximation layer.  `VB_DukeAI_HasActorCode()` reports whether
+  it on the approximation layer.  `NNB_DukeAI_HasActorCode()` reports whether
   Duke's compiled CON has *any* actor block for the tile, and
   `SW_CrossplayDukeShouldRunDukeAI()` adopts on that.  Found by the
   `no-old-layer-actors` invariant added with the respawn fix.
@@ -525,7 +525,7 @@ Fixed since:
   flames, the access cards, the nuke button and E1L1's breakables, and the sweep
   went from clean to sixteen failures.  The precise criterion is *whether Duke
   would draw the sprite at a tile other than its own picnum*:
-  `VB_DukeAI_ActorDrawsOffsetFrames()` reads the actor block's first action out
+  `NNB_DukeAI_ActorDrawsOffsetFrames()` reads the actor block's first action out
   of the compiled CON (`g_tile[tile].execPtr[1]` is the action's script offset)
   and answers yes when its `ACTION_STARTFRAME` or `ACTION_VIEWTYPE` is nonzero.
   An actor that draws in place -- FIRE, CLOCK, the cards -- answers no and stays
@@ -534,8 +534,8 @@ Fixed since:
   tiles are excluded as well; without the latter, VACA1's thirteen APLAYER start
   markers were adopted, un-hidden and drawn, since
   `SW_CrossplaySpriteIsHiddenDukeControlSprite()` stops culling anything Duke
-  owns.  `VB_CP_ADOPT_DEBUG=1` names each adoption and which of the two rules
-  took it; `VB_CP_TILE_DEBUG=<spr>` shows the frame a sprite actually resolves to.
+  owns.  `NNB_CP_ADOPT_DEBUG=1` names each adoption and which of the two rules
+  took it; `NNB_CP_TILE_DEBUG=<spr>` shows the frame a sprite actually resolves to.
 
 - **Nothing Duke breaks sounds electrical.**  E1L1's rooftop vent fan broke with
   a short-circuit crackle (`shorted.voc`).  Duke gives FANSPRITE
@@ -554,7 +554,7 @@ Fixed since:
   each with Duke's broken tile and `VENT_BUST`.  Note this also takes those
   tiles off the bridge's generic tagged-sprite operator path, which is correct:
   Duke breaks a vent panel, it does not operate its tag.
-  `VB_CP_BREAK_DEBUG=1` logs the tile and sound of every break.
+  `NNB_CP_BREAK_DEBUG=1` logs the tile and sound of every break.
 
 - **A solid prop stays solid until it is broken.**  The player could walk into
   E1L1's rooftop vent without shooting it open.  Duke has no list of which props
@@ -582,12 +582,12 @@ Fixed since:
   tile used at two Duke palettes costs two art slots.
 
 - **A solid prop stays solid until it is broken, and Duke decides which.**  The
-  map's own blocking bit is preserved, and `VB_DukeAI_MapSpriteSolidBits()` asks
+  map's own blocking bit is preserved, and `NNB_DukeAI_MapSpriteSolidBits()` asks
   Duke for the rest: its per-tile `A_Spawn()` cases plus its generic rules (a
   wall-aligned switch tile is solid, a tagged aligned sprite becomes a shootable
   faller, solid implies hittable).  The bridge used to guess this from a short
   list, so the player walked through E1L1's rooftop vent, its grates and every
-  masked wall on the level.  `VB_CP_CSTAT_DUMP=1` dumps every map sprite's
+  masked wall on the level.  `NNB_CP_CSTAT_DUMP=1` dumps every map sprite's
   post-setup cstat; the same dump runs in native Duke (`premap.cpp`) and
   `A_Spawn(-1,i)` keeps the map's sprite index, so the two diff sprite for
   sprite.  That diff is how this was found and is the tool for any future
@@ -601,7 +601,7 @@ Fixed since:
   `A_DamageObject()` / `A_DamageWall()` / `A_RadiusDamage()`, built from tables,
   and the copy drifted from Duke every time Duke's real code did something the
   tables did not describe.  It is gone.  `SW_CrossplayDamageDukeMapSprite()` now
-  hands the hit to `VB_DukeAI_QueueMapObjectDamage()`, and Duke's own
+  hands the hit to `NNB_DukeAI_QueueMapObjectDamage()`, and Duke's own
   `A_DamageObject_Internal()` runs on the prop at the top of the next Duke tic
   -- where Duke's status lists are installed, so `A_Spawn()` works.  The queue
   supplies the prop's Duke tile and a temporary invisible source projectile
@@ -615,14 +615,14 @@ Fixed since:
 
 - **An exploding canister shakes the room.**  Duke shakes the view by setting a
   countdown (`g_earthquakeTime`, 16 tics for a detonating charge or an RPG); the
-  host owns the camera, so it drains that value with `VB_DukeAI_TakeEarthquake()`
+  host owns the camera, so it drains that value with `NNB_DukeAI_TakeEarthquake()`
   after each Duke tic and drives its own `SpawnQuake()` from it.
 
 - **A blast reaches everything near it, whoever set it off.**  Duke's
   `A_RadiusDamage()` walks Duke's own status lists, and the host's props live
   outside them so they keep animating -- so a Duke gas canister going off beside
   E1L1's yellow tape and vent cover left both untouched.  The host now installs
-  `VB_DukeAI_SetRadiusDamageHook()` and runs the same blast over its own props
+  `NNB_DukeAI_SetRadiusDamageHook()` and runs the same blast over its own props
   (Duke-owned sprites are skipped: Duke already dealt to those).  The host's own
   explosion path had the mirror-image hole -- a detonating charge, crack or
   tripmine only ever hurt the player -- so it runs the full blast too, which is
@@ -635,8 +635,8 @@ Fixed since:
   what puts a lotag on a water fountain, a toilet and a stall (and 9999 on a
   PLUG).  The bridge carried the map's untagged sprite straight through, so the
   use key never saw a Duke water fountain and the player could not drink from
-  it.  `VB_DukeAI_MapSpriteSpawnLotag()` supplies that tag, the same way
-  `VB_DukeAI_MapSpriteSolidBits()` supplies the cstat.  Props whose answer to a
+  it.  `NNB_DukeAI_MapSpriteSpawnLotag()` supplies that tag, the same way
+  `NNB_DukeAI_MapSpriteSolidBits()` supplies the cstat.  Props whose answer to a
   use press is their own rather than a map tag are handled before the tag is
   treated as a map tag -- otherwise a fountain's tag 1 would operate whatever
   else on the level wears tag 1.  The fountain heals a point per press and shows
@@ -654,7 +654,7 @@ Fixed since:
   frame that landed on a base tile was not.  It also made a pal 21 and a pal 22
   trooper draw identically, since both resolved to that one uncoloured tile.
   The recolour is generated first now; the map's copy is only the fallback for a
-  tile whose recolour cannot be made.  `VB_CP_PAL_DEBUG=1` reports which path
+  tile whose recolour cannot be made.  `NNB_CP_PAL_DEBUG=1` reports which path
   answered each resolution -- the fix takes E1L1 from 17 `via=maptile` hits to
   none.
 
@@ -680,7 +680,7 @@ Fixed since:
   rule.  The host's own machinery is excluded -- sector effectors, activators,
   locators and the pickups converted into SW items are the host's to drive, and
   handing either to Duke would take it out of the system that runs it.
-  `VB_CP_TEST_BLAST=<hitag>` detonates a charge group the way shooting one does,
+  `NNB_CP_TEST_BLAST=<hitag>` detonates a charge group the way shooting one does,
   which is how this was reproduced without a human at the keyboard.
 
   Widening that delivery has one hard limit, learned the loud way: handing a
@@ -689,7 +689,7 @@ Fixed since:
   the enemy -- blowing up E1L1's rooftop canisters filled the roof with pigcops,
   raised out of the slots of ones already dealt with -- and pointed at a spent
   charge it re-arms it.  So the widening covers scenery only: anything Duke would
-  run (`VB_DukeAI_HasActorCode()`, `VB_DukeAI_IsEnemyTile()`) and the host's own
+  run (`NNB_DukeAI_HasActorCode()`, `NNB_DukeAI_IsEnemyTile()`) and the host's own
   charges are held back, and reach Duke through adoption at load or respawn time,
   which is where their state is set up properly.  What is left is what should have
   been there all along -- the tape, the vent cover, the fan, the masked walls.
@@ -712,7 +712,7 @@ Fixed since:
   retires ownership flags naming a freed or host-owned slot before anything reads
   them.
 
-  Measured with `VB_CP_TEST_ROCKET=1` (64 shots per run): E1L1 went from 9 rockets
+  Measured with `NNB_CP_TEST_ROCKET=1` (64 shots per run): E1L1 went from 9 rockets
   destroyed without moving to 0, repeatably, and every remaining rocket now dies
   through SW's own hit path with an explosion.  E1L4 was and stays 64/64.  Note
   that a rocket legitimately dies in preflight when something solid is within
@@ -724,7 +724,7 @@ Fixed since:
   set `CSTAT_SPRITE_BLOCK_HITSCAN` on *every* prop it classified, where Duke adds
   it only to a sprite the map already made solid or that its own per-tile spawn
   makes solid.  Both bits are Duke's answer now
-  (`VB_DukeAI_MapSpriteSolidBits()`), with the bridge's own list applied on top so
+  (`NNB_DukeAI_MapSpriteSolidBits()`), with the bridge's own list applied on top so
   a prop it drives stays hittable and its damage path can still run.  E1L1's
   rooftop vent, fan and grates keep exactly the cstats they had.
 
@@ -737,7 +737,7 @@ Fixed since:
   predicates, and the probe that named a rock sprite as the culprit was computing
   distance with `SQ()` on full map coordinates, which overflows 32 bits and put a
   sprite 53768 units away "at the muzzle".  Both are fixed;
-  `VB_CP_TEST_ROCKET=1` reports flight distance and names anything solid within
+  `NNB_CP_TEST_ROCKET=1` reports flight distance and names anything solid within
   900 units of the muzzle when a rocket dies without moving.
 
 - **A cracked wall is Duke's to run, and nothing host-side may run inside a Duke
@@ -761,7 +761,7 @@ Fixed since:
   quake, the map triggers and the blasts are all deferred past
   `LeaveDukeSpace()` now.  The rule this keeps proving: **host code must never
   create or delete sprites while Duke's lists are installed.**
-  `VB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
+  `NNB_CP_WATCH_TILES=<t,t,...>` reports every change to the sprites of a given
   Duke tile, which is how both halves of this were pinned down.
 
 - **Duke's toilet.**  Pressing use on one did nothing.  In Duke it is a short
@@ -796,7 +796,7 @@ Fixed since:
   the flush/relief at one second in and the weapon back up at two; a press inside
   it still answers -- Duke flushes -- but gives nothing away.
 
-  `VB_CP_SELFTEST=world` covers it as `toilet-reachable`, `toilet-use-answers`,
+  `NNB_CP_SELFTEST=world` covers it as `toilet-reachable`, `toilet-use-answers`,
   `toilet-heals`, `toilet-urinate-sound`, `toilet-holsters`, `toilet-relief-sound`,
   `toilet-weapon-returns`, `toilet-cooldown-answers` and
   `toilet-cooldown-no-repeat`.  The test presses through `neartag()` and
@@ -857,7 +857,7 @@ Fixed since:
   Not modelled: Duke's twelve-tic pause with the hand-and-card drawn on the HUD
   before the door moves.  The reader answers immediately here.
 
-  `VB_CP_SELFTEST=world` covers it as `card-reader-reachable`,
+  `NNB_CP_SELFTEST=world` covers it as `card-reader-reachable`,
   `card-reader-refuses-without-card`, `card-reader-stays-dark`,
   `card-pickup-grants-key`, `card-reader-opens-with-card`,
   `card-reader-consumes-card`, `card-reader-lights-up`,
@@ -890,7 +890,7 @@ Fixed since:
   triggers it because its sector carries a light, so the bridge reported the hit
   handled for that alone.  Nothing about a Duke wall reacting -- breaking,
   flickering, setting off a charge -- is a reason for the missile to live, so the
-  flag is left alone now.  Measured with `VB_CP_TEST_ROCKET_MIRROR=1`, which
+  flag is left alone now.  Measured with `NNB_CP_TEST_ROCKET_MIRROR=1`, which
   parks the rocket harness in front of a mirror: E1L1 went from 1099 wall impacts
   to 1.
 
@@ -899,7 +899,7 @@ Fixed since:
   `EXPLODINGBARREL` swaps the tile for `MIRRORBROKE` and clears the masking bit;
   anything else leaves it standing.  Swapping the tile is also what stops the
   reflection, because `JS_DrawMirrors()` only renders one for a mirror tile the
-  renderer asked for.  `VB_CP_SELFTEST=world` covers it as
+  renderer asked for.  `NNB_CP_SELFTEST=world` covers it as
   `mirror-needs-explosive`, `mirror-explosive-breaks`, `mirror-stops-reflecting`
   and `mirror-breaks-once`.  Note that the mirrors in these maps carry cstat
   97/101 and never had the masking bit, so Duke's `cstat &= ~16` is a no-op on
@@ -917,7 +917,7 @@ Fixed since:
   answer was always "nothing is playing" and the gurgle restarted on **every
   tic** -- a pile of overlapping voices rather than a running tap.  The host now
   remembers the voice handle it started for each (sound, sprite) and answers the
-  question itself, through `VB_DukeAI_SetSoundCheckHook()`.  Measured: two
+  question itself, through `NNB_DukeAI_SetSoundCheckHook()`.  Measured: two
   gurgles over 200 tics, where before there was one per tic.
 
   *The drinking.*  Three separate things had to be true and none were.  CON asks
@@ -938,7 +938,7 @@ Fixed since:
   ways.  Duke's own pacing survives -- `ifactioncount 32` means one point per 32
   action tics, which is the slow trickle the original has.
 
-  `VB_CP_SELFTEST=destruct` covers it as `hydrant-sprays`, `hydrant-reachable`,
+  `NNB_CP_SELFTEST=destruct` covers it as `hydrant-sprays`, `hydrant-reachable`,
   `hydrant-sound-once` and `hydrant-drink-heals` (4 heals over 200 tics, matching
   the four `addphealth` calls Duke's CON makes in that time).  The harness has to
   force the use key and the facing angle through the mirror rather than writing
@@ -977,7 +977,7 @@ Fixed since:
     holding one angle for forty tics.  Duke's `CAMERA1` case reads the hitag as
     the width of a sweep and walks `ang` across it -- out, back twice as far, out
     again, then a jump and round once more -- and that arithmetic now runs on
-    Duke's own tic, beside `VB_DukeAI_RunTic()`, so a camera pans at the speed it
+    Duke's own tic, beside `NNB_DukeAI_RunTic()`, so a camera pans at the speed it
     pans in Duke.  Most stock cameras have a hitag; the ones without stand still,
     which `camera-holds-still` pins down so the sweep cannot leak onto them.
   - **The deathmatch cameras were in the cycle.**  `A_Spawn()` shrinks a
@@ -1010,7 +1010,7 @@ Fixed since:
   it to one.
 
   Monitors sit in shallow alcove sectors, so there is no arithmetic that reliably
-  says "in front of one": `VB_CP_SELFTEST=world` finds a stand point by probing
+  says "in front of one": `NNB_CP_SELFTEST=world` finds a stand point by probing
   rooms that adjoin the alcove until `neartag()` itself returns the monitor,
   which is why `camera-reachable` is a reported check rather than test
   scaffolding.  It now walks the use key's own probe heights in the use key's own
@@ -1040,7 +1040,7 @@ Fixed since:
   other routes -- but a tile that merely has actor code is handed over now, and
   Duke turns the clock into a `BROKENCLOCK` as it should.
 
-  `VB_CP_SELFTEST=destruct` covers it as `duke-con-prop-takes-a-hit`, which picks
+  `NNB_CP_SELFTEST=destruct` covers it as `duke-con-prop-takes-a-hit`, which picks
   a Duke scenery prop that has CON code and is not owned by Duke, hits it, and
   requires Duke to have answered.  Nothing else covered this class: such a prop
   has no behavior record, so it never appeared in the breakable list.
@@ -1118,7 +1118,7 @@ Fixed since:
   a sprite splices it into an SW status list and doing that inside Duke's tic
   would leave it in Duke's.
 
-  `VB_CP_SELFTEST=actors` covers it as `duke-drops-become-pickups`.  Duke's drop
+  `NNB_CP_SELFTEST=actors` covers it as `duke-drops-become-pickups`.  Duke's drop
   is random, so what is asserted is the invariant rather than the event: nothing
   Duke owns may still be sitting on a tile that should have become an SW pickup.
   Worth knowing: Duke actors do not die in the headless harness, so the conversion
@@ -1163,7 +1163,7 @@ Fixed since:
   runs a third faster than it does in Duke.  That is a much larger question than
   one charge, and is left alone deliberately.
 
-  `VB_CP_SELFTEST=destruct` covers it as `master-switch-arms-charges`, checked
+  `NNB_CP_SELFTEST=destruct` covers it as `master-switch-arms-charges`, checked
   before the phase's own blast because that blast sets off every charge on the
   map and would hide it.  It arms the switch directly rather than through
   `SW_CrossplayOperateDukeTag()`, which refuses a tag whose sectors are still
@@ -1204,7 +1204,7 @@ Fixed since:
   countdown, and the countdown is in Duke's tics rather than SW's.  Duke's other
   exit -- a switch tagged 65535 -- ends the level too.
 
-  `VB_CP_SELFTEST=world` covers it as `nuke-button-starts`,
+  `NNB_CP_SELFTEST=world` covers it as `nuke-button-starts`,
   `nuke-button-animates` (all four of Duke's frames, not the two a generic switch
   would flip), `nuke-button-ends-level` and `nuke-button-advances-level`.  The
   phase puts the level back afterwards, since otherwise the rest of the suite
@@ -1261,7 +1261,7 @@ Fixed since:
     door to open to where it already was: nothing moved, and it only began
     working on the second press.
 
-  `VB_CP_SELFTEST=destruct` covers the doors as `operable-moves`, one line per
+  `NNB_CP_SELFTEST=destruct` covers the doors as `operable-moves`, one line per
   door.  Four things were wrong with that check, and all four hid faults:
 
   - it sampled two doors per kind, which is how a sliding door that slid
@@ -1326,7 +1326,7 @@ Fixed since:
   route Duke uses -- the explosion's own radius pass hands the crack to Duke,
   which detonates it and deletes it.
 
-  `VB_CP_SELFTEST=destruct` covers this as `crack-needs-explosive` (a shuriken
+  `NNB_CP_SELFTEST=destruct` covers this as `crack-needs-explosive` (a shuriken
   fires no charges and leaves the crack standing), `crack-explosive-opens` /
   `crack-sprite-removed` (a rocket on the crack fires its group and removes it)
   and `crack-blast-opens` (an explosion *near* a crack does the same, which is
@@ -1353,7 +1353,7 @@ Fixed since:
   dumping every sprite and every per-actor gamevar, so a corrupted list shows up
   as the game apparently freezing while it writes hundreds of megabytes of log --
   E1L1's destruct pass produced 623MB of one gib tile before this was fixed.
-  `VB_CP_SPRITE_DEBUG=1` prints `Numsprites`, the number of linked sprites and
+  `NNB_CP_SPRITE_DEBUG=1` prints `Numsprites`, the number of linked sprites and
   the length of the free chain after each Duke tic; when those three disagree, a
   list is crossed.
 
@@ -1375,7 +1375,7 @@ Fixed since:
   E3L6's fountain is the case that showed it.  Since a damaged prop is Duke's by
   the time it is judged, its cstat is Duke's own answer, so the check
   (`breakable-keeps-dukes-solidity`) now only insists the bridge never *adds*
-  solidity of its own; the `VB_CP_CSTAT_DUMP` diff against native Duke remains
+  solidity of its own; the `NNB_CP_CSTAT_DUMP` diff against native Duke remains
   the tool for the rest.
 
 - **A RECON needs somewhere to go.**  E1L2's patrol vehicle vanished the moment
@@ -1402,8 +1402,8 @@ run's result should not be read too closely.
   sentinel in its premap, which this bridge does not run, so the field sat at the
   zero every static starts life with and the test was permanently false.  The
   slimer would chase, crawl and sit at the player's feet forever, and never once
-  bite.  `VB_DukeAI_BeginLevel()` now marks each player unset and
-  `VB_DukeAI_SetPlayer()` seeds `somethingonplayer` (and `on_crane`, the same
+  bite.  `NNB_DukeAI_BeginLevel()` now marks each player unset and
+  `NNB_DukeAI_SetPlayer()` seeds `somethingonplayer` (and `on_crane`, the same
   sentinel for the same reason -- a zero there reads as "sprite 0 already has
   me", which is what stops a crane picking the player up) on the first sync of a
   level.
@@ -1411,7 +1411,7 @@ run's result should not be read too closely.
   Once attached, Duke rewrites the slimer's position from the player's eye every
   tic, and that calculation is `s->z += (100 - horiz) << 4`.  The bridge had
   never mirrored the host's view pitch, so the thing would have hung at a fixed
-  height while the player looked around; `VB_DukeAI_SetPlayerHoriz()` now carries
+  height while the player looked around; `NNB_DukeAI_SetPlayerHoriz()` now carries
   SW's `q16horiz + q16horizoff` across.  Nothing else is needed for the view --
   the slimer is an ordinary sprite parked in front of the camera, and SW draws it
   because both games are the same engine.  Duke leaves its `sectnum` stale while
@@ -1423,7 +1423,7 @@ run's result should not be read too closely.
   instead reads `SK_FIRE` straight out of the player's input bits and squibs the
   thing on the spot.  That was the only piece of Duke's actor code reading the
   fire bit, and the bridge had never mirrored it, so a latched slimer was
-  unkillable: `VB_DukeAI_SetPlayerFireKey()` now carries it across beside the use
+  unkillable: `NNB_DukeAI_SetPlayerFireKey()` now carries it across beside the use
   key.  Duke exempts the weapons you cannot shoot something off your own face
   with -- pipe bomb, its detonator and the tripbomb -- so SW's grenade launcher
   and sticky bombs are exempt in the same way.
@@ -1521,7 +1521,7 @@ run's result should not be read too closely.
   it up and shakes the level -- all of it Duke's own code, none of which the
   bridge was running, because `DUKECAR` was not on the adoptable list.  The ship
   simply hung there.  The earthquake it ends on already had a route out through
-  `VB_DukeAI_TakeEarthquake()`.  Covered by `dukecar-crashes`, which asserts movement rather than "the ship is
+  `NNB_DukeAI_TakeEarthquake()`.  Covered by `dukecar-crashes`, which asserts movement rather than "the ship is
   gone".  Two traps sit either side of that: the ship blows itself up after eight
   seconds of Duke tics, so the longer test groups have nothing left to look at,
   while the short ones end before it has fallen at all -- and an *unadopted* ship
@@ -1570,7 +1570,7 @@ run's result should not be read too closely.
   Both of Duke's calls are also made only for a player (`playerNum >= 0`), so an
   enemy's burst works nothing at all, not even a dip switch.
 
-  `VB_CP_SELFTEST=world` covers it in four lines: `switch-ignores-gunfire` (an
+  `NNB_CP_SELFTEST=world` covers it in four lines: `switch-ignores-gunfire` (an
   uzi burst into a switch that is not on Duke's list leaves its frame alone),
   `switch-answers-use` (the use key on the same switch does change it),
   `switch-ignores-enemy-fire` (the same burst from a source that resolves to no
@@ -1656,11 +1656,11 @@ run's result should not be read too closely.
     and the mirror could be broken over and over.  `SW_CrossplayRetireMirrorWall()`
     takes the entry out of the list and `JS_DrawMirrors()` skips a retired one.
     E1L1 passed only because its mirror is out of view when the check runs;
-    `VB_CP_SELFTEST=world` on VACA1 caught it as `mirror-breaks-once`.
+    `NNB_CP_SELFTEST=world` on VACA1 caught it as `mirror-breaks-once`.
 
   - **FEM1..FEM10 and STATUE were walk-through.**  `A_Spawn()` gives that whole
     case -- PODFEM1, NAKED1, STATUE, TOUGHGAL and the ten FEMs -- `CSTAT_SPRITE_BLOCK`
-    and `CSTAT_SPRITE_BLOCK_HITSCAN`, and `VB_DukeAI_MapSpriteSolidBits()` listed
+    and `CSTAT_SPRITE_BLOCK_HITSCAN`, and `NNB_DukeAI_MapSpriteSolidBits()` listed
     every member of it but those eleven.  Caught as
     `breakable-keeps-dukes-solidity` on VACA5, VACA6 and VACA7, where a dancer
     that had been walk-through gained her blocking bits the moment Duke adopted
@@ -1739,7 +1739,7 @@ run's result should not be read too closely.
     client and the seed drifted.  The bridge restores the seed around the call.
     Duke's own `S_GetPitch()` already refuses to do this for the same reason.
 
-  An audit of `VB_DukeAI_MapSpriteSolidBits()` against `A_Spawn()`, tile by tile,
+  An audit of `NNB_DukeAI_MapSpriteSolidBits()` against `A_Spawn()`, tile by tile,
   turned up five more: `REACTOR`/`REACTOR2` were walk-through and are now adopted
   outright (their whole life is in `G_MoveActors()`, which already runs);
   `BOSS1STAYPUT`/`BOSS4STAYPUT` are plain `actor` blocks rather than
@@ -1870,7 +1870,7 @@ run's result should not be read too closely.
   the play *events* the bridge raises, not whether any audio was found, so it
   passed over silence -- and it was cited as evidence that vacation's sounds
   worked.  A count of things attempted is not a measurement of things achieved.
-  `VB_CP_SOUND_PROBE=1` now answers the question directly by reading each claimed
+  `NNB_CP_SOUND_PROBE=1` now answers the question directly by reading each claimed
   file out of the foreign data: stock Duke's E1L1 finds 192 of 201, vacation 207
   of 215, StrikerDM 256 of 265.  The handful absent in each case is the same set
   -- `hlminhal.voc`, `yes.voc`, `fan.voc`, `hover.voc` and friends -- names stock
@@ -1883,7 +1883,7 @@ run's result should not be read too closely.
 - **The patrol vehicle never turned.**  `G_DoSpriteAnimations()` turns a handful
   of tiles by a rule of their own, in a switch that runs *before* it ever reaches
   the generic actor case, and only the generic case had been mirrored into
-  `VB_DukeAI_DisplayPicnum()`.  RECON is one of them, and it is the one that
+  `NNB_DukeAI_DisplayPicnum()`.  RECON is one of them, and it is the one that
   shows: the generic frame is `picnum + offset + startframe + viewtype *
   curframe`, and a RECON's curframe is not an animation frame at all -- it is the
   turn counter Duke calls RECON_T4 -- so multiplying it by the viewtype walked
@@ -1914,7 +1914,7 @@ run's result should not be read too closely.
   moving upward, and the warp leaves the player still and just beneath it, so it
   cannot re-fire on its own.  The tic hold on its own is enough.
 
-  `VB_CP_SELFTEST=world` covers it as `dive-enters-water`, `dive-sets-diving`,
+  `NNB_CP_SELFTEST=world` covers it as `dive-enters-water`, `dive-sets-diving`,
   `dive-leaves-water` and `dive-clears-diving`: the player is stood on the
   surface, pushed down until the warp fires, then pushed back up, and both the
   sector they end in and Shadow Warrior's own diving flag are checked each way.
@@ -1989,7 +1989,7 @@ The train-crush check counts the kill without carrying it out, because killing
 the player ends the level and the rest of the run would measure a fresh map.
 
 Earlier, and still true -- several "failures" were the test, not the bridge: an actor counts as attacking when it
-*fires* (`VB_DukeAI_ShotCount()`), not only when a shot happens to land, since
+*fires* (`NNB_DukeAI_ShotCount()`), not only when a shot happens to land, since
 landing depends on the map's geometry; tripmines are approached before their
 beams are judged, because Duke only arms a mine when a player comes near; and
 maps with no Duke actors skip the blast check instead of failing it.  Duke art is remapped
@@ -2002,9 +2002,9 @@ For "this actor behaves differently than Duke" reports, the bridge has a
 deterministic A/B rig, shared by both runtimes so traces diff line-by-line:
 
 ```sh
-VB_CP_WATCH_TILE=1725 VB_CP_FORCEWAKE=150 [VB_CP_PINLOW=1] [VB_CP_PINDIST=2600] [VB_CP_BURN=1] \
+NNB_CP_WATCH_TILE=1725 NNB_CP_FORCEWAKE=150 [NNB_CP_PINLOW=1] [NNB_CP_PINDIST=2600] [NNB_CP_BURN=1] \
     ./nnbuild -gm duke ... -map E1L1.MAP ...      # native reference
-VB_CP_WATCH_TILE=1725 VB_CP_FORCEWAKE=150 ...  ./nnbuild -gm sw ... -gm.lvls duke ...   # bridge
+NNB_CP_WATCH_TILE=1725 NNB_CP_FORCEWAKE=150 ...  ./nnbuild -gm sw ... -gm.lvls duke ...   # bridge
 ```
 
 `WATCH_TILE` pins the first sprite spawned as that tile; `FORCEWAKE` pins the
@@ -2055,32 +2055,32 @@ reproductions passed while the user's own game failed.
 
 | Variable | What it does |
 | --- | --- |
-| `VB_CP_WATCH_TILE=<tile>` | trace the first actor spawned from this map tile |
-| `VB_CP_WATCH_SPRITE=<idx>` | trace an exact sprite index (wins over the tile pin) |
-| `VB_CP_WATCH_NEAREST=1` | each tic, log the enemy nearest the player |
-| `VB_CP_WATCH_AREA=1` | log every Duke-flagged sprite around the player, owned or not |
-| `VB_CP_FORCEWAKE=<tic>` | wake the watched actor at a fixed tic, for A/B determinism |
-| `VB_CP_PINLOW` / `PINDIST` / `PINANG` / `VB_CP_APPROACH` | pin or walk the player to a fixed relation to the actor |
-| `VB_CP_BURN=1` | apply fire damage to the watched actor |
-| `VB_CP_FORCEHIDE` / `FORCEBOX` / `ZGUARD` | isolate visibility, collision box and z-clamp effects |
-| `VB_CP_FIRE_RESPAWNS=1` | fire every captured map trigger, to exercise respawned actors |
-| `VB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags, and each rejection with its behavior flags |
-| `VB_CP_TILE_DEBUG=<spr>` | log that sprite's Duke base tile, resolved Duke display frame, pal and runtime tile whenever the frame changes |
-| `VB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
-| `VB_CP_KEY_DEBUG=1` | log what the use key found at each probe height: sprite, distance, behavior flags, source tile, switch state, lotag |
-| `VB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
-| `VB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
-| `VB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
-| `VB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag, and hit any explosive source sprite carrying it (E1L1: rooftop canisters 253, cracked walls 214/223/237) |
-| `VB_CP_WATCH_TILES=<t,t,...>` | report every picnum/statnum change to sprites whose Duke tile is one of these |
-| `VB_CP_TEST_ROCKET_MIRROR=1` | with `VB_CP_TEST_ROCKET`, parks the harness in front of the first Duke mirror wall so rocket-versus-mirror behaviour can be counted |
-| `VB_CP_TEST_ROCKET=1` | fire SW's rocket launcher repeatedly, reporting each rocket's flight distance and what was solid at the muzzle if it died there |
-| `VB_CP_STRAY_DEBUG=1` | log host sprites found in Duke's lists and put back |
-| `VB_CP_SLIME_DEBUG` | when a slimer is on the player's face, logs its cstat, statnum, health and what a ray fired straight ahead actually hits |
-| `VB_CP_MIRROR_DEBUG` / `VB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
-| `VB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
-| `VB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
-| `VB_CP_SOUND_PROBE=1` | at level setup, read every Duke sound the bridge claimed a slot for and report how many are actually present in the foreign data.  Off by default because it reads all of them |
+| `NNB_CP_WATCH_TILE=<tile>` | trace the first actor spawned from this map tile |
+| `NNB_CP_WATCH_SPRITE=<idx>` | trace an exact sprite index (wins over the tile pin) |
+| `NNB_CP_WATCH_NEAREST=1` | each tic, log the enemy nearest the player |
+| `NNB_CP_WATCH_AREA=1` | log every Duke-flagged sprite around the player, owned or not |
+| `NNB_CP_FORCEWAKE=<tic>` | wake the watched actor at a fixed tic, for A/B determinism |
+| `NNB_CP_PINLOW` / `PINDIST` / `PINANG` / `NNB_CP_APPROACH` | pin or walk the player to a fixed relation to the actor |
+| `NNB_CP_BURN=1` | apply fire damage to the watched actor |
+| `NNB_CP_FORCEHIDE` / `FORCEBOX` / `ZGUARD` | isolate visibility, collision box and z-clamp effects |
+| `NNB_CP_FIRE_RESPAWNS=1` | fire every captured map trigger, to exercise respawned actors |
+| `NNB_CP_ADOPT_DEBUG=1` | log tiles adopted via CON actor code rather than enemy flags, and each rejection with its behavior flags |
+| `NNB_CP_TILE_DEBUG=<spr>` | log that sprite's Duke base tile, resolved Duke display frame, pal and runtime tile whenever the frame changes |
+| `NNB_CP_TEST_SWITCH=1` | log switch activation and the resulting frame |
+| `NNB_CP_KEY_DEBUG=1` | log what the use key found at each probe height: sprite, distance, behavior flags, source tile, switch state, lotag |
+| `NNB_CP_BREAK_DEBUG=1` | log each broken Duke prop's tile and break sound |
+| `NNB_CP_PAL_DEBUG=1` | log every (tile, Duke pal) art resolution and which path answered it |
+| `NNB_CP_SPRITE_DEBUG=1` | after each Duke tic, log `Numsprites`, linked sprites and free-chain length |
+| `NNB_CP_TEST_BLAST=<hitag>` | detonate the Duke charge group with that hitag, and hit any explosive source sprite carrying it (E1L1: rooftop canisters 253, cracked walls 214/223/237) |
+| `NNB_CP_WATCH_TILES=<t,t,...>` | report every picnum/statnum change to sprites whose Duke tile is one of these |
+| `NNB_CP_TEST_ROCKET_MIRROR=1` | with `NNB_CP_TEST_ROCKET`, parks the harness in front of the first Duke mirror wall so rocket-versus-mirror behaviour can be counted |
+| `NNB_CP_TEST_ROCKET=1` | fire SW's rocket launcher repeatedly, reporting each rocket's flight distance and what was solid at the muzzle if it died there |
+| `NNB_CP_STRAY_DEBUG=1` | log host sprites found in Duke's lists and put back |
+| `NNB_CP_SLIME_DEBUG` | when a slimer is on the player's face, logs its cstat, statnum, health and what a ray fired straight ahead actually hits |
+| `NNB_CP_MIRROR_DEBUG` / `NNB_CP_MIRROR_VIEW` | log mirror registration; pin the camera at a mirror |
+| `NNB_CP_PLAYERSIZE_DEBUG=1` | log the player's world vs drawn sprite scale |
+| `NNB_CP_CAPTURE=<frames>` | save one screenshot that many frames in |
+| `NNB_CP_SOUND_PROBE=1` | at level setup, read every Duke sound the bridge claimed a slot for and report how many are actually present in the foreign data.  Off by default because it reads all of them |
 
 ## Debugging approach
 

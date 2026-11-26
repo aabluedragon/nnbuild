@@ -190,7 +190,7 @@ static GdkPixbuf *load_banner(void)
 }
 #define STARTGTK_SHARED_SET_PAGE
 #include "../../build/include/startgtk_shared.cpp.inc"
-#define STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_VB
+#define STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_NNB
 #include "../../build/include/startgtk_shared.cpp.inc"
 
 static void PopulateForm(unsigned char pgs)

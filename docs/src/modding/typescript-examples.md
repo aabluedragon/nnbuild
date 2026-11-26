@@ -6,14 +6,14 @@ All examples keep to the TypeScript that the game can convert. See [TypeScript s
 
 Examples 5, 9 and 10 use only `on`, `log` and built-in modules. They also run in Shadow Warrior. The other examples need a Duke runtime game.
 
-All examples pass the type check (`npm run check`) against the generated `vb.d.ts`.
+All examples pass the type check (`npm run check`) against the generated `nnb.d.ts`.
 
 ## 1. Hello, HUD
 
 Shows a fixed line of text and a frame counter that updates every 30 frames.
 
 ```ts
-import { on, drawText } from 'vb';
+import { on, drawText } from 'nnb';
 
 let frames = 0;
 
@@ -34,7 +34,7 @@ Text stays on screen until it is replaced or cleared, so the first line is drawn
 Counts every trooper the engine spawns and shows the count. This includes troopers that are part of a map when a level loads.
 
 ```ts
-import { on, define, drawText, log } from 'vb';
+import { on, define, drawText, log } from 'nnb';
 
 let trooper: number | undefined;
 let seen = 0;
@@ -58,7 +58,7 @@ on('actorSpawned', (e) => {
 Adds two commands that players type into chat on a server: `!players` lists who is online, `!roll 20` rolls a die.
 
 ```ts
-import { registerCommand, session, log } from 'vb';
+import { registerCommand, session, log } from 'nnb';
 
 try {
   registerCommand('players', () => {
@@ -82,7 +82,7 @@ try {
 Every ten minutes the host announces a map change and switches to the next map of the rotation one minute later.
 
 ```ts
-import { sendMessage, run, session } from 'vb';
+import { sendMessage, run, session } from 'nnb';
 
 const minute = 60_000;
 
@@ -106,7 +106,7 @@ Counts how often the mod has been started and keeps the number in a text file.
 
 ```ts
 import fs from 'fs';
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 
 const file = 'my-mod-launches.txt';
 
@@ -128,7 +128,7 @@ The `'utf8'` argument makes `readFileSync` return a string. Without it you get b
 Halves the gravity that pulls sprites down, and logs the old and the new value.
 
 ```ts
-import { on, getGamevar, setGamevar, log } from 'vb';
+import { on, getGamevar, setGamevar, log } from 'nnb';
 
 const LOW_GRAVITY = 88;
 
@@ -150,9 +150,9 @@ on('levelChanged', applyGravity);
 Shows a frames-per-second counter. The logic lives in a component on a node.
 
 ```ts
-import { VBComponent, createNode, drawText, clearText } from 'vb';
+import { NNBComponent, createNode, drawText, clearText } from 'nnb';
 
-class FpsCounter extends VBComponent {
+class FpsCounter extends NNBComponent {
   frames = 0;
   elapsed = 0;
 
@@ -181,7 +181,7 @@ hud.name = 'fps counter';
 Stops a player from jumping while that player's health is below 25.
 
 ```ts
-import { on, getActor, setGamevar } from 'vb';
+import { on, getActor, setGamevar } from 'nnb';
 
 on('EVENT_JUMP', (e) => {
   const health = getActor(e.sprite, 'extra') ?? 0;
@@ -196,7 +196,7 @@ The engine fires `EVENT_JUMP` when a player starts a jump. `e.sprite` is that pl
 Downloads a web page when the mod starts and logs the status code and the length of the body.
 
 ```ts
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 
 on('start', async () => {
   try {
@@ -217,7 +217,7 @@ Opens a UDP socket on the local computer, sends itself one datagram and logs wha
 
 ```ts
 import dgram from 'dgram';
-import { log } from 'vb';
+import { log } from 'nnb';
 
 const PORT = 40123;
 const socket = dgram.createSocket('udp4');
@@ -239,7 +239,7 @@ socket.bind(PORT, '127.0.0.1', () => {
 Shows the index and name of up to eight players while a level is being played.
 
 ```ts
-import { on, session, drawText, clearText } from 'vb';
+import { on, session, drawText, clearText } from 'nnb';
 
 const FIRST_ID = 100;
 const MAX_LINES = 8;

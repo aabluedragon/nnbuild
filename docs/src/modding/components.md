@@ -2,16 +2,16 @@
 
 A component is a class that holds behavior for one thing: a sprite, or an empty object called a node. The game calls the component's methods at fixed moments. If you have used Unity, the model will look familiar.
 
-Components are part of the `vb` module and work only in the **Duke runtime** games.
+Components are part of the `nnb` module and work only in the **Duke runtime** games.
 
 > NNBuild has two things called components. This page describes the class-based components you create in code. Scripts that the map editor attaches to map objects are a different feature with different hooks. See [Map script components](map-script-components.md).
 
 ## A first component
 
 ```ts
-import { VBComponent, createNode, log } from 'vb';
+import { NNBComponent, createNode, log } from 'nnb';
 
-class Hello extends VBComponent {
+class Hello extends NNBComponent {
   start() {
     log('Hello component started');
   }
@@ -24,7 +24,7 @@ class Hello extends VBComponent {
 createNode(Hello);
 ```
 
-1. Write a class that extends `VBComponent`.
+1. Write a class that extends `NNBComponent`.
 2. Override the methods you need.
 3. Attach it to a sprite with `attach(sprite, Hello)`, or create a node for it with `createNode(Hello)`.
 
@@ -62,7 +62,7 @@ The update calls are driven by the `frame` event.
 | Member | Meaning |
 | --- | --- |
 | `sprite` | The sprite index the component is attached to, or `-1`. |
-| `node` | The `VBNode` the component is attached to, or `null`. |
+| `node` | The `NNBNode` the component is attached to, or `null`. |
 | `gameObject` | Same as `node`. |
 | `transform` | The node's `transform`, or `undefined` for a component on a sprite. |
 | `enabled` | `true` or `false`. Assign it to turn the component on or off. |
@@ -75,7 +75,7 @@ The update calls are driven by the `frame` event.
 ## Attaching to sprites
 
 ```ts
-import { attach, detach, getComponent, getComponents } from 'vb';
+import { attach, detach, getComponent, getComponents } from 'nnb';
 
 const pulse = attach(spriteIndex, Pulse);     // create and attach
 const same = getComponent(spriteIndex, Pulse);
@@ -85,7 +85,7 @@ detach(spriteIndex, pulse);
 
 - `attach(entity, component)` takes a sprite index or a node. `component` is a class, or an instance you created with `new`. It returns the component instance.
 - A sprite can have several components, also several of the same class.
-- `attach` throws when `entity` is not a non-negative whole number or a node, when the class does not extend `VBComponent`, or when the instance is already attached somewhere.
+- `attach` throws when `entity` is not a non-negative whole number or a node, when the class does not extend `NNBComponent`, or when the instance is already attached somewhere.
 - `attach` does not check that the sprite exists.
 - After `detach` or `Destroy()` an instance can be attached again.
 
@@ -103,7 +103,7 @@ This cleanup depends on the `actorDestroyed` event. Two things follow:
 A node is an empty object that is not part of the map. Use it for behavior that does not belong to one sprite, such as a HUD element or a game rule.
 
 ```ts
-import { createNode, destroyNode } from 'vb';
+import { createNode, destroyNode } from 'nnb';
 
 const node = createNode(Scoreboard, Timer);   // a node with two components
 node.name = 'match rules';
@@ -118,7 +118,7 @@ destroyNode(node);                            // components get onDisable, onDes
 | `name` | Free text. Starts as `Node <id>`. |
 | `tag` | Free text. Starts as `Untagged`. |
 | `transform` | `{ position, rotation, scale }`, each `{ x, y, z }`. Plain numbers for your own use. The game does not read them. |
-| `activeSelf` | `true` or `false`. Assigning it is the same as `SetActive`. `vb.d.ts` marks it read-only, so in TypeScript call `SetActive`. |
+| `activeSelf` | `true` or `false`. Assigning it is the same as `SetActive`. `nnb.d.ts` marks it read-only, so in TypeScript call `SetActive`. |
 | `activeInHierarchy` | `true` when the node is active and not destroyed. Read-only. |
 | `destroyed` | `true` after the node was destroyed. |
 | `SetActive(active)` | Activates or deactivates the node. Enabled components get `onEnable` or `onDisable`. |
@@ -126,14 +126,14 @@ destroyNode(node);                            // components get onDisable, onDes
 | `GetComponent(type)`, `GetComponents(type?)` | Look up components on the node. |
 | `Destroy()` | Same as `destroyNode(node)`. |
 
-`new VBNode()` also creates a node, without components. A destroyed node cannot take new components.
+`new NNBNode()` also creates a node, without components. A destroyed node cannot take new components.
 
 ## Prefabs
 
 A prefab is a recipe: a tile number and the component classes that every spawned copy gets.
 
 ```ts
-import { createPrefab, spawnPrefab, define } from 'vb';
+import { createPrefab, spawnPrefab, define } from 'nnb';
 
 const pulsingTrooper = createPrefab(define('LIZTROOP') ?? 0, Pulse);
 
@@ -141,20 +141,20 @@ const sprite = spawnPrefab(pulsingTrooper);            // at the local player
 const other = spawnPrefab(pulsingTrooper, x, y, z);    // at a map position
 ```
 
-- `createPrefab(tile, ...components)` returns a `VBPrefab` with the fields `tile` and `components`. `new VBPrefab(tile, ...components)` does the same, but `vb.d.ts` does not declare its arguments. Use `createPrefab`.
+- `createPrefab(tile, ...components)` returns an `NNBPrefab` with the fields `tile` and `components`. `new NNBPrefab(tile, ...components)` does the same, but `nnb.d.ts` does not declare its arguments. Use `createPrefab`.
 - `spawnPrefab(prefab, x?, y?, z?, owner?)` calls [`spawn`](api-reference.md#spawn) with the prefab's tile. If that succeeds, it attaches a new instance of each component class to the new sprite. It returns the sprite index, or `-1`.
 - Pass classes, not instances, to `createPrefab`. An instance can only be attached once.
 
-> These prefabs exist only in code. The map editor has its own *prefab* assets (`.vbprefab` files), which are saved groups of sprites. The two are unrelated.
+> These prefabs exist only in code. The map editor has its own *prefab* assets (`.nnbprefab` files), which are saved groups of sprites. The two are unrelated.
 
 ## Worked example: pulsing enemies
 
 This mod makes every trooper slowly grow and shrink. It shows a component on a sprite, per-instance state, cleanup, and the guard for level changes.
 
 ```ts
-import { VBComponent, attach, on, define, getActor, setActor, log } from 'vb';
+import { NNBComponent, attach, on, define, getActor, setActor, log } from 'nnb';
 
-class Pulse extends VBComponent {
+class Pulse extends NNBComponent {
   tile = -1;
   time = 0;
 
@@ -204,9 +204,9 @@ How it works:
 ## Worked example: a node with a lifecycle
 
 ```ts
-import { VBComponent, createNode, destroyNode, log } from 'vb';
+import { NNBComponent, createNode, destroyNode, log } from 'nnb';
 
-class Ticker extends VBComponent {
+class Ticker extends NNBComponent {
   seconds = 0;
 
   awake() { log('awake'); }

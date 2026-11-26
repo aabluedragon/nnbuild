@@ -78,7 +78,7 @@ void G_ShowParameterHelp(void)
         "-h, --help\t\tDisplay this help message and exit\n"
         "\nSee " APPBASENAME " --debughelp for additional parameters for debugging"
 #ifndef NETCODE_DISABLE
-        VB_NETARGS_HELP
+        NNB_NETARGS_HELP
 #endif
         ;
 #ifdef WM_MSGBOX_WINDOW
@@ -197,7 +197,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
 #ifndef NETCODE_DISABLE
         // NNBuild: unified multiplayer flags (advertise/lobbylist/joinlobby/netfile/
         // startnow/nplayers/headless). One dispatcher shared with SW/Blood - see netargs.h.
-        vb_netarg_ctx const netctx = {
+        nnb_netarg_ctx const netctx = {
             &g_networkMode, NET_SERVER, NET_CLIENT,
             &g_noSetup, &g_noLogo,
             &g_netStartNow, &g_netStartNowPlayers, &g_netWait, MAXPLAYERS,
@@ -222,7 +222,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                 shortopt = 0;
 #ifndef NETCODE_DISABLE
                 {
-                    int const consumed = VB_NetArg(&netctx, c+1, (i+1 < argc) ? argv[i+1] : NULL);
+                    int const consumed = NNB_NetArg(&netctx, c+1, (i+1 < argc) ? argv[i+1] : NULL);
                     if (consumed) { i += consumed; continue; }
                 }
 #endif
@@ -349,7 +349,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
-                // -headless/-startnow/-nplayers etc. are handled by VB_NetArg above.
+                // -headless/-startnow/-nplayers etc. are handled by NNB_NetArg above.
 #ifndef NETCODE_DISABLE
                 if (!Bstrcasecmp(c+1, "net"))
                 {
@@ -397,7 +397,7 @@ void G_CheckCommandLine(int32_t argc, char const * const * argv)
                     i++;
                     continue;
                 }
-                // -advertise/-lobbylist/-joinlobby are handled by VB_NetArg above.
+                // -advertise/-lobbylist/-joinlobby are handled by NNB_NetArg above.
                 if (!Bstrcasecmp(c+1, "password"))
                 {
                     if (argc > i+1)

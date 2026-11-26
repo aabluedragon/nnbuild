@@ -4,7 +4,7 @@
 #include "editorboard.h"
 #include "grpscan.h"
 #include "sjson.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #include <cstdlib>
 #ifdef _WIN32
@@ -274,7 +274,7 @@ void ActivateProjectScripts(std::string const &folder, std::string const &map, M
         }
         auto const script = folder + "/" + attachment.script;
         if (regularAsset(script))
-            VBJS_ActivateAttachment(script.c_str(), map.c_str(), attachment.kind.c_str(), attachment.index);
+            NNBJS_ActivateAttachment(script.c_str(), map.c_str(), attachment.kind.c_str(), attachment.index);
         else
             LOG_F(WARNING, "Project script %s could not be found.", attachment.script.c_str());
     }

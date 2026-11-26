@@ -513,7 +513,7 @@ def verify_input_compat(z):
                        'm_bind_weaponwheel', 'm_bind_screenshot',
                        'gamefunc_Weapon_Wheel', 'KexMenu_CaptureBinding',
                        'KexMenu_CopyCommandsExcept', 'binding.command',
-                       'VB_KEX_BINDINGS_TEST', 'KexBindingstest:',
+                       'NNB_KEX_BINDINGS_TEST', 'KexBindingstest:',
                        'CONFIG_MapKey(binding.gamefunc',
                        'KexMenu_Bindings();',
                        'staticvoidKexMenu_Input(void)', 'm_input_settings',
@@ -619,7 +619,7 @@ def verify_music_options():
                 out.append('live music-stop bridge changed: %s' % needle)
         if 'if(!MusicToggle)StopCDMusic();' not in game:
             out.append('live music setting no longer stops soundtrack')
-        for needle in ('VB_KEX_MUSIC_STOP_TEST', 'MusicToggle=0;StopCDMusic();',
+        for needle in ('NNB_KEX_MUSIC_STOP_TEST', 'MusicToggle=0;StopCDMusic();',
                        'Kexmusic-toggletest:%s'):
             if needle not in game:
                 out.append('music-toggle runtime probe changed: %s' % needle)
@@ -640,10 +640,10 @@ def verify_test_isolation():
     source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
         game = re.sub(r'\s+', '', open(os.path.join(source_dir, 'exhumed.cpp')).read())
-        for needle in ('#include"screenshot.h"', 'Bgetenv("VB_SCREENSHOT_DIR")',
+        for needle in ('#include"screenshot.h"', 'Bgetenv("NNB_SCREENSHOT_DIR")',
                        'if(screenshotDir&&screenshotDir[0])',
                        'Bstrncpyz(screenshot_dir,screenshotDir,sizeof(screenshot_dir));',
-                       'if(!Bgetenv("VB_KEX_SKIPMOVIES"))Kex_PlayTheora(endPath);'):
+                       'if(!Bgetenv("NNB_KEX_SKIPMOVIES"))Kex_PlayTheora(endPath);'):
             if needle not in game:
                 out.append('unattended capture isolation changed: %s' % needle)
     except OSError as exc:
@@ -784,7 +784,7 @@ def verify_named_save_state():
     source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
         native = re.sub(r'\s+', '', open(os.path.join(source_dir, 'save.cpp')).read())
-        for needle in ('VB_EX_SAVE_TEST_FILE',
+        for needle in ('NNB_EX_SAVE_TEST_FILE',
                        'LoadSave::SaveGame(Exhumed_SaveTestFilename());',
                        'LoadSave::LoadGame(Exhumed_SaveTestFilename());',
                        'charconst*constfilename=pzFile&&pzFile[0]?pzFile:"save3.gam";',
@@ -807,12 +807,12 @@ def verify_named_save_state():
     try:
         inventory = re.sub(r'\s+', '', open(os.path.join(source_dir, 'kexinv.cpp')).read())
         menu = re.sub(r'\s+', '', open(os.path.join(source_dir, 'menu.cpp')).read())
-        for needle in ('VB_EXHUMED_SAVE_FILE', 'VB_KEXINV_SAVE_FILE',
+        for needle in ('NNB_EXHUMED_SAVE_FILE', 'NNB_KEXINV_SAVE_FILE',
                        'menu_GameSave(2);', 'menu_GameSave(3);',
-                       'Kexmenuloadtest:FAIL(isolatedVB_EXHUMED_SAVE_FILEandVB_KEXINV_SAVE_FILErequired)'):
+                       'Kexmenuloadtest:FAIL(isolatedNNB_EXHUMED_SAVE_FILEandNNB_KEXINV_SAVE_FILErequired)'):
             if needle not in inventory:
                 out.append('isolated KEX campaign-save probe changed: %s' % needle)
-        for needle in ('charconst*constoverrideName=Bgetenv("VB_EXHUMED_SAVE_FILE");',
+        for needle in ('charconst*constoverrideName=Bgetenv("NNB_EXHUMED_SAVE_FILE");',
                        'menu_ApplyGameStats();', 'KexInv_Load(nSlot,GameStats.nMap)',
                        'KexCampaign_StagePlayer(nLocalPlayer);'):
             if needle not in menu:
@@ -825,7 +825,7 @@ def verify_named_save_state():
 def verify_startnow_roster():
     """Reserved mmulti slots must not become lockstep players before snapshot join."""
     out = []
-    source = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src', 'vbnet.cpp'))
+    source = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src', 'nnbnet.cpp'))
     try:
         native = re.sub(r'\s+', '', open(source).read())
         for needle in ('EXNET_PT_ROSTER',
@@ -902,8 +902,8 @@ def verify_network_snapshot_state():
     except OSError as exc:
         out.append('cannot read KEX snapshot inventory bridge: %s' % exc)
     try:
-        net = re.sub(r'\s+', '', open(os.path.join(source_dir, 'vbnet.cpp')).read())
-        for needle in ('VB_EXNET_SNAPSHOT_FILE',
+        net = re.sub(r'\s+', '', open(os.path.join(source_dir, 'nnbnet.cpp')).read())
+        for needle in ('NNB_EXNET_SNAPSHOT_FILE',
                        'LoadSave::SaveNetworkSnapshot(path);',
                        'LoadSave::LoadNetworkSnapshot(path);',
                        'EXNETsnapshottest:PASS(all-playerEXSN,localspriteOK)'):
@@ -919,7 +919,7 @@ def verify_latejoin_protocol():
     out = []
     source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src'))
     try:
-        net = re.sub(r'\s+', '', open(os.path.join(source_dir, 'vbnet.cpp')).read())
+        net = re.sub(r'\s+', '', open(os.path.join(source_dir, 'nnbnet.cpp')).read())
         for needle in ('EXNET_PT_LATE_ANNOUNCE',
                        'EXNET_PT_LATE_READY',
                        'EXNET_PT_LATE_FREEZE',
@@ -975,7 +975,7 @@ def verify_directed_portal_runtime():
             'if((unsigned)owner>=(unsigned)numsectors||s_kexDynamicWall[r.nextwall])',
             'intconsttargetIsDynamic=s_kexDynamicWall[r.nextwall];',
             '(!targetIsDynamic&&(wall[r.nextwall].nextwall!=nWall||wall[r.nextwall].nextsector!=owner))',
-            'VB_KEX_PORTAL_TEST'):
+            'NNB_KEX_PORTAL_TEST'):
         if needle not in native:
             out.append('native directed-portal runtime changed: %s' % needle)
     return out
@@ -1679,7 +1679,7 @@ def verify_menu_assets(z, outdir):
                        'KexMenu_Sound("k_menu_select",kSoundSwitchFoot)',
                        'KexMenu_Sound("k_menu_highlight",kSoundSwitchWtr1)',
                        'KexMenu_Highlight();',
-                       'VB_KEX_MENU_SCRIPT', 'staticintKexMenu_ScriptedKey(void)',
+                       'NNB_KEX_MENU_SCRIPT', 'staticintKexMenu_ScriptedKey(void)',
                        'staticvoidKexMenu_Video(void)', 'KexMenu_ApplyVideo(',
                        'm_video_settings', 'm_videoResolution', 'm_windowmode',
                        'm_verticalSync', 'm_maxFrameRate', 'm_applychanges',
@@ -1688,7 +1688,7 @@ def verify_menu_assets(z, outdir):
                        'KexMenu_Hint("LEFT/RIGHT","ADJUST","ENTER","SELECT");',
                        'KexMenu_HintIsArrowPair',
                        'staticboolKexMenu_UseControllerPrompts(void)',
-                       'Bgetenv("VB_KEX_MENU_CONTROLLER_PROMPTS")!=NULL',
+                       'Bgetenv("NNB_KEX_MENU_CONTROLLER_PROMPTS")!=NULL',
                        'KexMenu_HintKeyTile(k,controller);',
                        'intleftTile=controller?kKexTilePadLeft:kKexTileKeyLeft;',
                        'intrightTile=controller?kKexTilePadRight:kKexTileKeyRight;',
@@ -3185,7 +3185,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'kKexBreakSoundFlesh', 'if(fields<12)',
         'bd>0?kKexBreakSoundNone', 'KexBreak_PlaySound(t,nSprite)',
         'KexSound_Get("blood_4")', 'KexBreak_ShardBounceSound(t)',
-        'VB_KEXBREAK_SOUND_TEST',
+        'NNB_KEXBREAK_SOUND_TEST',
         'glass==10||glass==11', 's_legacyBreakTable?legacy:normal',
         'KexVasePuff_Spawn(', 's_vasePuffsSpawned',
         's_vasePuffsNormalPal',
@@ -3202,7 +3202,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'staticintKexRaSignedFloatVal(intmaximum)',
         '((int64_t)KexRandomWord()*maximum*2)/65535',
         's.vz=-(KexRaSignedFloatVal(24)*16*6)/30;',
-        'VB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
+        'NNB_KEXBREAK_SCORPTEST', 'KexSpiderIdentityTest()',
         'KexBreak_DropItem(intnSprite,KexBreakTypeconst&t)',
         'sprite[nSprite].z-t.spawnheight*16*6',
         'int16_tvariantcount', 'int16_tidleticks',
@@ -3210,8 +3210,8 @@ def verify_breakables(z, outdir, include_testmaps=False):
         't.idleticks=clamp(idleticks,0,4095);',
         'KexRandomMax(s_type[nType].variantcount)',
         'KexBreak_IdleTile(', 'intKexBreak_ViewTile(intnSprite)',
-        'VB_KEXBREAK_VARIANT_TEST', 'Kexexploding-vaseanimationtest:',
-        'VB_KEX_TOSS_OVERFLOW_SAVE_TEST', 'KexTossOverflowCount()',
+        'NNB_KEXBREAK_VARIANT_TEST', 'Kexexploding-vaseanimationtest:',
+        'NNB_KEX_TOSS_OVERFLOW_SAVE_TEST', 'KexTossOverflowCount()',
         'LoadSave::SaveGame(path);', 'LoadSave::LoadGame(path);',
         'Kextossoverflowsavetest:PASS(',
         's_vaseScorpsAtHeight',
@@ -3219,7 +3219,7 @@ def verify_breakables(z, outdir, include_testmaps=False):
         'Kexbreakscorpiontest:',
         'staticvoidKexBreak_ArmMine(intnProp)',
         'staticintKexBreak_MinePicnum(KexBreakTypeconst&t,intnFuse)',
-        'VB_KEX_MINE_TEST', 'Kexminecountdowntest:',
+        'NNB_KEX_MINE_TEST', 'Kexminecountdowntest:',
         's_prop[nProp].nFuse=t.fuse',
         'sprite[nSprite].cstat&=~0x100;',
         'sprite[nSprite].picnum=t.tile+1;',
@@ -3450,7 +3450,7 @@ def verify_drop_effects(z, outdir):
         'sprite[nSprite].zvel=picnum',
         'voidKexDrop_OrbSpawnPickup(intnEffectSprite)',
         'KexDrop_Spawn(sprite[nEffectSprite].sectnum',
-        'VB_KEXDROP_ORB_TEST',
+        'NNB_KEXDROP_ORB_TEST',
         'Kexenemy-droporbtest:%s(%d/%dexact20+23-tickdelayedpickups)',
         'if(exact==-1)KexDrop_Spawn(',
         'intconstr=(uint8_t)RandomByte()&7;', 'if(r>2)',
@@ -3668,7 +3668,7 @@ def verify_gib_death_effect(z, outdir):
         'intconstdropZ=sprite[nSprite].z-64*16*6',
         'KexDrop_RandomItemAt(sprite[nSprite].sectnum,sprite[nSprite].x,sprite[nSprite].y,dropZ,sprite[nSprite].xvel)',
         'nFrame==18', 'KexGibDeath_RandomItem(nSprite)',
-        'VB_KEX_GIB_DEATH_TEST',
+        'NNB_KEX_GIB_DEATH_TEST',
         'Kexgib-deathactortest:%s(%d/%dexactblank+13-art+5-blankcallbacksateffect+64)')
     for needle in anim_needles:
         if needle not in anims:
@@ -3858,7 +3858,7 @@ def verify_ramses(z, outdir):
                        'sector[m.linkedSector].floorz+=dz;',
                        'm.expectedTicks=(abs(m.rule->amount)+speed-1)/speed;',
                        'arrivedafter%dticks(expected%d)',
-                       'VB_KEXSCRIPT_END_TEST'):
+                       'NNB_KEXSCRIPT_END_TEST'):
             if needle not in native:
                 out.append('native scripted-sector 60-to-30Hz bridge changed: %s' % needle)
     except OSError:
@@ -3964,24 +3964,24 @@ def verify_movers(z, outdir):
                    'voidKexSwitch_Add(intnSector,intnTag,intnOffPic,intnType,intx,inty)',
                    'intKexSwitch_PlaySound(intnWall,intnPlayer)',
                    's.type==202||s.type==203?"k_sw2":"k_sw1"',
-                   'VB_KEXSWITCH_TEST',
+                   'NNB_KEXSWITCH_TEST',
                    'staticvoidKexSwitch_TestTick(void)',
                    'runlist_SignalRun(wall[nWall].lotag-1,nLocalPlayer|0x40000);',
                    'KexSwitch_ResetByTag(tag)', 'KexPlate_ResetChain(p.tag+1)',
                    'KexSound_Get("k_fplate")', 'D3PlayFX(sound,nSprite)',
-                   'VB_KEX_PLATE_SOUND_TEST',
+                   'NNB_KEX_PLATE_SOUND_TEST',
                    'KexPlate_Move(p,p.bottom,kKexPlateDown)',
                    'KexScript_FireTag(p.tag==0?100000:p.tag,"floortriggerplatelowered")',
-                   'VB_KEX_PLATE_TEST', 'staticintKexPlate_TestPlacePlayer(KexPlateconst&p,intnPlayer)',
+                   'NNB_KEX_PLATE_TEST', 'staticintKexPlate_TestPlacePlayer(KexPlateconst&p,intnPlayer)',
                    'sRunChannels[s_plate[i].resetChannel].d=0;',
                    'Kexplatetest:%s(sector%d,%d/%dticks)', 'voidKexPad_Init(void)',
                    'voidKexPad_ChannelFired(intchan)',
                    'KexPad_Move(p,min(p.delta-p.current,',
-                   'KexSwitch_ResetByTag(p.tag)', 'VB_KEXPAD_TEST',
+                   'KexSwitch_ResetByTag(p.tag)', 'NNB_KEXPAD_TEST',
                    'staticvoidKexPad_Land(KexPadconst&p)', 'KexQuake(16)',
                    'KexSound_Get("k_padfall")',
                    'PlayFXAtXYZ(sound,x,y,sector[nSector].floorz,nSector)',
-                   'VB_KEXPAD_TEST', 'KexPad_Land(p)'):
+                   'NNB_KEXPAD_TEST', 'KexPad_Land(p)'):
         if needle not in native:
             out.append('native floor-trigger plate bridge changed: %s' % needle)
     try:
@@ -3991,7 +3991,7 @@ def verify_movers(z, outdir):
     for needle in ('staticboolKexElevSound(shortnSprite,intnVal,boolbStop)',
                    'bStop?"k_stonestop":(nVal&2?"k_plat":"amb_ston")',
                    'sounds/platstart.wav', 'sounds/stonemov.wav',
-                   'sounds/stonestop.wav', 'VB_KEXMOVER_SOUND_TEST',
+                   'sounds/stonestop.wav', 'NNB_KEXMOVER_SOUND_TEST',
                    'if(!KexElevSound(Elevator[nElev].nSprite,var_18,true))'):
         if needle not in obj:
             out.append('native Kex mover-sound bridge changed: %s' % needle)
@@ -4029,8 +4029,8 @@ def verify_movers(z, outdir):
     for needle in ('staticvoidKexLift_TestTaggedStep(intnChannel,intnSector)',
                    'runlist_SignalRun(sector[nSector].lotag-1,0x50000)',
                    'sRunChannels[nChannel].c==1&&(sRunChannels[nChannel].d&2)',
-                   'VB_KEXLIFT_TEST',
-                   'VB_KEXLIFT_FLOOR_TEST'):
+                   'NNB_KEXLIFT_TEST',
+                   'NNB_KEXLIFT_FLOOR_TEST'):
         if needle not in runlist:
             out.append('native Kex tagged-lift regression probe changed: %s' % needle)
 
@@ -4166,7 +4166,7 @@ def verify_sealed_doors(z):
             out.append('player sealed-door use bridge changed: %s' % needle)
     for needle in ('intKexSealedDoor_Use(intnSector)',
                    'StatusMessage(300,"ThisDoorisSealed")',
-                   'VB_KEXSEALED_TEST', 'KexSealedDoor_Tick()'):
+                   'NNB_KEXSEALED_TEST', 'KexSealedDoor_Tick()'):
         if needle not in native:
             out.append('native sealed-door bridge changed: %s' % needle)
 
@@ -4233,7 +4233,7 @@ def verify_locked_doors(z):
                    'case1<<14:return"YouNeedtheSymbolofWar"',
                    'case1<<15:return"YouNeedtheSymbolofEarth"',
                    'KexLockedDoor_Message(SwitchData[nSwitch].field_12)',
-                   'VB_KEXLOCK_TEST', 'FuncSwPressSector(nLocalPlayer|0x40000,0,nRun)'):
+                   'NNB_KEXLOCK_TEST', 'FuncSwPressSector(nLocalPlayer|0x40000,0,nRun)'):
         if needle not in switch:
             out.append('native locked-door bridge changed: %s' % needle)
 
@@ -4303,12 +4303,12 @@ def verify_teleports(z, outdir, include_testmaps=False):
             out.append('mapper no longer preserves Kex teleport rule: %s' % needle)
     for needle in ('t.ang=ang<0?-1:', 'if(!KexPlayer_OnSectorFloor(nPlayer,nSector))',
                    'sprite[nSprite].z=getflorzofslope(s_tele[0].pad,', 'if(s_tele[i].ang>=0)',
-                   'legacygeneratedtablessuppliedafacing', 'VB_KEXTELE_TEST',
+                   'legacygeneratedtablessuppliedafacing', 'NNB_KEXTELE_TEST',
                    'mychangespritesect(nSprite,s_tele[0].pad)',
                    'sprite[nSprite].ang==s_teleTestAng',
                    'KexSound_Get("k_teleport")', 'sounds/teleport.wav',
                    's_teleFlash=255', 's_teleFlash=max(0,s_teleFlash-8)',
-                   'intKexTele_FlashAlpha(void)', 'VB_KEXTELE_TEST'):
+                   'intKexTele_FlashAlpha(void)', 'NNB_KEXTELE_TEST'):
         if needle not in native:
             out.append('native Kex teleport bridge changed: %s' % needle)
     tele_tick = native[native.find('voidKexTele_Tick(void)'):
@@ -4364,7 +4364,7 @@ def verify_shrines(z, outdir):
     for needle in ('KexInv_AddShrineSpawn', 'KexPlayer_OnSectorFloor(nPlayer,pad.padSector)',
                    'sprite[nSprite].z=getflorzofslope(pad.padSector,',
                    'KexInv_TakeArtifact(nPlayer,pad.nArtifact);',
-                   'KexScript_ArtifactTaken(pad.nArtifact);', 'VB_KEXSHRINE_TEST'):
+                   'KexScript_ArtifactTaken(pad.nArtifact);', 'NNB_KEXSHRINE_TEST'):
         if needle not in native:
             out.append('native Kex shrine bridge changed: %s' % needle)
     if 'case86:' not in init:
@@ -4420,7 +4420,7 @@ def verify_remote_triggers(z, outdir, include_testmaps=False):
     for needle in ('voidKexRemote_Add(intnSector,intnTag,intnChannel,intbOneShot)',
                    'KexPlate_ResetChain((int)r.tag+1)',
                    'Kex_FireChannel(r.channel)', 'if(r.oneShot)r.done=1',
-                   'VB_KEXREMOTE_TEST', 'KexScript_FireTag(p.tag==0?100000:p.tag,'):
+                   'NNB_KEXREMOTE_TEST', 'KexScript_FireTag(p.tag==0?100000:p.tag,'):
         if needle not in native:
             out.append('native remote-trigger bridge changed: %s' % needle)
     if 'case87:' not in init or 'KexRemote_Add(' not in init:
@@ -4655,7 +4655,7 @@ def verify_air_supply():
                    'KexSound_Get(((int32_t)totalclock&1)?"k_dolph1":"k_dolph2")',
                    'KexSound_Get("jon_gasp")',
                    'staticvoidKexAirSupply_RunSelftest(intnPlayer,shortnSprite)',
-                   'Bgetenv("VB_KEX_AIR_TEST")',
+                   'Bgetenv("NNB_KEX_AIR_TEST")',
                    'KexInvconstoldInv=KexInvList[nPlayer]',
                    'KexInvList[nPlayer]={}',
                    'KexInvList[nPlayer].artifacts=(uint8_t)(1<<kKexArtiMask)',
@@ -5010,7 +5010,7 @@ def verify_light_fields(z, outdir, include_testmaps=False):
             ('s.wallnum', vlight),
             ('polymost_kexShadeAt=KexVL_ShadeAt', bridge),
             ('polymost_kexColorAt=KexVL_ColorAt', bridge),
-            ('polymost_kexVertexLight=KexVL_Ready()&&!Bgetenv("VB_KEX_FLATLIGHT")', bridge),
+            ('polymost_kexVertexLight=KexVL_Ready()&&!Bgetenv("NNB_KEX_FLATLIGHT")', bridge),
             ('polymost_kexVertexColor', polymost), ('sectnum,wallnum,0', polymost)):
         if needle not in source:
             out.append('native KEX light-field bridge changed: %s' % needle)
@@ -5035,7 +5035,7 @@ def verify_sprite_interpolation():
                    'pose.sectnum!=t.sectnum',
                    'kKexSpriteInterpolationMaxDelta',
                    't.x=pose.x+mulscale16(dx,s_kexSpriteSmoothRatio);',
-                   'VB_KEX_SPRITE_INTERP_TEST'):
+                   'NNB_KEX_SPRITE_INTERP_TEST'):
         if needle not in view:
             out.append('KEX sprite interpolation changed: %s' % needle)
     for needle in ('insertsprite_callback=KexView_SpriteInserted;',
@@ -6593,7 +6593,7 @@ def verify_common_enemies(z, outdir):
             'sprite[nSprite].zvel+=kKexSpiderGravity;',
             'sprite[nSprite].xvel/=2;', 'KexSpiderGroundCallback(nSprite)',
             'KexSpiderLeapTick(nSpider,nSprite,nTarget)',
-            'KexSound_Get("spi_jump")', 'VB_KEX_SPIDER_LEAP_TEST',
+            'KexSound_Get("spi_jump")', 'NNB_KEX_SPIDER_LEAP_TEST',
             'KexContactRadius2(nSprite)', 'KexContactRadius2(nTarget)',
             'sprite[nTarget].x=691;', 'sprite[nTarget].x=692;',
             'changespritestat(nTarget,99);',
@@ -6726,7 +6726,7 @@ def verify_common_enemies(z, outdir):
             'sprite[nProbe].ang=(sprite[nProbe].ang+339)&kAngleMask;',
             'sprite[nPlayer]=savedPlayer;'),
         'init.cpp': (
-            'VB_KEX_COMMON_ENEMY_TEST',
+            'NNB_KEX_COMMON_ENEMY_TEST',
             '{101,72,60,"Anubis"}', '{102,72,60,"Mummy"}',
             '{104,72,60,"Bastet"}', '{103,24,40,"Fish"}',
             '{99,24,40,"Spider/Scorpion"}',
@@ -7031,7 +7031,7 @@ def verify_set(z, outdir):
     except OSError:
         return out + ['cannot read native Set controller']
     for needle in (
-            'VB_KEX_SET_TEST',
+            'NNB_KEX_SET_TEST',
             'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
             'PlayerList[s_setTestPlayer].invincibility=s_setTestInvincibility;',
             'staticshorts_setRun[kMaxSets];',
@@ -7371,7 +7371,7 @@ def verify_queen(z, outdir):
         'KexQueenSanitizeBody(nQueen)', 'KexQueenSanitizeSnake()',
         'save7+3/migrate%d',
         'KexQueen_SaveTestPrepare(void)', 'KexQueen_SaveTestValidate(void)',
-        's_queenTestSnakeExplosions==21', 'VB_KEX_QUEEN_TEST',
+        's_queenTestSnakeExplosions==21', 'NNB_KEX_QUEEN_TEST',
         'if(g_kexMode&&s_queenTest<0)KexScript_BossEvent(nSprite,"Queensnakedeathevent");',
         'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
         'PlayerList[s_queenTestPlayer].invincibility=s_queenTestInvincibility;',
@@ -7385,7 +7385,7 @@ def verify_queen(z, outdir):
             out.append('native Queen controller no longer implements %s' % needle)
     if 'intKexSeedlingCount()' not in wasp:
         out.append('native Queen seed cap no longer counts live seedlings')
-    for needle in ('VB_KEX_QUEEN_SAVE_TEST', 'KexQueen_SaveTestPrepare()',
+    for needle in ('NNB_KEX_QUEEN_SAVE_TEST', 'KexQueen_SaveTestPrepare()',
                    'KexQueen_SaveTestValidate()'):
         if needle not in kexbreak:
             out.append('Queen end-to-end save probe no longer invokes %s' % needle)
@@ -7631,7 +7631,7 @@ def verify_selkis(z, outdir):
         'boolKexSelkis_RemoveSprite(intnSprite)',
         'runlist_SubRunRec(scorpion[nScorp].f);',
         'scorpion[nScorp].nSprite=-1;',
-        'VB_KEX_SELKIS_TEST',
+        'NNB_KEX_SELKIS_TEST',
         'if(PlayerList[nLocalPlayer].invincibility<900)PlayerList[nLocalPlayer].invincibility=900;',
         'PlayerList[s_selkisTestPlayer].invincibility=s_selkisTestInvincibility;')
     for needle in native_needles:
@@ -8458,7 +8458,7 @@ def verify_projectiles(z, outdir):
             'sprite[nSprite].clipdist=bExactQueen?96:100;',
             'sprite[nSprite].xrepeat=bExactQueen?60:80;',
             'BuildKexAIFireProjectile(nSprite,12,nTarget,-64,128,32,0);',
-            'VB_KEX_QUEEN_TEST'),
+            'NNB_KEX_QUEEN_TEST'),
         'lavadude.cpp': (
             'sprite[nSprite].clipdist=g_kexMode?72:127;',
             'sprite[nSprite].xrepeat=g_kexMode?120:200;',
@@ -8481,7 +8481,7 @@ def verify_projectiles(z, outdir):
             'nextFrame==5||nextFrame==8',
             'nextFrame>=53',
             'sprite[nTarget].statnum==100',
-            'VB_KEX_MANTIS_TEST'),
+            'NNB_KEX_MANTIS_TEST'),
         'kexbreak.cpp': (
             'KexBouncyBalls_Spawn',
             'KexRaFire_Available', 'KexRaFire_PlayerFire',
@@ -8504,9 +8504,9 @@ def verify_projectiles(z, outdir):
             'KexVaseRa_Reflect', 's.vz+=72;',
             'KexBreak_IsProp(nHit)',
             'KexBreakLoadSaveConstruct',
-            'VB_KEX_RA_SAVE_TEST', 's_vaseShot[raShot].ticks==raTicks',
-            'VB_KEX_COBRA_SAVE_TEST', 'cobra.pitch==cobraPitch',
-            'VB_KEX_RED_COBRA_SAVE_TEST',
+            'NNB_KEX_RA_SAVE_TEST', 's_vaseShot[raShot].ticks==raTicks',
+            'NNB_KEX_COBRA_SAVE_TEST', 'cobra.pitch==cobraPitch',
+            'NNB_KEX_RED_COBRA_SAVE_TEST',
             'KexBullet_GetRedCobraPitch(redBullet,&loadedRedPitch)',
             'KexBullet_GetRedCobraJoint(redBullet,i)',
             'KexProjectile_RedCobraJointTile',
@@ -8524,7 +8524,7 @@ def verify_projectiles(z, outdir):
             'kKexBombBuildBlastRadius=kKexBombBlastRadius*6/256',
             'KexGrenade_Charge', 'KexGrenadePitchDirection',
             'if(GrenadeList[nGrenade].field_10<0)return;',
-            'VB_KEX_BOMB_TEST', 'nofuse/bounce'),
+            'NNB_KEX_BOMB_TEST', 'nofuse/bounce'),
         'gun.cpp': (
             'if(!g_kexMode)AddAmmo(nPlayer,kWeaponGrenade,-1);',
             'KexGrenade_Charge(nPlayer);',
@@ -8545,7 +8545,7 @@ def verify_projectiles(z, outdir):
             'KexMacheteInRange(start.x,start.y,start.z,hitData.x,hitData.y,hitData.z)',
             'cRange=KexPlayerMacheteTrace(nPlayer,&theX,&theY,&theZ,&nSectorB);',
             'shortnDamage=g_kexMode?kKexMacheteDamage:BulletInfo[kWeaponSword].nDamage;',
-            'VB_KEX_WEAPON_TEST',
+            'NNB_KEX_WEAPON_TEST',
             'nWeapon!=kWeaponFlamer||PlayerList[nPlayer].nWeaponFrame==1'),
         'snake.cpp': (
             'g_kexMode?100:BulletInfo[kWeaponStaff].nDamage',
@@ -8560,7 +8560,7 @@ def verify_projectiles(z, outdir):
             'seq_IsLoaded(kSeqKexMuzzle)',
             'KexTrapConfigured(nTrap)&&nType==14',
             'exact?48:40', 'puffs%d/%d', 'exact-seq%d',
-            'source-ordertag/tag+1', 'VB_KEX_TRAP_TEST'),
+            'source-ordertag/tag+1', 'NNB_KEX_TRAP_TEST'),
         'anims.cpp': (
             'KexImpactLight_Tick()', 'seq_IsLoaded(kSeqKexImpact)',
             'seq_IsLoaded(kSeqKexCobraRed)',
@@ -8691,7 +8691,7 @@ def verify_projectiles(z, outdir):
             'authoreddeathblasts', 'exact3-Dfireball/laser/boulderlaunch',
             'exactorange/cobra/Anubisimpactart,cadenceandlight',
             'nofalseSoul/SeedlingradialorBlaster/Beampuff',
-            'VB_KEX_PROJECTILE_TEST')
+            'NNB_KEX_PROJECTILE_TEST')
         for needle in bridge_checks:
             if needle not in compact:
                 out.append('native projectile bridge is missing: %s' % needle)
@@ -9200,7 +9200,7 @@ def verify_explosion_effects(z, outdir):
                       'bWater?48:96', '"bomb_wat":"bomb_exp"',
                       'radius=768*4*6', 'fadeSteps=20',
                       'BuildAnim(-1,nSeq,0,x,y,effectZ,nSector,bWater?48:96,0)',
-                      'VB_KEXEXPLOSION_PALETTE_TEST'),
+                      'NNB_KEXEXPLOSION_PALETTE_TEST'),
         'grenade.cpp': ('KexExplosion01_Spawn',
                         'exact21-tickland/watereffectsat+32'),
         'queen.cpp': ('sprite[nSprite].sectnum,32,0',

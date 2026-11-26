@@ -124,7 +124,7 @@ static actionSeq const &RoachActionSequence(int nAction)
 static void KexSentryAudit(short nRoach)
 {
     if (s_sentryAudit < 0)
-        s_sentryAudit = g_kexMode && Bgetenv("VB_KEX_SENTRY_AUDIT") ? 1 : 0;
+        s_sentryAudit = g_kexMode && Bgetenv("NNB_KEX_SENTRY_AUDIT") ? 1 : 0;
     if (!s_sentryAudit || s_sentryAuditSeen)
         return;
     s_sentryAuditSeen = 1;
@@ -292,7 +292,7 @@ static void KexSentryTestFinish(bool okay, short nSprite)
 void KexSentry_TestTick()
 {
     if (s_sentryTest == -1)
-        s_sentryTest = g_kexMode && Bgetenv("VB_KEX_SENTRY_TEST") ? 0 : -2;
+        s_sentryTest = g_kexMode && Bgetenv("NNB_KEX_SENTRY_TEST") ? 0 : -2;
     if (s_sentryTest < 0)
         return;
 

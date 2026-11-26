@@ -14,7 +14,7 @@
 #include "oldnet.h"
 #include "polymost.h"
 #include "sdl_inc.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #include <cmath>
 #include <map>
@@ -1022,7 +1022,7 @@ void enterPlaytest(PlayPoint const &point = {})
 
 void returnToEditor()
 {
-    VBJS_ClearAttachments();
+    NNBJS_ClearAttachments();
     cleanPlaytest();
     ud.m_player_skill = previousSkill;
     S_StopMusic();
@@ -3418,7 +3418,7 @@ void drawComponentInspector()
         {
             pendingPrefab = ProjectRequest{ProjectAction::SavePrefab};
             pendingPrefab.sprites = std::move(sprites);
-            Bstrncpyz(prefabPath, "Prefabs/Prefab.vbprefab", sizeof(prefabPath));
+            Bstrncpyz(prefabPath, "Prefabs/Prefab.nnbprefab", sizeof(prefabPath));
             dialogRevision = nextRevision;
             showPrefabDialog = true;
         }

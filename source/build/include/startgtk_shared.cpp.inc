@@ -46,7 +46,7 @@ static unsigned char GetModsDirNames(GtkListStore *list)
 #undef STARTGTK_SHARED_GET_MODS_DIR_NAMES_DUKE_BLOOD
 #endif
 
-#if defined(STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_VB)
+#if defined(STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_NNB)
 
 static unsigned char GetModsDirNames(GtkListStore *list)
 {
@@ -84,7 +84,7 @@ static unsigned char GetModsDirNames(GtkListStore *list)
     pathsearchmode = bakpathsearchmode;
     return iternumb;
 }
-#undef STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_VB
+#undef STARTGTK_SHARED_GET_MODS_DIR_NAMES_RR_NNB
 #endif
 
 #if defined(STARTGTK_SHARED_ON_VMODE3DCOMBO_CHANGED)

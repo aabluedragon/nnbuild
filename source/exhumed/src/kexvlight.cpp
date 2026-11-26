@@ -223,7 +223,7 @@ void KexVL_Load(char const *mapfile)
 // same. The converter's per-piece curve lifts the dim end with a square root
 // (a piece is an average, and a flat piece crushed to black reads worse than
 // one too light); a vertex does not need it, and the remaster is darker
-// than that curve at the low end. VB_KEX_LIGHTCURVE=<gamma> raises L/255 to
+// than that curve at the low end. NNB_KEX_LIGHTCURVE=<gamma> raises L/255 to
 // a power for comparison: 1 is Kex's own, 0.5 the converter's look.
 static float s_gamma = -1.f;
 
@@ -231,7 +231,7 @@ static inline float KexVL_Factor(float value)
 {
     if (s_gamma < 0.f)
     {
-        char const *const env = Bgetenv("VB_KEX_LIGHTCURVE");
+        char const *const env = Bgetenv("NNB_KEX_LIGHTCURVE");
         s_gamma = env ? (float)Batof(env) : 1.f;
         if (s_gamma <= 0.f) s_gamma = 1.f;
     }

@@ -23,7 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "compat.h"
 #include "player.h"
-#include "vbnet.h"
+#include "nnbnet.h"
 #include "runlist.h"
 #include "exhumed.h"
 #include "names.h"
@@ -220,13 +220,13 @@ static void KexAirSupply_Update(int nPlayer, short nSprite, int bUnderwater)
         SetAirFrame();
 }
 
-// VB_KEX_AIR_TEST=1 probes the native KEX update rate without moving the
+// NNB_KEX_AIR_TEST=1 probes the native KEX update rate without moving the
 // player into test geometry. Restore every touched value so it is safe to
 // run beside an ordinary hidden map load.
 static void KexAirSupply_RunSelftest(int nPlayer, short nSprite)
 {
     static int ran = 0;
-    if (ran || !Bgetenv("VB_KEX_AIR_TEST") || nPlayer != nLocalPlayer
+    if (ran || !Bgetenv("NNB_KEX_AIR_TEST") || nPlayer != nLocalPlayer
         || nSprite < 0 || nSprite >= kMaxSprites)
         return;
     ran = 1;
@@ -2538,7 +2538,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
 
             int nMove = 0; // TEMP
 
-            // NNBuild test hook: VB_KEX_WALK=<ticks> walks the player
+            // NNBuild test hook: NNB_KEX_WALK=<ticks> walks the player
             // straight ahead for that many ticks, then logs where it got to
             // (Kex units), so a step or a sill can be tried without a hand
             // on the keys.
@@ -2546,7 +2546,7 @@ void FuncPlayer(int a, int nDamage, int nRun)
                 static int s_kexWalk = -1;
                 if (s_kexWalk < 0)
                 {
-                    char const *const env = Bgetenv("VB_KEX_WALK");
+                    char const *const env = Bgetenv("NNB_KEX_WALK");
                     s_kexWalk = env ? Batoi(env) : 0;
                 }
                 if (s_kexWalk > 0)

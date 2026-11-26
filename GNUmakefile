@@ -756,7 +756,7 @@ nnbuild_src := $(nnbuild_root)/src
 nnbuild_rsrc := $(nnbuild_root)/rsrc
 nnbuild_obj := $(obj)/$(nnbuild)
 
-nnbuild_cflags := -I$(nnbuild_src) -I$(quickjs_inc) -I$(source)/glue -DVBJS
+nnbuild_cflags := -I$(nnbuild_src) -I$(quickjs_inc) -I$(source)/glue -DNNBJS
 
 nnbuild_game_deps := audiolib mact quickjs
 
@@ -821,9 +821,9 @@ nnbuild_game_objs := \
     sounds.cpp \
     sync.cpp \
     utils.cpp \
-    vbjs.cpp \
-    vbjs_ts.cpp \
-    vbjs_duke.cpp \
+    nnbjs.cpp \
+    nnbjs_ts.cpp \
+    nnbjs_duke.cpp \
 
 nnbuild_game_rsrc_objs :=
 nnbuild_game_gen_objs :=
@@ -1073,7 +1073,7 @@ blood_game_objs := \
     misc.cpp network.cpp osdcmd.cpp player.cpp qav.cpp qheap.cpp replace.cpp \
     resource.cpp screen.cpp sectorfx.cpp seq.cpp sfx.cpp sound.cpp tile.cpp \
     trig.cpp triggers.cpp view.cpp warp.cpp weapon.cpp weather.cpp \
-    vb_compat.cpp \
+    nnb_compat.cpp \
 
 components += blood
 dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))
@@ -1137,7 +1137,7 @@ exhumed_game_objs := \
     queen.cpp ra.cpp ramses.cpp random.cpp rat.cpp record.cpp rex.cpp roach.cpp \
     runlist.cpp save.cpp scorp.cpp sequence.cpp serial.cpp set.cpp snake.cpp \
     sound.cpp spider.cpp status.cpp stream.cpp switch.cpp text2.cpp timer.cpp \
-    trigdat.cpp vbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp kextactile.cpp \
+    trigdat.cpp nnbnet.cpp version.cpp view.cpp wasp.cpp kexmenu.cpp kexbreak.cpp kexmovie.cpp kexinv.cpp kexvlight.cpp kextactile.cpp \
 
 components += exhumed
 dukemerge_objs := $(addprefix $(nnbuild_obj)/,$(addsuffix .$o,$(basename $(nnbuild_game_objs))))

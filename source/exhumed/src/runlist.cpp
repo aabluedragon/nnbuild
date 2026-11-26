@@ -523,7 +523,7 @@ static int s_kexLiftTest = -1;
 static void KexLift_TestTaggedStep(int nChannel, int nSector)
 {
     if (s_kexLiftTest < 0)
-        s_kexLiftTest = g_kexMode && Bgetenv("VB_KEXLIFT_TEST") ? 1 : 0;
+        s_kexLiftTest = g_kexMode && Bgetenv("NNB_KEXLIFT_TEST") ? 1 : 0;
     if (!s_kexLiftTest || sRunChannels[nChannel].c == 0)
         return;
     int const before = sRunChannels[nChannel].c;
@@ -541,7 +541,7 @@ static int s_kexLiftFloorTest = -1;
 static void KexLift_TestUntaggedFloorStep(int nChannel, int nSector)
 {
     if (s_kexLiftFloorTest < 0)
-        s_kexLiftFloorTest = g_kexMode && Bgetenv("VB_KEXLIFT_FLOOR_TEST") ? 1 : 0;
+        s_kexLiftFloorTest = g_kexMode && Bgetenv("NNB_KEXLIFT_FLOOR_TEST") ? 1 : 0;
     if (!s_kexLiftFloorTest || sRunChannels[nChannel].c != 0)
         return;
 

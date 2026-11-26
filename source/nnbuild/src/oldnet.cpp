@@ -8,7 +8,7 @@
 #include "masterserver.h"
 #include "netcontent.h"
 #include "serverlevel.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #ifdef _WIN32
 # include <conio.h>
@@ -1717,7 +1717,7 @@ void Net_PollPrivateCommands(void)
     {
         if (Net_PlayerConnection(command.slot) != command.connection)
             continue;
-        if (!VBJS_RunServerCommand(command.slot, command.connection, command.text.c_str()))
+        if (!NNBJS_RunServerCommand(command.slot, command.connection, command.text.c_str()))
             Net_ServerMessage(command.slot, "Unknown server command.");
     }
 }
@@ -2065,7 +2065,7 @@ void Net_ParsePackets(void)
                 {
                     packbuf[packbufleng] = 0;
                     G_AddUserQuote(packbuf + 1);
-                    VBJS_FireChat("chatMessage", connecthead, packbuf + 1);
+                    NNBJS_FireChat("chatMessage", connecthead, packbuf + 1);
                     S_PlaySound(EXITMENUSOUND);
                 }
                 break;
@@ -2157,7 +2157,7 @@ void Net_ParsePackets(void)
                 recbuf[packbufleng - 2] = 0;
 
                 G_AddUserQuote(recbuf);
-                VBJS_FireChat("chatMessage", myconnectindex == connecthead ? other : -1, recbuf);
+                NNBJS_FireChat("chatMessage", myconnectindex == connecthead ? other : -1, recbuf);
                 S_PlaySound(EXITMENUSOUND);
 
                 pus = NUMPAGES;
@@ -3206,7 +3206,7 @@ void Net_EnterMessage(void)
                 }
 
                 G_AddUserQuote(recbuf);
-                VBJS_FireChat("chatMessage", myconnectindex, recbuf);
+                NNBJS_FireChat("chatMessage", myconnectindex, recbuf);
                 quotebot += 8;
                 l = G_GameTextLen(USERQUOTE_LEFTOFFSET,OSD_StripColors(tempbuf,recbuf));
                 while (l > (ud.config.ScreenWidth - USERQUOTE_RIGHTOFFSET))
@@ -3449,7 +3449,7 @@ static void Net_ExecContent(const char *statePath)
 #endif
     args.push_back(nullptr);
 
-    VBJS_Shutdown();
+    NNBJS_Shutdown();
     if (statePath)
         Masterserver_AdvertiseStop();
     mmulti_uninitmultiplayers();

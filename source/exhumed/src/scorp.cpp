@@ -307,7 +307,7 @@ static void KexSelkisCountDown(short nScorp, short nSprite)
 static void KexSelkisAudit(short nScorp)
 {
     if (s_selkisAudit < 0)
-        s_selkisAudit = g_kexMode && Bgetenv("VB_KEX_SELKIS_AUDIT") ? 1 : 0;
+        s_selkisAudit = g_kexMode && Bgetenv("NNB_KEX_SELKIS_AUDIT") ? 1 : 0;
     if (!s_selkisAudit || s_selkisAuditSeen)
         return;
     s_selkisAuditSeen = 1;
@@ -443,7 +443,7 @@ static void KexSelkisTestFinish(short nSprite)
 void KexSelkis_TestTick()
 {
     if (s_selkisTest == -1)
-        s_selkisTest = g_kexMode && Bgetenv("VB_KEX_SELKIS_TEST") ? 0 : -2;
+        s_selkisTest = g_kexMode && Bgetenv("NNB_KEX_SELKIS_TEST") ? 0 : -2;
     if (s_selkisTest < 0)
         return;
 

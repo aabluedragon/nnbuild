@@ -229,7 +229,7 @@ source steps per 30 Hz Exhumed tick; the second preserves that velocity while
 AI_Wasp's .94 vertical friction is applied, and both displacements are summed
 after converting KEX up-positive Z to Build down-positive Z. It has a yaw-only
 pursuit helper so the old pitch-in-`sprite.zvel` chase path cannot overwrite
-the callback. `VB_KEX_WASP_BOB_TEST=1` exercises the exact
+the callback. `NNB_KEX_WASP_BOB_TEST=1` exercises the exact
 phase, friction, bounds and sign; `kexverify.py` audits both source and native
 contracts.
 
@@ -264,7 +264,7 @@ animation edge and that zero-friction velocity moves on both source physics
 ticks. `A_BirdRetreat` similarly writes its four-unit turn/vector before both
 steps, then ends precisely when the script's vertical-velocity or
 ceiling-minus-128-height test succeeds rather than on a native timer.
-`VB_KEX_BIRD_FLIGHT_TEST=1` checks the source clock, fractional turns and
+`NNB_KEX_BIRD_FLIGHT_TEST=1` checks the source clock, fractional turns and
 retreat boundary. The 32-unit melee callback occurs on attack frame 0, then
 the bird rises and turns through the twelve-tick retreat. Death plays
 `birddeath.wav`, creates seven `Obj_Bird_Feathers` actors with the source's
@@ -272,7 +272,7 @@ centred spawn range, and removes the host immediately. The optional
 `KEXBIRDFEATHER.SEQ` holds the single retail feather tile (7632) through the
 15 source crops; the native KEX-only bridge randomizes its initial frame,
 loops it, writes the downward half-unit velocity on f8/f14, and removes it at
-the source's 1.024-unit floor gate. `VB_KEX_BIRD_FEATHER_TEST=1` probes that
+the source's 1.024-unit floor gate. `NNB_KEX_BIRD_FEATHER_TEST=1` probes that
 sequence/fall boundary without creating visible gameplay actors.
 
 ### 2.3 SENTRY — `ROACH.SEQ` (kSeqRoach, SeqNames[50], sequence.cpp:131/sequence.h:80)
@@ -314,9 +314,9 @@ uses the classic action table.
 KEX `BuildRoach` converts the retail dimensions to clipdist 72 and repeat 60,
 uses speed 8 and incremental turn-speed-2 steering, plays `sentryact01.wav`
 on acquisition, and retains chatter/pain/fire/death cues. The env-only
-`VB_KEX_SENTRY_TEST=1` probe forces one attack and one pain cycle and verifies
+`NNB_KEX_SENTRY_TEST=1` probe forces one attack and one pain cycle and verifies
 the 1/8/12/10 cadence, attack frame 6, pain exit frame 10, fullbright flag,
-stats and movement speed. `VB_KEX_SENTRY_AUDIT=1` logs the first live Sentry's
+stats and movement speed. `NNB_KEX_SENTRY_AUDIT=1` logs the first live Sentry's
 resolved values and whether the exact sequence was detected.
 
 ### 2.4 MANTIS — stock `LAVAG.SEQ` attack slot 10; lotag 108
@@ -357,7 +357,7 @@ is drawn. Frame 0 fires the tagged event, death sound, unblock, and first
 bursts of twenty Ra-fire orbs. The splash sounds remain on death frames 37 and
 43.
 
-`VB_KEX_MANTIS_TEST=1` forces and validates the 62-tick peek, 60-tick rise,
+`NNB_KEX_MANTIS_TEST=1` forces and validates the 62-tick peek, 60-tick rise,
 three-tick prefix, minimum two Saturn volleys (26 ticks), five-shot PSX branch
 (nine ticks), 24+21 submerge/splash path, and 53-tick destroy transition. It
 checks every immediate projectile, callback mask, tagged event, and all three
@@ -411,9 +411,9 @@ decision cadence, checks souls below 1500 health with a coin flip before
 checking leap below 2000 with a quarter roll, and computes speed from logical
 health. KEX health is stored as `KexHealthUnits(3000)`. Death suppresses the
 DOS twenty-soul recipe, sends tag 1010 after f29 and holds the corpse. The
-env-only `VB_KEX_SET_TEST=1` probe forces melee/cast/pain/leap and verifies all
+env-only `NNB_KEX_SET_TEST=1` probe forces melee/cast/pain/leap and verifies all
 cadences, callback/fullbright frames, launch, dimensions, logical/internal
-health and full-health speed; `VB_KEX_SET_AUDIT=1` logs live resolved values.
+health and full-health speed; `NNB_KEX_SET_AUDIT=1` logs live resolved values.
 
 ### 2.6 QUEEN — `QUEEN.SEQ` (kSeqQueen=49) + `QUEENEGG.SEQ` (kSeqQueenEgg=56); lotag 113 (init.cpp:861 → BuildQueen, statnum 121)
 
@@ -439,8 +439,8 @@ callback/sound frames. The body death spawns the six Queen gibs and the
 and the head becomes shootable only after all ten are gone. Joints lerp 0.2
 toward their parent every tick. Snake melee deals 30 with retreat, and death
 runs 21 explosions over 85 ticks before firing the exit event once. The
-env-only `VB_KEX_QUEEN_TEST=1` probe verifies this complete lifecycle;
-`VB_KEX_QUEEN_AUDIT=1` logs live map stats.
+env-only `NNB_KEX_QUEEN_TEST=1` probe verifies this complete lifecycle;
+`NNB_KEX_QUEEN_AUDIT=1` logs live map stats.
 
 The ten-link runtime does not enlarge the original save record. The historical
 seven-short `tailspr` field remains byte-for-byte fixed; the three exact-only
@@ -449,7 +449,7 @@ joint controller does not use. An unmarked KEX save is migrated from the older
 approximate controller: body phase health becomes one remaining 3600-point
 pool, old body/snake action ids are translated, legacy eggs become 60-tick
 seed pods, and action/frame bounds are sanitized before any exact sequence
-lookup. `VB_KEXSAVE_TEST=1 VB_KEX_QUEEN_SAVE_TEST=1` creates a live ten-tail
+lookup. `NNB_KEXSAVE_TEST=1 NNB_KEX_QUEEN_SAVE_TEST=1` creates a live ten-tail
 snake, saves and reloads the complete world, and verifies body, head, all ten
 sprite ids and health gates after deserialization. On KILARENA, the lifecycle
 probe reuses its authored Queen controller because the retail campaign has one
@@ -579,6 +579,6 @@ Reuse existing plumbing: `_sprite_table(Z, names, group, base)` (:1691, parses `
 
 9. `KEX_SOUNDS` includes the Queen's exact sequence aliases, including `rex-bite`, `q_gurgle`, `q_sight`, `q_stumpy`, `q_tail`, `q_spit`, `q_deth` and `q_cry`; these flow to kexsound.txt automatically.
 
-**Test recipe**: run the converter and full verifier, then launch a converted map containing each lotag (100 Anubis, 101 Mummy, 102 Bastet, 103/104 Sentry, 106 Fish, 108 Mantis, 111 Set, 112 Selkis, 113 Queen and 117 Wasp). Unattended probes must use `VB_HIDE_WINDOW=1`, `SDL_AUDIODRIVER=dummy`, `-nosound -nomusic` and an isolated absolute config. Use `VB_KEX_COMMON_ENEMY_TEST=1`, `VB_KEX_FLYER_TEST=1`, `VB_KEX_SENTRY_TEST=1`, `VB_KEX_SET_TEST=1`, `VB_KEX_SELKIS_TEST=1`, `VB_KEX_QUEEN_TEST=1`, `VB_KEX_MANTIS_TEST=1`, `VB_KEX_PROJECTILE_TEST=1`, `VB_KEX_BOMB_TEST=1` and `VB_KEX_GIB_DEATH_TEST=1` in separate runs for deterministic cadence/callback/stat/projectile probes. The gib-death probe validates representative +0/+64 offsets, scale 1/2, fullbright flags and the effect-top callback; the projectile probe covers both launch recipes and the Cobra/fireball/boulder death-blast matrix; the bomb probe covers 16→48 charge, release-time ammo, radius/scale, velocity/gravity and 512/140 first-impact behavior. Run `VB_KEX_QUEEN_TEST=1`, and pair `VB_KEXSAVE_TEST=1` with `VB_KEX_QUEEN_SAVE_TEST=1`, on KILARENA for the exact lifecycle and ten-tail serialization probes; `VB_KEX_QUEEN_AUDIT=1` and `VB_KEX_PROJECTILE_AUDIT=1` report live resolved values. Confirm all eight views, attack effects, deaths, and that untouched demo creatures still render so global sequence/frame/chunk limits are covered.
+**Test recipe**: run the converter and full verifier, then launch a converted map containing each lotag (100 Anubis, 101 Mummy, 102 Bastet, 103/104 Sentry, 106 Fish, 108 Mantis, 111 Set, 112 Selkis, 113 Queen and 117 Wasp). Unattended probes must use `NNB_HIDE_WINDOW=1`, `SDL_AUDIODRIVER=dummy`, `-nosound -nomusic` and an isolated absolute config. Use `NNB_KEX_COMMON_ENEMY_TEST=1`, `NNB_KEX_FLYER_TEST=1`, `NNB_KEX_SENTRY_TEST=1`, `NNB_KEX_SET_TEST=1`, `NNB_KEX_SELKIS_TEST=1`, `NNB_KEX_QUEEN_TEST=1`, `NNB_KEX_MANTIS_TEST=1`, `NNB_KEX_PROJECTILE_TEST=1`, `NNB_KEX_BOMB_TEST=1` and `NNB_KEX_GIB_DEATH_TEST=1` in separate runs for deterministic cadence/callback/stat/projectile probes. The gib-death probe validates representative +0/+64 offsets, scale 1/2, fullbright flags and the effect-top callback; the projectile probe covers both launch recipes and the Cobra/fireball/boulder death-blast matrix; the bomb probe covers 16→48 charge, release-time ammo, radius/scale, velocity/gravity and 512/140 first-impact behavior. Run `NNB_KEX_QUEEN_TEST=1`, and pair `NNB_KEXSAVE_TEST=1` with `NNB_KEX_QUEEN_SAVE_TEST=1`, on KILARENA for the exact lifecycle and ten-tail serialization probes; `NNB_KEX_QUEEN_AUDIT=1` and `NNB_KEX_PROJECTILE_AUDIT=1` report live resolved values. Confirm all eight views, attack effects, deaths, and that untouched demo creatures still render so global sequence/frame/chunk limits are covered.
 
 Key file paths: `/Users/alonamir/dev/eduke32/source/exhumed/src/sequence.cpp`, `wasp.cpp`, `roach.cpp`, `set.cpp`, `queen.cpp`, `scorp.cpp`, `init.cpp`, `exhumed.cpp` (:2556/:2577 load order), `/Users/alonamir/dev/eduke32/source/exhumed/tools/kexmap.py`; scratch tooling: `/private/tmp/claude-501/-Users-alonamir-dev-eduke32/8338d716-9146-4e6d-a50c-c933a3d0904b/scratchpad/{seqtool.py, writeseq.py, seqparse.py, parse_set_seq.py, scorp_seq.json, set_seq_dump.txt}`.

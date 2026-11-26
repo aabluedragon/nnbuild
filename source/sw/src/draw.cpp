@@ -1752,7 +1752,7 @@ void ScreenCaptureKeys(void)
     if (ConPanel)
         return;
 
-    // Debug aid for the crossplay bridge: VB_CP_CAPTURE=<frames> saves one
+    // Debug aid for the crossplay bridge: NNB_CP_CAPTURE=<frames> saves one
     // screenshot that many frames in, so bridge visuals can be checked from an
     // automated run.  See source/sw/DUKE_CROSSPLAY_BRIDGE.md.
     {
@@ -1760,7 +1760,7 @@ void ScreenCaptureKeys(void)
 
         if (autoCaptureFrames < 0)
         {
-            char const *const env = Bgetenv("VB_CP_CAPTURE");
+            char const *const env = Bgetenv("NNB_CP_CAPTURE");
             autoCaptureFrames = env != NULL ? Batoi(env) : 0;
         }
 

@@ -178,13 +178,13 @@ For a runnable SW debug starter, use only the shared imports and put a launch
 directive at the top of the entry file:
 
 ```ts
-/// vbd.params="--game sw --grp '/path/to/Sw.grp' --skip-cinema"
-import { log, on } from 'vb';
+/// nnbd.params="--game sw --grp '/path/to/Sw.grp' --skip-cinema"
+import { log, on } from 'nnb';
 
 on('frame', () => log('safe SW frame callback'));
 ```
 
-See `source/glue/VBJS.md` for generated projects, imports, supported APIs, and
+See `source/glue/NNBJS.md` for generated projects, imports, supported APIs, and
 the VS Code adapter contract.
 
    What's already SHARED (free for SW via the engine, no port needed):

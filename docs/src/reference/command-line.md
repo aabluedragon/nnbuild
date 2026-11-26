@@ -407,7 +407,7 @@ options for debugging, in a comment at its top. They are used only when NNBuild
 is started with `--debug` or `--devtools`:
 
 ```ts
-/// vbd.params="--game duke --gamegrp /home/you/games/duke3d/DUKE3D.GRP"
+/// nnbd.params="--game duke --gamegrp /home/you/games/duke3d/DUKE3D.GRP"
 ```
 
 ## Map editor and projects

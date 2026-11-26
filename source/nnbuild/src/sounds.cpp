@@ -55,7 +55,7 @@ voiceinfo_t nullvoice = { -1, FX_Ok, UINT16_MAX, 0, -1, { 0, 0, 0 } };
 
 static int S_CrossplayGameFromSoundPrefix(char const *name, char const **entryName)
 {
-    static char constexpr prefix[] = "vb-crossplay://";
+    static char constexpr prefix[] = "nnb-crossplay://";
 
     if (!name || Bstrncmp(name, prefix, sizeof(prefix) - 1))
         return ART_CROSSPLAY_GAME_UNKNOWN;
@@ -1047,29 +1047,29 @@ error:
 // underneath it.  Duke still decides which sound plays and when, which is the
 // part that is actor behavior; the host just plays it.  See
 // source/nnbuild/src/crossplay_dukeai.cpp.
-static int (*g_vbDukeAISoundHook)(int soundNum, int spriteNum);
+static int (*g_nnbDukeAISoundHook)(int soundNum, int spriteNum);
 
 // While the host owns playback, Duke's own g_sounds[] bookkeeping is never
 // filled in, so A_CheckSoundPlaying() would answer "nothing is playing" forever.
 // CON leans on that answer: `soundonce` is exactly "play unless already playing",
 // and without it a looping-by-repetition sound like the broken hydrant's gurgle
 // is started again on every single tic.  Let the host answer instead.
-static int (*g_vbDukeAISoundCheckHook)(int soundNum, int spriteNum);
+static int (*g_nnbDukeAISoundCheckHook)(int soundNum, int spriteNum);
 
-extern "C" void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum))
+extern "C" void NNB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum))
 {
-    g_vbDukeAISoundCheckHook = hook;
+    g_nnbDukeAISoundCheckHook = hook;
 }
 
-extern "C" void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum))
+extern "C" void NNB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum))
 {
-    g_vbDukeAISoundHook = hook;
+    g_nnbDukeAISoundHook = hook;
 }
 
 int S_PlaySound(int num)
 {
-    if (g_vbDukeAISoundHook != NULL)
-        return g_vbDukeAISoundHook(num, -1);
+    if (g_nnbDukeAISoundHook != NULL)
+        return g_nnbDukeAISoundHook(num, -1);
 
     if (!Net_InPredictableState())
         return -1;
@@ -1125,8 +1125,8 @@ error:
 
 int A_PlaySound(int soundNum, int spriteNum)
 {
-    if (g_vbDukeAISoundHook != NULL)
-        return g_vbDukeAISoundHook(soundNum, spriteNum);
+    if (g_nnbDukeAISoundHook != NULL)
+        return g_nnbDukeAISoundHook(soundNum, spriteNum);
 
     return (unsigned)spriteNum >= MAXSPRITES ? S_PlaySound(soundNum) :
         S_PlaySound3D(soundNum, spriteNum, sprite[spriteNum].xyz);
@@ -1339,8 +1339,8 @@ int A_CheckSoundPlaying(int spriteNum, int soundNum)
 {
     if (EDUKE32_PREDICT_FALSE((unsigned)soundNum > (unsigned)g_highestSoundIdx)) return 0;
 
-    if (g_vbDukeAISoundCheckHook != NULL)
-        return g_vbDukeAISoundCheckHook(soundNum, spriteNum);
+    if (g_nnbDukeAISoundCheckHook != NULL)
+        return g_nnbDukeAISoundCheckHook(soundNum, spriteNum);
 
     auto& snd = g_sounds[soundNum];
 

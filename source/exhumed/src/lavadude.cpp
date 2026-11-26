@@ -1022,7 +1022,7 @@ static void KexMantisTestFinish(short nSprite, bool bActorValid)
 void KexMantis_TestTick()
 {
     if (s_kexMantisTest == -1)
-        s_kexMantisTest = g_kexMode && Bgetenv("VB_KEX_MANTIS_TEST")
+        s_kexMantisTest = g_kexMode && Bgetenv("NNB_KEX_MANTIS_TEST")
             ? 0 : -2;
     if (s_kexMantisTest < 0)
         return;

@@ -1,11 +1,11 @@
 import fs from 'fs';
 let frames = 0, spawns = 0, chats = 0;
-vb.on('start', () => vb.log('demo started'));
-vb.on('frame', () => {
+nnb.on('start', () => nnb.log('demo started'));
+nnb.on('frame', () => {
   frames++;
-  vb.drawText(1, 20, 18, `JS frame ${frames}  spawns:${spawns}  chats:${chats}`, 0, 0);
-  if (frames === 40) { vb.log('spawning a pig cop (tile 1680) at the player'); vb.spawn(1680, 0, 0, 0); }  // 1680 = LIZTROOP
+  nnb.drawText(1, 20, 18, `JS frame ${frames}  spawns:${spawns}  chats:${chats}`, 0, 0);
+  if (frames === 40) { nnb.log('spawning a pig cop (tile 1680) at the player'); nnb.spawn(1680, 0, 0, 0); }  // 1680 = LIZTROOP
 });
-vb.on('actorSpawned', (e) => { spawns++; if (spawns <= 5) vb.log(`actorSpawned tile=${e.tile} sprite=${e.sprite}`); });
-vb.on('chatMessage', (e) => { chats++; vb.log(`chatMessage: ${e.text}`); });
-vb.on('playerDied', () => vb.log('EVENT: player died!'));
+nnb.on('actorSpawned', (e) => { spawns++; if (spawns <= 5) nnb.log(`actorSpawned tile=${e.tile} sprite=${e.sprite}`); });
+nnb.on('chatMessage', (e) => { chats++; nnb.log(`chatMessage: ${e.text}`); });
+nnb.on('playerDied', () => nnb.log('EVENT: player died!'));

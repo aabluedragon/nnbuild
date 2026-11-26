@@ -56,7 +56,7 @@ struct ProjectAsset
 };
 
 constexpr char projectManifest[] = "nnbuild.project.json";
-constexpr char mapSettingsSuffix[] = ".vbmap.json";
+constexpr char mapSettingsSuffix[] = ".nnbmap.json";
 constexpr unsigned maxScriptAttachments = 1024;
 constexpr char modernCompatibilityWarning[] =
     "Modern Mode requires NNBuild. This project is incompatible with other source ports and the original game.";

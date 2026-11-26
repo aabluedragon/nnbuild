@@ -12,7 +12,7 @@
 #include "osxbits.h"
 #include "sdl_inc.h"
 #include "SDL_syswm.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #import "GrpFile.game.h"
 #import "GameListSource.game.h"
@@ -20,7 +20,7 @@
 // SDL_RaiseWindow only orders a Cocoa window forward.  A separate DevTools
 // window also needs to become the key window, otherwise the game's SDL
 // relative-mouse view remains the target of the activation click.
-extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window)
+extern "C" void NNBJS_CocoaMakeKeyWindow(SDL_Window *window)
 {
     if (!window) return;
 
@@ -35,7 +35,7 @@ extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window)
     [nativeWindow makeKeyAndOrderFront:nil];
 }
 
-extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
+extern "C" void NNBJS_CocoaPlaceGameLeft(SDL_Window *window)
 {
     if (!window) return;
     SDL_SysWMinfo info;
@@ -57,7 +57,7 @@ extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
 
 // SDL relative mouse mode is process-wide on macOS.  A native AppKit window
 // avoids the second-SDL-window activation/capture race entirely.
-@interface VBJSCocoaDevtools : NSObject
+@interface NNBJSCocoaDevtools : NSObject
 {
     NSWindow *window;
     NSTextView *console;
@@ -70,7 +70,7 @@ extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
 - (BOOL)handleSDLEvent:(SDL_Event const *)event;
 @end
 
-@implementation VBJSCocoaDevtools
+@implementation NNBJSCocoaDevtools
 - (id)init
 {
     self = [super init];
@@ -129,13 +129,13 @@ extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
 - (void)refresh
 {
     NSMutableString *text = [NSMutableString string];
-    for (int i = 0; i < 12; ++i) { char const *line = VBJS_DevtoolsLog(i); if (line) [text appendFormat:@"%s\n", line]; }
+    for (int i = 0; i < 12; ++i) { char const *line = NNBJS_DevtoolsLog(i); if (line) [text appendFormat:@"%s\n", line]; }
     if (![text isEqualToString:lastConsole]) { [console setString:text]; [lastConsole release]; lastConsole = [text copy]; }
 }
 - (void)run:(id)sender
 {
     UNREFERENCED_PARAMETER(sender); char result[1024];
-    VBJS_DevtoolsEvaluate([[expression stringValue] UTF8String], result, sizeof(result));
+    NNBJS_DevtoolsEvaluate([[expression stringValue] UTF8String], result, sizeof(result));
     [console setString:[NSString stringWithFormat:@"> %@\n%s", [expression stringValue], result]];
 }
 - (BOOL)handleSDLEvent:(SDL_Event const *)event
@@ -187,11 +187,11 @@ extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window)
 }
 @end
 
-static VBJSCocoaDevtools *g_vbjsDevtools = nil;
-extern "C" void VBJS_CocoaDevtoolsShow(void) { if (!g_vbjsDevtools) { g_vbjsDevtools = [[VBJSCocoaDevtools alloc] init]; [g_vbjsDevtools show]; } }
-extern "C" void VBJS_CocoaDevtoolsRefresh(void) { [g_vbjsDevtools refresh]; }
-extern "C" int VBJS_CocoaDevtoolsProcessEvent(void const *event) { return [g_vbjsDevtools handleSDLEvent:(SDL_Event const *)event] ? 1 : 0; }
-extern "C" void VBJS_CocoaDevtoolsShutdown(void) { [g_vbjsDevtools release]; g_vbjsDevtools = nil; }
+static NNBJSCocoaDevtools *g_nnbjsDevtools = nil;
+extern "C" void NNBJS_CocoaDevtoolsShow(void) { if (!g_nnbjsDevtools) { g_nnbjsDevtools = [[NNBJSCocoaDevtools alloc] init]; [g_nnbjsDevtools show]; } }
+extern "C" void NNBJS_CocoaDevtoolsRefresh(void) { [g_nnbjsDevtools refresh]; }
+extern "C" int NNBJS_CocoaDevtoolsProcessEvent(void const *event) { return [g_nnbjsDevtools handleSDLEvent:(SDL_Event const *)event] ? 1 : 0; }
+extern "C" void NNBJS_CocoaDevtoolsShutdown(void) { [g_nnbjsDevtools release]; g_nnbjsDevtools = nil; }
 
 #ifndef MAC_OS_X_VERSION_10_5
 # define NSImageScaleNone NSScaleNone

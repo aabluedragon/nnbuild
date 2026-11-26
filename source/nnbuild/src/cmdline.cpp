@@ -23,13 +23,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "duke3d.h"
 //#include "demo.h"
 #include "screens.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "renderlayer.h"
 #include "cmdline.h"
 #include "mapeditor.h"
 #include "masterserver.h"
 #include "serverlevel.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #include <string>
 #include <vector>
@@ -426,7 +426,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if (cmd && !resume)
                     G_AddStartupCommands(argv[i]);
                 else if (script)
-                    VBJS_SetScriptPath(argv[i]);
+                    NNBJS_SetScriptPath(argv[i]);
                 else if (cmdFile && !resume && !G_ReadStartupCommands(argv[i]))
                 {
                     LOG_F(ERROR, "Could not read startup command file '%s'", argv[i]);
@@ -437,7 +437,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
             }
             if (*c != '-' && G_IsScriptPath(c) && (!firstnet || buildvfs_exists(c)))
             {
-                VBJS_SetScriptPath(c);
+                NNBJS_SetScriptPath(c);
                 ++i;
                 continue;
             }
@@ -489,7 +489,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 {
                     if (argc > i + 1)
                     {
-                        VBJS_SetScriptPath(argv[i + 1]);
+                        NNBJS_SetScriptPath(argv[i + 1]);
                         LOG_F(INFO, "JS script: %s", argv[i + 1]);
                         i++;
                     }
@@ -497,13 +497,13 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                     continue;
                 }
                 // Create an editor-ready TypeScript project.  The value is optional:
-                // without it VBJS chooses a short unused directory name.
+                // without it NNBJS chooses a short unused directory name.
                 if (!Bstrcasecmp(c + 1, "gen-js") || !Bstrcasecmp(c + 1, "gjs") ||
                     !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts"))
                 {
                     int const typescript = !Bstrcasecmp(c + 1, "gen-ts") || !Bstrcasecmp(c + 1, "gts");
                     const char *name = (i + 1 < argc && argv[i + 1][0] != '-') ? argv[++i] : NULL;
-                    if (VBJS_GenerateProject(name, typescript) != 0)
+                    if (NNBJS_GenerateProject(name, typescript) != 0)
                     {
                         LOG_F(ERROR, "Could not create JavaScript project.");
                         Bexit(EXIT_FAILURE);
@@ -512,7 +512,7 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 }
                 if (!Bstrcasecmp(c + 1, "devtools") || !Bstrcasecmp(c + 1, "dt"))
                 {
-                    VBJS_SetDevtools(1);
+                    NNBJS_SetDevtools(1);
                     G_SetCommandLineScreenMode(0); // Devtools is a side overlay: never start fullscreen.
                     g_noSetup = 1;            // debugger launches cannot wait in the native setup window
                     g_commandSetup = 0;
@@ -523,13 +523,13 @@ void G_CheckCommandLine(int argc, char const* const* argv)
                 if ((!Bstrncasecmp(c + 1, "debug", 5) && (!c[6] || isdigit((unsigned char)c[6]))) ||
                     (!Bstrncasecmp(c + 1, "dbg", 3) && (!c[4] || isdigit((unsigned char)c[4]))))
                 {
-                    VBJS_SetDebug(1);
+                    NNBJS_SetDebug(1);
                     g_noSetup = 1;            // launch straight into the game for VS Code
                     g_commandSetup = 0;
                     const char *portText = !Bstrncasecmp(c + 1, "debug", 5) ? c + 6 : c + 4;
-                    if (*portText) VBJS_SetDebugPort(atoi(portText));
-                    else if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) VBJS_SetDebugPort(atoi(argv[++i]));
-                    LOG_F(INFO, "JavaScript debugger attach endpoint enabled on port %d.", VBJS_DebugPort());
+                    if (*portText) NNBJS_SetDebugPort(atoi(portText));
+                    else if (i + 1 < argc && isdigit((unsigned char)argv[i + 1][0])) NNBJS_SetDebugPort(atoi(argv[++i]));
+                    LOG_F(INFO, "JavaScript debugger attach endpoint enabled on port %d.", NNBJS_DebugPort());
                     i++;
                     continue;
                 }

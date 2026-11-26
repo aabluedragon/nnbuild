@@ -1,7 +1,7 @@
 // NNBuild JS scripting — Duke3D game bindings.
 //
 // This TU includes the Duke game headers (which clash with quickjs.h, so the
-// QuickJS side lives in vbjs.cpp). It implements the vbjs_game::* seam the
+// QuickJS side lives in nnbjs.cpp). It implements the nnbjs_game::* seam the
 // script API calls into, plus the HUD text draw.
 #include "duke3d.h"
 #include "funct.h"
@@ -12,7 +12,7 @@
 #include "oldnet.h"
 #include "chatpipe.h"
 #include "osd.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #include <deque>
 #include <string>
@@ -38,26 +38,26 @@ static std::deque<std::string> scriptCommands;
 # include <signal.h>
 # include <pthread.h>
 # ifdef __APPLE__
-extern "C" void VBJS_CocoaMakeKeyWindow(SDL_Window *window);
-extern "C" void VBJS_CocoaPlaceGameLeft(SDL_Window *window);
-extern "C" void VBJS_CocoaDevtoolsShow(void);
-extern "C" void VBJS_CocoaDevtoolsRefresh(void);
-extern "C" int VBJS_CocoaDevtoolsProcessEvent(void const *event);
+extern "C" void NNBJS_CocoaMakeKeyWindow(SDL_Window *window);
+extern "C" void NNBJS_CocoaPlaceGameLeft(SDL_Window *window);
+extern "C" void NNBJS_CocoaDevtoolsShow(void);
+extern "C" void NNBJS_CocoaDevtoolsRefresh(void);
+extern "C" int NNBJS_CocoaDevtoolsProcessEvent(void const *event);
 # endif
 #endif
 
 extern hashtable_t h_gamevars;   // gamevars.cpp
 
-static int vbjs_playerSprite(void)
+static int nnbjs_playerSprite(void)
 {
     if ((unsigned)myconnectindex >= MAXPLAYERS || !g_player[myconnectindex].ps)
         return -1;
     return g_player[myconnectindex].ps->i;
 }
 
-static int s_vbjsMenuBackground = -1;
+static int s_nnbjsMenuBackground = -1;
 
-namespace vbjs_game {
+namespace nnbjs_game {
 
 int A_Spawn(int spriteNum, int tileNum)
 {
@@ -78,7 +78,7 @@ void log(const char *s)
 int spawn(int tile, int x, int y, int z, int owner)
 {
     if ((unsigned)tile >= MAXTILES) return -1;
-    int const psp   = vbjs_playerSprite();
+    int const psp   = nnbjs_playerSprite();
     int const psect = (psp >= 0) ? sprite[psp].sectnum : -1;
 
     int sect = (owner >= 0 && owner < MAXSPRITES && sprite[owner].sectnum >= 0) ? sprite[owner].sectnum : psect;
@@ -167,7 +167,7 @@ void setGamevar(const char *name, int value, int spriteNum, int playerNum)
     if (id >= 0) Gv_SetVar(id, value, spriteNum, playerNum);
 }
 
-int playerSprite(void) { return vbjs_playerSprite(); }
+int playerSprite(void) { return nnbjs_playerSprite(); }
 
 int gameStarted(void) { return (ud.gm & MODE_GAME) != 0; }
 int skill(void) { return ud.player_skill + 1; }
@@ -207,7 +207,7 @@ const char *connectedServer(void)
     // has no remote server address, so report undefined instead of inventing one.
     return myconnectindex != connecthead && g_punchTargetAddr[0] ? g_punchTargetAddr : nullptr;
 }
-void setMenuBackground(int tile) { s_vbjsMenuBackground = (unsigned)tile < MAXTILES ? tile : -1; }
+void setMenuBackground(int tile) { s_nnbjsMenuBackground = (unsigned)tile < MAXTILES ? tile : -1; }
 int currentMenu(void) { return g_currentMenu; }
 void openMenu(int menu) { ChangeToMenu(menu); }
 int menuOpen(void) { return (ud.gm & MODE_MENU) != 0; }
@@ -222,68 +222,68 @@ void runCommand(const char *cmd)
         scriptCommands.emplace_back(cmd);
 }
 
-} // namespace vbjs_game
+} // namespace nnbjs_game
 
-extern "C" int VBJS_MenuBackground(void) { return s_vbjsMenuBackground; }
+extern "C" int NNBJS_MenuBackground(void) { return s_nnbjsMenuBackground; }
 
-namespace vbjs_game {
+namespace nnbjs_game {
 
-// --- generic CON struct access (drives vb.getActor / getPlayer / getSector / ...) ---
+// --- generic CON struct access (drives nnb.getActor / getPlayer / getSector / ...) ---
 
-static hashtable_t *vbjs_tableFor(int kind)
+static hashtable_t *nnbjs_tableFor(int kind)
 {
     switch (kind)
     {
-        case VBJS_ACTOR:       return &h_actor;
-        case VBJS_PLAYER:      return &h_player;
-        case VBJS_INPUT:       return &h_input;
-        case VBJS_SECTOR:      return &h_sector;
-        case VBJS_WALL:        return &h_wall;
-        case VBJS_PROJECTILE:  return &h_projectile;
-        case VBJS_ACTIVEPROJ:  return &h_projectile;
-        case VBJS_TILEDATA:    return &h_tiledata;
-        case VBJS_USERDEF:     return &h_userdef;
+        case NNBJS_ACTOR:       return &h_actor;
+        case NNBJS_PLAYER:      return &h_player;
+        case NNBJS_INPUT:       return &h_input;
+        case NNBJS_SECTOR:      return &h_sector;
+        case NNBJS_WALL:        return &h_wall;
+        case NNBJS_PROJECTILE:  return &h_projectile;
+        case NNBJS_ACTIVEPROJ:  return &h_projectile;
+        case NNBJS_TILEDATA:    return &h_tiledata;
+        case NNBJS_USERDEF:     return &h_userdef;
         default:               return nullptr;
     }
 }
 
 int conGet(int kind, int index, const char *member, int parm2, int *ok)
 {
-    hashtable_t *t = vbjs_tableFor(kind);
+    hashtable_t *t = nnbjs_tableFor(kind);
     int const label = t ? hash_findcase(t, member) : -1;
     if (label < 0) { if (ok) *ok = 0; return 0; }
     if (ok) *ok = 1;
     switch (kind)
     {
-        case VBJS_ACTOR:      return VM_GetSprite(index, label, parm2);
-        case VBJS_PLAYER:     return VM_GetPlayer(index, label, parm2);
-        case VBJS_INPUT:      return VM_GetPlayerInput(index, label);
-        case VBJS_SECTOR:     return VM_GetSector(index, label);
-        case VBJS_WALL:       return VM_GetWall(index, label);
-        case VBJS_PROJECTILE: return VM_GetProjectile(index, label);
-        case VBJS_ACTIVEPROJ: return VM_GetActiveProjectile(index, label);
-        case VBJS_TILEDATA:   return VM_GetTileData(index, label);
-        case VBJS_USERDEF:    return VM_GetUserdef(label, parm2);
+        case NNBJS_ACTOR:      return VM_GetSprite(index, label, parm2);
+        case NNBJS_PLAYER:     return VM_GetPlayer(index, label, parm2);
+        case NNBJS_INPUT:      return VM_GetPlayerInput(index, label);
+        case NNBJS_SECTOR:     return VM_GetSector(index, label);
+        case NNBJS_WALL:       return VM_GetWall(index, label);
+        case NNBJS_PROJECTILE: return VM_GetProjectile(index, label);
+        case NNBJS_ACTIVEPROJ: return VM_GetActiveProjectile(index, label);
+        case NNBJS_TILEDATA:   return VM_GetTileData(index, label);
+        case NNBJS_USERDEF:    return VM_GetUserdef(label, parm2);
         default:              if (ok) *ok = 0; return 0;
     }
 }
 
 void conSet(int kind, int index, const char *member, int value, int parm2)
 {
-    hashtable_t *t = vbjs_tableFor(kind);
+    hashtable_t *t = nnbjs_tableFor(kind);
     int const label = t ? hash_findcase(t, member) : -1;
     if (label < 0) return;
     switch (kind)
     {
-        case VBJS_ACTOR:      VM_SetSprite(index, label, parm2, value); break;
-        case VBJS_PLAYER:     VM_SetPlayer(index, label, parm2, value); break;
-        case VBJS_INPUT:      VM_SetPlayerInput(index, label, value); break;
-        case VBJS_SECTOR:     VM_SetSector(index, label, value); break;
-        case VBJS_WALL:       VM_SetWall(index, label, value); break;
-        case VBJS_PROJECTILE: VM_SetProjectile(index, label, value); break;
-        case VBJS_ACTIVEPROJ: VM_SetActiveProjectile(index, label, value); break;
-        case VBJS_TILEDATA:   VM_SetTileData(index, label, value); break;
-        case VBJS_USERDEF:    VM_SetUserdef(label, parm2, value); break;
+        case NNBJS_ACTOR:      VM_SetSprite(index, label, parm2, value); break;
+        case NNBJS_PLAYER:     VM_SetPlayer(index, label, parm2, value); break;
+        case NNBJS_INPUT:      VM_SetPlayerInput(index, label, value); break;
+        case NNBJS_SECTOR:     VM_SetSector(index, label, value); break;
+        case NNBJS_WALL:       VM_SetWall(index, label, value); break;
+        case NNBJS_PROJECTILE: VM_SetProjectile(index, label, value); break;
+        case NNBJS_ACTIVEPROJ: VM_SetActiveProjectile(index, label, value); break;
+        case NNBJS_TILEDATA:   VM_SetTileData(index, label, value); break;
+        case NNBJS_USERDEF:    VM_SetUserdef(label, parm2, value); break;
         default: break;
     }
 }
@@ -362,9 +362,9 @@ void spriteXYZ(int spriteNum, int *x, int *y, int *z, int *ok)
     if (ok) *ok = 1;
 }
 
-} // namespace vbjs_game
+} // namespace nnbjs_game
 
-extern "C" void VBJS_DispatchCommands(void)
+extern "C" void NNBJS_DispatchCommands(void)
 {
     auto commands = std::move(scriptCommands);
     scriptCommands.clear();
@@ -386,7 +386,7 @@ static int s_webDebuggerPort = 0;
 static pthread_t s_webDebuggerThread;
 static int s_webDebuggerThreadStarted = 0;
 
-static void vbjs_web_close(int fd)
+static void nnbjs_web_close(int fd)
 {
 #ifdef _WIN32
     closesocket((SOCKET)fd);
@@ -395,14 +395,14 @@ static void vbjs_web_close(int fd)
 #endif
 }
 
-static void vbjs_web_reply(int fd, char const *body, char const *type = "text/plain; charset=utf-8")
+static void nnbjs_web_reply(int fd, char const *body, char const *type = "text/plain; charset=utf-8")
 {
     char header[256];
     int const headerLen = snprintf(header, sizeof(header), "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: close\r\n\r\n", type, (unsigned)strlen(body));
     send(fd, header, headerLen, 0); send(fd, body, (int)strlen(body), 0);
 }
 
-static void vbjs_web_decode(char *dst, size_t dstSize, char const *src)
+static void nnbjs_web_decode(char *dst, size_t dstSize, char const *src)
 {
     size_t n = 0;
     while (*src && *src != '&' && *src != ' ' && n + 1 < dstSize)
@@ -416,7 +416,7 @@ static void vbjs_web_decode(char *dst, size_t dstSize, char const *src)
 /* This listener deliberately lives off the game thread.  QuickJS can block
  * that thread at a source breakpoint while this endpoint continues receiving
  * Continue/Step/Inspect commands from the standalone DevTools window. */
-static void *vbjs_web_debugger_thread(void *)
+static void *nnbjs_web_debugger_thread(void *)
 {
     for (;;)
     {
@@ -425,8 +425,8 @@ static void *vbjs_web_debugger_thread(void *)
         char request[16384]; int bytes = (int)recv(fd, request, sizeof(request) - 1, 0); request[bytes > 0 ? bytes : 0] = 0;
         if (strncmp(request, "GET /send?m=", 12) == 0)
         {
-            char json[8192]; vbjs_web_decode(json, sizeof(json), request + 12);
-            VBJS_DevtoolsDebuggerSend(json); vbjs_web_reply(fd, "queued");
+            char json[8192]; nnbjs_web_decode(json, sizeof(json), request + 12);
+            NNBJS_DevtoolsDebuggerSend(json); nnbjs_web_reply(fd, "queued");
         }
         else if (strncmp(request, "GET /terminate", 14) == 0)
         {
@@ -435,8 +435,8 @@ static void *vbjs_web_debugger_thread(void *)
             // terminate the game even for an attached session (no Node child
             // PID is available in that case). Reply first, then use SIGTERM;
             // the engine's installed signal handler flushes and exits cleanly.
-            vbjs_web_reply(fd, "terminating");
-            vbjs_web_close(fd);
+            nnbjs_web_reply(fd, "terminating");
+            nnbjs_web_close(fd);
 #ifdef _WIN32
             TerminateProcess(GetCurrentProcess(), 0);
 #else
@@ -447,16 +447,16 @@ static void *vbjs_web_debugger_thread(void *)
         else if (strncmp(request, "GET /poll", 9) == 0)
         {
             int const vscode = strstr(request, "client=vscode") != nullptr;
-            char json[8192]; if (!VBJS_DevtoolsDebuggerReceiveForClient(vscode, json, sizeof(json))) strcpy(json, "");
-            vbjs_web_reply(fd, json, "application/json; charset=utf-8");
+            char json[8192]; if (!NNBJS_DevtoolsDebuggerReceiveForClient(vscode, json, sizeof(json))) strcpy(json, "");
+            nnbjs_web_reply(fd, json, "application/json; charset=utf-8");
         }
-        else vbjs_web_reply(fd, "not found");
-        vbjs_web_close(fd);
+        else nnbjs_web_reply(fd, "not found");
+        nnbjs_web_close(fd);
     }
     return nullptr;
 }
 
-static void vbjs_web_debugger_start(void)
+static void nnbjs_web_debugger_start(void)
 {
     if (s_webDebuggerThreadStarted) return;
 #ifdef _WIN32
@@ -466,11 +466,11 @@ static void vbjs_web_debugger_start(void)
     int one = 1; setsockopt(s_webDebuggerListen, SOL_SOCKET, SO_REUSEADDR, (const char *)&one, sizeof(one));
     // A stable, localhost-only port lets an external Debug Adapter attach to
     // a running game. The browser inspector uses the same bridge internally.
-    sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(VBJS_DebugPort());
-    if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
+    sockaddr_in address {}; address.sin_family = AF_INET; address.sin_addr.s_addr = htonl(INADDR_LOOPBACK); address.sin_port = htons(NNBJS_DebugPort());
+    if (bind(s_webDebuggerListen, (sockaddr *)&address, sizeof(address)) || listen(s_webDebuggerListen, 8)) { nnbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; return; }
     socklen_t length = sizeof(address); getsockname(s_webDebuggerListen, (sockaddr *)&address, &length); s_webDebuggerPort = ntohs(address.sin_port);
-    if (!pthread_create(&s_webDebuggerThread, nullptr, vbjs_web_debugger_thread, nullptr)) s_webDebuggerThreadStarted = 1;
-    else { vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; }
+    if (!pthread_create(&s_webDebuggerThread, nullptr, nnbjs_web_debugger_thread, nullptr)) s_webDebuggerThreadStarted = 1;
+    else { nnbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1; }
 }
 
 #ifdef __APPLE__
@@ -479,19 +479,19 @@ static int s_webDevtoolsListen = -1;
 static int s_webDevtoolsPort = 0;
 static int s_webDevtoolsLaunched = 0;
 
-static void vbjs_web_devtools_focus(void)
+static void nnbjs_web_devtools_focus(void)
 {
     if (s_webDevtoolsPort <= 0) return;
     char url[96]; snprintf(url, sizeof(url), "http://127.0.0.1:%d/", s_webDevtoolsPort);
     if (fork() == 0) { execl("/usr/bin/open", "open", "-a", "Google Chrome", url, (char *)nullptr); _exit(127); }
 }
 
-static void vbjs_web_devtools_tick(void)
+static void nnbjs_web_devtools_tick(void)
 {
     // SDL reapplies its saved window coordinates during early video setup on
     // Cocoa.  Keep the debug-layout game position authoritative while -dt is
     // active instead of allowing a one-frame snap back to the right.
-    VBJS_CocoaPlaceGameLeft(SDL_GL_GetCurrentWindow());
+    NNBJS_CocoaPlaceGameLeft(SDL_GL_GetCurrentWindow());
     if (s_webDevtoolsListen < 0)
     {
         s_webDevtoolsListen = socket(AF_INET, SOCK_STREAM, 0);
@@ -502,7 +502,7 @@ static void vbjs_web_devtools_tick(void)
         socklen_t length = sizeof(address); getsockname(s_webDevtoolsListen, (sockaddr *)&address, &length); s_webDevtoolsPort = ntohs(address.sin_port);
         fcntl(s_webDevtoolsListen, F_SETFL, fcntl(s_webDevtoolsListen, F_GETFL) | O_NONBLOCK);
     }
-    vbjs_web_debugger_start();
+    nnbjs_web_debugger_start();
     if (!s_webDevtoolsLaunched)
     {
         s_webDevtoolsLaunched = 1;
@@ -517,25 +517,25 @@ static void vbjs_web_devtools_tick(void)
         if (strncmp(request, "GET /api/log", 12) == 0)
         {
             char body[8192] = "";
-            for (int i = 0; i < 12; ++i) { char const *line = VBJS_DevtoolsLog(i); if (line) { strncat(body, line, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
-            vbjs_web_reply(fd, body);
+            for (int i = 0; i < 12; ++i) { char const *line = NNBJS_DevtoolsLog(i); if (line) { strncat(body, line, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
+            nnbjs_web_reply(fd, body);
         }
         else if (strncmp(request, "GET /api/eval?e=", 16) == 0)
         {
-            char expression[1024], result[2048]; vbjs_web_decode(expression, sizeof(expression), request + 16);
-            VBJS_DevtoolsEvaluate(expression, result, sizeof(result)); vbjs_web_reply(fd, result);
+            char expression[1024], result[2048]; nnbjs_web_decode(expression, sizeof(expression), request + 16);
+            NNBJS_DevtoolsEvaluate(expression, result, sizeof(result)); nnbjs_web_reply(fd, result);
         }
         else if (strncmp(request, "GET /api/sources", 16) == 0)
         {
             char body[4096] = "";
-            for (int i = 0; i < VBJS_DevtoolsSourceCount(); ++i) { char const *path = VBJS_DevtoolsSourcePath(i); if (path) { strncat(body, path, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
-            vbjs_web_reply(fd, body);
+            for (int i = 0; i < NNBJS_DevtoolsSourceCount(); ++i) { char const *path = NNBJS_DevtoolsSourcePath(i); if (path) { strncat(body, path, sizeof(body)-strlen(body)-2); strncat(body, "\n", sizeof(body)-strlen(body)-1); } }
+            nnbjs_web_reply(fd, body);
         }
         else if (strncmp(request, "GET /api/source?i=", 18) == 0)
         {
             int index = atoi(request + 18); char body[32768];
-            if (!VBJS_DevtoolsReadSource(index, body, sizeof(body))) snprintf(body, sizeof(body), "Unable to read source.");
-            vbjs_web_reply(fd, body);
+            if (!NNBJS_DevtoolsReadSource(index, body, sizeof(body))) snprintf(body, sizeof(body), "Unable to read source.");
+            nnbjs_web_reply(fd, body);
         }
         else
         {
@@ -543,10 +543,10 @@ static void vbjs_web_devtools_tick(void)
             char body[16384];
             static char const debuggerClient[] = R"HTML(
 <script>
-window.vbDebugPort=%d;
+window.nnbDebugPort=%d;
 (()=>{
  let seq=1,currentPath='',sourceText='',currentFrame=0,paused=false,pausedPath='',pausedLine=0,breakpoints={},pending=new Set();
- const endpoint='http://127.0.0.1:'+window.vbDebugPort;
+ const endpoint='http://127.0.0.1:'+window.nnbDebugPort;
  const section=document.querySelector('section'), toolbar=document.createElement('div');
  toolbar.style.cssText='padding:6px;border-bottom:1px solid #555';
  const stack=document.createElement('pre'), scopes=document.createElement('pre');
@@ -557,13 +557,13 @@ window.vbDebugPort=%d;
  async function send(m){await fetch(endpoint+'/send?m='+encodeURIComponent(JSON.stringify(m)))}
  function request(command,args){let request_seq=seq++;pending.add(request_seq);return send({type:'request',request:{request_seq,command,args:args||{}}})}
  window.cont=()=>request('continue'); window.run=()=>request('evaluate',{expression:e.value,frame:currentFrame});
- const style=document.createElement('style');style.textContent='#source{white-space:pre!important;line-height:16px}.vb-line{display:block}.vb-line.paused{background:#5b4720}.vb-gutter{display:inline-block;width:2.4em;color:#777;cursor:pointer;text-align:center}.vb-gutter.set{color:#ff5f56;font-weight:bold}.vb-number{display:inline-block;width:3em;color:#777;text-align:right;padding-right:1em;user-select:none}.tok-key{color:#c586c0}.tok-str{color:#ce9178}.tok-num{color:#b5cea8}.tok-com{color:#6a9955}.tok-type{color:#4ec9b0}';document.head.append(style);
+ const style=document.createElement('style');style.textContent='#source{white-space:pre!important;line-height:16px}.nnb-line{display:block}.nnb-line.paused{background:#5b4720}.nnb-gutter{display:inline-block;width:2.4em;color:#777;cursor:pointer;text-align:center}.nnb-gutter.set{color:#ff5f56;font-weight:bold}.nnb-number{display:inline-block;width:3em;color:#777;text-align:right;padding-right:1em;user-select:none}.tok-key{color:#c586c0}.tok-str{color:#ce9178}.tok-num{color:#b5cea8}.tok-com{color:#6a9955}.tok-type{color:#4ec9b0}';document.head.append(style);
  const escapeHtml=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
  const highlight=s=>{let out='',last=0,re=/\/\/.*$|\/\*[\s\S]*?\*\/|`(?:\\.|[^`])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:const|let|var|function|return|if|else|for|while|switch|case|break|continue|new|class|extends|import|export|from|async|await|throw|try|catch|finally|interface|type|enum|as|readonly|public|private|protected|declare|implements)\b|\b(?:string|number|boolean|unknown|any|void|never|object|undefined|null)\b|\b\d+(?:\.\d+)?\b/g;s.replace(re,m=>{out+=escapeHtml(s.slice(last,m.index));let t=escapeHtml(m[0]),k=m[0][0]==='/'?'com':m[0][0]==='"'||m[0][0]==="'"||m[0][0]==='`'?'str':/^\d/.test(m[0])?'num':/^(string|number|boolean|unknown|any|void|never|object|undefined|null)$/.test(m[0])?'type':'key';out+=`<span class="tok-${k}">${t}</span>`;last=m.index+m[0].length;return m[0]});return out+escapeHtml(s.slice(last));};
- function renderSource(){src.innerHTML=sourceText.split('\n').map((text,i)=>{let line=i+1,key=currentPath+':'+line,set=!!breakpoints[key],at=pausedPath===currentPath&&pausedLine===line;return `<span class="vb-line ${at?'paused':''}" data-line="${line}"><span class="vb-gutter ${set?'set':''}" title="Toggle breakpoint">${set?'●':'○'}</span><span class="vb-number">${line}</span>${highlight(text)}</span>`}).join('');let at=src.querySelector('.vb-line.paused');if(at)at.scrollIntoView({block:'center'});}
+ function renderSource(){src.innerHTML=sourceText.split('\n').map((text,i)=>{let line=i+1,key=currentPath+':'+line,set=!!breakpoints[key],at=pausedPath===currentPath&&pausedLine===line;return `<span class="nnb-line ${at?'paused':''}" data-line="${line}"><span class="nnb-gutter ${set?'set':''}" title="Toggle breakpoint">${set?'●':'○'}</span><span class="nnb-number">${line}</span>${highlight(text)}</span>`}).join('');let at=src.querySelector('.nnb-line.paused');if(at)at.scrollIntoView({block:'center'});}
  window.refreshSources=async()=>{let a=(await (await fetch('/api/sources')).text()).trim().split('\n');files.innerHTML='';a.forEach((path,i)=>{let b=document.createElement('button');b.textContent=path.split('/').pop();b.onclick=async()=>{currentPath=path;sourceText=await (await fetch('/api/source?i='+i)).text();renderSource();};files.append(b,document.createElement('br'))})};
  src.title='Click the circle in the left gutter to toggle a breakpoint';
- src.onclick=ev=>{if(!ev.target.closest('.vb-gutter'))return;let row=ev.target.closest('.vb-line');if(!currentPath||!row)return;let line=+row.dataset.line,key=currentPath+':'+line;breakpoints[key]=!breakpoints[key];let lines=Object.keys(breakpoints).filter(k=>breakpoints[k]&&k.startsWith(currentPath+':')).map(k=>({line:+k.slice(currentPath.length+1)}));send({type:'breakpoints',breakpoints:{path:currentPath,breakpoints:lines}});renderSource();stack.textContent=(breakpoints[key]?'Breakpoint set: ':'Breakpoint cleared: ')+key;};
+ src.onclick=ev=>{if(!ev.target.closest('.nnb-gutter'))return;let row=ev.target.closest('.nnb-line');if(!currentPath||!row)return;let line=+row.dataset.line,key=currentPath+':'+line;breakpoints[key]=!breakpoints[key];let lines=Object.keys(breakpoints).filter(k=>breakpoints[k]&&k.startsWith(currentPath+':')).map(k=>({line:+k.slice(currentPath.length+1)}));send({type:'breakpoints',breakpoints:{path:currentPath,breakpoints:lines}});renderSource();stack.textContent=(breakpoints[key]?'Breakpoint set: ':'Breakpoint cleared: ')+key;};
  function renderScopes(items){scopes.textContent=items.map(x=>x.name||'Scope').join('\n');if(items[0])request('variables',{variablesReference:items[0].reference})}
  async function poll(){try{let text=await (await fetch(endpoint+'/poll')).text();if(text){let m=JSON.parse(text),body=m.body;if(m.type==='event'){paused=true;pausedPath=m.event.filename||'';pausedLine=m.event.line||0;if(pausedPath===currentPath)renderSource();stack.textContent='Paused — '+m.event.reason+'\n'+pausedPath+':'+pausedLine;request('stackTrace')}else if(m.type==='response'&&pending.delete(m.request_seq)){if(Array.isArray(body)){if(body.length&&body[0].filename!==undefined){stack.textContent=body.map((f,i)=>`${i===currentFrame?'▶ ':'  '}${f.name}  ${f.filename||''}:${f.line||''}`).join('\n');stack.onclick=ev=>{currentFrame=Math.max(0,Math.floor(ev.offsetY/16));request('scopes',{frame:currentFrame})};request('scopes',{frame:currentFrame})}else renderScopes(body)}else if(body&&body.result!==undefined)log.textContent='> '+e.value+'\n'+body.result;else if(body&&typeof body==='object')scopes.textContent=Object.entries(body).map(([k,v])=>k+' = '+String(v)).join('\n');}}}catch(_){}setTimeout(poll,70)}
  poll();refreshSources();
@@ -572,14 +572,14 @@ window.vbDebugPort=%d;
             snprintf(body, sizeof(body), "%s", page);
             size_t pageLength = strlen(body);
             snprintf(body + pageLength, sizeof(body) - pageLength, debuggerClient, s_webDebuggerPort);
-            vbjs_web_reply(fd, body, "text/html; charset=utf-8");
+            nnbjs_web_reply(fd, body, "text/html; charset=utf-8");
         }
         close(fd);
     }
 }
 #endif
 
-static void vbjs_devtools_draw_contents(void)
+static void nnbjs_devtools_draw_contents(void)
 {
     static char expression[256] = "$event";
     static char result[1024] = "";
@@ -591,11 +591,11 @@ static void vbjs_devtools_draw_contents(void)
     ImGuiWindowFlags const flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize;
     ImGui::Begin("NNBuild JavaScript DevTools", nullptr, flags);
 
-    if (VBJS_DevtoolsPaused())
+    if (NNBJS_DevtoolsPaused())
     {
-        ImGui::TextColored(ImVec4(1.f, .75f, .1f, 1.f), "PAUSED at %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "breakpoint");
+        ImGui::TextColored(ImVec4(1.f, .75f, .1f, 1.f), "PAUSED at %s", NNBJS_DevtoolsCurrentEvent() ? NNBJS_DevtoolsCurrentEvent() : "breakpoint");
         ImGui::SameLine();
-        if (ImGui::Button("Resume")) VBJS_DevtoolsResume();
+        if (ImGui::Button("Resume")) NNBJS_DevtoolsResume();
     }
     else ImGui::TextDisabled("Running");
 
@@ -606,21 +606,21 @@ static void vbjs_devtools_draw_contents(void)
             ImGui::BeginChild("console-log", ImVec2(0, -36), ImGuiChildFlags_Borders);
             for (int i = 0; i < 12; ++i)
             {
-                const char *line = VBJS_DevtoolsLog(i);
+                const char *line = NNBJS_DevtoolsLog(i);
                 if (line) ImGui::TextWrapped("%s", line);
             }
             ImGui::EndChild();
             if (ImGui::InputText("Evaluate", expression, sizeof(expression), ImGuiInputTextFlags_EnterReturnsTrue))
-                VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
-            if (ImGui::Button("Run")) VBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+                NNBJS_DevtoolsEvaluate(expression, result, sizeof(result));
+            if (ImGui::Button("Run")) NNBJS_DevtoolsEvaluate(expression, result, sizeof(result));
             ImGui::SameLine(); ImGui::TextWrapped("%s", result);
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Scope"))
         {
             ImGui::TextUnformatted("Evaluate global expressions or inspect the last event.");
-            ImGui::BulletText("$event: %s", VBJS_DevtoolsCurrentEvent() ? VBJS_DevtoolsCurrentEvent() : "none");
-            ImGui::BulletText("Examples: vb.player(), globalThis.myValue");
+            ImGui::BulletText("$event: %s", NNBJS_DevtoolsCurrentEvent() ? NNBJS_DevtoolsCurrentEvent() : "none");
+            ImGui::BulletText("Examples: nnb.player(), globalThis.myValue");
             ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
@@ -628,7 +628,7 @@ static void vbjs_devtools_draw_contents(void)
     ImGui::End();
 }
 
-static void vbjs_devtools_open_window(void)
+static void nnbjs_devtools_open_window(void)
 {
     if (s_devtoolsWindow || s_devtoolsWindowClosed) return;
     SDL_Window *const gameWindow = SDL_GL_GetCurrentWindow();
@@ -693,13 +693,13 @@ static void vbjs_devtools_open_window(void)
     // immediately pull keyboard/mouse focus back to itself.
     SDL_RaiseWindow(s_devtoolsWindow);
 #ifdef __APPLE__
-    VBJS_CocoaMakeKeyWindow(s_devtoolsWindow);
+    NNBJS_CocoaMakeKeyWindow(s_devtoolsWindow);
 #endif
 }
 
-static void vbjs_devtools_render_window(void)
+static void nnbjs_devtools_render_window(void)
 {
-    vbjs_devtools_open_window();
+    nnbjs_devtools_open_window();
     if (!s_devtoolsWindow || !s_devtoolsContext || !s_devtoolsImGui) return;
     SDL_Window *const gameWindow = SDL_GL_GetCurrentWindow();
     SDL_GLContext const gameContext = SDL_GL_GetCurrentContext();
@@ -709,7 +709,7 @@ static void vbjs_devtools_render_window(void)
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-    vbjs_devtools_draw_contents();
+    nnbjs_devtools_draw_contents();
     ImGui::Render();
     int w, h; SDL_GL_GetDrawableSize(s_devtoolsWindow, &w, &h);
     glViewport(0, 0, w, h);
@@ -721,10 +721,10 @@ static void vbjs_devtools_render_window(void)
     SDL_GL_MakeCurrent(gameWindow, gameContext);
 }
 
-extern "C" int VBJS_DevtoolsProcessEvent(const void *event)
+extern "C" int NNBJS_DevtoolsProcessEvent(const void *event)
 {
 #ifdef __APPLE__
-    if (VBJS_CocoaDevtoolsProcessEvent(event)) return 1;
+    if (NNBJS_CocoaDevtoolsProcessEvent(event)) return 1;
 #endif
     if (!s_devtoolsWindow || !s_devtoolsImGui || !event) return 0;
     SDL_Event const *const ev = (SDL_Event const *)event;
@@ -760,34 +760,34 @@ extern "C" int VBJS_DevtoolsProcessEvent(const void *event)
     return 1;
 }
 
-extern "C" int VBJS_DevtoolsOwnsInput(void)
+extern "C" int NNBJS_DevtoolsOwnsInput(void)
 {
     return s_devtoolsWindow &&
            (SDL_GetKeyboardFocus() == s_devtoolsWindow || SDL_GetMouseFocus() == s_devtoolsWindow);
 }
 
-extern "C" int VBJS_DevtoolsSuppressGameMouseCapture(void)
+extern "C" int NNBJS_DevtoolsSuppressGameMouseCapture(void)
 {
 #ifdef __APPLE__
-    return VBJS_DevtoolsEnabled();
+    return NNBJS_DevtoolsEnabled();
 #else
     return s_devtoolsWindow != nullptr && !s_devtoolsWindowClosed;
 #endif
 }
 
-extern "C" void VBJS_DevtoolsFocus(void)
+extern "C" void NNBJS_DevtoolsFocus(void)
 {
 #ifdef __APPLE__
-    vbjs_web_devtools_focus();
+    nnbjs_web_devtools_focus();
 #endif
 }
 
-extern "C" void VBJS_DevtoolsStartDebuggerBridge(void)
+extern "C" void NNBJS_DevtoolsStartDebuggerBridge(void)
 {
-    vbjs_web_debugger_start();
+    nnbjs_web_debugger_start();
 }
 
-extern "C" void VBJS_DevtoolsShutdownWindow(void)
+extern "C" void NNBJS_DevtoolsShutdownWindow(void)
 {
 #ifdef __APPLE__
     if (s_webDevtoolsListen >= 0) { close(s_webDevtoolsListen); s_webDevtoolsListen = -1; }
@@ -802,7 +802,7 @@ extern "C" void VBJS_DevtoolsShutdownWindow(void)
 #else
         shutdown(s_webDebuggerListen, SHUT_RDWR);
 #endif
-        vbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1;
+        nnbjs_web_close(s_webDebuggerListen); s_webDebuggerListen = -1;
     }
     if (s_webDebuggerThreadStarted)
     {
@@ -822,40 +822,40 @@ extern "C" void VBJS_DevtoolsShutdownWindow(void)
     s_devtoolsWindowId = 0;
 }
 #else
-extern "C" int VBJS_DevtoolsProcessEvent(const void *) { return 0; }
-extern "C" int VBJS_DevtoolsOwnsInput(void) { return 0; }
-extern "C" int VBJS_DevtoolsSuppressGameMouseCapture(void) { return 0; }
-extern "C" void VBJS_DevtoolsFocus(void) {}
-extern "C" void VBJS_DevtoolsStartDebuggerBridge(void) {}
-extern "C" void VBJS_DevtoolsShutdownWindow(void) {}
+extern "C" int NNBJS_DevtoolsProcessEvent(const void *) { return 0; }
+extern "C" int NNBJS_DevtoolsOwnsInput(void) { return 0; }
+extern "C" int NNBJS_DevtoolsSuppressGameMouseCapture(void) { return 0; }
+extern "C" void NNBJS_DevtoolsFocus(void) {}
+extern "C" void NNBJS_DevtoolsStartDebuggerBridge(void) {}
+extern "C" void NNBJS_DevtoolsShutdownWindow(void) {}
 #endif
 
 // HUD draw: render every script-registered text line (called from the overlay pass).
-extern "C" void VBJS_DrawHUD(void)
+extern "C" void NNBJS_DrawHUD(void)
 {
     int n = 0;
-    vbjs_text_t *t = VBJS_TextSlots(&n);
+    nnbjs_text_t *t = NNBJS_TextSlots(&n);
     for (int i = 0; i < n; i++)
         if (t[i].used)
             G_PrintGameText(0, STARTALPHANUM, t[i].x, t[i].y, t[i].str, t[i].shade, t[i].pal,
                             8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
 
 #if SDL_MAJOR_VERSION >= 2 && defined(USE_OPENGL)
-    if (VBJS_DevtoolsEnabled())
+    if (NNBJS_DevtoolsEnabled())
 # ifdef __APPLE__
-        vbjs_web_devtools_tick();
+        nnbjs_web_devtools_tick();
 # else
-        vbjs_devtools_render_window();
+        nnbjs_devtools_render_window();
 # endif
 #else
     // Software-renderer fallback: retain a small read-only console panel.
-    if (VBJS_DevtoolsEnabled())
+    if (NNBJS_DevtoolsEnabled())
     {
         G_PrintGameText(0, STARTALPHANUM, 218, 4, "JS DEVTOOLS", 0, 14, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
         G_PrintGameText(0, STARTALPHANUM, 218, 12, "Console (F12 opens OSD)", 0, 8, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
         for (int i = 0; i < 12; ++i)
         {
-            const char *line = VBJS_DevtoolsLog(i);
+            const char *line = NNBJS_DevtoolsLog(i);
             if (line) G_PrintGameText(0, STARTALPHANUM, 218, 22 + i * 8, line, 0, 7, 8 + 16, 0, 0, xdim - 1, ydim - 1, 65536);
         }
     }

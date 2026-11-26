@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "duke3d.h"
 #include "compat.h"
 #include "colmatch.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #define KILLIT(KX) {A_DeleteSprite(KX);goto BOLT;}
 
@@ -1085,18 +1085,18 @@ void G_RefreshLights(void)
 // animating.  A Duke gas canister therefore exploded right next to them without
 // touching them.  The host installs a hook here and runs its own blast over its
 // own props with the same origin, radius and strength.
-static void (*g_vbDukeAIRadiusDamageHook)(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
+static void (*g_nnbDukeAIRadiusDamageHook)(int spriteNum, int x, int y, int z, int sectnum, int radius, int damage);
 
-extern "C" void VB_DukeAI_SetRadiusDamageHook(void (*hook)(int spriteNum, int x, int y, int z, int sectnum,
+extern "C" void NNB_DukeAI_SetRadiusDamageHook(void (*hook)(int spriteNum, int x, int y, int z, int sectnum,
                                                            int radius, int damage))
 {
-    g_vbDukeAIRadiusDamageHook = hook;
+    g_nnbDukeAIRadiusDamageHook = hook;
 }
 
 void A_RadiusDamage(int i, int  r, int  hp1, int  hp2, int  hp3, int  hp4)
 {
-    if (g_vbDukeAIRadiusDamageHook != NULL)
-        g_vbDukeAIRadiusDamageHook(i, sprite[i].x, sprite[i].y, sprite[i].z, sprite[i].sectnum, klabs(r), hp4);
+    if (g_nnbDukeAIRadiusDamageHook != NULL)
+        g_nnbDukeAIRadiusDamageHook(i, sprite[i].x, sprite[i].y, sprite[i].z, sprite[i].sectnum, klabs(r), hp4);
 
     spritetype *s=&sprite[i],*sj;
     walltype *wal;
@@ -1472,9 +1472,9 @@ void A_DeleteSprite(int s)
     // Give JS components a real lifecycle notification before the Build
     // sprite slot is recycled.  Components can still inspect their sprite
     // from onDestroy(), exactly as they can from Unity's callback.
-    VBJS_FireActor("actorDestroyed", s, sprite[s].owner, sprite[s].picnum);
+    NNBJS_FireActor("actorDestroyed", s, sprite[s].owner, sprite[s].picnum);
     if (deletesprite(s) == 0)
-        VBJS_NotifySpriteDeleted(s);
+        NNBJS_NotifySpriteDeleted(s);
 }
 
 void A_AddToDeleteQueue(int spriteNum)
@@ -1633,11 +1633,11 @@ static void ms(int i)
 // hitag, so the host installs one hook that receives that hitag and drives its
 // own equivalents.  Without this an adopted actor detonates without triggering
 // anything.  See source/nnbuild/src/crossplay_dukeai.cpp.
-static void (*g_vbDukeAIMapTriggerHook)(int hitag);
+static void (*g_nnbDukeAIMapTriggerHook)(int hitag);
 
-extern "C" void VB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag))
+extern "C" void NNB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag))
 {
-    g_vbDukeAIMapTriggerHook = hook;
+    g_nnbDukeAIMapTriggerHook = hook;
 }
 
 static void G_MoveZombieActors(void)
@@ -3077,8 +3077,8 @@ DETONATE:
 
                     // Hand the tag to the host before driving Duke's own copies
                     // of these effectors, which a foreign host runs instead.
-                    if (g_vbDukeAIMapTriggerHook != NULL)
-                        g_vbDukeAIMapTriggerHook(s->hitag);
+                    if (g_nnbDukeAIMapTriggerHook != NULL)
+                        g_nnbDukeAIMapTriggerHook(s->hitag);
 
                     j = headspritestat[STAT_EFFECTOR];
                     while (j >= 0)
@@ -8761,16 +8761,16 @@ static void G_RecordOldSpritePos(void)
     } while (statNum < MAXSTATUS);
 }
 
-// Debug aid shared with the crossplay bridge: VB_CP_WATCH_TILE=<tile> follows
-// the first sprite spawned as that tile.  VB_CP_FORCEWAKE=<tic> stages a
+// Debug aid shared with the crossplay bridge: NNB_CP_WATCH_TILE=<tile> follows
+// the first sprite spawned as that tile.  NNB_CP_FORCEWAKE=<tic> stages a
 // reproducible encounter: the player is pinned beside the actor (line of sight,
 // kept alive) shortly before <tic>, the actor is woken at <tic> if still
 // asleep, and the actor's full movement state is logged every tic in a window
 // around the wake -- identically under native Duke and under a foreign host
 // running Duke's AI, so the two traces can be diffed line by line.
-int g_vbDukeWatchSprite = -1;
+int g_nnbDukeWatchSprite = -1;
 
-static void VB_DukeWatchTick(void)
+static void NNB_DukeWatchTick(void)
 {
     static int32_t watchTile = -2;
     static int32_t wakeTic = -1;
@@ -8778,8 +8778,8 @@ static void VB_DukeWatchTick(void)
 
     if (watchTile == -2)
     {
-        char const *const envTile = Bgetenv("VB_CP_WATCH_TILE");
-        char const *const envWake = Bgetenv("VB_CP_FORCEWAKE");
+        char const *const envTile = Bgetenv("NNB_CP_WATCH_TILE");
+        char const *const envWake = Bgetenv("NNB_CP_FORCEWAKE");
         watchTile = envTile != NULL ? Batoi(envTile) : -1;
         wakeTic = envWake != NULL ? Batoi(envWake) : -1;
     }
@@ -8789,7 +8789,7 @@ static void VB_DukeWatchTick(void)
 
     ++tic;
 
-    // VB_CP_WATCH_SPRITE pins an exact sprite index (map order), overriding both
+    // NNB_CP_WATCH_SPRITE pins an exact sprite index (map order), overriding both
     // the spawn hook and the first-tile scan; needed on maps with several actors
     // of the watched tile.
     {
@@ -8797,7 +8797,7 @@ static void VB_DukeWatchTick(void)
         static int32_t indexPinned = 0;
         if (watchIndex == -2)
         {
-            char const *const envIdx = Bgetenv("VB_CP_WATCH_SPRITE");
+            char const *const envIdx = Bgetenv("NNB_CP_WATCH_SPRITE");
             watchIndex = envIdx != NULL ? Batoi(envIdx) : -1;
         }
 
@@ -8807,28 +8807,28 @@ static void VB_DukeWatchTick(void)
                 return;
 
             indexPinned = 1;
-            g_vbDukeWatchSprite = watchIndex;
+            g_nnbDukeWatchSprite = watchIndex;
             LOG_F(INFO, "CPDBG pin sprite=%d tile=%d tic=%d", watchIndex, TrackerCast(sprite[watchIndex].picnum), tic);
         }
     }
 
-    if (g_vbDukeWatchSprite < 0)
+    if (g_nnbDukeWatchSprite < 0)
     {
         for (int32_t i = 0; i < MAXSPRITES; ++i)
         {
             if (sprite[i].statnum < MAXSTATUS && sprite[i].picnum == watchTile)
             {
-                g_vbDukeWatchSprite = i;
+                g_nnbDukeWatchSprite = i;
                 LOG_F(INFO, "CPDBG pin sprite=%d tile=%d tic=%d", i, watchTile, tic);
                 break;
             }
         }
     }
 
-    if (g_vbDukeWatchSprite < 0 || sprite[g_vbDukeWatchSprite].statnum >= MAXSTATUS)
+    if (g_nnbDukeWatchSprite < 0 || sprite[g_nnbDukeWatchSprite].statnum >= MAXSTATUS)
         return;
 
-    int const i = g_vbDukeWatchSprite;
+    int const i = g_nnbDukeWatchSprite;
 
     if (wakeTic > 0)
     {
@@ -8837,19 +8837,19 @@ static void VB_DukeWatchTick(void)
         static int32_t pinLow = -1;
         if (pinLow < 0)
         {
-            char const *const envLow = Bgetenv("VB_CP_PINLOW");
+            char const *const envLow = Bgetenv("NNB_CP_PINLOW");
             pinLow = (envLow != NULL && envLow[0] == '1') ? 1 : 0;
         }
 
         // Pin the player beside the actor from shortly before the wake, so both
         // runtimes stage the identical encounter and keep line of sight.
-        // VB_CP_PINLOW=1 places the player standing on the ground instead of
+        // NNB_CP_PINLOW=1 places the player standing on the ground instead of
         // floating beside the actor -- the way a real player approaches -- and
         // skips the forced wake so the natural line-of-sight wake fires.
         static int32_t pinDist = -1;
         if (pinDist < 0)
         {
-            char const *const envDist = Bgetenv("VB_CP_PINDIST");
+            char const *const envDist = Bgetenv("NNB_CP_PINDIST");
             pinDist = envDist != NULL ? Batoi(envDist) : 1536;
         }
 
@@ -8857,8 +8857,8 @@ static void VB_DukeWatchTick(void)
         static int32_t pinAng = 0;
         if (approach < 0)
         {
-            char const *const envAp = Bgetenv("VB_CP_APPROACH");
-            char const *const envAngE = Bgetenv("VB_CP_PINANG");
+            char const *const envAp = Bgetenv("NNB_CP_APPROACH");
+            char const *const envAngE = Bgetenv("NNB_CP_PINANG");
             approach = (envAp != NULL && envAp[0] == '1') ? 1 : 0;
             pinAng = envAngE != NULL ? (Batoi(envAngE) & 2047) : 0;
         }
@@ -8915,24 +8915,24 @@ static void VB_DukeWatchTick(void)
             LOG_F(INFO, "CPDBG forcewake tic=%d sprite=%d", tic, i);
         }
 
-        // VB_CP_FORCEHIDE=<tic>: put a trooper into the pal-21 teleport-hide AI
+        // NNB_CP_FORCEHIDE=<tic>: put a trooper into the pal-21 teleport-hide AI
         // (AITROOPHIDE) exactly as CON's `ai` would, so the hide cycle can be
         // A/B'd deterministically.  Script offsets are for the stock 1.3d GRP.
         static int32_t hideTic = -2;
         if (hideTic == -2)
         {
-            char const *const envHide = Bgetenv("VB_CP_FORCEHIDE");
+            char const *const envHide = Bgetenv("NNB_CP_FORCEHIDE");
             hideTic = envHide != NULL ? Batoi(envHide) : -1;
         }
 
-        // VB_CP_FORCEBOX=<tic>: teleport the watched trooper INTO the dumpster
+        // NNB_CP_FORCEBOX=<tic>: teleport the watched trooper INTO the dumpster
         // interior grounded in seek AI -- the state the user's screenshots show --
         // so the escape-by-phigher dynamics can be A/B'd.  The pinned player
         // jumps for 12 of every 100 tics, like a live player would.
         static int32_t boxTic = -2;
         if (boxTic == -2)
         {
-            char const *const envBox = Bgetenv("VB_CP_FORCEBOX");
+            char const *const envBox = Bgetenv("NNB_CP_FORCEBOX");
             boxTic = envBox != NULL ? Batoi(envBox) : -1;
         }
 
@@ -8966,13 +8966,13 @@ static void VB_DukeWatchTick(void)
             LOG_F(INFO, "CPDBG forcehide tic=%d sprite=%d", tic, i);
         }
 
-        // VB_CP_BURN=1 additionally feeds the actor small periodic fire damage
+        // NNB_CP_BURN=1 additionally feeds the actor small periodic fire damage
         // from the wake on, reproducing an actor standing in Duke FIRE -- the
         // ingredient visible in the reported screenshot.
         static int32_t burn = -1;
         if (burn < 0)
         {
-            char const *const envBurn = Bgetenv("VB_CP_BURN");
+            char const *const envBurn = Bgetenv("NNB_CP_BURN");
             burn = (envBurn != NULL && envBurn[0] == '1') ? 1 : 0;
         }
 
@@ -9020,7 +9020,7 @@ static void VB_DukeWatchTick(void)
 
 void G_MoveWorld(void)
 {
-    VB_DukeWatchTick();
+    NNB_DukeWatchTick();
 
     X_OnEvent(EVENT_PREWORLD, -1, -1, 0);
 
@@ -9108,9 +9108,9 @@ void G_MoveWorld(void)
 // A foreign runtime hosting a Duke level owns the player, the sectors and the
 // effectors, so those loops must not run here; everything that gives Duke
 // enemies their behavior does.  See source/nnbuild/src/crossplay_dukeai.cpp.
-extern "C" void VB_DukeAI_MoveActorsOnly(void)
+extern "C" void NNB_DukeAI_MoveActorsOnly(void)
 {
-    VB_DukeWatchTick();
+    NNB_DukeWatchTick();
 
     G_RecordOldSpritePos();
 

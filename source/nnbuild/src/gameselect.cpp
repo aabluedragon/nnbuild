@@ -23,7 +23,7 @@
 #include "baselayer.h"
 #include "common_game.h"
 #include "crc32.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 
 #ifdef _WIN32
 # include <io.h>
@@ -504,7 +504,7 @@ static int gs_compactValueOption(char const *arg, char const *longName, char con
 }
 
 // Debug-only launch parameters live in an index-file header, for example:
-//   /// vbd.params="-l 1 -v 1"
+//   /// nnbd.params="-l 1 -v 1"
 // They are parsed into argv tokens directly: this is not shell input.
 static char const *gs_debugParams[64];
 static int gs_debugParamCount = 0;
@@ -540,7 +540,7 @@ static void gs_parseDebugParams(char const *text)
     char const *end = text + Bstrlen(text);
     while (end > p && isspace((unsigned char)end[-1])) --end;
     // The usual directive form quotes the entire argument list:
-    //   /// vbd.params="-gm duke -g ~/games/duke3d.grp"
+    //   /// nnbd.params="-gm duke -g ~/games/duke3d.grp"
     // Those outer quotes delimit the header value; they must not turn the
     // complete list into one argv token. Inner quotes remain available for a
     // value that itself contains whitespace.
@@ -580,9 +580,10 @@ static void gs_collectDebugParamsFromFile(char const *filename)
         if (!Bstrncasecmp(p, "///", 3))
         {
             p += 3; while (*p && isspace((unsigned char)*p)) ++p;
-            if (!Bstrncasecmp(p, "vbd.params", 10))
+            static char constexpr directive[] = "nnbd.params";
+            if (!Bstrncasecmp(p, directive, sizeof(directive) - 1))
             {
-                p += 10; while (*p && isspace((unsigned char)*p)) ++p;
+                p += sizeof(directive) - 1; while (*p && isspace((unsigned char)*p)) ++p;
                 if (*p == '=') { ++p; gs_parseDebugParams(p); }
                 break;
             }
@@ -2028,8 +2029,8 @@ static char const **gs_filterArgv(int argc, char const * const * argv, int *outA
 int app_main(int32_t argc, char const * const * argv)
 {
     artCrossplayClearForeignData();
-    VBJS_CaptureLaunchDir();   // NNBuild: record the launch dir now (before any chdir) for autojs/
-    VBJS_SetExecutablePath(argc > 0 ? argv[0] : NULL);
+    NNBJS_CaptureLaunchDir();   // NNBuild: record the launch dir now (before any chdir) for autojs/
+    NNBJS_SetExecutablePath(argc > 0 ? argv[0] : NULL);
 
     // The live-editor MCP adapter and the lobby server are small network-only
     // programs handled at the top of the Duke entry point. They use no game
@@ -2043,9 +2044,9 @@ int app_main(int32_t argc, char const * const * argv)
         // Enable the shared debugger before dispatch. Shadow Warrior has its
         // own command-line parser and therefore never reaches Duke's -dbg
         // branch, but VS Code still needs the same localhost bridge.
-        VBJS_SetDebug(1);
+        NNBJS_SetDebug(1);
         for (int i = 1; i < argc; ++i)
-            if (gs_option(argv[i], "--devtools", "-dt", NULL, NULL)) { VBJS_SetDevtools(1); break; }
+            if (gs_option(argv[i], "--devtools", "-dt", NULL, NULL)) { NNBJS_SetDevtools(1); break; }
         gs_collectDebugParams();
     }
     int launchArgc = argc;
@@ -2060,7 +2061,7 @@ int app_main(int32_t argc, char const * const * argv)
         const char *inlineValue = NULL;
         if (!gs_option(launchArgv[i], "--js", "-js", NULL, &inlineValue)) continue;
         const char *path = gs_takeOptionValue(&i, launchArgc, launchArgv, inlineValue);
-        if (path && path[0]) VBJS_SetScriptPath(path);
+        if (path && path[0]) NNBJS_SetScriptPath(path);
     }
 
     // This is a launcher command, not a Duke-only gameplay option: generate a
@@ -2081,7 +2082,7 @@ int app_main(int32_t argc, char const * const * argv)
         else continue;
 
         if (name && !name[0]) name = nullptr;
-        if (VBJS_GenerateProject(name, typescript) != 0)
+        if (NNBJS_GenerateProject(name, typescript) != 0)
         {
             fprintf(stderr, "Could not create JavaScript project.\n");
             return EXIT_FAILURE;

@@ -51,7 +51,7 @@ int KexScaleCreatureMove(short nSprite, int nMove); // Pharaoh: kexSlaveAI moveS
 // kexPuppet::OnDamage selects its sizzle feedback from its live lava/slime
 // timers, not just the sector underfoot.
 int KexHazard_IsActive(int nPlayer);
-void KexNoStanding_Test(void);            // VB_KEX_NOEDGE_TEST runtime regression probe
+void KexNoStanding_Test(void);            // NNB_KEX_NOEDGE_TEST runtime regression probe
 void WheresMyMouth(int nPlayer, int *x, int *y, int *z, short *sectnum);
 
 int GetSpriteHeight(int nSprite);

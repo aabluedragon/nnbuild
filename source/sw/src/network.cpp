@@ -1318,16 +1318,16 @@ void Net_SetMasterAddr(const char *addr)  { Bstrncpyz(s_swMasterAddr,  addr, siz
 
 // Client lobby query: ask a masterserver for its list of advertised servers.
 // This is the backend a future in-menu server browser calls; -lobbylist <addr>
-// exercises it from the console. vb_msserver_t + the weak Masterserver_QueryList
+// exercises it from the console. nnb_msserver_t + the weak Masterserver_QueryList
 // come from netshared.h.
 
-int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
+int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "SW"); }  // -lobbylist (shared)
 
 // --- in-menu server browser backend -----------------------------------------
 int Net_QueryLobbyList(const char *masterAddr, sw_lobby_server *out, int maxout)
 {
     if (!Masterserver_QueryList) return -1;
-    vb_msserver_t list[16];
+    nnb_msserver_t list[16];
     int const cap = maxout < 16 ? maxout : 16;
     int32_t const n = Masterserver_QueryList(masterAddr, list, cap, 1200);
     for (int i = 0; i < n && i < maxout; i++)
@@ -1390,7 +1390,7 @@ int Net_ResolveAutoJoin(void)
         LOG_F(WARNING, "joinlobby: no masterserver support in this build");
         return 0;
     }
-    vb_msserver_t list[16];
+    nnb_msserver_t list[16];
     int32_t const n = Masterserver_QueryList(s_autoJoinMaster, list, 16, 1500);
     if (n <= 0)
     {
@@ -1429,7 +1429,7 @@ void Net_ClientPunchAttempt(void)
 extern char LevelName[20];
 
 // Enable advertising this server to a masterserver (from -advertise <addr>). Shared.
-void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }
+void Net_SetAdvertise(const char *addr) { NNB_SetAdvertise(addr); }
 
 // Called each net tic from getpackets(): service NAT-punch requests and pulse
 // this server's presence (host only). Mirrors Duke's Net_HostAdvertise().
@@ -1463,14 +1463,14 @@ void Net_HostAdvertise(void)
 // the current usermap) as two custom packets over mmulti's reliable channel; the
 // client dedups by size+CRC, writes any missing file, and mounts group files.
 extern char UserMapName[80];
-// Chunk size / max files / crc / byte helpers are shared in netshared.h (VB_*).
-static char s_swNetFiles[VB_MAX_NETFILES][BMAX_PATH];
+// Chunk size / max files / crc / byte helpers are shared in netshared.h (NNB_*).
+static char s_swNetFiles[NNB_MAX_NETFILES][BMAX_PATH];
 static int  s_swNetFileCount = 0;
-void Net_AddNetFile(const char *path) { if (s_swNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
+void Net_AddNetFile(const char *path) { if (s_swNetFileCount < NNB_MAX_NETFILES) Bstrncpyz(s_swNetFiles[s_swNetFileCount++], path, BMAX_PATH); }
 
-// VB_HaveFile (shared dedup check) lives in netshared.h.
+// NNB_HaveFile (shared dedup check) lives in netshared.h.
 
-// mmulti transport callback for the shared VB_SendFile. ctx carries the target slot
+// mmulti transport callback for the shared NNB_SendFile. ctx carries the target slot
 // (-1 = all connected joiners); SW streams over mmulti's reliable channel.
 static void Net_SendCbSW(void *ctx, const void *buf, int len)
 {
@@ -1482,7 +1482,7 @@ static void Net_SendCbSW(void *ctx, const void *buf, int len)
 void Net_SendFile(int slot, const char *name, int fileIndex, int fileTotal)
 {
     if (myconnectindex != connecthead) return;
-    VB_SendFile(Net_SendCbSW, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
+    NNB_SendFile(Net_SendCbSW, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
                 PACKET_TYPE_FILE_HEADER, PACKET_TYPE_FILE_CHUNK, "SW");
 }
 
@@ -1497,8 +1497,8 @@ void Net_SendGameFiles(int slot)
     if (UserMapName[0]) Net_SendFile(slot, UserMapName, ++idx, total);
 }
 
-static vb_filerecv_t s_swRecv;   // incoming file reassembly (shared receiver, netshared.h)
-// The file receiver (VB_RecvFileHeader/Chunk) reads SW's global packbuf; see the
+static nnb_filerecv_t s_swRecv;   // incoming file reassembly (shared receiver, netshared.h)
+// The file receiver (NNB_RecvFileHeader/Chunk) reads SW's global packbuf; see the
 // dispatch below. Reassembly/CRC/write/mount are shared in netshared.h.
 
 void
@@ -1861,10 +1861,10 @@ getpackets(void)
             break;
 
         case PACKET_TYPE_FILE_HEADER:   // mid-game file transfer (host -> joiner)
-            VB_RecvFileHeader(&s_swRecv, (const uint8_t *)packbuf, "SW");
+            NNB_RecvFileHeader(&s_swRecv, (const uint8_t *)packbuf, "SW");
             break;
         case PACKET_TYPE_FILE_CHUNK:
-            VB_RecvFileChunk(&s_swRecv, (const uint8_t *)packbuf, "SW");
+            NNB_RecvFileChunk(&s_swRecv, (const uint8_t *)packbuf, "SW");
             break;
 
         default:

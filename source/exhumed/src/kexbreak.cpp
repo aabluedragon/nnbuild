@@ -98,28 +98,28 @@ static int          s_legacyBreakTable;    // pre-breaksound 11-column conversio
 static KexBreakProp s_prop[kMaxKexBreaks];
 static int          s_props;
 static int16_t      s_propBySprite[kMaxSprites];
-static int          s_selftest;   // VB_KEXBREAK_TEST: shatter everything after N ticks
+static int          s_selftest;   // NNB_KEXBREAK_TEST: shatter everything after N ticks
 static int          s_breakSelftestActive;
-static int          s_soundTest;  // VB_KEXBREAK_SOUND_TEST: exact table/playback census
+static int          s_soundTest;  // NNB_KEXBREAK_SOUND_TEST: exact table/playback census
 static int          s_soundExpected[kKexBreakSoundCount];
 static int          s_soundPlayed[kKexBreakSoundCount];
 static int          s_vasePuffsExpected;
 static int          s_vasePuffsSpawned;
 static int          s_vasePuffsNormalPal;
-static int          s_scorpTest;  // VB_KEXBREAK_SCORPTEST: force every vase's case-0 AI_Scorp
+static int          s_scorpTest;  // NNB_KEXBREAK_SCORPTEST: force every vase's case-0 AI_Scorp
 static int          s_vaseScorpsSpawned;
 static int          s_vaseScorpsAtHeight;
 static int          s_vaseScorpsAtAngle;
-static int          s_mineTest;    // VB_KEX_MINE_TEST: exact authored countdown poses
+static int          s_mineTest;    // NNB_KEX_MINE_TEST: exact authored countdown poses
 static int          s_mineTestProp;
 static int          s_mineTestSteps;
 static int          s_mineTestPassed;
-static int          s_variantTest; // VB_KEXBREAK_VARIANT_TEST: exploding-vase art/range audit
-static int          s_overflowSaveTest; // VB_KEX_TOSS_OVERFLOW_SAVE_TEST
+static int          s_variantTest; // NNB_KEXBREAK_VARIANT_TEST: exploding-vase art/range audit
+static int          s_overflowSaveTest; // NNB_KEX_TOSS_OVERFLOW_SAVE_TEST
 static int          s_overflowSavePhase;
 static int          s_overflowSaveExpected;
 static int          s_overflowSaveTicks;
-static int          s_orbTest;           // VB_KEXDROP_ORB_TEST: exact delayed drop actors
+static int          s_orbTest;           // NNB_KEXDROP_ORB_TEST: exact delayed drop actors
 static int          s_orbTestStarted;
 static int          s_orbTestExpected;
 static int          s_orbTestCallbacks;
@@ -309,7 +309,7 @@ void KexDecor_Init(void)
         return;
 
     int instances = 0, randomized = 0, invalid = 0;
-    bool const phaseTest = Bgetenv("VB_KEXDECOR_PHASE_TEST") != NULL;
+    bool const phaseTest = Bgetenv("NNB_KEXDECOR_PHASE_TEST") != NULL;
     for (int i = 0; i < kMaxSprites; i++)
     {
         if (sprite[i].statnum >= kMaxStatus || sprite[i].sectnum < 0)
@@ -399,7 +399,7 @@ void KexLight_Init(void)
         polymost_kexShadeAt = KexVL_ShadeAt;
         polymost_kexColorAt = KexVL_ColorAt;
         polymost_kexTriangles = KexVL_Triangles;
-        polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("VB_KEX_FLATLIGHT");
+        polymost_kexVertexLight = KexVL_Ready() && !Bgetenv("NNB_KEX_FLATLIGHT");
     }
     if (!g_kexMode || !s_lightTypes)
         return;
@@ -433,8 +433,8 @@ void KexLight_Init(void)
 static uint8_t s_flash[MAXSPRITES];
 static uint8_t s_flashGhost[MAXSPRITES];
 static uint8_t s_flashSeen[MAXSPRITES];
-static int     s_flashTest = -1;    // VB_KEX_FLASHTEST=1: every creature and prop held in the flash
-static int     s_flashAudit = -1;   // VB_KEX_FLASH_AUDIT=1: log mark -> rendered coverage
+static int     s_flashTest = -1;    // NNB_KEX_FLASHTEST=1: every creature and prop held in the flash
+static int     s_flashAudit = -1;   // NNB_KEX_FLASH_AUDIT=1: log mark -> rendered coverage
 
 // The flash palette. A hires tile is whitened by exhumed.def's tint on pal
 // 30 (a screen blend with white, applied to the pixels when the texture is
@@ -460,7 +460,7 @@ static void KexFlash_MakePal(void)
 static int KexFlash_AuditEnabled(void)
 {
     if (s_flashAudit < 0)
-        s_flashAudit = g_kexMode && Bgetenv("VB_KEX_FLASH_AUDIT") ? 1 : 0;
+        s_flashAudit = g_kexMode && Bgetenv("NNB_KEX_FLASH_AUDIT") ? 1 : 0;
     return s_flashAudit;
 }
 
@@ -485,7 +485,7 @@ int KexFlash_Active(int nSprite)
     if ((unsigned)nSprite >= MAXSPRITES)
         return 0;
     if (s_flashTest < 0)
-        s_flashTest = g_kexMode && Bgetenv("VB_KEX_FLASHTEST") ? 1 : 0;
+        s_flashTest = g_kexMode && Bgetenv("NNB_KEX_FLASHTEST") ? 1 : 0;
     if (s_flashTest && ((sprite[nSprite].statnum > 100 && sprite[nSprite].statnum < 200) || KexBreak_IsProp(nSprite)))
     {
         KexFlash_MakePal();
@@ -728,7 +728,7 @@ void KexTele_Init(void)
     }
     if (s_teles)
         OSD_Printf("Kex teleports: %d pads on this level\n", s_teles);
-    s_teleTest = g_kexMode && Bgetenv("VB_KEXTELE_TEST") != NULL;
+    s_teleTest = g_kexMode && Bgetenv("NNB_KEXTELE_TEST") != NULL;
     if (s_teleTest && !s_teles)
     {
         OSD_Printf(OSD_ERROR "Kex teleport test: FAIL (no pad on this level)\n");
@@ -1073,27 +1073,27 @@ void KexBreak_Init(void)
         s.nSprite = -1;
     s_props = 0;
     Bmemset(s_propBySprite, -1, sizeof(s_propBySprite));
-    { char const *e = getenv("VB_KEXBREAK_TEST"); s_selftest = e ? Batoi(e) : 0; }
+    { char const *e = getenv("NNB_KEXBREAK_TEST"); s_selftest = e ? Batoi(e) : 0; }
     s_breakSelftestActive = 0;
-    s_soundTest = Bgetenv("VB_KEXBREAK_SOUND_TEST") != NULL;
+    s_soundTest = Bgetenv("NNB_KEXBREAK_SOUND_TEST") != NULL;
     Bmemset(s_soundExpected, 0, sizeof(s_soundExpected));
     Bmemset(s_soundPlayed, 0, sizeof(s_soundPlayed));
     s_vasePuffsExpected = 0;
     s_vasePuffsSpawned = 0;
     s_vasePuffsNormalPal = 0;
-    s_scorpTest = s_selftest && Bgetenv("VB_KEXBREAK_SCORPTEST") != NULL;
+    s_scorpTest = s_selftest && Bgetenv("NNB_KEXBREAK_SCORPTEST") != NULL;
     s_vaseScorpsSpawned = 0;
     s_vaseScorpsAtHeight = 0;
     s_vaseScorpsAtAngle = 0;
-    s_mineTest = Bgetenv("VB_KEX_MINE_TEST") != NULL;
+    s_mineTest = Bgetenv("NNB_KEX_MINE_TEST") != NULL;
     s_mineTestProp = -1;
     s_mineTestSteps = 0;
     s_mineTestPassed = 1;
-    s_variantTest = Bgetenv("VB_KEXBREAK_VARIANT_TEST") != NULL;
-    s_overflowSaveTest = Bgetenv("VB_KEX_TOSS_OVERFLOW_SAVE_TEST") != NULL;
+    s_variantTest = Bgetenv("NNB_KEXBREAK_VARIANT_TEST") != NULL;
+    s_overflowSaveTest = Bgetenv("NNB_KEX_TOSS_OVERFLOW_SAVE_TEST") != NULL;
     s_overflowSavePhase = 0;
     s_overflowSaveExpected = s_overflowSaveTicks = 0;
-    s_orbTest = Bgetenv("VB_KEXDROP_ORB_TEST") != NULL;
+    s_orbTest = Bgetenv("NNB_KEXDROP_ORB_TEST") != NULL;
     s_orbTestStarted = 0;
     s_orbTestExpected = s_orbTestCallbacks = s_orbTestPassed = 0;
     Bmemset(s_orbTestEffect, 0, sizeof(s_orbTestEffect));
@@ -2153,10 +2153,10 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
     // 16x vertical and 6x world conversion used by the effect helpers.
     int const z = sprite[nSprite].z - t.spawnheight * 16 * 6;
     int const pharaoh = KexDifficulty_Get() == kKexDifficultyPharaoh;
-    int const powerTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_POWERTEST");
-    int const mapTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_MAPTEST");
-    int const scepterTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTERTEST");
-    int const shawlTest = s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SHAWLTEST");
+    int const powerTest = s_breakSelftestActive && Bgetenv("NNB_KEXBREAK_POWERTEST");
+    int const mapTest = s_breakSelftestActive && Bgetenv("NNB_KEXBREAK_MAPTEST");
+    int const scepterTest = s_breakSelftestActive && Bgetenv("NNB_KEXBREAK_SCEPTERTEST");
+    int const shawlTest = s_breakSelftestActive && Bgetenv("NNB_KEXBREAK_SHAWLTEST");
     // ObjectFactory receives angle 0 for the case-0 Scorp and case-1 Wasp.
     // KEX yaw 0 is north (+Y before the map's Y flip), which is Build 1536.
     constexpr int kKexVaseFactoryAngle = 1536;
@@ -2253,7 +2253,7 @@ static void KexBreak_DropItem(int nSprite, KexBreakType const &t)
         {
             int const scepterHeld = !s_scorpTest
                 && (KexInv_HasArtifact(nLocalPlayer, kKexArtiScepter)
-                    || (s_breakSelftestActive && Bgetenv("VB_KEXBREAK_SCEPTER_SUBTEST")));
+                    || (s_breakSelftestActive && Bgetenv("NNB_KEXBREAK_SCEPTER_SUBTEST")));
             if (scepterHeld
                 && (((uint8_t)RandomByte() & 7) >= 3))
             {
@@ -2696,15 +2696,15 @@ void KexScripted_Trigger(int when)
 
 void KexScripted_Tick(void)
 {
-    // VB_KEXSCRIPT_TEST=<ticks>: fire the Ramses move that far into the level.
+    // NNB_KEXSCRIPT_TEST=<ticks>: fire the Ramses move that far into the level.
     static int s_test = -1;
-    if (s_test < 0) { char const *e = getenv("VB_KEXSCRIPT_TEST"); s_test = e ? Batoi(e) : 0; }
+    if (s_test < 0) { char const *e = getenv("NNB_KEXSCRIPT_TEST"); s_test = e ? Batoi(e) : 0; }
     if (s_test > 0 && --s_test == 0)
         KexScripted_Trigger(0);
-    // VB_KEXSCRIPT_END_TEST=<ticks>: likewise exercise the good-ending move
+    // NNB_KEXSCRIPT_END_TEST=<ticks>: likewise exercise the good-ending move
     // without waiting through TOMBEND's full Ramses conversation.
     static int s_endTest = -1;
-    if (s_endTest < 0) { char const *e = getenv("VB_KEXSCRIPT_END_TEST"); s_endTest = e ? Batoi(e) : 0; }
+    if (s_endTest < 0) { char const *e = getenv("NNB_KEXSCRIPT_END_TEST"); s_endTest = e ? Batoi(e) : 0; }
     if (s_endTest > 0 && --s_endTest == 0)
         KexScripted_Trigger(1);
 
@@ -2776,7 +2776,7 @@ void KexSwitch_Add(int nSector, int nTag, int nOffPic, int nType, int x, int y)
     s.wall = (int16_t)best;
     s.offpic = (int16_t)nOffPic;
     s.type = (int16_t)nType;
-    if (Bgetenv("VB_KEXSWITCH_TEST"))
+    if (Bgetenv("NNB_KEXSWITCH_TEST"))
         OSD_Printf("Kex switch sound marker: wall %d event %d tag %d off %d\n",
                    best, nType, nTag, nOffPic);
 }
@@ -2811,7 +2811,7 @@ int KexSwitch_PlaySound(int nWall, int nPlayer)
             ? "sounds/switch2.wav" : "sounds/switch.wav";
         char const * const path = KexSound_Alias(name, NULL);
         int const sound = KexSound_Get(name);
-        if (Bgetenv("VB_KEXSWITCH_TEST"))
+        if (Bgetenv("NNB_KEXSWITCH_TEST"))
             OSD_Printf("Kex switch sound test: %s (event %d -> %s, player %d)\n",
                        path && !Bstrcasecmp(path, want) ? "PASS" : "FAIL",
                        s.type, path ? path : "missing", nPlayer);
@@ -2826,14 +2826,14 @@ int KexSwitch_PlaySound(int nWall, int nPlayer)
     return 0;
 }
 
-// VB_KEXSWITCH_TEST drives one authored switch through the normal player-use
+// NNB_KEXSWITCH_TEST drives one authored switch through the normal player-use
 // runlist message.  Wall-only switches do not have a sector mover for the
 // generic look-at helper to target, so keep this focused probe with the
 // marker table that resolves their remaster sound and reset art.
 static void KexSwitch_TestTick(void)
 {
     if (s_kexSwitchTest < 0)
-        s_kexSwitchTest = g_kexMode && Bgetenv("VB_KEXSWITCH_TEST") ? 90 : 0;
+        s_kexSwitchTest = g_kexMode && Bgetenv("NNB_KEXSWITCH_TEST") ? 90 : 0;
     if (s_kexSwitchTest <= 0 || --s_kexSwitchTest != 0)
         return;
 
@@ -2883,10 +2883,10 @@ int KexSealedDoor_Use(int nSector)
 
 void KexSealedDoor_Tick(void)
 {
-    // VB_KEXSEALED_TEST checks the live marker path without input.  The
+    // NNB_KEXSEALED_TEST checks the live marker path without input.  The
     // actual player use is routed through player.cpp above.
     if (s_kexSealedDoorTest < 0)
-        s_kexSealedDoorTest = g_kexMode && Bgetenv("VB_KEXSEALED_TEST") ? 90 : 0;
+        s_kexSealedDoorTest = g_kexMode && Bgetenv("NNB_KEXSEALED_TEST") ? 90 : 0;
     if (s_kexSealedDoorTest <= 0 || --s_kexSealedDoorTest != 0)
         return;
     for (int nSector = 0; nSector < numsectors; nSector++)
@@ -2983,7 +2983,7 @@ static void KexPlate_Start(KexPlate &p, int nPlayer, int test)
     // player path supplies that actor; the focused no-input probe uses local.
     char const * const path = KexSound_Alias("k_fplate", NULL);
     int const sound = KexSound_Get("k_fplate");
-    if (Bgetenv("VB_KEX_PLATE_SOUND_TEST"))
+    if (Bgetenv("NNB_KEX_PLATE_SOUND_TEST"))
         OSD_Printf("Kex plate sound test: %s (event 23 -> %s, player %d)\n",
                    path && !Bstrcasecmp(path, "sounds/fplate.wav") ? "PASS" : "FAIL",
                    path ? path : "missing", nPlayer);
@@ -3066,7 +3066,7 @@ void KexPlate_Tick(void)
     static int s_test = -1;
     if (s_test < 0)
     {
-        char const *e = getenv("VB_KEX_PLATE_TEST");
+        char const *e = getenv("NNB_KEX_PLATE_TEST");
         s_test = e ? Batoi(e) : 0;
     }
     if (s_test > 0 && --s_test == 0)
@@ -3077,7 +3077,7 @@ void KexPlate_Tick(void)
                 {
                     // The focused map queues its tag-2 reset while loading.
                     // Consume that setup-only signal so this probe observes
-                    // the selected plate's own descent; VB_KEXREMOTE_TEST
+                    // the selected plate's own descent; NNB_KEXREMOTE_TEST
                     // independently validates the queued one-shot reset.
                     if (s_plate[i].resetChannel >= 0)
                         sRunChannels[s_plate[i].resetChannel].d = 0;
@@ -3120,7 +3120,7 @@ void KexPlate_Tick(void)
             p.state = kKexPlateLowered;
             OSD_Printf("Kex plate: sector %d tag %d arrived after %d ticks (expected %d)\n",
                        p.sector, p.tag, p.ticks, p.expectedTicks);
-            if (Bgetenv("VB_KEX_PLATE_TEST"))
+            if (Bgetenv("NNB_KEX_PLATE_TEST"))
                 OSD_Printf("Kex plate test: %s (sector %d, %d/%d ticks)\n",
                            p.ticks == p.expectedTicks ? "PASS" : "FAIL",
                            p.sector, p.ticks, p.expectedTicks);
@@ -3200,7 +3200,7 @@ void KexRemote_Tick(void)
         return;
     if (s_remoteTest < 0)
     {
-        char const *e = Bgetenv("VB_KEXREMOTE_TEST");
+        char const *e = Bgetenv("NNB_KEXREMOTE_TEST");
         s_remoteTest = e ? Batoi(e) : 0;
     }
     if (s_remoteTest > 0 && --s_remoteTest == 0)
@@ -3424,7 +3424,7 @@ void KexFloat_Init(void)
         s.base = s.ceiling ? sector[s.sector].ceilingz : sector[s.sector].floorz;
     }
 
-    s_floatTest = Bgetenv("VB_KEXFLOAT_TEST") != NULL;
+    s_floatTest = Bgetenv("NNB_KEXFLOAT_TEST") != NULL;
     if (s_floaters)
         OSD_Printf("Kex floating platforms: %d movers, %d surfaces on this level\n",
                    s_floaters, s_floatSurfaces);
@@ -3693,13 +3693,13 @@ void KexPad_Init(void)
                 }
             }
 
-    char const *padTest = Bgetenv("VB_KEXPAD_TEST");
+    char const *padTest = Bgetenv("NNB_KEXPAD_TEST");
     s_padTest = padTest != NULL;
     if (s_pads)
         OSD_Printf("Kex drop pads: %d movers, %d paired surfaces on this level\n", s_pads, s_padSurfaces);
     if (s_padTest)
     {
-        // "VB_KEXPAD_TEST=5200" selects the pad using that (possibly
+        // "NNB_KEXPAD_TEST=5200" selects the pad using that (possibly
         // remapped) Kex tag. Any other nonempty value uses the first pad.
         int const requestedTag = Batoi(padTest);
         s_padTestPad = requestedTag > 1 ? -1 : 0;
@@ -3989,7 +3989,7 @@ void KexBeam_Init(void)
         // A channel's state starts out as its tag number (runlist_AllocChannel
         // matches channels by that value), so "off" is any change from it.
         b.c0 = b.chan >= 0 ? sRunChannels[b.chan].c : 0;
-        if (getenv("VB_KEXBEAM_DEBUG"))
+        if (getenv("NNB_KEXBEAM_DEBUG"))
             OSD_Printf("Kex beam %d: sector %d ang %d len %d bolts %d chan %d (c=%d) z %d\n",
                        i, sprite[nSprite].sectnum, sprite[nSprite].ang, len, b.nBolts, b.chan, b.c0, b.z);
     }
@@ -4003,7 +4003,7 @@ static inline int KexBeam_Rand(int span)
     return (int)((s_beamSeed >> 16) % (unsigned)(2 * span + 1)) - span;
 }
 
-// VB_KEX_LOOKAT=<statnum>: a moment in, stand the local player a little way
+// NNB_KEX_LOOKAT=<statnum>: a moment in, stand the local player a little way
 // from the first sprite of that statnum, facing it -- for looking at a
 // creature without a hand on the keys.
 static int KexChan(int tag);   // below
@@ -4013,27 +4013,27 @@ static void Kex_LookAtDebug(void)
     static int s_ticks = -1, s_stat = -1, s_pic0 = -1, s_pic1 = -1;
     if (s_ticks < 0)
     {
-        char const *e = getenv("VB_KEX_LOOKAT");
+        char const *e = getenv("NNB_KEX_LOOKAT");
         s_stat = e ? Batoi(e) : -1;
         s_ticks = e ? 90 : 0;
-        // VB_KEX_LOOKAT_TILE=<lo>-<hi>: only a sprite whose picnum is in
+        // NNB_KEX_LOOKAT_TILE=<lo>-<hi>: only a sprite whose picnum is in
         // that range -- the creatures share statnum 99, and a skinned one
         // (scorpion 7700+) is told apart by its tiles.
-        char const *t = getenv("VB_KEX_LOOKAT_TILE");
+        char const *t = getenv("NNB_KEX_LOOKAT_TILE");
         if (t && sscanf(t, "%d-%d", &s_pic0, &s_pic1) != 2)
             s_pic0 = s_pic1 = Batoi(t);
     }
     static int s_target = -1;
     int const nSprite = PlayerList[nLocalPlayer].nSprite;
-    // VB_KEX_LOOKAT_TAG=<kex tag>: instead of a sprite, the first sector
+    // NNB_KEX_LOOKAT_TAG=<kex tag>: instead of a sprite, the first sector
     // whose hitag is that tag's channel (a door or lift) -- the player stands
     // in a neighbouring sector, facing it, to watch it fire.
     static int s_tag = -2, s_tagTicks = 0, s_tagSector = -1;
-    // VB_KEX_LOOKAT_OVERPIC=<tile>: stand before the first masked wall with
+    // NNB_KEX_LOOKAT_OVERPIC=<tile>: stand before the first masked wall with
     // that overpicnum (a grate, a force field), 640 units back in its sector.
     static int s_over = -2, s_overTicks = 0;
     if (s_over == -2)
-    { char const *e = getenv("VB_KEX_LOOKAT_OVERPIC"); s_over = e ? Batoi(e) : -1; }
+    { char const *e = getenv("NNB_KEX_LOOKAT_OVERPIC"); s_over = e ? Batoi(e) : -1; }
     if (s_over >= 0 && ++s_overTicks == 90)
     {
         for (int w = 0; w < numwalls; w++)
@@ -4060,7 +4060,7 @@ static void Kex_LookAtDebug(void)
         s_over = -1;
     }
     if (s_tag == -2)
-    { char const *e = getenv("VB_KEX_LOOKAT_TAG"); s_tag = e ? Batoi(e) : -1; }
+    { char const *e = getenv("NNB_KEX_LOOKAT_TAG"); s_tag = e ? Batoi(e) : -1; }
     if (s_tag >= 0 && s_target < 0 && ++s_tagTicks == 90)
     {
         int const chan = KexChan(s_tag);
@@ -4107,7 +4107,7 @@ static void Kex_LookAtDebug(void)
             for (int w = sector[nb].wallptr; w < sector[nb].wallptr + sector[nb].wallnum; w++)
             { px += wall[w].x; py += wall[w].y; m++; }
             px /= m; py /= m;
-            if (getenv("VB_KEX_LOOKAT_STAND"))
+            if (getenv("NNB_KEX_LOOKAT_STAND"))
             {
                 // ... or stand ON it (a pad, a lift): its centre, its floor.
                 sprite[nSprite].x = cx; sprite[nSprite].y = cy;
@@ -4153,11 +4153,11 @@ static void Kex_LookAtDebug(void)
         }
         s_tag = -1;
     }
-    // VB_KEX_LOOKAT_PRESS=1: 40 ticks after the look-at, press the first
+    // NNB_KEX_LOOKAT_PRESS=1: 40 ticks after the look-at, press the first
     // wall switch (file lotag 7) on the traced tag's channel, the way the
     // player's use key does, so the door it drives is seen to answer.
     static int s_pressTicks = -1, s_pressWall = -1;
-    if (s_tagSector >= 0 && s_pressTicks < 0 && getenv("VB_KEX_LOOKAT_PRESS"))
+    if (s_tagSector >= 0 && s_pressTicks < 0 && getenv("NNB_KEX_LOOKAT_PRESS"))
     {
         s_pressTicks = 40;
         buildvfs_kfd hMap = kopen4loadfrommod(gUserMapFilename, 0);
@@ -4172,7 +4172,7 @@ static void Kex_LookAtDebug(void)
                 if (kread(hMap, cnt, 2) == 2)
                 {
                     int const nw = B_LITTLE16(*(uint16_t *)cnt);
-                    int const chan = KexChan(Batoi(getenv("VB_KEX_LOOKAT_TAG")));
+                    int const chan = KexChan(Batoi(getenv("NNB_KEX_LOOKAT_TAG")));
                     for (int w = 0; w < nw && w < numwalls; w++)
                     {
                         uint8_t rec[32];
@@ -4246,7 +4246,7 @@ static void KexOverflowSaveTest_Tick(void)
     if (!s_overflowSaveTest || s_overflowSavePhase < 1)
         return;
 
-    char const *const path = Bgetenv("VB_KEX_OVERFLOW_SAVE_FILE");
+    char const *const path = Bgetenv("NNB_KEX_OVERFLOW_SAVE_FILE");
     if (!path || !path[0])
         return;
 
@@ -4286,7 +4286,7 @@ static void KexOverflowSaveTest_Tick(void)
     }
 }
 
-// VB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
+// NNB_KEXSAVE_TEST=1: save at tick 100 and load the save back at 160, then
 // compare the player's place and health -- the per-sector tables the save
 // carries are kMaxSectors wide, and the levels past 1024 sectors are where
 // that has to hold. The projectile flags add live Ra, green-Cobra and
@@ -4302,10 +4302,10 @@ static void Kex_SaveTest(void)
     static int redTest, redBullet, redSprite, redPitch, redJoint[5];
     if (s_ticks < 0)
     {
-        s_ticks = getenv("VB_KEXSAVE_TEST") ? 0 : 1000000;
-        raTest = Bgetenv("VB_KEX_RA_SAVE_TEST") != NULL;
-        cobraTest = Bgetenv("VB_KEX_COBRA_SAVE_TEST") != NULL;
-        redTest = Bgetenv("VB_KEX_RED_COBRA_SAVE_TEST") != NULL;
+        s_ticks = getenv("NNB_KEXSAVE_TEST") ? 0 : 1000000;
+        raTest = Bgetenv("NNB_KEX_RA_SAVE_TEST") != NULL;
+        cobraTest = Bgetenv("NNB_KEX_COBRA_SAVE_TEST") != NULL;
+        redTest = Bgetenv("NNB_KEX_RED_COBRA_SAVE_TEST") != NULL;
         raShot = raSprite = -1;
         cobraShot = cobraSprite = -1;
         redBullet = redSprite = -1;
@@ -4319,7 +4319,7 @@ static void Kex_SaveTest(void)
     int const nSprite = PlayerList[nLocalPlayer].nSprite;
     if (++s_ticks == 100)
     {
-        queenPrepared = !Bgetenv("VB_KEX_QUEEN_SAVE_TEST")
+        queenPrepared = !Bgetenv("NNB_KEX_QUEEN_SAVE_TEST")
             || KexQueen_SaveTestPrepare();
         sx = sprite[nSprite].x; sy = sprite[nSprite].y; sect = sprite[nSprite].sectnum; hp = PlayerList[nLocalPlayer].nHealth;
         if (raTest)
@@ -4366,7 +4366,7 @@ static void Kex_SaveTest(void)
         void testsave(); testsave();
         OSD_Printf("Kex save test: saved at (%d,%d) sector %d health %d, %d sectors\n", sx, sy, sect, hp, numsectors);
     }
-    else if (s_ticks == 120 && Bgetenv("VB_KEX_TOGGLE_SAVE_TEST"))
+    else if (s_ticks == 120 && Bgetenv("NNB_KEX_TOGGLE_SAVE_TEST"))
         KexToggle_SaveTestMutate();
     else if (s_ticks == 160)
     {
@@ -4374,7 +4374,7 @@ static void Kex_SaveTest(void)
         int const n2 = PlayerList[nLocalPlayer].nSprite;
         bool const playerOkay = sprite[n2].sectnum == sect
             && PlayerList[nLocalPlayer].nHealth == hp;
-        bool const queenOkay = !Bgetenv("VB_KEX_QUEEN_SAVE_TEST")
+        bool const queenOkay = !Bgetenv("NNB_KEX_QUEEN_SAVE_TEST")
             || (queenPrepared && KexQueen_SaveTestValidate());
         bool const raOkay = !raTest || (raShot >= 0
             && s_vaseShot[raShot].nSprite == raSprite
@@ -4428,12 +4428,12 @@ void KexBeam_Tick(void)
     KexScript_BossTick();
     KexOverflowSaveTest_Tick();
     Kex_SaveTest();
-    // VB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
+    // NNB_KEXBEAM_DEBUG=<n>: a moment in, stand the local player beside beam
     // n, looking along it, for a visual check without a hand on the keys.
     static int s_dbgTicks = -1, s_dbgBeam = -1;
     if (s_dbgTicks < 0)
     {
-        char const *e = getenv("VB_KEXBEAM_DEBUG");
+        char const *e = getenv("NNB_KEXBEAM_DEBUG");
         s_dbgBeam = e ? Batoi(e) : -1;
         s_dbgTicks = e ? 60 : 0;
     }
@@ -5351,14 +5351,14 @@ static int KexWall_Matches(int nWall, KexWallSaved const &s)
         && wall[nWall].cstat == s.cstat;
 }
 
-// VB_KEX_PORTAL_TEST=1: select every face at its centre, install its temporary
+// NNB_KEX_PORTAL_TEST=1: select every face at its centre, install its temporary
 // topology/render state, verify a static target's reciprocal link, then prove
 // every touched wall was restored byte-for-byte. Rows in a currently closed
 // lift/bomb sector are counted as dormant rather than failed; its live sector
 // bounds activate them when that geometry opens.
 static void KexPortal_SelfTest(void)
 {
-    if (!Bgetenv("VB_KEX_PORTAL_TEST"))
+    if (!Bgetenv("NNB_KEX_PORTAL_TEST"))
         return;
 
     int tested = 0, dormant = 0, bad = 0, boundEndpoints = 0;
@@ -5742,7 +5742,7 @@ static int KexToggle_FaceOwner(int nFace)
     return -1;
 }
 
-// VB_KEX_TOGGLE_TEST=1: open one wall closure and one vertical closure (when
+// NNB_KEX_TOGGLE_TEST=1: open one wall closure and one vertical closure (when
 // present), then verify every logical bit and every ordinary wall transition.
 // This intentionally changes only the isolated test process's map.
 static void KexToggle_SelfTest(void)
@@ -5758,7 +5758,7 @@ static void KexToggle_SelfTest(void)
     }
 
     uint32_t expected[kKexToggleWords] = {};
-    char const *const testValue = Bgetenv("VB_KEX_TOGGLE_TEST");
+    char const *const testValue = Bgetenv("NNB_KEX_TOGGLE_TEST");
     int const testAll = testValue && Batoi(testValue) > 1;
     for (int i = 0; i < (testAll ? s_kexToggleFaces : 2); i++)
     {
@@ -5906,7 +5906,7 @@ void KexToggleLoadSave::Save()
     Write(s_kexSaveNextWall, numwalls * 2 * sizeof(int16_t));
 #endif
 
-    if (Bgetenv("VB_KEX_TOGGLE_SAVE_TEST"))
+    if (Bgetenv("NNB_KEX_TOGGLE_SAVE_TEST"))
     {
         Bmemcpy(s_kexToggleTestSnapshot, s_kexToggleOpen,
                 sizeof(s_kexToggleTestSnapshot));
@@ -5949,7 +5949,7 @@ void KexToggleLoadSave::Load()
     s_kexWallClipActive = 0;
     Bmemset(s_kexWallWasSaved, 0, sizeof(s_kexWallWasSaved));
 
-    if (Bgetenv("VB_KEX_TOGGLE_SAVE_TEST") && s_kexToggleTestSnapshotValid)
+    if (Bgetenv("NNB_KEX_TOGGLE_SAVE_TEST") && s_kexToggleTestSnapshotValid)
     {
         int const bad = Bmemcmp(s_kexToggleTestSnapshot, s_kexToggleOpen,
                                 sizeof(s_kexToggleOpen))
@@ -6056,8 +6056,8 @@ void KexWall_Reset(void)
         }
     }
     KexPortal_BindSurfaces();
-    s_kexPortalTestPending = s_kexPortals && Bgetenv("VB_KEX_PORTAL_TEST");
-    s_kexToggleTestPending = s_kexToggleFaces && Bgetenv("VB_KEX_TOGGLE_TEST");
+    s_kexPortalTestPending = s_kexPortals && Bgetenv("NNB_KEX_PORTAL_TEST");
+    s_kexToggleTestPending = s_kexToggleFaces && Bgetenv("NNB_KEX_TOGGLE_TEST");
     if (s_kexPortals)
         OSD_Printf("Kex height-selected portals: %d faces on this level\n", s_kexPortals);
     if (s_kexWallClips)
@@ -6333,12 +6333,12 @@ void KexTrigger_Init(void)
     }
 }
 
-// VB_KEXTRIGGER_TEST=<ticks>: that far in, kill what each trigger watches,
+// NNB_KEXTRIGGER_TEST=<ticks>: that far in, kill what each trigger watches,
 // through the same damage path a bullet takes, and see the channel fire.
 void KexTrigger_Test(void)
 {
     static int s_test = -1;
-    if (s_test < 0) { char const *e = getenv("VB_KEXTRIGGER_TEST"); s_test = e ? Batoi(e) : 0; }
+    if (s_test < 0) { char const *e = getenv("NNB_KEXTRIGGER_TEST"); s_test = e ? Batoi(e) : 0; }
     if (s_test <= 0 || --s_test != 0)
         return;
     for (int i = 0; i < s_triggers; i++)
@@ -6480,7 +6480,7 @@ void KexScript_RamsesEnd(void)
         KexScript_FireTag(1020, "Ramses has spoken");
 }
 static KexBossRule const *s_boss;     // this level's, or NULL
-static int s_bossTest;                // VB_KEXBOSS_TEST: 1 kill the boss at tick 60, 2 also hold its artifact first
+static int s_bossTest;                // NNB_KEXBOSS_TEST: 1 kill the boss at tick 60, 2 also hold its artifact first
 static int s_bossTestActive;
 static int s_bossPoll;                // the remaster's two-second script poll
 static uint8_t s_bossExitFired;
@@ -6568,18 +6568,18 @@ void KexScript_BossTick(void)
     // two-second disappearance poll sees the complete boss hierarchy gone.
     if (s_bossTestActive && !s_bossExitFired)
         KexScript_BossKill();
-    // VB_KEXRAMSES_TEST=1: at tick 100, act as if Ramses had just finished
+    // NNB_KEXRAMSES_TEST=1: at tick 100, act as if Ramses had just finished
     // speaking (TOMB's crypt door), without the speech.
     static int s_ramsesTest = -1;
     if (s_ramsesTest < 0)
-        s_ramsesTest = getenv("VB_KEXRAMSES_TEST") ? 100 : 0;
+        s_ramsesTest = getenv("NNB_KEXRAMSES_TEST") ? 100 : 0;
     if (s_ramsesTest > 0 && --s_ramsesTest == 0)
         KexScript_RamsesEnd();
-    // VB_KEXEXPLODE_TEST=1: at tick 100, blow the first bomb wall (statnum
+    // NNB_KEXEXPLODE_TEST=1: at tick 100, blow the first bomb wall (statnum
     // 406, the energy block); its siblings on the tag should follow.
     static int s_explodeTest = -1;
     if (s_explodeTest < 0)
-        s_explodeTest = getenv("VB_KEXEXPLODE_TEST") ? 100 : 0;
+        s_explodeTest = getenv("NNB_KEXEXPLODE_TEST") ? 100 : 0;
     if (s_explodeTest > 0 && --s_explodeTest == 0)
     {
         void ExplodeEnergyBlock(int nSprite);
@@ -6598,7 +6598,7 @@ void KexScript_BossTick(void)
     s_bossTestActive = 1;
     OSD_Printf("Kex boss test: armed %s actor stat %d at native tick 60\n",
                s_boss->map, s_boss->statnum);
-    if (getenv("VB_KEXBOSS_TEST")[0] == '2')
+    if (getenv("NNB_KEXBOSS_TEST")[0] == '2')
     {
         KexInv_GiveArtifact(nLocalPlayer, s_boss->artifact);
         KexScript_BossLoad();
@@ -6689,7 +6689,7 @@ void KexScript_Init(void)
     for (auto const &r : s_bossRule)
         if (!Bstrcmp(base, r.map))
             s_boss = &r;
-    { char const *e = getenv("VB_KEXBOSS_TEST"); s_bossTest = e ? 60 : 0; }
+    { char const *e = getenv("NNB_KEXBOSS_TEST"); s_bossTest = e ? 60 : 0; }
     s_bossTestActive = 0;
     KexScript_BossLoad();
     for (int a = 0; a < kKexArtiCount; a++)
@@ -6807,11 +6807,11 @@ void KexTravel_ChangeMap(int nMap)
 void KexScript_Tick(void)
 {
     KexTrigger_Test();
-    // VB_KEXKEY_TEST=1: at tick 100, hand the local player key 1 and arm the
+    // NNB_KEXKEY_TEST=1: at tick 100, hand the local player key 1 and arm the
     // key rules as if the script sector had been entered (SUNKEN).
     static int s_keyTest = -1;
     if (s_keyTest < 0)
-        s_keyTest = getenv("VB_KEXKEY_TEST") ? 100 : 0;
+        s_keyTest = getenv("NNB_KEXKEY_TEST") ? 100 : 0;
     if (s_keyTest > 0 && --s_keyTest == 0)
     {
         PlayerList[nLocalPlayer].keys |= 0x1000;

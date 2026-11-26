@@ -148,7 +148,7 @@ Shadow Warrior runtime playing Duke E3L6 / Rabid Transit:
 
 ## JavaScript/TypeScript mods
 
-Primary doc: `source/glue/VBJS.md`.
+Primary doc: `source/glue/NNBJS.md`.
 
 Generation commands:
 
@@ -169,16 +169,16 @@ If both exist, `index.ts` wins. Do not generate `main.ts`.
 VS Code debugging:
 
 - Generated `.vscode/launch.json` starts the game with only `-dbg`.
-- The generated adapter reads top-of-file `/// vbd.params="..."` from
+- The generated adapter reads top-of-file `/// nnbd.params="..."` from
   `index.ts` or `index.js` and appends those args only for debug/devtools
   launches.
-- `/// vbd.params="..."` is the implemented top-of-file launch directive.
+- `/// nnbd.params="..."` is the implemented top-of-file launch directive.
 - `-dbg` with no port means engine debugger port `8501`; the DAP adapter uses
   its own local port, currently `4714` in generated projects.
 
 Supported embedded modules are intentionally Node-like where implemented:
 
-- `vb`
+- `nnb`
 - `fs` and `node:fs`
 - `fs/promises` and `node:fs/promises`
 - `dgram` and `node:dgram`
@@ -190,7 +190,7 @@ Do not add JS globals for APIs that are meant to be imported. The public pattern
 is:
 
 ```ts
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 ```
 
 ## Shadow Warrior playing Duke maps
@@ -207,7 +207,7 @@ than an approximation of it; see the bridge doc for the architecture. The
 bridge has an automated self-test:
 
 ```sh
-VB_CP_SELFTEST=1 ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
+NNB_CP_SELFTEST=1 ./nnbuild -gm sw -g "/path/Sw.grp" -gm.lvls duke \
     -g /path/duke3d.grp -map E1L1.MAP -wnd -res640x480 -sc -sm -nosound -nomusic
 ```
 
@@ -215,7 +215,7 @@ Current status:
 
 - `make -j8 nnbuild` passes.
 - E1L1 through E1L8 and E3L6 all report `fail=0`, run per phase group
-  (`VB_CP_SELFTEST=actors|world|destruct|tripmines`); 36 group-runs, 0 failures.
+  (`NNB_CP_SELFTEST=actors|world|destruct|tripmines`); 36 group-runs, 0 failures.
   Re-run over E1L1, E1L2, E1L3, E1L4, E1L7 and E3L6 after the damage delegation:
   24 group-runs, 0 failures.
 - The E3L6 startup `SIGSEGV` no longer reproduces, and leaving a Duke level no
@@ -262,7 +262,7 @@ is not in the working directory:
 A mod's sounds and music are its own as well: sounds are given slots from a
 reserved block filled in from the mod's own CON and read by the name that CON
 gave (path and all), and the level's track comes from the same `definelevelname`
-/ `music` lines that name the level.  `VB_CP_SOUND_PROBE=1` reports how many of
+/ `music` lines that name the level.  `NNB_CP_SOUND_PROBE=1` reports how many of
 a mod's sound files are actually present in its data.
 
 Art a mod declares through a `.def` (`tilefromtexture` with PNG files) is
@@ -334,7 +334,7 @@ launch with `-cfg`, never edit the user's own config:
 When changing behavior, update the relevant Markdown in the same patch:
 
 - `NNBUILD_HANDOFF.md` for restart/agent handoff facts.
-- `source/glue/VBJS.md` for JS/TS API and debugging.
+- `source/glue/NNBJS.md` for JS/TS API and debugging.
 - `source/sw/DUKE_CROSSPLAY_BRIDGE.md` for SW runtime + Duke map behavior.
 - `source/sw/UNIFY_WITH_NNBUILD.md` for high-level SW integration status.
 - `source/nnbuild/NETCODE.md` for netcode-specific behavior.

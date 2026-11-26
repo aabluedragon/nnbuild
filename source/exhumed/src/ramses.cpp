@@ -439,7 +439,7 @@ static int Kex_RamsesStart(void)
     s_kexRamsesTalkClock = (int)totalclock;
     s_kexRamsesEndClock = s_kexRamsesTalkClock + Kex_RamsesDuration(nSpeech) * 120;
     s_kexRamsesSkipClock = s_kexRamsesTalkClock + 4 * 120;
-    if (Bgetenv("VB_KEXRAMSES_VISUAL_TEST"))
+    if (Bgetenv("NNB_KEXRAMSES_VISUAL_TEST"))
         s_kexRamsesEndClock = min(s_kexRamsesEndClock, s_kexRamsesTalkClock + 3 * 120);
     OSD_Printf("Kex Ramses: speech %d, %d facial samples, %d scripted seconds\n",
                nSpeech, sKexTalkCount, Kex_RamsesDuration(nSpeech));
@@ -502,7 +502,7 @@ void KexRamses_Reset(void)
     s_kexTombEndAftermathStartClock = 0;
     s_kexTombEndAftermathNextClock = 0;
     s_kexTombEndAftermathPulses = 0;
-    s_kexTombEndAftermathTest = Bgetenv("VB_KEX_TOMBEND_AFTER_TEST") != NULL;
+    s_kexTombEndAftermathTest = Bgetenv("NNB_KEX_TOMBEND_AFTER_TEST") != NULL;
     sKexTalkCount = 0;
 }
 
@@ -586,7 +586,7 @@ static void Kex_RamsesEnd(void)
 
     if (s_kexRamsesNative)
     {
-        int const visualTest = Bgetenv("VB_KEXRAMSES_VISUAL_TEST") != NULL;
+        int const visualTest = Bgetenv("NNB_KEXRAMSES_VISUAL_TEST") != NULL;
         int const incompleteEnding = Kex_IsTombEnd()
                                   && KexInv_TransCount(0) < KEX_TRANS_PIECES
                                   && !visualTest;
@@ -698,7 +698,7 @@ static void Kex_RamsesFinishNative(void)
     s_kexRamsesPhase = kKexRamsesNone;
     s_kexRamsesNative = 0;
 
-    if (Bgetenv("VB_KEXRAMSES_VISUAL_TEST"))
+    if (Bgetenv("NNB_KEXRAMSES_VISUAL_TEST"))
     {
         int const expectedPhases = (1 << kKexRamsesPrelude) | (1 << kKexRamsesSpawn)
                                  | (1 << kKexRamsesTalk) | (1 << kKexRamsesVanish);
@@ -748,7 +748,7 @@ int KexRamses_Tick(void)
 
     // Unattended presentation probe. It starts the real cinematic after the
     // map has settled; its dialogue timer is shortened in Kex_RamsesStart().
-    if (g_kexMode && !s_kexRamsesTestStarted && Bgetenv("VB_KEXRAMSES_VISUAL_TEST")
+    if (g_kexMode && !s_kexRamsesTestStarted && Bgetenv("NNB_KEXRAMSES_VISUAL_TEST")
         && totalmoves >= 30 && !nFreeze && (Kex_IsTomb() || Kex_IsTombEnd())
         && (unsigned)nSpiritSprite < (unsigned)kMaxSprites)
     {

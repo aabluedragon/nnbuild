@@ -25,7 +25,7 @@ ashline-relay/
   README.md
   Maps/
     Ashline.map               the map
-    Ashline.map.vbmap.json    settings for that map
+    Ashline.map.nnbmap.json   settings for that map
   Scripts/
     Station.js                a script component
   Sounds/
@@ -240,7 +240,7 @@ are written when you save the map.
 ### The map settings file
 
 The settings are stored beside the map in a file with the map's full name plus
-`.vbmap.json`. For `Maps/Ashline.map` this is `Maps/Ashline.map.vbmap.json`.
+`.nnbmap.json`. For `Maps/Ashline.map` this is `Maps/Ashline.map.nnbmap.json`.
 
 The file is written only when the map has something to store: a game target of
 its own, a Modern Mode choice, or script components. A plain classic map has
@@ -523,17 +523,17 @@ to keep values for that one attachment.
 
 A prefab is a saved group of sprites that you can place again and again, such
 as a desk with a lamp and a switch. It is stored in the project as a file
-ending in `.vbprefab`. Prefabs need an open project with Modern Mode on.
+ending in `.nnbprefab`. Prefabs need an open project with Modern Mode on.
 
 **Create a prefab**
 
 1. Select a sprite. For several, turn on
    [Batch Select](building-tools.md#batch-selection) and click each sprite.
 2. Click **Create Prefab...** in the Inspector.
-3. Type a path inside the project, such as `Prefabs/Desk.vbprefab`.
+3. Type a path inside the project, such as `Prefabs/Desk.nnbprefab`.
 4. Click **Save Prefab**.
 
-The editor adds `.vbprefab` if you leave it out. An existing file is not
+The editor adds `.nnbprefab` if you leave it out. An existing file is not
 replaced.
 
 A prefab stores:
@@ -544,7 +544,7 @@ A prefab stores:
 - the script components attached to each sprite,
 - the game target of the map it came from.
 
-A `.vbprefab` file is JSON text. It holds `version` (always `1`), `target` (a
+A `.nnbprefab` file is JSON text. It holds `version` (always `1`), `target` (a
 game target ID) and a `sprites` list. Each entry in the list has these number fields: `x`, `y`, `z`, `tile`,
 `flags`, `palette`, `shade`, `blend`, `clip_distance`, `repeat_x`, `repeat_y`,
 `offset_x`, `offset_y`, `angle`, `status`, `owner`, `velocity_x`,

@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "communityapi.h"
 #include "duke3d.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "gamedef.h"
 #include "scriplib.h"
 
@@ -185,7 +185,7 @@ void X_OnEvent(int iEventID, int iActor, int iPlayer, int lDist)
 
     ERROR_CONTEXT("VM event execution", &EventNames[iEventID][0]);
 
-    VBJS_FireConEvent(iEventID, iActor, iPlayer, lDist);   // NNBuild: every CON event -> JS (no-op if unlistened)
+    NNBJS_FireConEvent(iEventID, iActor, iPlayer, lDist);   // NNBuild: every CON event -> JS (no-op if unlistened)
 
     if (!apScriptEvents[iEventID])   // no compiled CON body: JS already saw it, nothing more to run
         return;

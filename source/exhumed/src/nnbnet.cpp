@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// NNBuild multiplayer for Powerslave / Exhumed.  See vbnet.h for the
+// NNBuild multiplayer for Powerslave / Exhumed.  See nnbnet.h for the
 // overview; source/nnbuild/NETCODE.md for the determinism rules this file
 // has to honour.
 //
@@ -38,7 +38,7 @@
 #include "keyboard.h"
 #include "control.h"
 #include "names.h"
-#include "vbnet.h"
+#include "nnbnet.h"
 #include "save.h"
 #include "kexinv.h"
 #include "kexbreak.h"
@@ -182,10 +182,10 @@ static int  s_playerColor;
 static int  s_startNowPlayers = 2;
 static int  s_startNow;
 static int  s_wait;
-static char s_netFiles[VB_MAX_NETFILES][BMAX_PATH];
+static char s_netFiles[NNB_MAX_NETFILES][BMAX_PATH];
 static int  s_filesDone = 0;   // host said it has finished streaming (joiner side)
 static int  s_netFileCount;
-static vb_filerecv_t s_recv;
+static nnb_filerecv_t s_recv;
 
 // ---- chat ------------------------------------------------------------------
 // Chat is deliberately outside the tick stream: it is delivered on the same
@@ -201,8 +201,8 @@ static int ExNet_OSDCmd_Say(osdcmdptr_t parm);   // defined with the rest of the
 void ExNet_SetPunchTarget(const char *addr) { Bstrncpyz(s_punchTarget, addr, sizeof(s_punchTarget)); }
 void ExNet_SetMasterAddr(const char *addr)  { Bstrncpyz(s_masterAddr,  addr, sizeof(s_masterAddr)); }
 void ExNet_SetAutoJoin(const char *addr)    { Bstrncpyz(s_autoJoinMaster, addr, sizeof(s_autoJoinMaster)); }
-void ExNet_SetAdvertise(const char *addr)   { VB_SetAdvertise(addr); }
-int  ExNet_QueryLobby(const char *addr)     { return VB_QueryLobby(addr, "Exhumed"); }
+void ExNet_SetAdvertise(const char *addr)   { NNB_SetAdvertise(addr); }
+int  ExNet_QueryLobby(const char *addr)     { return NNB_QueryLobby(addr, "Exhumed"); }
 void ExNet_SetPlayerName(const char *name)  { Bstrncpyz(s_playerName, name, sizeof(s_playerName)); }
 void ExNet_SetPlayerColor(int color)        { s_playerColor = clamp(color, 0, 7); }
 void ExNet_SetStartNowPlayers(int n)        { s_startNowPlayers = clamp(n, 2, kMaxPlayers); }
@@ -211,7 +211,7 @@ void ExNet_SetWait(int on)                  { s_wait = on; }
 void ExNet_SetLateJoin(int on)               { s_lateJoinEnabled = on; }
 void ExNet_AddNetFile(const char *path)
 {
-    if (s_netFileCount < VB_MAX_NETFILES)
+    if (s_netFileCount < NNB_MAX_NETFILES)
         Bstrncpyz(s_netFiles[s_netFileCount++], path, BMAX_PATH);
 }
 
@@ -351,24 +351,24 @@ static int ExNet_Recv(int *from, uint8_t *buf)
 
 static void ExNet_PackInput(uint8_t *p, const PlayerInput *in)
 {
-    VB_put32((char *)&p[0],  (uint32_t)in->xVel);
-    VB_put32((char *)&p[4],  (uint32_t)in->yVel);
-    VB_put32((char *)&p[8],  (uint32_t)in->nAngle);
-    VB_put32((char *)&p[12], (uint32_t)in->horizon);
-    VB_put16((char *)&p[16], in->buttons);
-    VB_put16((char *)&p[18], (uint16_t)in->nTarget);
+    NNB_put32((char *)&p[0],  (uint32_t)in->xVel);
+    NNB_put32((char *)&p[4],  (uint32_t)in->yVel);
+    NNB_put32((char *)&p[8],  (uint32_t)in->nAngle);
+    NNB_put32((char *)&p[12], (uint32_t)in->horizon);
+    NNB_put16((char *)&p[16], in->buttons);
+    NNB_put16((char *)&p[18], (uint16_t)in->nTarget);
     p[20] = (uint8_t)in->nItem;
 }
 
 static void ExNet_UnpackInput(const uint8_t *p, PlayerInput *in)
 {
     Bmemset(in, 0, sizeof(*in));
-    in->xVel    = (int32_t)VB_get32(&p[0]);
-    in->yVel    = (int32_t)VB_get32(&p[4]);
-    in->nAngle  = (fix16_t)VB_get32(&p[8]);
-    in->horizon = (fix16_t)VB_get32(&p[12]);
-    in->buttons = VB_get16(&p[16]);
-    in->nTarget = (int16_t)VB_get16(&p[18]);
+    in->xVel    = (int32_t)NNB_get32(&p[0]);
+    in->yVel    = (int32_t)NNB_get32(&p[4]);
+    in->nAngle  = (fix16_t)NNB_get32(&p[8]);
+    in->horizon = (fix16_t)NNB_get32(&p[12]);
+    in->buttons = NNB_get16(&p[16]);
+    in->nTarget = (int16_t)NNB_get16(&p[18]);
     in->nItem   = (int8_t)p[20];
 }
 
@@ -433,14 +433,14 @@ static void ExNet_NetworkSnapshotSelftest(void)
     static int state = -1;
     if (state < 0)
     {
-        char const *const path = Bgetenv("VB_EXNET_SNAPSHOT_FILE");
+        char const *const path = Bgetenv("NNB_EXNET_SNAPSHOT_FILE");
         state = ExNet_IsServer() && path && path[0] ? 1 : 0;
     }
     if (state != 1 || s_netTick < 120)
         return;
     state = 2;
 
-    char const *const path = Bgetenv("VB_EXNET_SNAPSHOT_FILE");
+    char const *const path = Bgetenv("NNB_EXNET_SNAPSHOT_FILE");
     uint32_t const expected = ExNet_SnapshotPlayerHash();
     LoadSave::SaveNetworkSnapshot(path);
 
@@ -499,7 +499,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         {
             if (len < 1 + 4 + EXNET_INPUT_BYTES || !ExNet_SlotActive(from))
                 break;
-            uint32_t const tick = VB_get32(&pkt[1]);
+            uint32_t const tick = NNB_get32(&pkt[1]);
             // A tick we have already run, or one absurdly far ahead, can only be
             // a duplicate or a corrupt packet; either way it must not scribble
             // over a live ring slot.
@@ -515,7 +515,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         {
             if (len < 5 || !ExNet_SlotActive(from))
                 break;
-            uint32_t const gen = VB_get32(&pkt[1]);
+            uint32_t const gen = NNB_get32(&pkt[1]);
             if (gen > s_readyGen[from])
                 s_readyGen[from] = gen;
             break;
@@ -525,8 +525,8 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         {
             if (len < 9 || !ExNet_SlotActive(from))
                 break;
-            uint32_t const tick = VB_get32(&pkt[1]);
-            uint32_t const crc  = VB_get32(&pkt[5]);
+            uint32_t const tick = NNB_get32(&pkt[1]);
+            uint32_t const crc  = NNB_get32(&pkt[5]);
             if (tick >= s_netTick || s_netTick - tick >= EXNET_RINGSIZ)
                 break;                                   // we have not run it yet, or it aged out
             if (!s_syncHave[tick & EXNET_RINGMASK])
@@ -555,7 +555,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
             if (!ExNet_SlotActive(who) || s_gone[who])
                 break;
             s_gone[who] = 1;
-            s_goneTick[who] = max(VB_get32(&pkt[2]), s_netTick);
+            s_goneTick[who] = max(NNB_get32(&pkt[2]), s_netTick);
             LOG_F(WARNING, "Exhumed net: master dropped silent player %d at tick %u", who, s_goneTick[who]);
             break;
         }
@@ -564,7 +564,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         {
             if (len < 5 || !ExNet_SlotActive(from))
                 break;
-            uint32_t const tick = VB_get32(&pkt[1]);
+            uint32_t const tick = NNB_get32(&pkt[1]);
             // Everyone drops this player at the same tick, so the sims stay
             // identical across the removal.
             s_gone[from] = 1;
@@ -587,8 +587,8 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
             break;
         }
 
-        case EXNET_PT_FILE_HEADER: VB_RecvFileHeader(&s_recv, pkt, "Exhumed"); break;
-        case EXNET_PT_FILE_CHUNK:  VB_RecvFileChunk(&s_recv, pkt, "Exhumed");  break;
+        case EXNET_PT_FILE_HEADER: NNB_RecvFileHeader(&s_recv, pkt, "Exhumed"); break;
+        case EXNET_PT_FILE_CHUNK:  NNB_RecvFileChunk(&s_recv, pkt, "Exhumed");  break;
         case EXNET_PT_FILES_DONE:  s_filesDone = 1; break;
 
         case EXNET_PT_LATE_ANNOUNCE:
@@ -619,7 +619,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         case EXNET_PT_LATE_FREEZE:
             if (len == 1 + 4 && from == connecthead && !s_lateJoiner && ExNet_SlotActive(myconnectindex))
             {
-                uint32_t const tick = VB_get32(&pkt[1]);
+                uint32_t const tick = NNB_get32(&pkt[1]);
                 if (tick == UINT32_MAX)
                 {
                     s_lateFreezeTick = UINT32_MAX;
@@ -644,7 +644,7 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
 
         case EXNET_PT_LATE_FROZEN:
             if (ExNet_IsServer() && len == 1 + 4 && ExNet_SlotActive(from)
-                && s_lateFreezeTick == VB_get32(&pkt[1]))
+                && s_lateFreezeTick == NNB_get32(&pkt[1]))
                 s_lateFrozen[from] = 1;
             break;
 
@@ -652,9 +652,9 @@ static void ExNet_HandlePacket(int from, const uint8_t *pkt, int len)
         {
             if (!s_lateJoiner || from != connecthead || len < 1 + 2 + 2 + 2)
                 break;
-            int const seq = VB_get16(&pkt[1]);
-            int const total = VB_get16(&pkt[3]);
-            int const bytes = VB_get16(&pkt[5]);
+            int const seq = NNB_get16(&pkt[1]);
+            int const total = NNB_get16(&pkt[3]);
+            int const bytes = NNB_get16(&pkt[5]);
             if (total <= 0 || total > EXNET_LATE_MAX_BYTES / EXNET_LATE_CHUNK_SIZE
                 || seq < 0 || seq >= total || bytes <= 0 || bytes > EXNET_LATE_CHUNK_SIZE
                 || len != 1 + 2 + 2 + 2 + bytes)
@@ -763,7 +763,7 @@ void ExNet_HostAdvertise(void)
     int const hostPlayer = ExNet_PlayerForSlot(connecthead);
     char const *name = hostPlayer >= 0 ? playerNames[hostPlayer] : "";
     int const advertisedPlayers = s_rosterReady ? s_activePlayers : 1;
-    VB_HostAdvertisePulse(1, name && name[0] ? name : "NNBuild Powerslave server",
+    NNB_HostAdvertisePulse(1, name && name[0] ? name : "NNBuild Powerslave server",
                           mmulti_getport(), advertisedPlayers, kMaxPlayers, map);
 }
 
@@ -798,7 +798,7 @@ int ExNet_ResolveAutoJoin(void)
         return 0;
 
     char name[32] = "";
-    if (!VB_QueryFirstServer(s_autoJoinMaster, ExNet_autoJoinServer, sizeof(ExNet_autoJoinServer),
+    if (!NNB_QueryFirstServer(s_autoJoinMaster, ExNet_autoJoinServer, sizeof(ExNet_autoJoinServer),
                              name, sizeof(name)))
         return 0;
 
@@ -867,7 +867,7 @@ static void ExNet_SendFile(int slot, const char *name, int fileIndex, int fileTo
 {
     if (!ExNet_IsServer())
         return;
-    VB_SendFile(ExNet_SendCb, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
+    NNB_SendFile(ExNet_SendCb, (void *)(intptr_t)slot, name, fileIndex, fileTotal,
                 EXNET_PT_FILE_HEADER, EXNET_PT_FILE_CHUNK, "Exhumed");
 }
 
@@ -895,7 +895,7 @@ void ExNet_SendGameFiles(int slot)
 }
 
 // Joiner side of the same exchange. The received files are mounted the moment
-// they land (VB_RecvFileChunk calls initgroupfile), so this has to complete
+// they land (NNB_RecvFileChunk calls initgroupfile), so this has to complete
 // BEFORE InstallEngine() reads the ART -- otherwise a mod GRP would be mounted
 // after the tiles were already loaded from the base game and have no effect.
 void ExNet_ReceiveGameFiles(void)
@@ -1120,7 +1120,7 @@ static void ExNet_AbortLateJoin(char const *reason)
     {
         uint8_t thaw[1 + 4];
         thaw[0] = EXNET_PT_LATE_FREEZE;
-        VB_put32((char *)&thaw[1], UINT32_MAX);
+        NNB_put32((char *)&thaw[1], UINT32_MAX);
         ExNet_Broadcast(thaw, sizeof(thaw));
     }
     s_lateFreezeTick = UINT32_MAX;
@@ -1174,9 +1174,9 @@ static int ExNet_SendLateSnapshot(void)
         int const bytes = min(EXNET_LATE_CHUNK_SIZE, (int)fileBytes - seq * EXNET_LATE_CHUNK_SIZE);
         uint8_t pkt[1 + 2 + 2 + 2 + EXNET_LATE_CHUNK_SIZE];
         pkt[0] = EXNET_PT_LATE_SNAPSHOT;
-        VB_put16((char *)&pkt[1], (uint16_t)seq);
-        VB_put16((char *)&pkt[3], (uint16_t)chunks);
-        VB_put16((char *)&pkt[5], (uint16_t)bytes);
+        NNB_put16((char *)&pkt[1], (uint16_t)seq);
+        NNB_put16((char *)&pkt[3], (uint16_t)chunks);
+        NNB_put16((char *)&pkt[5], (uint16_t)bytes);
         if (Bfread(&pkt[7], 1, bytes, fp) != (size_t)bytes)
         {
             Bfclose(fp);
@@ -1297,7 +1297,7 @@ static void ExNet_HostCheckLateJoin(void)
         Bmemset(s_lateFrozen, 0, sizeof(s_lateFrozen));
         uint8_t freeze[1 + 4];
         freeze[0] = EXNET_PT_LATE_FREEZE;
-        VB_put32((char *)&freeze[1], s_lateFreezeTick);
+        NNB_put32((char *)&freeze[1], s_lateFreezeTick);
         ExNet_Broadcast(freeze, sizeof(freeze));
         LOG_F(INFO, "Exhumed net: late join will freeze at tick %u", s_lateFreezeTick);
         return;
@@ -1529,7 +1529,7 @@ void ExNet_LevelStart(void)
 
     uint8_t pkt[5];
     pkt[0] = EXNET_PT_READY;
-    VB_put32((char *)&pkt[1], s_levelGen);
+    NNB_put32((char *)&pkt[1], s_levelGen);
     ExNet_Broadcast(pkt, sizeof(pkt));
 
     LOG_F(INFO, "Exhumed net: waiting for all %d active player(s) at the level-start barrier...", s_activePlayers);
@@ -1657,7 +1657,7 @@ static void ExNet_CheckTimeouts(void)
         uint8_t pkt[6];
         pkt[0] = EXNET_PT_DROP;
         pkt[1] = (uint8_t)p;
-        VB_put32((char *)&pkt[2], s_goneTick[p]);
+        NNB_put32((char *)&pkt[2], s_goneTick[p]);
         ExNet_Broadcast(pkt, sizeof(pkt));
 
         LOG_F(WARNING, "Exhumed net: player %d timed out, dropping at tick %u", p, s_goneTick[p]);
@@ -1676,7 +1676,7 @@ static void ExNet_CheckLateFreeze(void)
     {
         uint8_t pkt[1 + 4];
         pkt[0] = EXNET_PT_LATE_FROZEN;
-        VB_put32((char *)&pkt[1], s_lateFreezeTick);
+        NNB_put32((char *)&pkt[1], s_lateFreezeTick);
         ExNet_SendDirect(connecthead, pkt, sizeof(pkt));
     }
     LOG_F(INFO, "Exhumed net: reached late-join freeze tick %u", s_lateFreezeTick);
@@ -1723,7 +1723,7 @@ void ExNet_Update(void)
 
         uint8_t pkt[1 + 4 + EXNET_INPUT_BYTES];
         pkt[0] = EXNET_PT_INPUT;
-        VB_put32((char *)&pkt[1], s_sendTick);
+        NNB_put32((char *)&pkt[1], s_sendTick);
         ExNet_PackInput(&pkt[5], &local);
         ExNet_Broadcast(pkt, sizeof(pkt));
 
@@ -1806,12 +1806,12 @@ void ExNet_EndTick(void)
     {
         uint8_t pkt[9];
         pkt[0] = EXNET_PT_SYNC;
-        VB_put32((char *)&pkt[1], t);
-        VB_put32((char *)&pkt[5], crc);
+        NNB_put32((char *)&pkt[1], t);
+        NNB_put32((char *)&pkt[5], crc);
         ExNet_Broadcast(pkt, sizeof(pkt));
     }
 
-    // VB_EXNET_DEBUG=<ticks> traces the lockstep cursor. Without it a clean
+    // NNB_EXNET_DEBUG=<ticks> traces the lockstep cursor. Without it a clean
     // "no desyncs" result is not worth much -- a sim that never advanced also
     // never disagrees -- so this is what makes the two-instance test mean
     // something.
@@ -1819,7 +1819,7 @@ void ExNet_EndTick(void)
         static int32_t traceEvery = -1;
         if (traceEvery < 0)
         {
-            char const *const env = Bgetenv("VB_EXNET_DEBUG");
+            char const *const env = Bgetenv("NNB_EXNET_DEBUG");
             traceEvery = env != NULL ? Batoi(env) : 0;
         }
         if (traceEvery > 0 && (t % (uint32_t)traceEvery) == 0)
@@ -1963,7 +1963,7 @@ void ExNet_SendQuit(void)
 
     uint8_t pkt[5];
     pkt[0] = EXNET_PT_QUIT;
-    VB_put32((char *)&pkt[1], s_netTick + EXNET_INPUT_DELAY);
+    NNB_put32((char *)&pkt[1], s_netTick + EXNET_INPUT_DELAY);
     ExNet_Broadcast(pkt, sizeof(pkt));
 
     // The reliable channel needs a moment to hand the message over before we

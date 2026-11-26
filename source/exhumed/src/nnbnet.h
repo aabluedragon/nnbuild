@@ -16,8 +16,8 @@
 // every live player's input for T.
 //
 //-------------------------------------------------------------------------
-#ifndef __vbnet_h__
-#define __vbnet_h__
+#ifndef __nnbnet_h__
+#define __nnbnet_h__
 
 #include "compat.h"
 

@@ -594,7 +594,7 @@ static bool KexElevSound(short nSprite, int nVal, bool bStop)
         : (nVal & 2 ? "sounds/platstart.wav" : "sounds/stonemov.wav");
     char const * const path = KexSound_Alias(name, NULL);
     int const sound = KexSound_Get(name);
-    if (Bgetenv("VB_KEXMOVER_SOUND_TEST"))
+    if (Bgetenv("NNB_KEXMOVER_SOUND_TEST"))
         OSD_Printf("Kex mover sound test: %s (%s -> %s)\n",
                    path && !Bstrcasecmp(path, want) ? "PASS" : "FAIL",
                    bStop ? "stop" : (nVal & 2 ? "floor/lift" : "door"), want);
@@ -1633,7 +1633,7 @@ int BuildBoulderTrap(int nSprite, int nSpeed)
 void KexTrap_TestTick()
 {
     if (s_kexTrapTest < 0)
-        s_kexTrapTest = g_kexMode && Bgetenv("VB_KEX_TRAP_TEST") ? 1 : 0;
+        s_kexTrapTest = g_kexMode && Bgetenv("NNB_KEX_TRAP_TEST") ? 1 : 0;
     if (s_kexTrapTest != 1)
         return;
     s_kexTrapTest = 2;

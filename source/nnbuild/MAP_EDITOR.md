@@ -164,14 +164,14 @@ Each module can export any of the following hooks.
 
 The context provides `kind`, `index`, `map`, and a fresh `state` object
 for each attachment. Use `state` for per-instance values. Components can
-use `vb` and relative ES module imports. The next playtest reloads the
+use `nnb` and relative ES module imports. The next playtest reloads the
 component modules. Players can enable components in an exported ZIP with
 `--allow-project-scripts`.
 
 ### Prefabs
 
 Select a sprite or use **Batch Select** to pick several, then choose
-**Create Prefab** in Inspector. Save the `.vbprefab` asset in the project.
+**Create Prefab** in Inspector. Save the `.nnbprefab` asset in the project.
 The prefab keeps the sprites' relative positions, floor heights, Build
 properties, and component references.
 

@@ -3,7 +3,7 @@
 A script reacts to the game by listening to events.
 
 ```ts
-import { on } from 'vb';
+import { on } from 'nnb';
 
 on('levelChanged', () => {
   // a level has been loaded
@@ -60,7 +60,7 @@ It can also happen in a multiplayer game started from the command line, includin
 In these cases your script does not receive `gameStarted` or `levelChanged` for that first level. It still receives `start`. To cover both cases, do your setup in a function and call it from `start` when a game is already running:
 
 ```ts
-import { on, session } from 'vb';
+import { on, session } from 'nnb';
 
 function setup() {
   // level-dependent setup
@@ -110,7 +110,7 @@ The event object is `{ sprite, owner, tile }`.
 `actorSpawned` fires very often while a level loads. Filter by `tile` first and do little work.
 
 ```ts
-import { on, define, log } from 'vb';
+import { on, define, log } from 'nnb';
 
 let trooper: number | undefined;
 on('start', () => {
@@ -154,7 +154,7 @@ Be careful with a handler that answers every `chatMessage` with `sendMessage`. I
 CON is the game's original scripting language. The engine calls CON *events* at fixed points, for example when a player jumps. A script can listen to every one of them.
 
 ```ts
-import { on, setGamevar } from 'vb';
+import { on, setGamevar } from 'nnb';
 
 // Cancel every jump.
 on('EVENT_JUMP', (e) => {
@@ -256,9 +256,9 @@ EVENT_WEAPKEY10 EVENT_WORLD
 
 A name on this list is accepted by `on()`. Whether and when the event fires depends on the game and on what happens in it.
 
-### Names missing from `vb.d.ts`
+### Names missing from `nnb.d.ts`
 
-The generated `vb.d.ts` knows 112 of these names. The other 53 work at run time, but the type check treats them as unknown event names and gives the handler an untyped argument:
+The generated `nnb.d.ts` knows 112 of these names. The other 53 work at run time, but the type check treats them as unknown event names and gives the handler an untyped argument:
 
 ```text
 EVENT_ACTIVATECHEAT EVENT_CAPIR EVENT_CHANGEMENU EVENT_CHECKFLOORDAMAGE
@@ -280,7 +280,7 @@ EVENT_VALIDATESTART
 For these, give the argument its type yourself:
 
 ```ts
-import { on } from 'vb';
+import { on } from 'nnb';
 
 on('EVENT_DAMAGEWALL', (event) => {
   const e = event as ConEvent;

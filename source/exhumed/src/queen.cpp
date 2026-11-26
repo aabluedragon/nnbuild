@@ -2168,7 +2168,7 @@ int BuildQueen(int nSprite, int x, int y, int z, int nSector, int nAngle, int nC
     nCreaturesLeft++;
 
     if (s_queenAudit < 0)
-        s_queenAudit = g_kexMode && Bgetenv("VB_KEX_QUEEN_AUDIT") ? 1 : 0;
+        s_queenAudit = g_kexMode && Bgetenv("NNB_KEX_QUEEN_AUDIT") ? 1 : 0;
     if (s_queenAudit && !s_queenAuditSeen)
     {
         s_queenAuditSeen = 1;
@@ -3200,7 +3200,7 @@ static void KexQueenTestFinish(bool bOkay)
 void KexQueen_TestTick()
 {
     if (s_queenTest == -1)
-        s_queenTest = g_kexMode && Bgetenv("VB_KEX_QUEEN_TEST") ? 0 : -2;
+        s_queenTest = g_kexMode && Bgetenv("NNB_KEX_QUEEN_TEST") ? 0 : -2;
     if (s_queenTest < 0)
         return;
 

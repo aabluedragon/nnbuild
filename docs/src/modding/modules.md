@@ -1,6 +1,6 @@
 # Built-in modules
 
-Besides [`vb`](api-reference.md), scripts can use a few modules and global functions that look like their Node.js or browser counterparts.
+Besides [`nnb`](api-reference.md), scripts can use a few modules and global functions that look like their Node.js or browser counterparts.
 
 This is not Node.js. Only the functions listed on this page exist. A function that Node.js has and this page does not list is not available.
 
@@ -64,7 +64,7 @@ A relative path is relative to the folder the game runs in. That is usually the 
 | `renameSync(oldPath, newPath)` | `undefined` | Renames or moves a file. |
 | `mkdirSync(path)` | `undefined` | Creates one folder. No error if it already exists. |
 | `readdirSync(path)` | array of strings | The names in a folder, without `.` and `..`. |
-| `statSync(path)` | object | `{ size, isFile(), isDirectory() }`. Named `FSStats` in `vb.d.ts`. |
+| `statSync(path)` | object | `{ size, isFile(), isDirectory() }`. Named `FSStats` in `nnb.d.ts`. |
 
 - **Text or bytes.** `readFileSync(path)` returns a `Uint8Array`. To get a string, pass an encoding: `readFileSync(path, 'utf8')` or `readFileSync(path, { encoding: 'utf8' })`. The file is always read as UTF-8, whatever encoding name you pass.
 - **`data` is text.** `writeFileSync` and `appendFileSync` convert `data` to a string. A `Uint8Array` is written as its text form (`1,2,3`), not as bytes. Binary writing is not supported.
@@ -97,7 +97,7 @@ The same object is the module `fs/promises`:
 
 ```ts
 import promises from 'fs/promises';
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 
 on('start', async () => {
   await promises.writeFile('notes.txt', 'hello');
@@ -226,7 +226,7 @@ cvar.set('r_maxfps', 60);
 | `cvar.set(name, value)` | Short for `cvar.run(name + ' ' + value)`. |
 
 - Commands are queued. They run after your code returns, on the next pass of the game loop, during play and at the title menu. See [`run`](api-reference.md#console).
-- `vb.run` is the same function as `cvar.run`.
+- `nnb.run` is the same function as `cvar.run`.
 - You cannot read the value of a console variable, and you get no result back.
 - In Shadow Warrior the functions exist, but the commands are never executed.
 
@@ -262,7 +262,7 @@ Things to know:
 - You can read the body as often as you like. It is fully downloaded before the promise resolves. There is no streaming.
 
 ```ts
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 
 on('start', async () => {
   try {
@@ -308,7 +308,7 @@ Not implemented: `setImmediate`, `timer.unref()`, `timer.refresh()`.
 
 ## console
 
-`console.log`, `console.info`, `console.warn` and `console.error` all do the same as [`vb.log`](api-reference.md#logging): they write one line to the game log. There are no log levels.
+`console.log`, `console.info`, `console.warn` and `console.error` all do the same as [`nnb.log`](api-reference.md#logging): they write one line to the game log. There are no log levels.
 
 Not implemented: `console.table`, `console.time`, `console.assert`, `console.trace` and the rest.
 
@@ -321,7 +321,7 @@ const fs = require('fs');
 const helpers = require('./helpers.js');
 ```
 
-Built-in names: `vb`, `cvar`, `fs`, `node:fs`, `fs/promises`, `node:fs/promises`, `dgram`, `node:dgram`, `net`, `node:net`.
+Built-in names: `nnb`, `cvar`, `fs`, `node:fs`, `fs/promises`, `node:fs/promises`, `dgram`, `node:dgram`, `net`, `node:net`.
 
 For the rules that apply to your own files, see [`require`](project-layout.md#require). There is no `module`, `exports`, `__dirname` or `__filename` at the top level of an entry file, because entry files are ES modules. A file loaded through `require` does receive `module` and `exports`.
 

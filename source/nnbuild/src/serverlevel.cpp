@@ -177,7 +177,7 @@ bool readLaunchFile(ServerLaunch &state)
     std::ifstream file(launchFile, std::ios::binary);
     std::string magic;
     size_t count, commandCount;
-    if (!(file >> magic) || magic != "VB-SERVER-2" ||
+    if (!(file >> magic) || magic != "NNB-SERVER-2" ||
         !(file >> std::quoted(state.target.pack) >> std::quoted(state.target.level) >>
           state.cycleIndex >> state.rotation >> state.coop >> state.skill >>
           state.fragLimit >> state.dmflags >> count >> commandCount) ||
@@ -208,7 +208,7 @@ bool writeLaunchFile(std::string const &path, ServerLevel const &target, int ind
 {
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     auto const commands = G_PendingStartupCommands();
-    file << "VB-SERVER-2\n" << std::quoted(target.pack) << ' ' << std::quoted(target.level) << '\n'
+    file << "NNB-SERVER-2\n" << std::quoted(target.pack) << ' ' << std::quoted(target.level) << '\n'
          << index << ' ' << g_mapRotationMode << ' ' << ud.m_coop << ' ' << ud.m_player_skill << ' '
          << ud.fraglimit << ' ' << ud.m_dmflags << ' ' << cycle.size() << ' ' << commands.size() << '\n';
     for (auto const &entry : cycle)

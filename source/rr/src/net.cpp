@@ -2922,17 +2922,17 @@ void Net_ReceiveDisconnect(ENetEvent *event)
 static char s_rrMasterAddr[128] = "";   // masterserver used for -joinlobby / NAT punch
 static char s_rrJoinAddr[128]   = "";   // "ip:port" of the server we are joining (punch target)
 
-void Net_SetAdvertise(const char *addr) { VB_SetAdvertise(addr); }  // -advertise <masteraddr> (shared)
+void Net_SetAdvertise(const char *addr) { NNB_SetAdvertise(addr); }  // -advertise <masteraddr> (shared)
 
 void Net_HostAdvertise(void)  // pulse this server to the masterserver (host only)
 {
     char map[24];
     Bstrncpyz(map, boardfilename[0] ? boardfilename : "Redneck Rampage", sizeof(map));
-    VB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Redneck server",
+    NNB_HostAdvertisePulse(g_networkMode == NET_SERVER, szPlayerName[0] ? szPlayerName : "NNBuild Redneck server",
                           g_netPort, numplayers, numplayers, map);
 }
 
-int Net_QueryLobby(const char *masterAddr) { return VB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
+int Net_QueryLobby(const char *masterAddr) { return NNB_QueryLobby(masterAddr, "RR"); }  // -lobbylist (shared)
 
 // Client NAT hole-punch: ask the masterserver to punch a hole toward the server we
 // are joining. The request must leave our GAME socket (enet's) so the master learns
@@ -2941,7 +2941,7 @@ void Net_ClientPunch(void)
 {
     if (!s_rrMasterAddr[0] || g_networkMode != NET_CLIENT || !g_netClient || !s_rrJoinAddr[0])
         return;
-    VB_SendPunch(s_rrMasterAddr, s_rrJoinAddr, g_netClient->socket, "RR");
+    NNB_SendPunch(s_rrMasterAddr, s_rrJoinAddr, g_netClient->socket, "RR");
 }
 
 // -joinlobby <masteraddr>: query the masterserver, pick the first advertised server,
@@ -2950,7 +2950,7 @@ int Net_JoinLobby(const char *masterAddr)
 {
     Bstrncpyz(s_rrMasterAddr, masterAddr, sizeof(s_rrMasterAddr));  // remember for NAT punch
     char ep[64], name[32];
-    if (!VB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
+    if (!NNB_QueryFirstServer(masterAddr, ep, sizeof(ep), name, sizeof(name))) return 0;
     Bstrncpyz(s_rrJoinAddr, ep, sizeof(s_rrJoinAddr));  // "ip:port" punch target
     g_networkMode = NET_CLIENT;
     LOG_F(INFO, "joinlobby: joining \"%s\" at %s (via masterserver %s)", name, ep, masterAddr);
@@ -2964,37 +2964,37 @@ int Net_JoinLobby(const char *masterAddr)
 // packets go host->joiner on CHAN_GAMESTATE (reliable, ordered) and are enqueued
 // before the match-start NEW_GAME packet, so the client has the files by the time
 // it enters the level. Mirrors the Blood/Duke transfer (FNV-1a crc, 1KB chunks).
-// Wire constants + crc/byte helpers are shared in netshared.h (VB_*).
-static char     s_rrNetFiles[VB_MAX_NETFILES][BMAX_PATH];
+// Wire constants + crc/byte helpers are shared in netshared.h (NNB_*).
+static char     s_rrNetFiles[NNB_MAX_NETFILES][BMAX_PATH];
 static int      s_rrNetFileCount = 0;
-static vb_filerecv_t s_rrRecv;   // incoming file reassembly (shared receiver, netshared.h)
+static nnb_filerecv_t s_rrRecv;   // incoming file reassembly (shared receiver, netshared.h)
 
-void Net_AddNetFile(const char *path) { if (s_rrNetFileCount < VB_MAX_NETFILES) Bstrncpyz(s_rrNetFiles[s_rrNetFileCount++], path, BMAX_PATH); }
+void Net_AddNetFile(const char *path) { if (s_rrNetFileCount < NNB_MAX_NETFILES) Bstrncpyz(s_rrNetFiles[s_rrNetFileCount++], path, BMAX_PATH); }
 
-// enet transport callback for the shared VB_SendFile: reliable send to one peer.
+// enet transport callback for the shared NNB_SendFile: reliable send to one peer.
 static void rr_SendCb(void *ctx, const void *buf, int len)
 {
     enet_peer_send((ENetPeer *)ctx, CHAN_GAMESTATE, enet_packet_create((void *)buf, len, ENET_PACKET_FLAG_RELIABLE));
 }
 static void rr_SendFile(ENetPeer *peer, const char *name, int fileIndex, int fileTotal)
 {
-    VB_SendFile(rr_SendCb, peer, name, fileIndex, fileTotal, VB_FILE_HEADER, VB_FILE_CHUNK, "RR");
+    NNB_SendFile(rr_SendCb, peer, name, fileIndex, fileTotal, NNB_FILE_HEADER, NNB_FILE_CHUNK, "RR");
     enet_host_service(g_netServer, NULL, 0);
 }
 
 void Net_SendGameFiles(ENetPeer *peer)  // host: push custom content to a joining client
 {
     if (!g_netServer || !peer) return;
-    char offer[VB_MAX_NETFILES + 1][BMAX_PATH]; int n = 0;
-    for (int i = 0; i < s_rrNetFileCount && n < VB_MAX_NETFILES; i++)
+    char offer[NNB_MAX_NETFILES + 1][BMAX_PATH]; int n = 0;
+    for (int i = 0; i < s_rrNetFileCount && n < NNB_MAX_NETFILES; i++)
         Bstrncpyz(offer[n++], s_rrNetFiles[i], BMAX_PATH);
-    if (boardfilename[0] && n <= VB_MAX_NETFILES)      // the current user map, if any
+    if (boardfilename[0] && n <= NNB_MAX_NETFILES)      // the current user map, if any
         Bstrncpyz(offer[n++], boardfilename, BMAX_PATH);
     if (n == 0) return;
     for (int i = 0; i < n; i++) rr_SendFile(peer, offer[i], i + 1, n);
 }
 
-// The file receiver (VB_RecvFileHeader/Chunk) + dedup check live in netshared.h.
+// The file receiver (NNB_RecvFileHeader/Chunk) + dedup check live in netshared.h.
 
 void Net_GetPackets(void)
 {
@@ -3262,12 +3262,12 @@ void Net_ParseServerPacket(ENetEvent *event)
         Net_ReceiveNewGame(event);
         break;
 
-    case VB_FILE_HEADER:   // NNBuild: host is pushing custom content to us
-        VB_RecvFileHeader(&s_rrRecv, pbuf, "RR");
+    case NNB_FILE_HEADER:   // NNBuild: host is pushing custom content to us
+        NNB_RecvFileHeader(&s_rrRecv, pbuf, "RR");
         break;
 
-    case VB_FILE_CHUNK:
-        VB_RecvFileChunk(&s_rrRecv, pbuf, "RR");
+    case NNB_FILE_CHUNK:
+        NNB_RecvFileChunk(&s_rrRecv, pbuf, "RR");
         break;
 
     case PACKET_ACK:

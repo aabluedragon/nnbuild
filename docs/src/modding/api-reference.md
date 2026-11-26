@@ -1,31 +1,31 @@
-# API reference: the `vb` module
+# API reference: the `nnb` module
 
-The `vb` module is the link between a script and the game. This page lists every export, grouped by task.
+The `nnb` module is the link between a script and the game. This page lists every export, grouped by task.
 
 ## Using the module
 
 ```ts
-import { on, log, drawText } from 'vb';   // named imports
+import { on, log, drawText } from 'nnb';   // named imports
 ```
 
 ```ts
-import vb from 'vb';                      // default import: one object with everything
-vb.log('hello');
+import nnb from 'nnb';                     // default import: one object with everything
+nnb.log('hello');
 ```
 
 ```js
-const vb = require('vb');                 // CommonJS style
+const nnb = require('nnb');                // CommonJS style
 ```
 
-A global object named `vb` with the same functions also exists, so short scripts need no import at all.
+A global object named `nnb` with the same functions also exists, so short scripts need no import at all.
 
-In TypeScript files use the first or second form. `import * as vb from 'vb'` does not work there. See [TypeScript support and its limits](project-layout.md#typescript-support-and-its-limits).
+In TypeScript files use the first or second form. `import * as nnb from 'nnb'` does not work there. See [TypeScript support and its limits](project-layout.md#typescript-support-and-its-limits).
 
 The module exports functions and three classes. It exports no constants. Use [`define()`](#gamevars-and-con-data) to look up the game's named constants, such as tile numbers.
 
 ## Availability
 
-Functions marked **Duke** work only in the Duke runtime games: Duke Nukem 3D, World Tour, Ion Fury, NAM, NAPALM and WWII GI. In Shadow Warrior these functions exist but throw `ReferenceError: This vb API is not supported by the active game`.
+Functions marked **Duke** work only in the Duke runtime games: Duke Nukem 3D, World Tour, Ion Fury, NAM, NAPALM and WWII GI. In Shadow Warrior these functions exist but throw `ReferenceError: This nnb API is not supported by the active game`.
 
 Only `on`, `off`, `log` and `breakpoint` work in every game that runs scripts.
 
@@ -63,7 +63,7 @@ Only `on`, `off`, `log` and `breakpoint` work in every game that runs scripts.
 - `off` cannot remove a single handler. It also removes handlers that other mods and the [component system](components.md) registered for that event. Avoid `off('frame')` and `off('actorDestroyed')` if you use components.
 
 ```ts
-import { on, log } from 'vb';
+import { on, log } from 'nnb';
 
 on('actorSpawned', (e) => {
   log(`sprite ${e.sprite} spawned with tile ${e.tile}`);
@@ -156,7 +156,7 @@ Tile data members: `xsize`, `ysize`, `animframes`, `xoffset`, `yoffset`, `animsp
 - Input members: `avel`, `q16avel`, `horz`, `q16horz`, `fvel`, `svel`, `bits`, `extbits`.
 
 ```ts
-import { getPlayer, player, getActor } from 'vb';
+import { getPlayer, player, getActor } from 'nnb';
 
 const me = player();
 if (me.sprite >= 0) {
@@ -200,7 +200,7 @@ Heights (`z` values) get smaller as you go up.
 - Common userdef members: `god`, `multimode`, `level_number`, `volume_number`, `player_skill`, `eog`, `pause_on`.
 
 ```ts
-import { define, getGamevar, setGamevar, getUserdef } from 'vb';
+import { define, getGamevar, setGamevar, getUserdef } from 'nnb';
 
 const trooper = define('LIZTROOP');             // a tile number in Duke Nukem 3D
 const gravity = getGamevar('gravitationalconstant');
@@ -299,7 +299,7 @@ Each entry of `players`:
 - It throws a `TypeError` unless this computer is hosting a multiplayer game in master/slave mode. It throws in single-player games and on clients.
 - `name` may start with `!`. It may contain only letters, digits, `_` and `-`, at most 32 characters. It is not case-sensitive.
 - Registering the same name again replaces the earlier handler.
-- When a player types `!name some text` in chat, the handler receives one object. `vb.d.ts` calls its type `CommandRequest`:
+- When a player types `!name some text` in chat, the handler receives one object. `nnb.d.ts` calls its type `CommandRequest`:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -337,21 +337,21 @@ See [Debugging with VS Code](debugging-vscode.md#the-breakpoint-function).
 
 | Export | Returns | Description |
 | --- | --- | --- |
-| `VBComponent` | class | Base class for your components. |
-| `VBNode` | class | An empty object that can hold components. `new VBNode()` creates one. |
-| `VBPrefab` | class | A tile plus a list of component classes. Create it with `createPrefab`. |
-| `attach(entity, component)` | the component | Attaches a component to a sprite index or a `VBNode`. `component` is a class or an instance. |
+| `NNBComponent` | class | Base class for your components. |
+| `NNBNode` | class | An empty object that can hold components. `new NNBNode()` creates one. |
+| `NNBPrefab` | class | A tile plus a list of component classes. Create it with `createPrefab`. |
+| `attach(entity, component)` | the component | Attaches a component to a sprite index or an `NNBNode`. `component` is a class or an instance. |
 | `detach(entity, component)` | boolean | Removes one component. `true` if it was attached. |
 | `getComponent(entity, type)` | component, or `undefined` | The first attached component that is an instance of `type`. |
 | `getComponents(entity, type?)` | array | All attached components, or only those of `type`. |
 | `setComponentEnabled(component, enabled)` | `undefined` | Turns a component on or off. Same as assigning `component.enabled`. |
-| `createNode(...components)` | `VBNode` | Creates a node and attaches the given components. |
+| `createNode(...components)` | `NNBNode` | Creates a node and attaches the given components. |
 | `destroyNode(node)` | boolean | Destroys a node and all its components. `false` if it was already destroyed. |
-| `createPrefab(tile, ...components)` | `VBPrefab` | Describes an actor tile together with component classes. |
+| `createPrefab(tile, ...components)` | `NNBPrefab` | Describes an actor tile together with component classes. |
 | `spawnPrefab(prefab, x?, y?, z?, owner?)` | sprite index, or `-1` | Calls `spawn` for the prefab's tile and attaches its components to the new sprite. |
 
 ## Alphabetical list
 
 All 58 exports:
 
-`A_InsertSprite`, `A_Spawn`, `addAmmo`, `addWeapon`, `attach`, `breakpoint`, `clearText`, `createNode`, `createPrefab`, `currentMenu`, `define`, `destroyNode`, `detach`, `drawText`, `getActiveProjectile`, `getActor`, `getComponent`, `getComponents`, `getGamevar`, `getInput`, `getPlayer`, `getProjectile`, `getSector`, `getTileData`, `getUserdef`, `getWall`, `log`, `menuSelection`, `off`, `on`, `openMenu`, `player`, `registerCommand`, `run`, `sendMessage`, `session`, `setActiveProjectile`, `setActor`, `setComponentEnabled`, `setGamevar`, `setInput`, `setMenuBackground`, `setMenuRoute`, `setMenuSelection`, `setMenuText`, `setPlayer`, `setProjectile`, `setSector`, `setTileData`, `setUserdef`, `setWall`, `shoot`, `sound`, `spawn`, `spawnPrefab`, `VBComponent`, `VBNode`, `VBPrefab`
+`A_InsertSprite`, `A_Spawn`, `addAmmo`, `addWeapon`, `attach`, `breakpoint`, `clearText`, `createNode`, `createPrefab`, `currentMenu`, `define`, `destroyNode`, `detach`, `drawText`, `getActiveProjectile`, `getActor`, `getComponent`, `getComponents`, `getGamevar`, `getInput`, `getPlayer`, `getProjectile`, `getSector`, `getTileData`, `getUserdef`, `getWall`, `log`, `menuSelection`, `off`, `on`, `openMenu`, `player`, `registerCommand`, `run`, `sendMessage`, `session`, `setActiveProjectile`, `setActor`, `setComponentEnabled`, `setGamevar`, `setInput`, `setMenuBackground`, `setMenuRoute`, `setMenuSelection`, `setMenuText`, `setPlayer`, `setProjectile`, `setSector`, `setTileData`, `setUserdef`, `setWall`, `shoot`, `sound`, `spawn`, `spawnPrefab`, `NNBComponent`, `NNBNode`, `NNBPrefab`

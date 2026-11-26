@@ -105,7 +105,7 @@ action in the host editor.
   NNBuild compatibility warning. Use `project_control` to attach a
   project-relative JS or TS asset to a sprite or create and attach a
   template with `create_component`.
-- Use `save_prefab` with a `path` such as `Prefabs/Assembly.vbprefab` and a
+- Use `save_prefab` with a `path` such as `Prefabs/Assembly.nnbprefab` and a
   `sprites` array. Use `place_prefab` with the asset path and `x` and `y`.
   Place scripted prefabs from the host's project workspace in live sessions.
 - Use the attachment context's `state` object for instance data.

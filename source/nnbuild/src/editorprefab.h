@@ -19,7 +19,7 @@ struct Prefab
     std::vector<PrefabSprite> sprites;
 };
 
-constexpr char prefabSuffix[] = ".vbprefab";
+constexpr char prefabSuffix[] = ".nnbprefab";
 bool IsPrefabAsset(std::string const &path);
 bool ProjectFileExists(std::string const &root, std::string const &path);
 bool ReadPrefab(std::string const &root, std::string const &path, Prefab &prefab, std::string &error);

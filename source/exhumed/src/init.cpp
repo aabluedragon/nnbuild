@@ -1361,7 +1361,7 @@ void LoadObjects()
     // native Build counterparts use different collision/renderer dimensions.
     // Run after every authored sprite has been constructed so it validates the
     // live level state, not merely constants in source.
-    if (g_kexMode && Bgetenv("VB_KEX_COMMON_ENEMY_TEST"))
+    if (g_kexMode && Bgetenv("NNB_KEX_COMMON_ENEMY_TEST"))
     {
         struct KexEnemyDimensions
         {

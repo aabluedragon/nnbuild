@@ -107,7 +107,7 @@ The adapter starts the game with the single option `-dbg` and waits for its debu
 
 Pressing **Stop** ends the game.
 
-The game is started with `-dbg` and nothing else. To choose a game, data files or a map, use the [`vbd.params` directive](#launch-arguments-the-vbdparams-directive).
+The game is started with `-dbg` and nothing else. To choose a game, data files or a map, use the [`nnbd.params` directive](#launch-arguments-the-nnbdparams-directive).
 
 ### Attach to running NNBuild
 
@@ -138,25 +138,25 @@ With `--debug` or `--devtools`, the game gives a debugger time to connect:
 
 There is no reason to add `--debug` to a normal launch. It delays your scripts and opens a local debug port.
 
-## Launch arguments: the `vbd.params` directive
+## Launch arguments: the `nnbd.params` directive
 
 The **Launch NNBuild** configuration cannot pass game arguments. Put them into your entry file instead, as a special comment near the top:
 
 ```ts
-/// vbd.params="--game duke --grp ~/games/duke3d/duke3d.grp --skip-cinema"
-import { on, log } from 'vb';
+/// nnbd.params="--game duke --grp ~/games/duke3d/duke3d.grp --skip-cinema"
+import { on, log } from 'nnb';
 ```
 
 When the game is started in debug mode, it reads this line and adds the arguments to its own command line.
 
 Rules:
 
-- The line starts with three slashes: `/// vbd.params=…`.
+- The line starts with three slashes: `/// nnbd.params=…`.
 - It must be in the comment block at the top of the file. Only `//` comment lines and empty lines may come before it. It must be within the first 32 lines.
 - The value is split into arguments at spaces. The quotes around the whole value are optional. Use inner quotes for an argument that contains spaces:
 
   ```ts
-  /// vbd.params="--game sw --grp '/home/me/Shadow Warrior/SW.GRP'"
+  /// nnbd.params="--game sw --grp '/home/me/Shadow Warrior/SW.GRP'"
   ```
 
 - A backslash keeps the next character as it is.
@@ -168,7 +168,7 @@ Rules:
 The generated starter contains the directive as an inactive example:
 
 ```ts
-// /// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
+// /// nnbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
 ```
 
 Remove the leading `// ` and adjust the paths to activate it.
@@ -216,7 +216,7 @@ How variables are shown:
 How expressions are evaluated:
 
 - A single name, such as `frames`, is looked up in the Local and Closure variables of the selected stack frame. This is what hovering uses.
-- Any other expression is evaluated as global code. It cannot see local variables or the top-level variables of your module. `vb.player()` works. `frames + 1` does not.
+- Any other expression is evaluated as global code. It cannot see local variables or the top-level variables of your module. `nnb.player()` works. `frames + 1` does not.
 
 Other things to know:
 
@@ -244,7 +244,7 @@ What the view is depends on the platform:
 - **Scope** tab: short hints.
 - Closing the window hides it for the rest of the session.
 
-The **Evaluate** field runs an expression as global code and shows the result as JSON text. For example `vb.player()` or `globalThis.myValue`. It cannot see the top-level variables of your modules. Store a value on `globalThis` if you want to inspect it.
+The **Evaluate** field runs an expression as global code and shows the result as JSON text. For example `nnb.player()` or `globalThis.myValue`. It cannot see the top-level variables of your modules. Store a value on `globalThis` if you want to inspect it.
 
 An expression that throws an error is treated like any other script error: the game shows the error and closes. Type carefully.
 
@@ -261,10 +261,10 @@ Press **Command+Option+I** in the game window to bring the page to the front.
 
 ### The `breakpoint()` function
 
-`breakpoint()` is a function of the `vb` module. It pauses your scripts from code:
+`breakpoint()` is a function of the `nnb` module. It pauses your scripts from code:
 
 ```ts
-import { on, breakpoint, log } from 'vb';
+import { on, breakpoint, log } from 'nnb';
 
 on('levelChanged', () => {
   log('pausing scripts');
@@ -275,7 +275,7 @@ on('levelChanged', () => {
 - It only works when the game was started with `--devtools`. Otherwise it does nothing.
 - It does not freeze the game, and it does not stop in the middle of a function. The current function runs to its end.
 - After that, no events, timers, `fs` callbacks, promise continuations or component updates are delivered. Network results still arrive: socket listeners keep running.
-- The DevTools window shows **PAUSED at vb.breakpoint()**. Click **Resume** to continue.
+- The DevTools window shows **PAUSED at nnb.breakpoint()**. Click **Resume** to continue.
 
 The **Resume** button is part of the DevTools window on Linux and Windows. The DevTools page on macOS has no such button. On macOS use breakpoints in the source instead.
 

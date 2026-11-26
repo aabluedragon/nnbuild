@@ -27,7 +27,7 @@
 
 // Wire protocol. Every packet starts with this 4-byte tag so stray UDP noise is
 // ignored, then a 1-byte message type.
-static const char MS_MAGIC[4] = { 'V', 'B', 'M', 'S' };
+static const char MS_MAGIC[4] = { 'N', 'B', 'M', 'S' };
 enum
 {
     MS_ADVERTISE      = 0xB0,   // server  -> master : register / heartbeat

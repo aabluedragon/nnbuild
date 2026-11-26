@@ -33,7 +33,7 @@ The project is always created in `autojs/<name>/` inside the folder you ran the 
 autojs/
 └── my-mod/
     ├── index.ts        the entry point; the only file the game loads by itself
-    ├── vb.d.ts         type declarations for your editor
+    ├── nnb.d.ts        type declarations for your editor
     ├── tsconfig.json   settings for your editor and for tsc
     ├── package.json    optional type check: npm run check
     └── .vscode/
@@ -55,8 +55,8 @@ The `.vscode` files are explained in [Debugging with VS Code](debugging-vscode.m
 ```ts
 // NNBuild auto-loads only index.ts (or index.js) from this project.
 // Optional debug-only launch args, for example:
-// /// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
-import { on, log } from 'vb';
+// /// nnbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
+import { on, log } from 'nnb';
 
 let frames = 0;
 on('start', () => {
@@ -78,7 +78,7 @@ on('frame', () => {
     "moduleResolution": "Bundler", "allowImportingTsExtensions": true, "strict": true,
     "noEmit": true, "skipLibCheck": true
   },
-  "include": ["*.ts", "vb.d.ts"]
+  "include": ["*.ts", "nnb.d.ts"]
 }
 ```
 
@@ -86,11 +86,11 @@ on('frame', () => {
 
 ```json
 {
-  "name": "vbjs-mod",
+  "name": "nnbjs-mod",
   "private": true,
   "version": "0.1.0",
   "description": "NNBuild auto-loaded JavaScript mod",
-  "types": "./vb.d.ts",
+  "types": "./nnb.d.ts",
   "scripts": { "check": "tsc --noEmit -p tsconfig.json" },
   "devDependencies": { "typescript": "^5.0.0" }
 }
@@ -103,19 +103,19 @@ on('frame', () => {
 ```js
 // NNBuild auto-loads only index.js (or index.ts) from this project.
 // Optional debug-only launch args, for example:
-// /// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
+// /// nnbd.params="-gm duke -g ~/games/duke3da/duke3d.grp -sc"
 // @ts-check
-/** @type {typeof import('vb').default} */
-const vb = require('vb');
+/** @type {typeof import('nnb').default} */
+const nnb = require('nnb');
 
 let frames = 0;
-vb.on('start', () => {
-  vb.log('JavaScript mod loaded.');
+nnb.on('start', () => {
+  nnb.log('JavaScript mod loaded.');
 });
 
-vb.on('frame', () => {
+nnb.on('frame', () => {
   const breakpointProbe = `JavaScript frame ${++frames}`;
-  if (frames % 60 === 0) vb.log(breakpointProbe);
+  if (frames % 60 === 0) nnb.log(breakpointProbe);
 });
 ```
 
@@ -124,7 +124,7 @@ vb.on('frame', () => {
 ```json
 {
   "compilerOptions": { "target": "ES2020", "lib": ["ES2020"], "checkJs": true, "allowJs": true, "noEmit": true, "strict": true },
-  "include": ["*.js", "vb.d.ts"]
+  "include": ["*.js", "nnb.d.ts"]
 }
 ```
 
@@ -134,7 +134,7 @@ What the starter does:
 
 - `start` runs once, after the script has been loaded. The starter writes one line to the log.
 - `frame` runs on every drawn frame. The starter writes a line every 60 frames.
-- The third comment line shows the optional `vbd.params` directive. It is inactive as generated, because it starts with `// ///`. See [Debugging with VS Code](debugging-vscode.md#launch-arguments-the-vbdparams-directive).
+- The third comment line shows the optional `nnbd.params` directive. It is inactive as generated, because it starts with `// ///`. See [Debugging with VS Code](debugging-vscode.md#launch-arguments-the-nnbdparams-directive).
 
 ## 3. How the game finds and loads it
 
@@ -174,7 +174,7 @@ If a script has a syntax error or throws an error that nothing catches, the game
 Try a first change. Replace the `start` handler with this and restart:
 
 ```ts
-import { on, log, drawText } from 'vb';
+import { on, log, drawText } from 'nnb';
 
 on('start', () => {
   log('TypeScript mod loaded.');
@@ -198,7 +198,7 @@ This runs the TypeScript compiler without producing files. Your editor shows the
 Two things to keep in mind:
 
 - The game's own TypeScript support is limited. Code that passes `npm run check` can still fail in the game. Read [TypeScript support and its limits](project-layout.md#typescript-support-and-its-limits) before you write much TypeScript.
-- The generated `vb.d.ts` differs from the game in a few details. See [the list](project-layout.md#where-vbdts-differs-from-the-game).
+- The generated `nnb.d.ts` differs from the game in a few details. See [the list](project-layout.md#where-nnbdts-differs-from-the-game).
 
 ## Without the generator
 
@@ -209,7 +209,7 @@ autojs/hello/index.js
 ```
 
 ```js
-vb.on('start', () => vb.log('hello'));
+nnb.on('start', () => nnb.log('hello'));
 ```
 
 You can also load one file directly with `--js`:

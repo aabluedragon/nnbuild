@@ -26,8 +26,8 @@ Pass your game and game-data arguments through the optional debug-only header di
 `index.js`:
 
 ```ts
-/// vbd.params="-l 1 -v 1"
+/// nnbd.params="-l 1 -v 1"
 ```
 
-For example: `/// vbd.params="-gm duke -g ~/games/duke3da/duke3d.grp"`.
+For example: `/// nnbd.params="-gm duke -g ~/games/duke3da/duke3d.grp"`.
 Quoted values are supported; the directive is passed directly as arguments and is never evaluated by a shell.

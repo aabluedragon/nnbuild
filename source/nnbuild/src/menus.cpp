@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "osd.h"
 #include "osdcmds.h"
 #include "config.h"
-#include "vbjs.h"
+#include "nnbjs.h"
 #include "communityapi.h"
 #include <sys/stat.h>
 
@@ -160,7 +160,7 @@ static int32_t Menu_GameText(int32_t const x, int32_t const y, char const *text,
     if (text == nullptr)
         return x;
 
-    text = VBJS_MenuText(text);
+    text = NNBJS_MenuText(text);
 
     int32_t const zoom = ud.gametext_zoom > 0 ? ud.gametext_zoom : FURY_BLUE_ZOOM;
     int32_t const xspace = ud.gametext_xspace != 0 ? ud.gametext_xspace : FURY_BLUE_SPACE;
@@ -229,7 +229,7 @@ void ChangeToMenu(int cm)
         cm = 0;
     }
 
-    cm = VBJS_MenuRoute(g_currentMenu, probey, cm);
+    cm = NNBJS_MenuRoute(g_currentMenu, probey, cm);
     if (cm == -1)
         cm = previousMenu;
     else if (cm == -2)
@@ -240,7 +240,7 @@ void ChangeToMenu(int cm)
 
     g_currentMenu = cm;
     if (previousMenu != cm)
-        VBJS_FireMenu("menuChanged", cm, previousMenu);
+        NNBJS_FireMenu("menuChanged", cm, previousMenu);
 
     if ((cm >= 1000 && cm <= 1009))
         return;
@@ -453,7 +453,7 @@ int menutext_(int x,int y,int s,int p,const char *t,int bits, bool centerAtMenuM
     if (t == nullptr)
         return x;
 
-    t = VBJS_MenuText(t);
+    t = NNBJS_MenuText(t);
 
     if (p == 0)
     {
@@ -6551,7 +6551,7 @@ VOLUME_ALL_40x:
     // The normal HUD path draws DevTools during gameplay. Draw it here too at
     // title/menu screens, where there is no HUD pass yet.
     if ((ud.gm & MODE_GAME) == 0)
-        VBJS_DrawHUD();
+        NNBJS_DrawHUD();
 
     if ((ud.gm&MODE_MENU) != MODE_MENU)
     {

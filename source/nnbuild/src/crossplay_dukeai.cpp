@@ -31,70 +31,70 @@
 
 extern "C"
 {
-int VB_DukeAI_CompileScripts(void);
-int VB_DukeAI_BeginLevel(int playerSkill);
-int VB_DukeAI_SpawnMapActor(int spriteNum);
-void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum);
-void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
-void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld);
-void VB_DukeAI_SetPlayerHealth(int playerNum, int health);
-void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
-int VB_DukeAI_SomethingOnPlayer(int playerNum);
-void VB_DukeAI_SetPlayerCount(int count);
-int VB_DukeAI_TakePlayerDamageFor(int playerNum);
-void VB_DukeAI_RunTic(void);
-int VB_DukeAI_IsEnemyTile(int tileNum);
-int VB_DukeAI_IsAdoptableTile(int tileNum);
-int VB_DukeAI_HasActorCode(int tileNum);
-int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
-int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
-int VB_DukeAI_DrinkingSound(void);
-int VB_DukeAI_MonitorSound(void);
-int VB_DukeAI_WaterSound(void);
-int VB_DukeAI_UrinateSound(void);
-int VB_DukeAI_FlushSound(void);
-int VB_DukeAI_PissReliefSound(void);
-void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
+int NNB_DukeAI_CompileScripts(void);
+int NNB_DukeAI_BeginLevel(int playerSkill);
+int NNB_DukeAI_SpawnMapActor(int spriteNum);
+void NNB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum);
+void NNB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld);
+void NNB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld);
+void NNB_DukeAI_SetPlayerHealth(int playerNum, int health);
+void NNB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz);
+int NNB_DukeAI_SomethingOnPlayer(int playerNum);
+void NNB_DukeAI_SetPlayerCount(int count);
+int NNB_DukeAI_TakePlayerDamageFor(int playerNum);
+void NNB_DukeAI_RunTic(void);
+int NNB_DukeAI_IsEnemyTile(int tileNum);
+int NNB_DukeAI_IsAdoptableTile(int tileNum);
+int NNB_DukeAI_HasActorCode(int tileNum);
+int NNB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag);
+int NNB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag);
+int NNB_DukeAI_DrinkingSound(void);
+int NNB_DukeAI_MonitorSound(void);
+int NNB_DukeAI_WaterSound(void);
+int NNB_DukeAI_UrinateSound(void);
+int NNB_DukeAI_FlushSound(void);
+int NNB_DukeAI_PissReliefSound(void);
+void NNB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
                                     int impactAng, int ownerSprite);
-int VB_DukeAI_TakeEarthquake(void);
-int VB_DukeAI_TileIsTripmine(int tileNum);
-int VB_DukeAI_TileIsLaserLine(int tileNum);
-int VB_DukeAI_TileIsFireExt(int tileNum);
-int VB_DukeAI_MirrorTile(void);
-int VB_DukeAI_SpriteIsNoShade(int spriteNum);
-void VB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outMove, int *outCurFrame, int *outStayput);
-void VB_DukeAI_WatchSprite(int spriteNum);
-void VB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCurFrame, int *outHitag);
-void VB_DukeAI_WatchedPos(int *outX, int *outY, int *outZ, int *outAng, int *outAction, int *outMove);
-int VB_DukeAI_WatchedFloorDist(void);
-int VB_DukeAI_WatchedPicnum(void);
-char const *VB_DukeAI_SoundFilename(int soundNum);
-int VB_DukeAI_HighestSoundIndex(void);
-void VB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
-void VB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
-void VB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag));               // actors.cpp
-int VB_DukeAI_SpriteIsAlive(int spriteNum);
-int VB_DukeAI_SpriteIsEnemy(int spriteNum);
-int VB_DukeAI_PlayerStatnum(void);
-int VB_DukeAI_PlayerTileNumber(void);
-void VB_DukeAI_BeginPlayerSprite(int spriteNum);
-int VB_DukeAI_SpriteHealth(int spriteNum);
-void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng, int ownerSprite);
-void VB_DukeAI_MoveActorsOnly(void);   // actors.cpp
+int NNB_DukeAI_TakeEarthquake(void);
+int NNB_DukeAI_TileIsTripmine(int tileNum);
+int NNB_DukeAI_TileIsLaserLine(int tileNum);
+int NNB_DukeAI_TileIsFireExt(int tileNum);
+int NNB_DukeAI_MirrorTile(void);
+int NNB_DukeAI_SpriteIsNoShade(int spriteNum);
+void NNB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outMove, int *outCurFrame, int *outStayput);
+void NNB_DukeAI_WatchSprite(int spriteNum);
+void NNB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCurFrame, int *outHitag);
+void NNB_DukeAI_WatchedPos(int *outX, int *outY, int *outZ, int *outAng, int *outAction, int *outMove);
+int NNB_DukeAI_WatchedFloorDist(void);
+int NNB_DukeAI_WatchedPicnum(void);
+char const *NNB_DukeAI_SoundFilename(int soundNum);
+int NNB_DukeAI_HighestSoundIndex(void);
+void NNB_DukeAI_SetSoundHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
+void NNB_DukeAI_SetSoundCheckHook(int (*hook)(int soundNum, int spriteNum));   // sounds.cpp
+void NNB_DukeAI_SetMapTriggerHook(void (*hook)(int hitag));               // actors.cpp
+int NNB_DukeAI_SpriteIsAlive(int spriteNum);
+int NNB_DukeAI_SpriteIsEnemy(int spriteNum);
+int NNB_DukeAI_PlayerStatnum(void);
+int NNB_DukeAI_PlayerTileNumber(void);
+void NNB_DukeAI_BeginPlayerSprite(int spriteNum);
+int NNB_DukeAI_SpriteHealth(int spriteNum);
+void NNB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng, int ownerSprite);
+void NNB_DukeAI_MoveActorsOnly(void);   // actors.cpp
 }
 
-// Weapon classes the host runtime can report; see VB_DukeAI_DamageActor().
+// Weapon classes the host runtime can report; see NNB_DukeAI_DamageActor().
 enum
 {
-    VB_DUKEAI_HIT_BULLET,
-    VB_DUKEAI_HIT_MELEE,
-    VB_DUKEAI_HIT_EXPLOSION,
-    VB_DUKEAI_HIT_PROJECTILE,
+    NNB_DUKEAI_HIT_BULLET,
+    NNB_DUKEAI_HIT_MELEE,
+    NNB_DUKEAI_HIT_EXPLOSION,
+    NNB_DUKEAI_HIT_PROJECTILE,
     // A blast, as opposed to a rocket landing square on something.  Duke keeps
     // these apart and its own code depends on the difference: A_RadiusDamage()
     // leaves RADIUSEXPLOSION in htpicnum, and every dead body in GAME.CON comes
     // apart on `ifwasweapon RADIUSEXPLOSION` and on nothing else.
-    VB_DUKEAI_HIT_RADIUS,
+    NNB_DUKEAI_HIT_RADIUS,
 };
 
 // Duke's player health is mirrored, not owned, here: the host applies the
@@ -111,9 +111,9 @@ static int32_t g_dukeAILevelReady;
 static uint8_t g_dukeAIPlayerFresh[MAXPLAYERS];
 static uint8_t g_dukeAIPendingDamage[MAXSPRITES];
 
-int VB_DukeAI_BeginLevel(int playerSkill)
+int NNB_DukeAI_BeginLevel(int playerSkill)
 {
-    if (!VB_DukeAI_CompileScripts())
+    if (!NNB_DukeAI_CompileScripts())
         return 0;
 
     // Duke's spawn code gates enemies on skill (an enemy whose lotag exceeds
@@ -135,14 +135,14 @@ int VB_DukeAI_BeginLevel(int playerSkill)
     // one of them decides whether a slimer may attach at all.  Zeroed statics
     // leave `somethingonplayer` at 0, and Duke only lets a slimer latch on when
     // it reads -1 -- so the leech simply never happened.  The reset is deferred
-    // to VB_DukeAI_SetPlayer(): g_player[].ps is not necessarily wired up yet.
+    // to NNB_DukeAI_SetPlayer(): g_player[].ps is not necessarily wired up yet.
     Bmemset(g_dukeAIPlayerFresh, 0, sizeof(g_dukeAIPlayerFresh));
 
     g_dukeAILevelReady = 1;
     return 1;
 }
 
-int VB_DukeAI_IsEnemyTile(int tileNum)
+int NNB_DukeAI_IsEnemyTile(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)
         return 0;
@@ -172,7 +172,7 @@ int VB_DukeAI_IsEnemyTile(int tileNum)
 // The per-tile cases are mechanically derived from the cstat assignments in
 // A_Spawn(); tiles it makes merely hittable (QUEBALL/STRIPEBALL) are absent,
 // and the cases A_Spawn() guards on game state are guarded here the same way.
-int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
+int NNB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
 {
     int bits = mapCstat & (CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
 
@@ -393,7 +393,7 @@ int VB_DukeAI_MapSpriteSolidBits(int tileNum, int mapCstat, int mapHitag)
 // to it -- which is why a Duke water fountain could not be drunk from in the
 // host: its lotag is assigned at spawn, and the bridge was carrying the map's
 // untagged sprite straight through.
-int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
+int NNB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
 {
     if ((unsigned)tileNum >= MAXTILES)
         return mapLotag;
@@ -420,7 +420,7 @@ int VB_DukeAI_MapSpriteSpawnLotag(int tileNum, int mapLotag)
 // broken hydrant, a toilet or a smashed fountain heals a point at a time while
 // the key is held, and the microphone and statues talk back.  The host owns
 // input, so it has to hand the state over or none of them ever respond.
-void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld)
+void NNB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS ||
         g_player[playerNum].inputBits == NULL)
@@ -437,7 +437,7 @@ void VB_DukeAI_SetPlayerUseKey(int playerNum, int useHeld)
 // can reach it and there is nothing to hit.  Duke kills it by reading SK_FIRE
 // out of the player's input directly, which is why firing shakes one off in Duke
 // and did nothing here.
-void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld)
+void NNB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS ||
         g_player[playerNum].inputBits == NULL)
@@ -450,13 +450,13 @@ void VB_DukeAI_SetPlayerFireKey(int playerNum, int fireHeld)
 }
 
 // Duke's own sound number for drinking, so the host does not hardcode one.
-int VB_DukeAI_DrinkingSound(void)
+int NNB_DukeAI_DrinkingSound(void)
 {
     return DUKE_DRINKING;
 }
 
 // ...and the one a security monitor makes when it picks up a camera.
-int VB_DukeAI_MonitorSound(void)
+int NNB_DukeAI_MonitorSound(void)
 {
     return MONITOR_ACTIVE;
 }
@@ -470,31 +470,31 @@ int VB_DukeAI_MonitorSound(void)
 // and the "much better" a second later.  Fixed definitions rather than runtime
 // symbols, so the ids are used directly the way player.cpp does for the enemy
 // pain/dying sounds; the values mirror soundefs.h.
-int VB_DukeAI_UrinateSound(void)
+int NNB_DukeAI_UrinateSound(void)
 {
     enum { S_DUKE_URINATE = 28 };
     return S_DUKE_URINATE;
 }
 
-int VB_DukeAI_FlushSound(void)
+int NNB_DukeAI_FlushSound(void)
 {
     enum { S_FLUSH_TOILET = 79 };
     return S_FLUSH_TOILET;
 }
 
-int VB_DukeAI_PissReliefSound(void)
+int NNB_DukeAI_PissReliefSound(void)
 {
     enum { S_DUKE_PISSRELIEF = 218 };
     return S_DUKE_PISSRELIEF;
 }
 
-int VB_DukeAI_WaterSound(void)
+int NNB_DukeAI_WaterSound(void)
 {
     enum { S_WATER_GURGLE = 220 };
     return S_WATER_GURGLE;
 }
 
-int VB_DukeAI_HasActorCode(int tileNum)
+int NNB_DukeAI_HasActorCode(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)
         return 0;
@@ -509,7 +509,7 @@ int VB_DukeAI_HasActorCode(int tileNum)
 // sits on FEM1 with `action BEACHBATHER 2338`, so Duke draws tile 3650 and the
 // un-adopted sprite showed stock Duke's dancer instead.  Tiles whose actor draws
 // in place (FIRE, CLOCK, the access cards) answer 0 and stay with the host.
-extern "C" int VB_DukeAI_ActorDrawsOffsetFrames(int tileNum)
+extern "C" int NNB_DukeAI_ActorDrawsOffsetFrames(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)
         return 0;
@@ -530,7 +530,7 @@ extern "C" int VB_DukeAI_ActorDrawsOffsetFrames(int tileNum)
            ? 1 : 0;
 }
 
-int VB_DukeAI_IsAdoptableTile(int tileNum)
+int NNB_DukeAI_IsAdoptableTile(int tileNum)
 {
     if ((unsigned)tileNum >= MAXTILES)
         return 0;
@@ -548,13 +548,13 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
     // it, and finally blows it up and shakes the level -- all of it Duke's own
     // code, none of which the bridge was running, so the ship simply hung in the
     // sky.  The earthquake it ends on already has a route out through
-    // VB_DukeAI_TakeEarthquake().
+    // NNB_DukeAI_TakeEarthquake().
     case DUKECAR__:
     case HELECOPT__:
         return 1;
 
     // FIREEXT arms the host's charges and drives its effectors by hitag; it is
-    // adoptable because the host installs VB_DukeAI_SetMapTriggerHook() to
+    // adoptable because the host installs NNB_DukeAI_SetMapTriggerHook() to
     // receive that tag.  Without the hook it would explode without triggering
     // anything, which is why it was previously left out.
     case FIREEXT__:
@@ -631,7 +631,7 @@ int VB_DukeAI_IsAdoptableTile(int tileNum)
 // Tile predicates the host uses to classify the Duke sprites it is holding.
 // Outside a Duke tic those sprites carry the host's display tiles, so the host
 // asks about the Duke tile it recorded rather than the sprite's current one.
-int VB_DukeAI_TileIsTripmine(int tileNum)
+int NNB_DukeAI_TileIsTripmine(int tileNum)
 {
     return (unsigned)tileNum < MAXTILES && tileGetMapping(tileNum) == TRIPBOMB__;
 }
@@ -640,7 +640,7 @@ int VB_DukeAI_TileIsTripmine(int tileNum)
 // way -- a wall whose overpicnum is the mirror tile with cstat bit 32 -- so the
 // host only needs to know which tile number Duke means.  It is a dynamic name,
 // so it has to be read from here rather than hardcoded.
-int VB_DukeAI_MirrorTile(void)
+int NNB_DukeAI_MirrorTile(void)
 {
     return MIRROR;
 }
@@ -649,7 +649,7 @@ int VB_DukeAI_MirrorTile(void)
 // shade for actors flagged NOSHADE.
 // Duke's internal state for one actor, so a host can tell a stuck actor from one
 // that is deliberately holding position.
-void VB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outMove, int *outCurFrame,
+void NNB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outMove, int *outCurFrame,
                           int *outStayput)
 {
     if ((unsigned)spriteNum >= MAXSPRITES)
@@ -662,7 +662,7 @@ void VB_DukeAI_ActorState(int spriteNum, int *outStat, int *outAction, int *outM
     if (outStayput)  *outStayput = actor[spriteNum].actorstayput;
 }
 
-int VB_DukeAI_SpriteIsNoShade(int spriteNum)
+int NNB_DukeAI_SpriteIsNoShade(int spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES)
         return 0;
@@ -670,12 +670,12 @@ int VB_DukeAI_SpriteIsNoShade(int spriteNum)
     return A_CheckSpriteFlags(spriteNum, SFLAG_NOSHADE) ? 1 : 0;
 }
 
-int VB_DukeAI_TileIsFireExt(int tileNum)
+int NNB_DukeAI_TileIsFireExt(int tileNum)
 {
     return (unsigned)tileNum < MAXTILES && tileGetMapping(tileNum) == FIREEXT__;
 }
 
-int VB_DukeAI_TileIsLaserLine(int tileNum)
+int NNB_DukeAI_TileIsLaserLine(int tileNum)
 {
     return (unsigned)tileNum < MAXTILES && tileGetMapping(tileNum) == LASERLINE__;
 }
@@ -683,7 +683,7 @@ int VB_DukeAI_TileIsLaserLine(int tileNum)
 // Runs Duke's own map-sprite spawn for one sprite, which is what gives the
 // actor its Duke statnum, Duke health (CON "strength"), clipdist, cstat and
 // actor_t state.  The caller must have restored the sprite's Duke picnum.
-int VB_DukeAI_SpawnMapActor(int spriteNum)
+int NNB_DukeAI_SpawnMapActor(int spriteNum)
 {
     if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES)
         return 0;
@@ -701,7 +701,7 @@ int VB_DukeAI_SpawnMapActor(int spriteNum)
 // players is mirrored into its own Duke slot.  Mirroring only the local player
 // would also make the AI follow a different target on every client, which cannot
 // survive a lockstep netgame.
-void VB_DukeAI_SetPlayerCount(int count)
+void NNB_DukeAI_SetPlayerCount(int count)
 {
     if (!g_dukeAILevelReady)
         return;
@@ -720,7 +720,7 @@ void VB_DukeAI_SetPlayerCount(int count)
     ud.multimode = count;
 }
 
-void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum)
+void NNB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int32_t z, int32_t ang, int16_t sectnum)
 {
     if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES || (unsigned)playerNum >= MAXPLAYERS)
         return;
@@ -764,7 +764,7 @@ void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int
     // every health test in CON meaningless: `ifphealthl MAXPLAYERHEALTH` was
     // permanently false, so the props that only give you something when you are
     // hurt -- the water from a hydrant, a toilet, a fountain -- never fired.
-    // The host's real health goes in instead; VB_DukeAI_SetPlayerHealth()
+    // The host's real health goes in instead; NNB_DukeAI_SetPlayerHealth()
     // overwrites this for players whose health the host has told us about.
     sprite[spriteNum].extra = kMirroredPlayerHealth;
     g_dukeAIMirroredHealth[playerNum] = kMirroredPlayerHealth;
@@ -775,7 +775,7 @@ void VB_DukeAI_SetPlayer(int playerNum, int spriteNum, int32_t x, int32_t y, int
 // tic in which its actors outdamage the player's remaining health would
 // otherwise have every actor react to a dead player before the host has even
 // been told.
-void VB_DukeAI_SetPlayerHealth(int playerNum, int health)
+void NNB_DukeAI_SetPlayerHealth(int playerNum, int health)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
         return;
@@ -793,7 +793,7 @@ void VB_DukeAI_SetPlayerHealth(int playerNum, int health)
 // The host's view pitch.  A slimer riding the player's face places itself from
 // this every tic -- `s->z += (100 - horiz) << 4` -- so without it the thing sits
 // at a fixed height and refuses to follow where the player is looking.
-void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz)
+void NNB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
         return;
@@ -806,7 +806,7 @@ void VB_DukeAI_SetPlayerHoriz(int playerNum, int32_t q16horiz)
 }
 
 // Which sprite, if any, is currently latched onto this player's face.
-int VB_DukeAI_SomethingOnPlayer(int playerNum)
+int NNB_DukeAI_SomethingOnPlayer(int playerNum)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
         return -1;
@@ -819,7 +819,7 @@ int VB_DukeAI_SomethingOnPlayer(int playerNum)
 }
 
 // Damage Duke's actors dealt to a mirrored player since the last call.
-int VB_DukeAI_TakePlayerDamageFor(int playerNum)
+int NNB_DukeAI_TakePlayerDamageFor(int playerNum)
 {
     if (!g_dukeAILevelReady || (unsigned)playerNum >= MAXPLAYERS)
         return 0;
@@ -840,7 +840,7 @@ int VB_DukeAI_TakePlayerDamageFor(int playerNum)
 
 // Duke decides what is an enemy from the actor's own SFLAG_BADGUY, which stays
 // correct through every animation frame the actor cycles through.
-int VB_DukeAI_SpriteIsEnemy(int spriteNum)
+int NNB_DukeAI_SpriteIsEnemy(int spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES || sprite[spriteNum].statnum >= MAXSTATUS)
         return 0;
@@ -851,7 +851,7 @@ int VB_DukeAI_SpriteIsEnemy(int spriteNum)
 // Duke's CON "definesound" table, exposed so the host can pair Duke's sounds
 // with its own copies of the same files instead of carrying a hand-written
 // table of sound numbers.
-char const *VB_DukeAI_SoundFilename(int soundNum)
+char const *NNB_DukeAI_SoundFilename(int soundNum)
 {
     if (!g_dukeAILevelReady || (unsigned)soundNum > (unsigned)g_highestSoundIdx || g_sounds == NULL)
         return NULL;
@@ -861,17 +861,17 @@ char const *VB_DukeAI_SoundFilename(int soundNum)
     return (pSound != NULL && pSound->filename != NULL && pSound->filename[0] != '\0') ? pSound->filename : NULL;
 }
 
-int VB_DukeAI_HighestSoundIndex(void)
+int NNB_DukeAI_HighestSoundIndex(void)
 {
     return g_dukeAILevelReady ? g_highestSoundIdx : 0;
 }
 
-int VB_DukeAI_PlayerStatnum(void)
+int NNB_DukeAI_PlayerStatnum(void)
 {
     return STAT_PLAYER;
 }
 
-int VB_DukeAI_PlayerTileNumber(void)
+int NNB_DukeAI_PlayerTileNumber(void)
 {
     return APLAYER;
 }
@@ -879,7 +879,7 @@ int VB_DukeAI_PlayerTileNumber(void)
 // Duke's actors only treat a sprite as the player if it looks like Duke's own
 // player sprite: APLAYER, with yvel holding the player index and health in
 // extra.  The host restores its own values after the tic.
-void VB_DukeAI_BeginPlayerSprite(int spriteNum)
+void NNB_DukeAI_BeginPlayerSprite(int spriteNum)
 {
     if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES)
         return;
@@ -889,7 +889,7 @@ void VB_DukeAI_BeginPlayerSprite(int spriteNum)
     sprite[spriteNum].extra = kMirroredPlayerHealth;
 }
 
-int VB_DukeAI_SpriteIsAlive(int spriteNum)
+int NNB_DukeAI_SpriteIsAlive(int spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES)
         return 0;
@@ -897,7 +897,7 @@ int VB_DukeAI_SpriteIsAlive(int spriteNum)
     return sprite[spriteNum].statnum < MAXSTATUS && sprite[spriteNum].extra > 0;
 }
 
-int VB_DukeAI_SpriteHealth(int spriteNum)
+int NNB_DukeAI_SpriteHealth(int spriteNum)
 {
     if ((unsigned)spriteNum >= MAXSPRITES)
         return 0;
@@ -909,7 +909,7 @@ int VB_DukeAI_SpriteHealth(int spriteNum)
 // damage through these actor_t fields and let the actor's CON "ifhitweapon"
 // state react, which is where Duke's pain, knockback, gibbing and death
 // behavior all come from; the host's weapons therefore do exactly the same.
-void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng, int ownerSprite)
+void NNB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng, int ownerSprite)
 {
     if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES || damage <= 0)
         return;
@@ -923,10 +923,10 @@ void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng
     int16_t weaponTile;
     switch (hitKind)
     {
-    case VB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
-    case VB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
-    case VB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
-    case VB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
+    case NNB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
+    case NNB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
+    case NNB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
+    case NNB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
     default:                       weaponTile = SHOTSPARK1; break;
     }
 
@@ -941,7 +941,7 @@ void VB_DukeAI_DamageActor(int spriteNum, int damage, int hitKind, int impactAng
 // Duke promotes a sleeping actor the instant it is hit.  The host's damage
 // arrives while Duke's sprite lists are swapped out, so the promotion is done
 // here, at the top of the tic, where changespritestat() is safe.
-static void VB_DukeAI_ApplyPendingDamage(void)
+static void NNB_DukeAI_ApplyPendingDamage(void)
 {
     for (int spriteNum = 0; spriteNum < MAXSPRITES; ++spriteNum)
     {
@@ -982,12 +982,12 @@ static void VB_DukeAI_ApplyPendingDamage(void)
 static int g_dukeAIWatchSprite = -1;
 static int g_dukeAIWatchStat, g_dukeAIWatchXvel, g_dukeAIWatchZvel, g_dukeAIWatchCurFrame, g_dukeAIWatchHitag;
 
-void VB_DukeAI_WatchSprite(int spriteNum)
+void NNB_DukeAI_WatchSprite(int spriteNum)
 {
     g_dukeAIWatchSprite = spriteNum;
 }
 
-void VB_DukeAI_WatchedPos(int *outX, int *outY, int *outZ, int *outAng, int *outAction, int *outMove)
+void NNB_DukeAI_WatchedPos(int *outX, int *outY, int *outZ, int *outAng, int *outAction, int *outMove)
 {
     if ((unsigned)g_dukeAIWatchSprite >= MAXSPRITES)
         return;
@@ -1003,7 +1003,7 @@ void VB_DukeAI_WatchedPos(int *outX, int *outY, int *outZ, int *outAng, int *out
 // Distance from the watched actor to the floor Duke believes is under it.  This
 // is what CON's iffloordistl tests, and it is how a jetpack trooper decides to
 // stop flying and walk.
-int VB_DukeAI_WatchedFloorDist(void)
+int NNB_DukeAI_WatchedFloorDist(void)
 {
     if ((unsigned)g_dukeAIWatchSprite >= MAXSPRITES)
         return -1;
@@ -1011,12 +1011,12 @@ int VB_DukeAI_WatchedFloorDist(void)
     return (actor[g_dukeAIWatchSprite].floorz - sprite[g_dukeAIWatchSprite].z) >> 8;
 }
 
-int VB_DukeAI_WatchedPicnum(void)
+int NNB_DukeAI_WatchedPicnum(void)
 {
     return (unsigned)g_dukeAIWatchSprite < MAXSPRITES ? sprite[g_dukeAIWatchSprite].picnum : -1;
 }
 
-void VB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCurFrame, int *outHitag)
+void NNB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCurFrame, int *outHitag)
 {
     if (outStat)     *outStat = g_dukeAIWatchStat;
     if (outXvel)     *outXvel = g_dukeAIWatchXvel;
@@ -1041,7 +1041,7 @@ void VB_DukeAI_WatchedState(int *outStat, int *outXvel, int *outZvel, int *outCu
 // Whatever Duke spawns in response (water, glass, scrap, explosions) lands in
 // Duke's lists and the host adopts it when it takes the lists back, which is the
 // same path an enemy's gibs already take.
-struct VB_DukeAIMapObjectHit
+struct NNB_DukeAIMapObjectHit
 {
     int16_t spriteNum;
     int16_t dukePicnum;
@@ -1052,10 +1052,10 @@ struct VB_DukeAIMapObjectHit
     int16_t ownerSprite;
 };
 
-static VB_DukeAIMapObjectHit g_dukeAIMapObjectHits[256];
+static NNB_DukeAIMapObjectHit g_dukeAIMapObjectHits[256];
 static int32_t g_dukeAIMapObjectHitCount;
 
-void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
+void NNB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat, int hitKind, int damage,
                                     int impactAng, int ownerSprite)
 {
     if (!g_dukeAILevelReady || (unsigned)spriteNum >= MAXSPRITES || (unsigned)dukePicnum >= MAXTILES)
@@ -1081,10 +1081,10 @@ void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat,
     int16_t weaponTile;
     switch (hitKind)
     {
-    case VB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
-    case VB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
-    case VB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
-    case VB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
+    case NNB_DUKEAI_HIT_MELEE:      weaponTile = KNEE; break;
+    case NNB_DUKEAI_HIT_EXPLOSION:  weaponTile = RPG; break;
+    case NNB_DUKEAI_HIT_RADIUS:     weaponTile = RADIUSEXPLOSION; break;
+    case NNB_DUKEAI_HIT_PROJECTILE: weaponTile = FIRELASER; break;
     default:                       weaponTile = SHOTSPARK1; break;
     }
 
@@ -1094,7 +1094,7 @@ void VB_DukeAI_QueueMapObjectDamage(int spriteNum, int dukePicnum, int dukeStat,
                                                            (int16_t)ownerSprite };
 }
 
-static void VB_DukeAI_ApplyMapObjectDamage(void)
+static void NNB_DukeAI_ApplyMapObjectDamage(void)
 {
     int32_t const count = g_dukeAIMapObjectHitCount;
     g_dukeAIMapObjectHitCount = 0;
@@ -1115,7 +1115,7 @@ static void VB_DukeAI_ApplyMapObjectDamage(void)
 
     for (int32_t i = 0; i < count; ++i)
     {
-        VB_DukeAIMapObjectHit const &hit = g_dukeAIMapObjectHits[i];
+        NNB_DukeAIMapObjectHit const &hit = g_dukeAIMapObjectHits[i];
         int const spriteNum = hit.spriteNum;
 
         if (sprite[spriteNum].statnum >= MAXSTATUS || onFreeList[spriteNum])
@@ -1191,21 +1191,21 @@ static void VB_DukeAI_ApplyMapObjectDamage(void)
 
 // Duke shakes the view by setting a countdown; the host has its own quake, so
 // it takes the value and drives its own.
-int VB_DukeAI_TakeEarthquake(void)
+int NNB_DukeAI_TakeEarthquake(void)
 {
     int const tics = g_earthquakeTime;
     g_earthquakeTime = 0;
     return tics;
 }
 
-void VB_DukeAI_RunTic(void)
+void NNB_DukeAI_RunTic(void)
 {
     if (!g_dukeAILevelReady)
         return;
 
-    VB_DukeAI_ApplyPendingDamage();
-    VB_DukeAI_ApplyMapObjectDamage();
-    VB_DukeAI_MoveActorsOnly();
+    NNB_DukeAI_ApplyPendingDamage();
+    NNB_DukeAI_ApplyMapObjectDamage();
+    NNB_DukeAI_MoveActorsOnly();
 
     // Duke's actors queue the damage they deal in the target's actor record;
     // it is Duke's player code that turns that into lost health.  The host owns
@@ -1233,14 +1233,14 @@ void VB_DukeAI_RunTic(void)
 // second copy of it.  The host works in its own animation states, so what crosses
 // here is a state and a frame, not one of Duke's CON action numbers.
 // ---------------------------------------------------------------------------
-extern "C" int VB_DukeAI_PlayerSkinCount(void) { return MAXPLAYERSKINS; }
+extern "C" int NNB_DukeAI_PlayerSkinCount(void) { return MAXPLAYERSKINS; }
 
-extern "C" char const *VB_DukeAI_PlayerSkinName(int skin)
+extern "C" char const *NNB_DukeAI_PlayerSkinName(int skin)
 {
     return (unsigned)skin < MAXPLAYERSKINS ? g_playerSkinNames[skin] : "";
 }
 
-extern "C" int VB_DukeAI_PlayerSkinUsable(int skin)
+extern "C" int NNB_DukeAI_PlayerSkinUsable(int skin)
 {
     if ((unsigned)skin >= MAXPLAYERSKINS)
         return 0;
@@ -1258,7 +1258,7 @@ extern "C" int VB_DukeAI_PlayerSkinUsable(int skin)
 // The host's states, in the order the bridge passes them.  Mapped onto the
 // APLAYER action each one corresponds to, because that is what Duke's own skin
 // lookup is written in terms of.
-extern "C" int VB_DukeAI_PlayerSkinTile(int skin, int state, int frame, int direction)
+extern "C" int NNB_DukeAI_PlayerSkinTile(int skin, int state, int frame, int direction)
 {
     static struct { int32_t start, frames; } const stateAction[] = {
         {  0, 1 },   // standing

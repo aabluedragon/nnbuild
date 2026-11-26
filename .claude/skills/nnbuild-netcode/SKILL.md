@@ -31,7 +31,7 @@ per-tick counter all machines agree on. Tie synced events to it.
 
 ## JavaScript/TypeScript mod boundary
 
-The `vb` API is an embedded local runtime, not a network replication layer.
+The `nnb` API is an embedded local runtime, not a network replication layer.
 `on('frame')`, CON-event handlers, component updates, spawning, gamevar writes,
 and actor mutations run on each peer. Therefore a mod that changes gameplay in
 multiplayer must obey the same lockstep rules above: make the same decision on
@@ -40,10 +40,10 @@ deterministic network event and replay it everywhere. Do not use `fetch`, TCP,
 UDP, local filesystem state, wall-clock time, or host-only callbacks as direct
 inputs to synchronized gameplay.
 
-When changing the JS/TS surface, update `source/glue/VBJS.md` and the generated
-`vb.d.ts` in `VBJS_GenerateProject()` together. The generated VS Code setup uses
+When changing the JS/TS surface, update `source/glue/NNBJS.md` and the generated
+`nnb.d.ts` in `NNBJS_GenerateProject()` together. The generated VS Code setup uses
 DAP port 4714 and game debug port 8501; source breakpoints are the supported
-debugging mechanism. See `source/glue/VBJS.md` for the supported API and the
+debugging mechanism. See `source/glue/NNBJS.md` for the supported API and the
 per-game compatibility boundary.
 
 ## Where things live

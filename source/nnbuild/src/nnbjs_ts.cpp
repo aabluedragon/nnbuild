@@ -346,7 +346,7 @@ struct TS {
 
 } // namespace
 
-extern "C" char *vbjs_ts_to_js(const char *src, size_t *outlen)
+extern "C" char *nnbjs_ts_to_js(const char *src, size_t *outlen)
 {
     TS ts;
     return ts.run(src, strlen(src), outlen);

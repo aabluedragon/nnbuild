@@ -4666,7 +4666,7 @@ WeaponMoveHit(short SpriteNum)
 
         ASSERT(wph->extra != -1);
 
-        if (Bgetenv("VB_CP_MIRROR_DEBUG") != NULL)
+        if (Bgetenv("NNB_CP_MIRROR_DEBUG") != NULL)
             LOG_F(INFO, "CPMIR missile spr=%d hit wall=%d pic=%d over=%d extra=%d lotag=%d cstat=%d", (int)SpriteNum,
                   (int)hitinfo.wall, TrackerCast(wph->picnum), TrackerCast(wph->overpicnum),
                   TrackerCast(wph->extra), TrackerCast(wph->lotag), TrackerCast(wph->cstat));
@@ -10263,7 +10263,7 @@ DoRocket(int16_t Weapon)
     {
         if (WeaponMoveHit(Weapon) && u->ret)
         {
-            if (Bgetenv("VB_CP_TEST_ROCKET") != NULL && !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
+            if (Bgetenv("NNB_CP_TEST_ROCKET") != NULL && !TEST(u->Flags, SPR_SET_POS_DONT_KILL))
             {
                 int const hit = TEST(u->ret, HIT_MASK);
                 int idx = -1, pic = -1;
@@ -15624,7 +15624,7 @@ InitRocket(PLAYERp pp)
     wu->Counter = 1;
     if (TestMissileSetPos(w, DoRocket, 1200, zvel))
     {
-    if (Bgetenv("VB_CP_TEST_ROCKET") != NULL)
+    if (Bgetenv("NNB_CP_TEST_ROCKET") != NULL)
         {
             int const hit = TEST(wu->ret, HIT_MASK);
             int cz = 0, fz = 0;

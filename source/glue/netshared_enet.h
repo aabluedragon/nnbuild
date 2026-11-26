@@ -11,7 +11,7 @@
 // then fire the returned request out our own game <socket> so the master learns our real
 // endpoint. enet_address_set_host (getaddrinfo) resolves IPv4 to IPv4-mapped; set_host_ip
 // only parses IPv6 literals. <tag> names the game for the log line.
-static inline void VB_SendPunch(const char *masterAddr, const char *target, ENetSocket socket, const char *tag)
+static inline void NNB_SendPunch(const char *masterAddr, const char *target, ENetSocket socket, const char *tag)
 {
     if (!Masterserver_MakePunchReq) return;
     char msEp[128]; unsigned char pbuf[160];

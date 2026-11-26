@@ -24,7 +24,7 @@ The generated project contains exactly one auto-loaded entry point:
 | TypeScript | `autojs/<name>/index.ts` | `tsconfig.json` |
 | JavaScript | `autojs/<name>/index.js` | `jsconfig.json` |
 
-Each project also receives `vb.d.ts`, `package.json`, and `.vscode/` files for
+Each project also receives `nnb.d.ts`, `package.json`, and `.vscode/` files for
 launching and debugging. Open **the generated project folder** in VS Code.
 `npm install` is optional; it is only needed for `npm run check`.
 
@@ -47,7 +47,7 @@ more spaces (for example `-g/path/file.grp`, `-g /path/file.grp`, and
 Prefer imports; `on`, `off`, and `log` are not implicit globals.
 
 ```ts
-import { on, log, drawText, define } from 'vb';
+import { on, log, drawText, define } from 'nnb';
 import fs from 'fs';
 import cvar from 'cvar';
 
@@ -55,22 +55,22 @@ on('start', () => log('mod loaded'));
 on('frame', () => drawText(1, 8, 8, 'Hello from TypeScript'));
 
 // CommonJS remains supported.
-const vb = require('vb');
+const nnb = require('nnb');
 ```
 
 `console.log()` uses the same logger as `log()`. Duke logs appear in the game
 console/log; the debugger also shows them. In games using the shared generic
 runtime, logs are written to the process log and debugger.
 
-The generated `vb.d.ts` is the authoritative editor contract. It declares all
-exported `vb` functions, component types, CON names/events, `fs`, `fs/promises`,
+The generated `nnb.d.ts` is the authoritative editor contract. It declares all
+exported `nnb` functions, component types, CON names/events, `fs`, `fs/promises`,
 `dgram`, `net`, `cvar`, and `fetch` support. Do not add globals to work around a
 missing import—add or correct the typed module export instead.
 
 ## Events and Duke bindings
 
 ```ts
-import { on, getActor, setGamevar } from 'vb';
+import { on, getActor, setGamevar } from 'nnb';
 
 on('actorSpawned', event => {
   // event is { sprite, owner, tile }
@@ -101,12 +101,12 @@ the game rather than continuing with a broken mod.
 ## Components and nodes
 
 The Duke API supports Unity-style components. Components must subclass
-`VBComponent`; instances can be attached to sprites or empty `VBNode`s.
+`NNBComponent`; instances can be attached to sprites or empty `NNBNode`s.
 
 ```ts
-import { VBComponent, createNode, createPrefab, spawnPrefab } from 'vb';
+import { NNBComponent, createNode, createPrefab, spawnPrefab } from 'nnb';
 
-class Spin extends VBComponent {
+class Spin extends NNBComponent {
   update(dt: number) { /* use this.node?.transform */ }
   onSpawn() {}
   onDestroy() {}
@@ -146,13 +146,13 @@ tcp.write('hello');
 const response = await fetch('https://example.invalid/api', { method: 'GET' });
 ```
 
-Consult `vb.d.ts` for the implemented overloads. This is an embedded runtime,
+Consult `nnb.d.ts` for the implemented overloads. This is an embedded runtime,
 not a complete Node distribution: only declared APIs are supported. Current
 module support is:
 
 | API | Import names | Current scope |
 |---|---|---|
-| filesystem | `fs`, `node:fs` | sync, callback-style, and `fs.promises` helpers declared in `vb.d.ts` |
+| filesystem | `fs`, `node:fs` | sync, callback-style, and `fs.promises` helpers declared in `nnb.d.ts` |
 | filesystem promises | `fs/promises`, `node:fs/promises` | promise wrappers for the implemented file helpers |
 | UDP | `dgram`, `node:dgram` | `createSocket`, `bind`, `send`, `close`, events |
 | TCP | `net`, `node:net` | outbound `createConnection` / `connect`; no TCP server API yet |
@@ -182,10 +182,10 @@ Use the optional debug-only header directive to add launch arguments from a
 mod:
 
 ```ts
-/// vbd.params="--game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'"
+/// nnbd.params="--game sw --grp '/Users/me/games/Shadow Warrior Complete/Sw.grp'"
 ```
 
-`vbd.params` applies only to debug/devtools launches. Put it at the top of
+`nnbd.params` applies only to debug/devtools launches. Put it at the top of
 `index.ts` or `index.js`. The launcher parses quoted paths and the normal option
 spellings.
 
@@ -195,9 +195,9 @@ native game-selector GUI, while `--menu`/`-m` forces it.
 
 ## Extending the runtime
 
-The lifecycle/API seam is in `source/glue/vbjs.h` and
-`source/nnbuild/src/vbjs.cpp`. Duke game-state bindings are implemented in
-`source/nnbuild/src/vbjs_duke.cpp`. When adding an API, implement the real
-binding, export it from `vb`, and update the generated `vb.d.ts`; do not ship a
+The lifecycle/API seam is in `source/glue/nnbjs.h` and
+`source/nnbuild/src/nnbjs.cpp`. Duke game-state bindings are implemented in
+`source/nnbuild/src/nnbjs_duke.cpp`. When adding an API, implement the real
+binding, export it from `nnb`, and update the generated `nnb.d.ts`; do not ship a
 stub. Add an explicit safe implementation or a deliberate throwing boundary
 for every other supported game.

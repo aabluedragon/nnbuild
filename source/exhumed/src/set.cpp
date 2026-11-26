@@ -139,7 +139,7 @@ static void KexSetSightSound(short nSprite)
 static void KexSetAudit(short nSet)
 {
     if (s_setAudit < 0)
-        s_setAudit = g_kexMode && Bgetenv("VB_KEX_SET_AUDIT") ? 1 : 0;
+        s_setAudit = g_kexMode && Bgetenv("NNB_KEX_SET_AUDIT") ? 1 : 0;
     if (!s_setAudit || s_setAuditSeen)
         return;
     s_setAuditSeen = 1;
@@ -323,7 +323,7 @@ static void KexSetTestFinish(short nSprite)
 void KexSet_TestTick()
 {
     if (s_setTest == -1)
-        s_setTest = g_kexMode && Bgetenv("VB_KEX_SET_TEST") ? 0 : -2;
+        s_setTest = g_kexMode && Bgetenv("NNB_KEX_SET_TEST") ? 0 : -2;
     if (s_setTest < 0)
         return;
 

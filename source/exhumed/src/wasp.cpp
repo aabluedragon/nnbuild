@@ -242,7 +242,7 @@ static char const *KexFlyerName(int nWasp)
 static void KexFlyerAudit(int nWasp)
 {
     if (s_flyerAudit < 0)
-        s_flyerAudit = g_kexMode && Bgetenv("VB_KEX_FLYER_AUDIT") ? 1 : 0;
+        s_flyerAudit = g_kexMode && Bgetenv("NNB_KEX_FLYER_AUDIT") ? 1 : 0;
     int const kind = s_waspKind[nWasp];
     if (!s_flyerAudit || (s_flyerAuditSeen & (1u << kind)))
         return;
@@ -814,7 +814,7 @@ int BuildWasp(short nSprite, int x, int y, int z, short nSector, short nAngle, i
 void KexFlyer_TestTick()
 {
     if (s_waspBobTest == -1)
-        s_waspBobTest = g_kexMode && Bgetenv("VB_KEX_WASP_BOB_TEST") ? 0 : -2;
+        s_waspBobTest = g_kexMode && Bgetenv("NNB_KEX_WASP_BOB_TEST") ? 0 : -2;
     if (s_waspBobTest == 0)
     {
         short gameTicks = 0, velocity = 0;
@@ -842,7 +842,7 @@ void KexFlyer_TestTick()
     }
 
     if (s_birdFlightTest == -1)
-        s_birdFlightTest = g_kexMode && Bgetenv("VB_KEX_BIRD_FLIGHT_TEST") ? 0 : -2;
+        s_birdFlightTest = g_kexMode && Bgetenv("NNB_KEX_BIRD_FLIGHT_TEST") ? 0 : -2;
     if (s_birdFlightTest == 0)
     {
         short calmRemainder = 0, retreatRemainder = 0, gameTicks = 2046;
@@ -868,7 +868,7 @@ void KexFlyer_TestTick()
     }
 
     if (s_flyerTest == -1)
-        s_flyerTest = g_kexMode && Bgetenv("VB_KEX_FLYER_TEST") ? 0 : -2;
+        s_flyerTest = g_kexMode && Bgetenv("NNB_KEX_FLYER_TEST") ? 0 : -2;
     if (s_flyerTest < 0)
         return;
 

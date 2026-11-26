@@ -259,7 +259,7 @@ int KexInv_WeaponForPickupLotag(int nItem)
     }
 }
 
-// VB_KEXINV_TEST=<ticks>: that many ticks into a level, take every collectible
+// NNB_KEXINV_TEST=<ticks>: that many ticks into a level, take every collectible
 // it holds as if walked over, log the tally, then page through the status
 // screen unattended, screenshotting each page (see KexMenu_Status).
 static int s_selftest;
@@ -976,7 +976,7 @@ static void KexInv_ShrineTick(void)
     }
 }
 
-// VB_KEXSHRINE_TEST=<ticks>: force a player carrying the first loaded shrine
+// NNB_KEXSHRINE_TEST=<ticks>: force a player carrying the first loaded shrine
 // artifact onto its pad, then assert the source bit was consumed and every
 // event-54 destination materialised an item at its authored Kex position.
 static void KexInv_ShrineTestPrepare(void)
@@ -1062,10 +1062,10 @@ void KexInv_LevelStart(void)
     // RestartPlayer() asks for the difficulty-dependent health ceiling.
     if (g_kexMode)
     {
-        char const *difficulty = Bgetenv("VB_KEX_DIFFICULTY");
+        char const *difficulty = Bgetenv("NNB_KEX_DIFFICULTY");
         if (difficulty)
             KexDifficulty_Set(Batoi(difficulty));
-        if (Bgetenv("VB_KEXOVERWORLD_TEST"))
+        if (Bgetenv("NNB_KEXOVERWORLD_TEST"))
             KexMenu_LevelCount();
     }
 
@@ -1096,22 +1096,22 @@ void KexInv_LevelStart(void)
             OSD_Printf("Kex shrines: %d pads, %d destinations on this level\n",
                        s_shrinePads, s_shrineSpawns);
     }
-    { char const *e = getenv("VB_KEXINV_TEST"); s_selftest = e ? Batoi(e) : 0; }
-    { char const *e = getenv("VB_KEXPICKUP_TEST"); s_pickupSelftest = e ? Batoi(e) : 0; }
-    { char const *e = getenv("VB_KEXDIFF_TEST"); s_difficultySelftest = e ? Batoi(e) : 0; }
+    { char const *e = getenv("NNB_KEXINV_TEST"); s_selftest = e ? Batoi(e) : 0; }
+    { char const *e = getenv("NNB_KEXPICKUP_TEST"); s_pickupSelftest = e ? Batoi(e) : 0; }
+    { char const *e = getenv("NNB_KEXDIFF_TEST"); s_difficultySelftest = e ? Batoi(e) : 0; }
     if (s_shrineTestPhase == 0)
     {
-        char const *e = getenv("VB_KEXSHRINE_TEST");
+        char const *e = getenv("NNB_KEXSHRINE_TEST");
         s_shrineSelftest = e ? Batoi(e) : 0;
     }
-    if (!s_saveSelftestDone && Bgetenv("VB_KEXCAMPAIGNSAVE_TEST"))
+    if (!s_saveSelftestDone && Bgetenv("NNB_KEXCAMPAIGNSAVE_TEST"))
     {
         s_saveSelftestDone = 1;
         KexInv_RunSaveSelftest();
     }
     if (s_travelTestPhase == 0)
     {
-        char const *e = Bgetenv("VB_KEXTRAVEL_TEST");
+        char const *e = Bgetenv("NNB_KEXTRAVEL_TEST");
         s_travelSelftest = e ? 20 : 0;
         s_travelTestTarget = e ? Batoi(e) : -1;
     }
@@ -1119,18 +1119,18 @@ void KexInv_LevelStart(void)
         s_travelTestPostTicks = 2;
     if (s_menuLoadTestPhase == 0)
     {
-        char const *e = Bgetenv("VB_KEXMENU_LOAD_TEST");
+        char const *e = Bgetenv("NNB_KEXMENU_LOAD_TEST");
         s_menuLoadSelftest = e ? 20 : 0;
         s_menuLoadTestSlot = e ? clamp(Batoi(e), 0, KEX_INV_SAVE_SLOTS - 1) : -1;
     }
     if (s_deathTestPhase == 0)
     {
-        char const *e = getenv("VB_KEXDEATH_TEST");
+        char const *e = getenv("NNB_KEXDEATH_TEST");
         s_deathSelftest = e ? Batoi(e) : 0;
     }
     if (s_checkpointTestPhase == 0)
     {
-        char const *e = getenv("VB_KEXCHECKPOINT_TEST");
+        char const *e = getenv("NNB_KEXCHECKPOINT_TEST");
         s_checkpointSelftest = e ? Batoi(e) : 0;
     }
     s_wantScreen = 0;
@@ -1141,11 +1141,11 @@ void StartDeathSeq(int nPlayer, int nVal);                                  // p
 
 static void KexInv_RunTravelSelftest(void)
 {
-    char const *const sidecar = Bgetenv("VB_KEXINV_SAVE_FILE");
-    char const *const slotText = Bgetenv("VB_KEXTRAVEL_TEST_SLOT");
+    char const *const sidecar = Bgetenv("NNB_KEXINV_SAVE_FILE");
+    char const *const slotText = Bgetenv("NNB_KEXTRAVEL_TEST_SLOT");
     if (!sidecar || !sidecar[0] || !slotText)
     {
-        OSD_Printf("Kex travel save test: FAIL (isolated VB_KEXINV_SAVE_FILE and VB_KEXTRAVEL_TEST_SLOT required)\n");
+        OSD_Printf("Kex travel save test: FAIL (isolated NNB_KEXINV_SAVE_FILE and NNB_KEXTRAVEL_TEST_SLOT required)\n");
         s_travelTestPhase = 2;
         return;
     }
@@ -1202,12 +1202,12 @@ static void KexInv_RunTravelSelftest(void)
 
 static void KexInv_RunMenuLoadSelftest(void)
 {
-    char const *const classicSave = Bgetenv("VB_EXHUMED_SAVE_FILE");
-    char const *const sidecar = Bgetenv("VB_KEXINV_SAVE_FILE");
+    char const *const classicSave = Bgetenv("NNB_EXHUMED_SAVE_FILE");
+    char const *const sidecar = Bgetenv("NNB_KEXINV_SAVE_FILE");
     if (!classicSave || !classicSave[0] || !sidecar || !sidecar[0]
         || !Bstrcmp(sidecar, "kexinv.sav"))
     {
-        OSD_Printf("Kex menu load test: FAIL (isolated VB_EXHUMED_SAVE_FILE and VB_KEXINV_SAVE_FILE required)\n");
+        OSD_Printf("Kex menu load test: FAIL (isolated NNB_EXHUMED_SAVE_FILE and NNB_KEXINV_SAVE_FILE required)\n");
         s_menuLoadTestPhase = 2;
         return;
     }
@@ -1661,7 +1661,7 @@ int KexInv_TestWantsScreen(void)
     return r;
 }
 
-int KexInv_TestActive(void) { return getenv("VB_KEXINV_TEST") != NULL; }
+int KexInv_TestActive(void) { return getenv("NNB_KEXINV_TEST") != NULL; }
 
 void KexInv_GiveArtifact(int nPlayer, int nArtifact)
 {
@@ -2081,7 +2081,7 @@ static char const *KexInv_SaveFileName(void)
 {
     // Tests can isolate the sidecar without touching a player's real slots.
     // Normal launches never set this and retain the established filename.
-    char const *const overrideName = Bgetenv("VB_KEXINV_SAVE_FILE");
+    char const *const overrideName = Bgetenv("NNB_KEXINV_SAVE_FILE");
     return overrideName && overrideName[0] ? overrideName : KEX_INV_SAVE_FILE;
 }
 
@@ -2673,12 +2673,12 @@ static int KexInv_WriteLegacyTestFile(char const *path, int version,
 
 static void KexInv_RunSaveSelftest(void)
 {
-    char const *const testPath = Bgetenv("VB_KEXINV_SAVE_FILE");
-    char const *const classicPath = Bgetenv("VB_EXHUMED_SAVE_FILE");
+    char const *const testPath = Bgetenv("NNB_KEXINV_SAVE_FILE");
+    char const *const classicPath = Bgetenv("NNB_EXHUMED_SAVE_FILE");
     if (!testPath || !testPath[0] || !Bstrcmp(testPath, KEX_INV_SAVE_FILE)
         || !classicPath || !classicPath[0] || !Bstrcmp(testPath, classicPath))
     {
-        OSD_Printf("Kex campaign save test: FAIL (set distinct isolated VB_EXHUMED_SAVE_FILE and VB_KEXINV_SAVE_FILE paths)\n");
+        OSD_Printf("Kex campaign save test: FAIL (set distinct isolated NNB_EXHUMED_SAVE_FILE and NNB_KEXINV_SAVE_FILE paths)\n");
         return;
     }
 

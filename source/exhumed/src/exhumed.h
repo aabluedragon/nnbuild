@@ -49,7 +49,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 void handleevents();
 #endif
 
-// NNBuild: VB_CP_CAPTURE=<frames> screenshot hook, shared by the in-game
+// NNBuild: NNB_CP_CAPTURE=<frames> screenshot hook, shared by the in-game
 // display and the Kex menu so either can be checked visually headlessly.
 void Exhumed_CaptureFrame(void);
 

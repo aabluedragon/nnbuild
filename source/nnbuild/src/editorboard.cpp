@@ -210,7 +210,7 @@ std::string temporaryMap(std::string const &directory)
 {
 #ifdef _WIN32
     char path[MAX_PATH];
-    return GetTempFileNameA(directory.c_str(), "vbm", 0, path) ? path : "";
+    return GetTempFileNameA(directory.c_str(), "nnb", 0, path) ? path : "";
 #else
     std::string path = directory + "/.nnbmap-XXXXXX";
     auto const fd = mkstemp(&path[0]);

@@ -1870,7 +1870,7 @@ static int BuildBulletInternal(short nSprite, int nType, int UNUSED(ebx),
             ? kexLaunch->nTarget : -1;
 
         if (s_kexBulletAudit < 0)
-            s_kexBulletAudit = g_kexMode && Bgetenv("VB_KEX_PROJECTILE_AUDIT") ? 1 : 0;
+            s_kexBulletAudit = g_kexMode && Bgetenv("NNB_KEX_PROJECTILE_AUDIT") ? 1 : 0;
         if (s_kexBulletAudit && !kexLaunch->bSuppressAudit)
         {
             OSD_Printf("Kex projectile: type %d source %d target %d pos %d,%d,%d vel %d,%d,%d callback %d/%d/%d radius %d repeat %d homing %d\n",
@@ -2418,7 +2418,7 @@ int KexBullet_CheckMantisFireProjectile(int nBullet, short nSource)
 void KexBullet_TestTick()
 {
     if (s_kexBulletTest == -1)
-        s_kexBulletTest = g_kexMode && Bgetenv("VB_KEX_PROJECTILE_TEST")
+        s_kexBulletTest = g_kexMode && Bgetenv("NNB_KEX_PROJECTILE_TEST")
             ? 0 : -2;
     if (s_kexBulletTest != 0)
         return;

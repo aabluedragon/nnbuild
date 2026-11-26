@@ -223,7 +223,7 @@ static void KexQuake_Tick()
 static void KexQuake_TestTick()
 {
     if (s_kexQuakeTest == -1)
-        s_kexQuakeTest = g_kexMode && Bgetenv("VB_KEX_QUAKE_TEST") ? 0 : -2;
+        s_kexQuakeTest = g_kexMode && Bgetenv("NNB_KEX_QUAKE_TEST") ? 0 : -2;
     if (s_kexQuakeTest != 0 || (unsigned)nLocalPlayer >= (unsigned)kMaxPlayers)
         return;
 
@@ -521,7 +521,7 @@ static void KexTossSourcePhysicsStep(short nSprite, int bouncySound,
 static void KexToss_TestTick()
 {
     if (s_kexTossTest == -1)
-        s_kexTossTest = g_kexMode && Bgetenv("VB_KEX_TOSS_TEST") ? 0 : -2;
+        s_kexTossTest = g_kexMode && Bgetenv("NNB_KEX_TOSS_TEST") ? 0 : -2;
     if (s_kexTossTest != 0)
         return;
 
@@ -885,7 +885,7 @@ static int KexSectorHit(int hit)
 // Build edge support and the filtered Kex result.
 void KexNoStanding_Test(void)
 {
-    if (!g_kexMode || !Bgetenv("VB_KEX_NOEDGE_TEST"))
+    if (!g_kexMode || !Bgetenv("NNB_KEX_NOEDGE_TEST"))
         return;
 
     int marked = 0, portals = 0, samples = 0, suppressed = 0, shown = 0;
@@ -1602,7 +1602,7 @@ static int s_kexAcquireTest = -1;
 static void KexAcquire_TestTick()
 {
     if (s_kexAcquireTest < 0)
-        s_kexAcquireTest = g_kexMode && Bgetenv("VB_KEX_COMMON_ENEMY_TEST") ? 1 : 0;
+        s_kexAcquireTest = g_kexMode && Bgetenv("NNB_KEX_COMMON_ENEMY_TEST") ? 1 : 0;
     if (!s_kexAcquireTest)
         return;
     s_kexAcquireTest = 0;

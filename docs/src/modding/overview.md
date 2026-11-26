@@ -17,11 +17,11 @@ NNBuild can be modded in four ways. You can combine them.
 
 A script mod is a folder with an `index.ts` or `index.js` file. The game loads it at startup. Node.js is not needed to run it: TypeScript files are converted by the game itself.
 
-Scripts talk to the game through the `vb` module. They can also use a small set of Node-style modules (`fs`, `dgram`, `net`), `fetch`, and timers.
+Scripts talk to the game through the `nnb` module. They can also use a small set of Node-style modules (`fs`, `dgram`, `net`), `fetch`, and timers.
 
 - [Quick start](quick-start.md): create and run your first mod.
 - [Project layout](project-layout.md): how scripts are found, how `import` works, what TypeScript is supported.
-- [API reference](api-reference.md): every function of the `vb` module.
+- [API reference](api-reference.md): every function of the `nnb` module.
 - [Events](events.md): every event you can listen to.
 - [Components](components.md): class-based components for sprites and nodes.
 - [Built-in modules](modules.md): `fs`, `dgram`, `net`, `cvar`, `fetch`, timers.
@@ -43,7 +43,7 @@ A script mod can work together with a classic mod. It can read and write CON gam
 
 ### Editor projects and stand-alone games
 
-The map editor stores a project as a folder with a `nnbuild.project.json` file. A project can be played, edited, or exported as a ZIP. See [Projects and stand-alone games](../editor/projects.md).
+The map editor stores a project as a folder with an `nnbuild.project.json` file. A project can be played, edited, or exported as a ZIP. See [Projects and stand-alone games](../editor/projects.md).
 
 A project with *Modern Mode* turned on can attach scripts to sprites, sectors and walls. These scripts use a different, simpler model than normal script mods. See [Map script components](map-script-components.md).
 

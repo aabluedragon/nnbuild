@@ -42,7 +42,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "kexmenu.h"
 #include "player.h"
 #include "network.h"
-#include "vbnet.h"    // NNBuild: Powerslave multiplayer
+#include "nnbnet.h"    // NNBuild: Powerslave multiplayer
 #include "netargs.h"  // NNBuild: unified multiplayer command-line flags
 #include "input.h"
 #include "sound.h"
@@ -1492,7 +1492,7 @@ void FinishLevel()
                      movieLang[KexLanguage_VoiceIndex()]);
             // Keep unattended KEX test runs out of both the title and ending
             // movie decoders. Normal gameplay always presents this ending.
-            if (!Bgetenv("VB_KEX_SKIPMOVIES"))
+            if (!Bgetenv("NNB_KEX_SKIPMOVIES"))
                 Kex_PlayTheora(endPath);
             // Kex maps all run as user maps, so the generic levelnew++ below
             // would reload TOMBEND after the ending movie. mapDestination -2
@@ -1869,7 +1869,7 @@ char const *Kex_PickupCaption(int lotag)
     return NULL;
 }
 
-// Debug aid shared with the other merged games: VB_CP_CAPTURE=<frames> saves one
+// Debug aid shared with the other merged games: NNB_CP_CAPTURE=<frames> saves one
 // screenshot that many drawn frames in, so a Powerslave run -- in a level or
 // sitting on the menu -- can be checked visually without a human at the keyboard.
 void Exhumed_CaptureFrame(void)
@@ -1878,7 +1878,7 @@ void Exhumed_CaptureFrame(void)
 
     if (autoCaptureFrames < 0)
     {
-        char const *const env = Bgetenv("VB_CP_CAPTURE");
+        char const *const env = Bgetenv("NNB_CP_CAPTURE");
         autoCaptureFrames = env != NULL ? Batoi(env) : 0;
     }
 
@@ -2112,7 +2112,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     // mmulti args, so networkMode stays NULL; the auto-start knobs are collected
     // here and handed to the netcode once parsing is done.
     int netDedicated = 0, netStartNow = 0, netWait = 0, netLateJoin = 0, netStartNowPlayers = 2;
-    vb_netarg_ctx const exNetArg = {
+    nnb_netarg_ctx const exNetArg = {
         &netDedicated, 1, 0,
         &g_noSetup, NULL,
         &netStartNow, &netStartNowPlayers, &netWait, kMaxPlayers,
@@ -2136,7 +2136,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             // NNBuild: accept the canonical "--flag" spelling for every
             // NNBuild multiplayer flag, not just the one-dash form. pChar has
             // had exactly one dash removed, so a "--joinlobby" still reads as
-            // "-joinlobby" here and used to fall through to the shared VB_NetArg
+            // "-joinlobby" here and used to fall through to the shared NNB_NetArg
             // handler -- which accepted and swallowed it without doing anything,
             // because Exhumed passes NULL for that hook. Compare the net flags
             // against the fully-undashed token instead.
@@ -2176,7 +2176,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
             {
                 netLateJoin = 1;
             }
-            else if (int const nc = VB_NetArg(&exNetArg, pOpt, (i + 1 < argc) ? argv[i + 1] : NULL))
+            else if (int const nc = NNB_NetArg(&exNetArg, pOpt, (i + 1 < argc) ? argv[i + 1] : NULL))
             {
                 i += nc - 1;        // the for-loop does the other ++
             }
@@ -2586,7 +2586,7 @@ int Exhumed_app_main(int argc, char const* const* argv)
     // not enough to contain an unattended capture.  Keep this test-only
     // override after cvars load: it neither changes a player's saved setting
     // nor affects ordinary screenshots.
-    char const *const screenshotDir = Bgetenv("VB_SCREENSHOT_DIR");
+    char const *const screenshotDir = Bgetenv("NNB_SCREENSHOT_DIR");
     if (screenshotDir && screenshotDir[0])
         Bstrncpyz(screenshot_dir, screenshotDir, sizeof(screenshot_dir));
 
@@ -3037,13 +3037,13 @@ LATEJOIN_READY:
             }
         }
 
-        // VB_KEX_MUSIC_STOP_TEST=1: wait for the real level track, then
+        // NNB_KEX_MUSIC_STOP_TEST=1: wait for the real level track, then
         // exercise the same live mus_enabled transition as Audio Settings.
         // TOMB starts its soundtrack before the Ramses dialogue, so a passing
         // test also proves the dialogue-safe StopCDMusic() classification.
         static int musicStopTest = -1, musicStopStart = -1;
         if (musicStopTest == -1)
-            musicStopTest = g_kexMode && Bgetenv("VB_KEX_MUSIC_STOP_TEST") ? 0 : -2;
+            musicStopTest = g_kexMode && Bgetenv("NNB_KEX_MUSIC_STOP_TEST") ? 0 : -2;
         if (musicStopTest == 0)
         {
             if (musicStopStart < 0)
@@ -3549,11 +3549,11 @@ void DoTitle()
         char intro[40];
         Bsprintf(intro, "movies/intro-%s.ogv",
                  movieLang[KexLanguage_VoiceIndex()]);
-        // VB_KEX_SKIPMOVIES: bypass all KEX movies (including endings) for
+        // NNB_KEX_SKIPMOVIES: bypass all KEX movies (including endings) for
         // unattended checks and go straight to the title hold here.
-        if (Bgetenv("VB_KEX_SKIPMOVIES") || Kex_PlayTheora("movies/NightDive.ogv"))
+        if (Bgetenv("NNB_KEX_SKIPMOVIES") || Kex_PlayTheora("movies/NightDive.ogv"))
         {
-            if (!Bgetenv("VB_KEX_SKIPMOVIES"))
+            if (!Bgetenv("NNB_KEX_SKIPMOVIES"))
             {
                 Kex_PlayTheora("movies/Kex.ogv");
                 Kex_PlayTheora("movies/throwback.ogv");
