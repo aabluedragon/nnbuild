@@ -9858,6 +9858,22 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     i = initgroupfile(eduke32dat);
 
     if (i == -1)
+    {
+        // Release archives keep this file next to the program. That folder is
+        // not searched once the launcher has switched into a game's own folder.
+        if (char *appdir = Bgetappdir())
+        {
+            char path[BMAX_PATH];
+            Bsnprintf(path, sizeof(path), "%s/%s", appdir, eduke32dat);
+            Xfree(appdir);
+            int const savedSearchMode = pathsearchmode;
+            pathsearchmode = 1;
+            i = initgroupfile(path);
+            pathsearchmode = savedSearchMode;
+        }
+    }
+
+    if (i == -1)
         LOG_F(WARNING, "Could not find internal data file '%s'!", eduke32dat);
     else 
         LOG_F(INFO, "Using '%s' for internal data.", eduke32dat);

@@ -1451,7 +1451,7 @@ static int gs_searchPathOption(char const *arg, char const **inlineValue)
     // Do not let the `-j` path shorthand consume VibeBuild32's `-js` script option
     // or the join options that also start with "-j".
     if (!Bstrncasecmp(arg, "-js", 3)) return 0;
-    if (!Bstrcasecmp(arg, "-joinerror") || !Bstrcasecmp(arg, "-joinlobby") ||
+    if (!Bstrncasecmp(arg, "-joinerror", 10) || !Bstrncasecmp(arg, "-joinlobby", 10) ||
         !Bstrcasecmp(arg, "-jl") || !Bstrcasecmp(arg, "-je")) return 0;
     return gs_valueOptionWithAttached(arg, "--search-path", "-j", NULL, inlineValue) ||
            gs_valueOptionWithAttached(arg, "--path", NULL, NULL, inlineValue);
