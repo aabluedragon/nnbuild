@@ -1,9 +1,11 @@
 # NNBuild Features
 
 NNBuild is one program for playing, hosting and building for **Duke Nukem 3D**
-and other games made with the Build engine. It is based on NetDuke32, a
-community-made version of the game from the EDuke32 family. This page lists
-what NNBuild adds on top of that, in plain language.
+and other games made with the Build engine. It is based on
+[NetDuke32](https://wiki.eduke32.com/wiki/NetDuke32), the amazing work of
+Jordon "StrikerTheHedgefox" Moss, which is built on
+[EDuke32](https://www.eduke32.com), created by Richard "TerminX" Gobeille.
+This page lists what NNBuild adds on top of that, in plain language.
 
 ## At a glance
 

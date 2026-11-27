@@ -14,9 +14,12 @@
   <a href="features.html">See the features</a>
 </div>
 
-NNBuild is free and open source. It is based on NetDuke32, part of the EDuke32
-family of community-made versions of the game. You bring your own copy of each
-game's data files; NNBuild supplies the program that runs them.
+NNBuild is free and open source. You bring your own copy of each game's data
+files; NNBuild supplies the program that runs them.
+
+NNBuild is based on [NetDuke32](https://wiki.eduke32.com/wiki/NetDuke32), the
+amazing work of Jordon "StrikerTheHedgefox" Moss. NetDuke32 is in turn built on
+[EDuke32](https://www.eduke32.com), created by Richard "TerminX" Gobeille.
 
 > **Disclaimer.** NNBuild is entirely vibe-coded: everything it adds on top of NetDuke32 was
 > written by AI coding assistants. It is provided as is, with no warranty and no
