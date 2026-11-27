@@ -24,6 +24,10 @@
 #include "startwin.game.h"
 
 const char* credits = {
+    "NNBuild is one program for playing, hosting and building for Duke Nukem 3D "
+    "and other games made with the Build engine. It is based on NetDuke32 and EDuke32.\r\n"
+    "- https://nnb.nukemnet.com\r\n\r\n"
+    "-= NetDuke32 =-\r\n"
     "Developed by: Jordon \"Striker The Hedgefox\" Moss.\r\n\r\n"
     "NetDuke32 is a multiplayer-centric port based on EDuke32. "
     "Started late 2015 as a series of maintenance builds of EDuke32-OldMP, it has since "
@@ -395,7 +399,7 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
             static char tabText[][32] = {
                 TEXT("Setup"),
                 TEXT("Message Log"),
-                TEXT("About NetDuke32"),
+                TEXT("About NNBuild"),
             };
 
             TCITEM tab;
