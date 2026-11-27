@@ -509,6 +509,12 @@ ASFORMAT := elf$(BITS)
 ifeq ($(PLATFORM),WINDOWS)
     WINDOWS_MAJOR := 6
     WINDOWS_MINOR := 1
+    # The 32-bit build also starts on Windows XP and Vista: winxpcompat.cpp
+    # stands in for the functions those lack.
+    ifeq ($(BITS),32)
+        WINDOWS_MAJOR := 5
+        WINDOWS_MINOR := 1
+    endif
     LINKERFLAGS += -static -Wl,-subsystem,windows:$(WINDOWS_MAJOR).$(WINDOWS_MINOR),--major-os-version,$(WINDOWS_MAJOR),--minor-os-version,$(WINDOWS_MINOR)
     COMPILERFLAGS += -DUNDERSCORES
     ASFORMAT := win$(BITS)

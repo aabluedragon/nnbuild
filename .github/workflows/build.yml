@@ -109,6 +109,9 @@ jobs:
           sudo update-alternatives --set ${{ matrix.triple }}-g++ /usr/bin/${{ matrix.triple }}-g++-posix
       - name: Build
         run: make -j"$(nproc)" PLATFORM=WINDOWS CROSS=${{ matrix.triple }}- nnbuild PRETTY_OUTPUT=0
+      - name: Check that the 32-bit build can start on Windows XP
+        if: matrix.arch == 'x86'
+        run: sh platform/check-windows-xp.sh nnbuild.exe ${{ matrix.triple }}-objdump
       - name: Package
         run: |
           case "$GITHUB_REF" in refs/tags/[nv][0-9]*) export NNBUILD_VERSION="${GITHUB_REF_NAME#[nv]}" ;; esac

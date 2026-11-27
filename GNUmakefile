@@ -339,6 +339,11 @@ else
     engine_excl += winbits.cpp
 endif
 
+# Windows XP support, in the 32-bit Windows build only.
+ifneq ($(PLATFORM)$(BITS),WINDOWS32)
+    engine_excl += winxpcompat.cpp
+endif
+
 ifeq ($(PLATFORM),WII)
     LINKERFLAGS += -Wl,-wrap,c_default_exceptionhandler
 else
