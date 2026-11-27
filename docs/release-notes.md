@@ -3,48 +3,33 @@ other Build-engine games.
 
 **Documentation:** https://nnb.nukemnet.com
 
-**This is release 1.0.0.** NNBuild's releases are numbered from 1.0.0 from here
-on. It is the newest release: it follows the earlier 1.3.2 and contains
-everything that one has.
+NNBuild's releases are numbered from 1.0.0. The earlier 1.3.1 and 1.3.2 came
+before 1.0.0, and every later release contains everything they had.
 
 ## New in this release
 
-- **Only games you can join.** The public lobby holds the matches of every
-  game NNBuild runs. Each match now carries its game, and your list shows
-  only matches of the game you are running, so a Duke Nukem 3D player no
-  longer sees Shadow Warrior rooms or rooms of another Duke edition.
-- **Shadow Warrior's server browser** joins like the Duke one: it asks the
-  server over IPv6 and IPv4 at once, prefers IPv6, shows the progress, and
-  Esc cancels. Enter in that browser now really joins, and the list is
-  fetched without freezing the menu.
-- **Player numbers in the list are real.** A server shows the players in the
-  match and its slots; an empty server no longer looks full.
-- **After a join that fails late**, NNBuild opens JOIN GAME with the reason
-  instead of starting at the main menu behind the intro.
-- **Joining a running match over the internet.** The match is now sent to a
-  joining player in packets small enough for every connection. Before, many
-  connections dropped them, and the join ended with `Timed out joining the
-  game in progress`. Only the host needs this release for that.
-- **No question box without the startup window.** Started with `--skip-menu`,
-  NNBuild no longer stops to ask whether to import `duke3d.cfg` or
-  `eduke32.cfg`; it starts with its default settings.
-- **A slow sound device no longer gets you removed.** Where the sound device
-  takes seconds to open (or cannot be opened), the host no longer drops the
-  player for being silent.
-- **The setup window on Windows carries NNBuild's own banner**, and its About
-  page starts with NNBuild.
-
-Hosts and players need this release to see each other in the list: a host
-on an older release does not say which game it runs.
+- **A build for 32-bit ARM Linux.** `nnbuild-linux-armv7l.tar.gz` is for ARM
+  computers with a 32-bit system, such as a Raspberry Pi with 32-bit Raspberry
+  Pi OS 12. It has been checked under emulation: hosting, joining a running
+  match, and a match together with a 64-bit PC.
+- **The 32-bit Windows build is made for Windows XP and later.** It no longer
+  asks Windows for functions that Windows XP lacks. It has not yet been tried
+  on a real Windows XP, Vista, 7 or 8 computer.
+- **No crash when you are ready before the host.** When a host started a match
+  directly on a level and needed longer than a player to open its window or
+  its sound device, that player's game could crash as the match began. The
+  player now waits for the host. It was seen with a Windows host; each player
+  needs this release for the fix.
 
 ## Downloads
 
 | System | File | Needs |
 | --- | --- | --- |
 | Windows, 64-bit | `nnbuild-windows-x64.zip` | Windows 10 or later |
-| Windows, 32-bit | `nnbuild-windows-x86.zip` | Windows 10 or later |
+| Windows, 32-bit | `nnbuild-windows-x86.zip` | Windows XP or later |
 | Linux, x64 | `nnbuild-linux-x64.tar.gz` | glibc 2.35 or later, SDL2 |
 | Linux, ARM64 | `nnbuild-linux-arm64.tar.gz` | glibc 2.35 or later, SDL2 |
+| Linux, ARMv7 (32-bit ARM) | `nnbuild-linux-armv7l.tar.gz` | glibc 2.35 or later, SDL2 |
 | macOS, Apple silicon | `nnbuild-macos-arm64.zip` | macOS 15 or later |
 | macOS, Intel | `nnbuild-macos-x64.zip` | macOS 14 or later |
 

@@ -208,6 +208,9 @@ running match only with the same kind of build as the host's.
 - 64-bit with 64-bit works, and 32-bit with 32-bit works. The operating system
   does not matter: a Linux server and Windows players get along.
 
+The 32-bit builds are the 32-bit Windows build and the ARMv7 Linux build.
+Joining a running match between those two has not been tried.
+
 The reason is that the host sends a newcomer the running match as a saved
 game, and a saved game made by one kind of build cannot be read by the other.
 A player with the wrong kind of build is told so at the end of the transfer,

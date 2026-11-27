@@ -236,6 +236,9 @@ be read by the other.
 - 64-bit with 64-bit works, and 32-bit with 32-bit works. The operating system
   does not matter. A Windows player can join a Linux server, for example.
 
+The 32-bit builds are the 32-bit Windows build and the ARMv7 Linux build.
+Joining a running match between those two has not been tried.
+
 If your build is the wrong kind, the join runs to the end of the transfer and
 then the game closes with one of these messages:
 

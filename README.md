@@ -8,8 +8,8 @@ built-in map editor, and mods written in JavaScript or TypeScript.
 
 - **Documentation:** <https://nnb.nukemnet.com>
 - **Downloads:** [latest release](https://github.com/aabluedragon/nnbuild/releases/latest)
-  for Windows (64-bit and 32-bit), Linux (x64 and ARM64) and macOS (Apple
-  silicon and Intel)
+  for Windows (64-bit and 32-bit), Linux (x64, ARM64 and ARMv7) and macOS
+  (Apple silicon and Intel)
 - **Feature list:** [FEATURES.md](FEATURES.md)
 
 You bring your own copy of each game's data files; NNBuild supplies the program

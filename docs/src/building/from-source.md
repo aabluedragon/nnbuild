@@ -47,6 +47,20 @@ The curl library is only needed for building. At run time it is loaded when a
 script first calls `fetch`; without it, `fetch` reports an error and everything
 else works.
 
+### 32-bit ARM (ARMv7)
+
+The ARMv7 build is cross-compiled on an x86-64 computer. A script does the
+whole job inside an Ubuntu 22.04 container: it installs the cross compiler and
+the ARM libraries, builds `nnbuild` and `nnbuild-lobby`, and starts both once
+under emulation. From the top of the source tree:
+
+```sh
+docker run --rm -v "$PWD":/src -w /src ubuntu:22.04 sh platform/build-linux-armv7l.sh
+```
+
+`podman` works the same way. On an ARMv7 computer itself, the ordinary Linux
+steps above apply.
+
 ## Windows
 
 The Windows builds are cross-compiled on Linux with MinGW-w64. The libraries
@@ -64,6 +78,13 @@ make -j"$(nproc)" PLATFORM=WINDOWS CROSS=x86_64-w64-mingw32- nnbuild
 For the 32-bit build, use `g++-mingw-w64-i686-posix` and
 `CROSS=i686-w64-mingw32-`. Give each build its own object directory if you
 build both from one checkout, for example `obj=obj-win32`.
+
+The 32-bit build is made to start on Windows XP and later. Windows refuses to
+start a program that asks for a function the system does not have, so
+`source/build/src/winxpcompat.cpp` provides the functions that are newer than
+Windows XP: each passes the call on to Windows where it exists and does the
+work itself otherwise. `platform/check-windows-xp.sh nnbuild.exe` reports
+any newer function that has crept back in.
 
 The POSIX-threads flavour of MinGW (the `-posix` packages) is required.
 
@@ -87,8 +108,8 @@ The build also creates an application bundle next to the program file.
 sh platform/package.sh linux-x64
 ```
 
-Targets are `linux-x64`, `linux-arm64`, `windows-x64`, `windows-x86`,
-`macos-arm64` and `macos-x64`. The archive is written to `dist/`. On macOS the
+Targets are `linux-x64`, `linux-arm64`, `linux-armv7l`, `windows-x64`,
+`windows-x86`, `macos-arm64` and `macos-x64`. The archive is written to `dist/`. On macOS the
 script needs `dylibbundler` (`brew install dylibbundler`) to carry the
 libraries inside the application bundle.
 

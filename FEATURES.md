@@ -225,8 +225,9 @@ Open **Map Editor** from the title menu.
   feeling up to a second behind for the rest of the match. That is fixed.
 - **Faster joining.** Sending the running game and mod files to a new player is
   many times quicker than before, so large add-ons no longer time out.
-- **Six ready-made builds.** Windows (64-bit and 32-bit), Linux (x64 and ARM64)
-  and macOS (Apple silicon and Intel).
+- **Seven ready-made builds.** Windows (64-bit and 32-bit), Linux (x64, ARM64
+  and ARMv7) and macOS (Apple silicon and Intel). The 32-bit Windows build is
+  made to start on Windows XP and later.
 - **Clearer launch options.** Options have readable long names such as
   `--game`, `--level` and `--dedicated`, next to the short classic ones.
 - **Tidier scoreboard.** Only real players are listed, numbered in order.
