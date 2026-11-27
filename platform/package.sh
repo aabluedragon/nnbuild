@@ -10,7 +10,7 @@ set -eu
 target="${1:?usage: platform/package.sh <target>}"
 name="nnbuild-$target"
 # Version shown by macOS for the app; release builds pass the tag's number.
-version="${NNBUILD_VERSION:-1.3}"
+version="${NNBUILD_VERSION:-1.0.0}"
 stage="dist/$name"
 
 mkdir -p dist

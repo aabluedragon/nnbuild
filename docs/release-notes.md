@@ -3,6 +3,10 @@ other Build-engine games.
 
 **Documentation:** https://nnb.nukemnet.com
 
+**This is release 1.0.0.** NNBuild's releases are numbered from 1.0.0 from here
+on. It is the newest release: it follows the earlier 1.3.2 and contains
+everything that one has.
+
 ## New in this release
 
 - **Only games you can join.** The public lobby holds the matches of every
@@ -27,6 +31,8 @@ other Build-engine games.
 - **A slow sound device no longer gets you removed.** Where the sound device
   takes seconds to open (or cannot be opened), the host no longer drops the
   player for being silent.
+- **The setup window on Windows carries NNBuild's own banner**, and its About
+  page starts with NNBuild.
 
 Hosts and players need this release to see each other in the list: a host
 on an older release does not say which game it runs.
