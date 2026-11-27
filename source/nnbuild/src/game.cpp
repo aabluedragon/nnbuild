@@ -22,6 +22,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 //-------------------------------------------------------------------------
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 #include "duke3d.h"
 //#include "types.h"
 #include "scriplib.h"
@@ -9454,6 +9458,51 @@ static void G_CheckGametype(void)
     // LOG_F("ud.m_coop=%i after sanitisation\n",ud.m_coop);
 }
 
+// Opening the audio device blocks, for seconds where no device can be opened (8 s
+// was seen on a Windows computer without a usable one). In a network game that
+// silence gets this player removed: a host drops a player it has not heard from
+// for 5 seconds. While the audio start-up runs, a helper thread therefore sends an
+// empty packet once a second. Nothing else uses the network layer meanwhile (the
+// main thread is inside the audio start-up), and the helper is joined before the
+// start-up returns to the game.
+struct NetKeepAliveWhileBlocked
+{
+    std::atomic<bool> done { false };
+    std::thread worker;
+
+    NetKeepAliveWhileBlocked()
+    {
+        if (numplayers < 2)
+            return;
+        worker = std::thread([this]
+        {
+            for (int waited = 0; !done.load(); waited += 50)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                if (waited < 1000 || done.load())
+                    continue;
+                waited = 0;
+                unsigned char nullpacket = PACKET_TYPE_NULL_PACKET;
+                int32_t i;
+                TRAVERSE_CONNECT(i)
+                {
+                    if (i != myconnectindex)
+                        mmulti_sendpacket(i, &nullpacket, 1);
+                    if (myconnectindex != connecthead)
+                        break; // a client only talks to the host
+                }
+            }
+        });
+    }
+
+    ~NetKeepAliveWhileBlocked()
+    {
+        done.store(true);
+        if (worker.joinable())
+            worker.join();
+    }
+};
+
 static bool G_BeginMultiplayer()
 {
     for (int32_t i = 0; i < MAXPLAYERS; i++)
@@ -10089,6 +10138,8 @@ int Duke_app_main(int32_t argc, char const* const* argv)
     }
     else
     {
+        NetKeepAliveWhileBlocked keepAlive;
+
         if (ud.config.MusicToggle)
         {
             LOG_F(INFO, "Initializing music...");

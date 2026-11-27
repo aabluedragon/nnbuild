@@ -17,6 +17,16 @@ other Build-engine games.
   match and its slots; an empty server no longer looks full.
 - **After a join that fails late**, NNBuild opens JOIN GAME with the reason
   instead of starting at the main menu behind the intro.
+- **Joining a running match over the internet.** The match is now sent to a
+  joining player in packets small enough for every connection. Before, many
+  connections dropped them, and the join ended with `Timed out joining the
+  game in progress`. Only the host needs this release for that.
+- **No question box without the startup window.** Started with `--skip-menu`,
+  NNBuild no longer stops to ask whether to import `duke3d.cfg` or
+  `eduke32.cfg`; it starts with its default settings.
+- **A slow sound device no longer gets you removed.** Where the sound device
+  takes seconds to open (or cannot be opened), the host no longer drops the
+  player for being silent.
 
 Hosts and players need this release to see each other in the list: a host
 on an older release does not say which game it runs.

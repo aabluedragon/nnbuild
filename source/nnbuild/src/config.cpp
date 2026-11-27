@@ -738,6 +738,14 @@ int32_t CONFIG_ReadSetup(void)
     pathsearchmode = 1;
     if (buildvfs_exists(g_setupFileName) && ud.config.scripthandle < 0)  // JBF 20031211
         ud.config.scripthandle = SCRIPT_Load(g_setupFileName);
+    else if (g_noSetup)
+    {
+        // Started without the startup window (--skip-menu, a launcher, a debugger):
+        // nobody is there to answer a question box, and a match would wait behind
+        // it. The settings of another program are not imported; defaults are used.
+        if (ud.config.scripthandle < 0 && (buildvfs_exists(SETUPFILENAME) || buildvfs_exists("eduke32.cfg") || buildvfs_exists("duke3d.cfg")))
+            LOG_F(INFO, "No %s yet: starting with default settings (settings of other programs in this folder are not imported without the startup window).", g_setupFileName);
+    }
     else if (buildvfs_exists(SETUPFILENAME) && ud.config.scripthandle < 0)
     {
         Bsprintf(tempbuf,"The configuration file \"%s\" was not found. "

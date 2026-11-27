@@ -747,6 +747,11 @@ int32_t CONFIG_ReadSetup(void)
         if (buildvfs_exists(g_setupFileName))  // JBF 20031211
             ud.config.scripthandle = SCRIPT_Load(g_setupFileName);
 #if !defined(EDUKE32_TOUCH_DEVICES)
+        else if (g_noSetup)
+        {
+            // Started without the startup window: nobody is there to answer a question
+            // box, and a match would wait behind it. Defaults are used.
+        }
         else if (buildvfs_exists(SETUPFILENAME))
         {
             int32_t i;

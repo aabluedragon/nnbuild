@@ -65,11 +65,27 @@ static int GetTickCount(void)
 // per frame, so throughput is (messages-per-packet x frame-rate). At 2048 only
 // one ~1KB snapshot chunk fit per packet, capping the transfer near 40 KB/s
 // (~7s). Room for several chunks per packet scales that up proportionally.
-// Ordinary gameplay packets stay tiny, so this only enlarges the rare big
-// transfer; datagrams above the path MTU just fragment, and the reliable layer
-// already handles any resulting loss.
+// This is the size of the buffers (the largest single message, and what is accepted
+// when receiving). What is put on the wire is limited by NET_MAX_DATAGRAM below.
 #define MAXPAKSIZ 8192
 //#define MAXPAKSIZ 576
+
+// The largest datagram dosendpackets() builds from several messages. A datagram
+// larger than the path's MTU is cut into IP fragments, and many internet paths
+// drop fragments altogether: one measured path lost every datagram above about
+// 1400 bytes over IPv4 and IPv6, so a late-join snapshot packed into 8 KB
+// datagrams never arrived there ("Timed out joining the game in progress"). 1200
+// fits the smallest MTU an IPv6 path may have (1280) with room for the IP and
+// UDP headers and for a tunnel's own header. A single message larger than this
+// still goes out alone, in one datagram.
+#define NET_MAX_DATAGRAM 1200
+
+// A large transfer (snapshot, mod file) needs many datagrams. The first datagram
+// of every call is built as before (oldest unacked messages first), which is all
+// ordinary gameplay ever sends. The datagrams after it carry messages that were
+// never sent yet at once, and repeat messages already sent at most this often,
+// instead of putting the whole unacked window on the wire on every call.
+#define NET_BULK_RESEND_MS 100
 
 
 #define PAKRATE 250  //Packet rate/sec limit ... necessary?
@@ -97,6 +113,8 @@ int connecthead, connectpoint2[MAXPLAYERS];
 
 static int tims, lastsendtims[MAXPLAYERS];
 static char pakbuf[MAXPAKSIZ];
+static int bulksentupto[MAXPLAYERS];  // messages below this index were sent at least once
+static int bulkresendtims[MAXPLAYERS]; // when the datagrams after the first last repeated sent messages
 
 #define FIFSIZ 512 //16384/40 = 6min:49sec
 static int ipak[MAXPLAYERS][FIFSIZ], icnt0[MAXPLAYERS];
@@ -903,6 +921,8 @@ void mmulti_dropslot(int slot)
     icnt0[slot] = 0;
     ocnt0[slot] = 0;
     ocnt1[slot] = 0;
+    bulksentupto[slot] = 0;
+    bulkresendtims[slot] = 0;
     Bmemset(ipak[slot], 0, sizeof(ipak[slot]));
     lastsendtims[slot] = GetTickCount();
 #if (SIMLAG > 1)
@@ -1044,6 +1064,11 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
     // exactly once (unchanged behavior); only a large transfer sends several.
     int sendfrom = ocnt0[other];
     int packets = 0;
+    // (the indexes start again when a slot is dropped and taken by another player)
+    if (bulksentupto[other] < ocnt0[other] || bulksentupto[other] > ocnt1[other])
+        bulksentupto[other] = ocnt0[other];
+    int const resendbulk = (tims < bulkresendtims[other]) || (tims >= bulkresendtims[other]+NET_BULK_RESEND_MS);
+    enum { HEADERSIZ = 2+4+32 };
     do
     {
         k = 2;
@@ -1060,6 +1085,9 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
             if (!offset) continue; // packet already acked
             j = *(short *)&pakmem[offset];
             if (k+6+j+4 > (int)sizeof(pakbuf))
+                break;
+            // Keep the datagram under the path MTU, unless this message alone is larger.
+            if (k > HEADERSIZ && k+6+j+4 > NET_MAX_DATAGRAM)
                 break;
 
             *(unsigned short *)&pakbuf[k] = (unsigned short)j; k += 2;
@@ -1078,8 +1106,16 @@ void dosendpackets(int other)  //Host to send intially, client to send to others
 
         packets++;
         sendfrom = i;   // next datagram continues after what this one packed
+        // Between two repeats of a large transfer, go on with what was never sent.
+        if (!resendbulk && sendfrom < bulksentupto[other])
+            sendfrom = bulksentupto[other];
     }
     while (sendfrom < ocnt1[other] && packets < NET_MAX_PACKETS_PER_CALL);
+
+    if (sendfrom > bulksentupto[other])
+        bulksentupto[other] = min(sendfrom, ocnt1[other]);
+    if (resendbulk && packets > 1)
+        bulkresendtims[other] = tims;
 }
 
 void mmulti_sendpacket(int other, unsigned char *bufptr, int messleng)

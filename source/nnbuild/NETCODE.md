@@ -43,12 +43,29 @@ Reliable + ordered delivery, per peer slot:
 - `0xaa/0xab` handshake (slave sends `0xaa`, master replies `0xab` with the
   slot + player count). `ic0 == -1` marks these special handshake packets.
 - Each datagram packs the ack bitmap **plus as many queued ordered messages as
-  fit in `MAXPAKSIZ`**, starting from the oldest un-acked (`ocnt0`).
+  fit in `NET_MAX_DATAGRAM` (1200 bytes)**, starting from the oldest un-acked
+  (`ocnt0`). A single message larger than that goes out alone.
 
 Notable settings / fixes:
 
-- **`MAXPAKSIZ = 8192`** (was 2048) — more chunks per datagram for big
-  transfers; gameplay packets stay tiny.
+- **`MAXPAKSIZ = 8192`** is the buffer size (the largest single message, and
+  what a receiver accepts). **`NET_MAX_DATAGRAM = 1200`** is what the sender
+  packs into one datagram. Until release 1.3.2 the sender packed up to
+  `MAXPAKSIZ`, on the assumption that a datagram above the path MTU "just
+  fragments". Many internet paths drop IP fragments altogether: on a measured
+  path every datagram above about 1400 bytes was lost over IPv4 and IPv6, so the
+  late-join snapshot (7930-byte datagrams) never arrived and the joiner ended with
+  "Timed out joining the game in progress". 1200 fits the smallest IPv6 path MTU
+  (1280) with room for the headers and a tunnel's own. Gameplay datagrams are
+  far smaller either way (under 300 bytes).
+- **Pacing of large transfers (`NET_BULK_RESEND_MS = 100`).** The first datagram
+  of each `dosendpackets` call is built as always (oldest unacked first: the
+  fast retransmit gameplay relies on). The datagrams after it send messages that
+  were never sent at once (`bulksentupto[]`), and repeat already-sent ones at
+  most every 100 ms, instead of putting the whole unacked window on the wire on
+  every call. Measured on one computer: the late-join snapshot (270 chunks)
+  still completes in about 0.25 s; a 20 MB mod pack takes about 6 s (3.4 MB/s)
+  where 8 KB datagrams took about 2 s.
 - **Whole-window send (`dosendpackets`).** Originally each call emitted only the
   *front* packet (~7 chunks) and re-sent it every cycle until acked, so only ~7
   chunks were ever in flight per ack round-trip — bulk transfers crawled
