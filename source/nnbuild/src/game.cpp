@@ -10231,7 +10231,12 @@ MAIN_LOOP_RESTART:
     }
     else if (ud.warp_on == 1)
     {
-        G_NewGame(NEWGAME_NORMAL);
+        // Only the host starts the match. The other players were told that it
+        // will and enter the level on its message, which may still be on its way.
+        if (numplayers > 1 && myconnectindex != connecthead)
+            Net_WaitForHostStart();
+        else
+            G_NewGame(NEWGAME_NORMAL);
     }
     else G_UpdateScreenArea();
 

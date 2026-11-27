@@ -70,6 +70,16 @@ per-game compatibility boundary.
   (CoreFoundation before Cocoa init corrupts startup). Resolve lazily.
 - **Late-join spawn**: must run on master + joiner + peers at the frozen tick;
   it uses `krand()`, so all three stay aligned.
+- **Start on a level (`-v`/`-l`, everyone in from the start)**: only the host
+  starts the match; the other players enter the level on its NEW_GAME message.
+  That message can arrive after a player is through its own start-up (a host
+  slow to open its window or sound device, real network delay). The player
+  must wait for it (`Net_WaitForHostStart`), never enter the game loop without
+  a level: the first frame dereferences prediction pointers that no level set
+  up. One computer hides this, because the host's ready and start messages
+  then travel in one packet. Test with
+  `/mnt/storage/claude-tmp/nnb/plat/early_ready.sh`-style timing, not only
+  with two fast local copies.
 
 ## Build
 

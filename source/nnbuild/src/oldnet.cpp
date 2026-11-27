@@ -3848,6 +3848,56 @@ void Net_CheckPlayerQuit(int i)
     g_player[myconnectindex].ps->ftq = QUOTE_RESERVED2, g_player[myconnectindex].ps->fta = 180;
 }
 
+// The title screen with "WAITING FOR PLAYERS", drawn but not yet shown.
+static void Net_DrawWaitingScreen(void)
+{
+    videoClearScreen(0);
+
+    rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite(160 << 16, (104) << 16, 60 << 10, 0, DUKENUKEM, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+    rotatesprite(160 << 16, (129) << 16, 30 << 11, 0, THREEDEE, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+    if (PLUTOPAK)   // JBF 20030804
+        rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
+
+    gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
+}
+
+// For a player whose host starts the match directly on a level (the host was
+// started with one). Every other player enters that level when the host's start
+// message arrives, and the host sends it only after it has opened its window and
+// its sound device. That can take longer than the same took here: until then
+// there is no level to simulate or draw, so the game loop must not start. Wait
+// for the level here. (A player who was through its own start-up before the
+// host's message arrived used to crash in the first frame.)
+//
+// The message is handled inside gameHandleEvents(), which enters the level
+// before it returns. Escape or closing the window leaves the game.
+void Net_WaitForHostStart()
+{
+    if (numplayers < 2 || myconnectindex == connecthead || (ud.gm & MODE_GAME))
+        return;
+
+    LOG_F(INFO, "Waiting for the host to start the match...");
+    P_SetGamePalette(g_player[myconnectindex].ps, TITLEPAL, 11);
+
+    while (!(ud.gm & MODE_GAME))
+    {
+        gameHandleEvents();
+
+        if (quitevent || KB_KeyPressed(sc_Escape))
+            G_GameExit(" ");
+
+        if (ud.gm & MODE_GAME)  // the level has set its own palette and screen
+            break;
+
+        if (!engineFPSLimit())
+            continue;
+
+        Net_DrawWaitingScreen();
+        videoNextPage();
+    }
+}
+
 void Net_WaitForPlayers()
 {
     int i;
@@ -3907,15 +3957,7 @@ void Net_WaitForPlayers()
         if (!engineFPSLimit())
             continue;
 
-        videoClearScreen(0);
-
-        rotatesprite(0, 0, 65536L, 0, BETASCREEN, 0, 0, 2 + 8 + 16 + 64, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(160 << 16, (104) << 16, 60 << 10, 0, DUKENUKEM, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-        rotatesprite(160 << 16, (129) << 16, 30 << 11, 0, THREEDEE, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-        if (PLUTOPAK)   // JBF 20030804
-            rotatesprite(160 << 16, (151) << 16, 30 << 11, 0, PLUTOPAKSPRITE + 1, 0, 0, 2 + 8, 0, 0, xdim - 1, ydim - 1);
-
-        gametext(160, 190, "WAITING FOR PLAYERS", 14, 2);
+        Net_DrawWaitingScreen();
 
         if (myconnectindex == connecthead)
         {

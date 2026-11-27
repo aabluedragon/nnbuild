@@ -93,6 +93,30 @@ Notable settings / fixes:
 
 ---
 
+## 1a. Starting together on a level (`Net_WaitForHostStart`)
+
+When a host is started with a level (`-v`/`-l`) and all players are in from the
+start, only the host starts the match. Its settings tell the other players that
+it will (`ud.warp_on`), and they enter the level when its `NEW_GAME` message
+arrives.
+
+The host sends `NEW_GAME` only after it has opened its window and its sound
+device. A player can be through the same steps sooner. Such a player must not
+enter the game loop: without a level the first frame uses prediction pointers
+that nothing has set up, and the game crashes. The player waits in
+`Net_WaitForHostStart()` instead, which shows WAITING FOR PLAYERS until the
+message has entered the level.
+
+This does not show with two copies on one computer. There the host's last
+"ready" and its `NEW_GAME` leave in one packet (the transport holds a message
+back when it has just sent another to the same peer), so the player is still
+inside the ready barrier when the level arrives. A Windows host, whose tick
+counter is coarse, sends the "ready" at once and the `NEW_GAME` later. To get
+that timing in a test, pump the host's network right after its ready barrier
+and delay its window.
+
+---
+
 ## 2. Late join (`Net_MasterCheckLateJoin` / `Net_CompleteLateJoin`)
 
 A client may join a match already in progress:

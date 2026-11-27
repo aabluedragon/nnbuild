@@ -226,6 +226,7 @@ void Net_ClearFIFO(void);
 void Net_CheckPlayerQuit(int i);
 void Net_Disconnect(bool showScores);
 void Net_WaitForPlayers();
+void Net_WaitForHostStart();   // a player waits for the level its host starts
 
 // Host-authoritative, deterministic world changes (spawn actors / monster
 // control) driven from the server console. The host schedules the change for a
