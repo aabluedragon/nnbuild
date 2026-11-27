@@ -2,7 +2,8 @@
 # Assemble a release archive from an already built tree.
 #
 # Usage: platform/package.sh <target>
-#   target: linux-x64 | linux-arm64 | windows-x64 | windows-x86 | macos-arm64 | macos-x64
+#   target: linux-x64 | linux-arm64 | linux-armv7l | windows-x64 | windows-x86 |
+#           macos-arm64 | macos-x64
 #
 # Writes dist/nnbuild-<target>.tar.gz (Linux) or dist/nnbuild-<target>.zip.
 set -eu

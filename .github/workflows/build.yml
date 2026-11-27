@@ -1,7 +1,8 @@
 name: Build
 
-# Builds NNBuild for six platforms. A release tag ("n" or "v" followed by the
-# version number, such as n1.0.0) also publishes the archives as a GitHub release.
+# Builds NNBuild for every system it is released for. A release tag ("n" or "v"
+# followed by the version number, such as n1.0.0) also publishes the archives as
+# a GitHub release.
 
 on:
   push:
@@ -62,6 +63,28 @@ jobs:
         with:
           name: nnbuild-linux-${{ matrix.arch }}
           path: dist/nnbuild-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  linux-armv7l:
+    name: Linux ARMv7
+    # 32-bit ARM. Cross-compiled inside an Ubuntu 22.04 container, so it needs
+    # the same system libraries as the other Linux builds; the script also
+    # starts both programs once under emulation.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build
+        run: docker run --rm -v "$PWD":/src -w /src ubuntu:22.04 sh platform/build-linux-armv7l.sh
+      - name: Package
+        run: |
+          case "$GITHUB_REF" in refs/tags/[nv][0-9]*) export NNBUILD_VERSION="${GITHUB_REF_NAME#[nv]}" ;; esac
+          sh platform/package.sh linux-armv7l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nnbuild-linux-armv7l
+          path: dist/nnbuild-linux-armv7l.tar.gz
           if-no-files-found: error
 
   windows:
@@ -149,7 +172,7 @@ jobs:
   release:
     name: Publish release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [linux, windows, macos]
+    needs: [linux, linux-armv7l, windows, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
