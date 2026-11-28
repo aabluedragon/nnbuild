@@ -3188,22 +3188,25 @@ cheat_for_port_credits2:
             break;
         }
 
-        case 101:
-        {
-            if (boardfilename[0] == 0) strcpy(boardfilename, "./");
-            Bcorrectfilename(boardfilename, 1);
-            getfilenames(boardfilename, "*.map");
-            ChangeToMenu(MENU_USERMAP_BROWSER);
-            KB_FlushKeyboardQueue();
-            fallthrough__;
-        }
-
         case MENU_NEWGAMECUSTOM:
         case MENU_NEWGAMECUSTOMSUB:
         case MENU_NEWGAMECUSTOML3:
         {
             Menu_DisplayNewGameCustom();
             break;
+        }
+
+        case MENU_USERMAP:
+        {
+            if (boardfilename[0] == 0) strcpy(boardfilename, "./");
+            Bcorrectfilename(boardfilename, 1);
+            getfilenames(boardfilename, "*.map");
+            ChangeToMenu(MENU_USERMAP_BROWSER);
+            KB_FlushKeyboardQueue();
+            // Draws the list it has just read. The list's case must stay directly
+            // below: with another menu's case in between, that menu ran instead
+            // and sent the player back to the episode list.
+            fallthrough__;
         }
 
         case MENU_USERMAP_BROWSER:
