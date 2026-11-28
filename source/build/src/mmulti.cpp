@@ -767,6 +767,14 @@ int initmultiplayersparms(int argc, const char * const *argv)
     if ((numplayers >= 2) && (daindex) && (networkmode == MMULTI_MODE_MS)) myconnectindex = 1;
     if (daindex > numplayers) numplayers = daindex;
 
+    // The per-slot tables hold MAXPLAYERS entries, so a larger count (/n0:20)
+    // would write past them.
+    if (numplayers > MAXPLAYERS)
+    {
+        printf("mmulti: %d slots asked for; a match has at most %d\n", numplayers, MAXPLAYERS);
+        numplayers = MAXPLAYERS;
+    }
+
     // NNBuild: order-independent P2P. If the local machine's own address is among the
     // listed ones, the participant listed the full roster (any order) rather than the
     // legacy "peers only, /n1 marks my slot" form. Sort the roster canonically so every
@@ -1268,8 +1276,11 @@ int mmulti_getpacket_sized(int *retother, unsigned char *bufptr, int capacity)
                 }
                 else if ((pakbuf[k] == 0xab) && (myconnectindex != connecthead) && crc16ofs >= 9)
                 {
+                    // A match may use every slot: MAXPLAYERS slots, numbered from 0.
+                    // This check used to refuse a slot count of MAXPLAYERS, so nobody
+                    // could join a 16-slot host: its answer was dropped here, unseen.
                     if (((unsigned int)pakbuf[k+1] < (unsigned int)pakbuf[k+2]) &&
-                            ((unsigned int)pakbuf[k+2] < (unsigned int)MAXPLAYERS))
+                            ((unsigned int)pakbuf[k+2] <= (unsigned int)MAXPLAYERS))
                     {
                         myconnectindex = (int)pakbuf[k+1];
                         numplayers = (int)pakbuf[k+2];

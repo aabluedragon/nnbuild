@@ -42,6 +42,9 @@ Reliable + ordered delivery, per peer slot:
   `ipak/opak[MAXPLAYERS][FIFSIZ=512]` the packet rings.
 - `0xaa/0xab` handshake (slave sends `0xaa`, master replies `0xab` with the
   slot + player count). `ic0 == -1` marks these special handshake packets.
+  The slave accepts a player count up to and including `MAXPLAYERS` (16): a
+  match may use every slot. A count above that on the command line is cut to
+  `MAXPLAYERS` when the host starts.
 - Each datagram packs the ack bitmap **plus as many queued ordered messages as
   fit in `NET_MAX_DATAGRAM` (1200 bytes)**, starting from the oldest un-acked
   (`ocnt0`). A single message larger than that goes out alone.

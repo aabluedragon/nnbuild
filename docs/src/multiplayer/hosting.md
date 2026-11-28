@@ -131,11 +131,14 @@ nnbuild --name ARENA --startnow --coop 1 --volume 1 --level 1 --advertise lobby.
 ## Number of slots
 
 The number after `/n0:` is the number of slots, with the host included. A
-match needs at least 2 slots. The largest match that players can join has 15
-slots.
+match needs at least 2 slots and has at most 16; a larger number is treated as
+16.
 
 On a dedicated server the server itself takes one slot and does not play, so
-`/n0:8` leaves room for 7 players.
+`/n0:8` leaves room for 7 players and `/n0:16` for 15.
+
+In releases up to 1.0.1 nobody could join a match with 16 slots: the joining
+player kept waiting for the server. Use 15 slots with those releases.
 
 ## Game mode and starting level
 

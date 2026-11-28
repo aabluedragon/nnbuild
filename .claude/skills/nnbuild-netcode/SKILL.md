@@ -70,6 +70,12 @@ per-game compatibility boundary.
   (CoreFoundation before Cocoa init corrupts startup). Resolve lazily.
 - **Late-join spawn**: must run on master + joiner + peers at the frozen tick;
   it uses `krand()`, so all three stay aligned.
+- **Sixteen slots**: a match may use all `MAXPLAYERS` (16) slots, numbered
+  0–15. The joining side must accept a slot count equal to `MAXPLAYERS` in the
+  `0xab` answer; with `<` instead of `<=` there, nobody can join a `/n0:16`
+  host and the joiner only shows "Waiting for the server - retrying". NukemNet
+  asks for 16 slots for a dedicated room with 15 players. Test the top slot
+  with `/mnt/storage/claude-tmp/nnb/tests/fullhouse.sh`-style runs (15 players).
 - **Start on a level (`-v`/`-l`, everyone in from the start)**: only the host
   starts the match; the other players enter the level on its NEW_GAME message.
   That message can arrive after a player is through its own start-up (a host
