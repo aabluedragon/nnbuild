@@ -8,18 +8,20 @@ before 1.0.0, and every later release contains everything they had.
 
 ## New in this release
 
-- **A build for 32-bit ARM Linux.** `nnbuild-linux-armv7l.tar.gz` is for ARM
-  computers with a 32-bit system, such as a Raspberry Pi with 32-bit Raspberry
-  Pi OS 12. It has been checked under emulation: hosting, joining a running
-  match, and a match together with a 64-bit PC.
-- **The 32-bit Windows build is made for Windows XP and later.** It no longer
-  asks Windows for functions that Windows XP lacks. It has not yet been tried
-  on a real Windows XP, Vista, 7 or 8 computer.
-- **No crash when you are ready before the host.** When a host started a match
-  directly on a level and needed longer than a player to open its window or
-  its sound device, that player's game could crash as the match began. The
-  player now waits for the host. It was seen with a Windows host; each player
-  needs this release for the fix.
+Two fixes for bugs that players reported.
+
+- **USER MAP in the menu works again.** In Duke Nukem 3D, choosing USER MAP
+  after NEW GAME did nothing: the menu stayed on the episode list. It now
+  opens the list of map files. The same entry in a running match's game setup
+  (Escape, NEW GAME, USER MAP) sent the host to the single-player episode
+  list; that is fixed too, and the chosen map is sent to the other players as
+  before.
+- **A match with 16 slots can be joined.** Nobody could join a host that was
+  started with 16 slots: the joining player only saw "Waiting for the server -
+  retrying". NukemNet starts a dedicated server room for 15 players this way
+  (15 players and the server). The fault was on the joining side, so each
+  player needs this release, not only the host.
+- A slot count above 16 is now treated as 16.
 
 ## Downloads
 
